@@ -1,0 +1,11 @@
+application: mapreduce
+version: 1
+runtime: python
+api_version: 1
+
+handlers:
+- url: /mapreduce/.*
+  script: mapreduce/main.py
+  login: admin
+- url: .*
+  script: main.py
