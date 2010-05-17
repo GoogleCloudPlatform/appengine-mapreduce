@@ -1,0 +1,36 @@
+/* TODO(bslatkin): Fix this. This is all throw-away style */
+#control {
+  float: right;
+}
+#detail-graph {
+  float: left;
+}
+
+#logs {
+  border: 1px solid blue;
+  font-family: sans-serif;
+}
+#logs p {
+  margin: 0;
+}
+
+.job-overlap {
+  background: blue;
+  cursor: pointer;
+}
+.param-key {
+  text-transform: capitalize;
+}
+.param-key:after {
+  content: ': ';
+}
+.user-param-key:after {
+  content: ': ';
+}
+.param-aux:before {
+  content: ' ';
+}
+
+#aggregated-counters-container {
+  float: left;
+}
