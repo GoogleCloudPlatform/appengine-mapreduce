@@ -449,7 +449,7 @@ def fetch_data(blob, start_index, end_index):
     blob: BlobInfo, BlobKey, str or unicode representation of BlobKey of
       blob to fetch data from.
     start_index: Start index of blob data to fetch.  May not be negative.
-    end_index: End index (exclusive) of blob data to fetch.  Must be
+    end_index: End index (inclusive) of blob data to fetch.  Must be
       >= start_index.
 
   Returns:
@@ -561,7 +561,7 @@ class BlobReader(object):
     """
     read_size = min(max(size, self.__buffer_size), MAX_BLOB_FETCH_SIZE)
     self.__buffer = fetch_data(self.__blob_key, self.__position,
-                               self.__position + read_size)
+                               self.__position + read_size - 1)
     self.__buffer_position = 0
     self.__eof = len(self.__buffer) < read_size
 
