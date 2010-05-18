@@ -423,11 +423,11 @@ class MockAnything:
     self._description = description
     self._Reset()
 
-  def __str__(self):
-    return "<MockAnything instance at %s>" % id(self)
-
   def __repr__(self):
-    return '<MockAnything instance>'
+    if self._description:
+      return '<MockAnything instance of %s>' % self._description
+    else:
+      return '<MockAnything instance>'
 
   def __getattr__(self, method_name):
     """Intercept method calls on this object.

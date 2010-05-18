@@ -541,7 +541,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
 
     worker_params = handlers.MapperWorkerCallbackHandler.worker_parameters(
         self.mapreduce_spec, self.shard_id, self.slice_id,
-        InputReader(ENTITY_KIND, key_range.KeyRange(), 50))
+        InputReader(ENTITY_KIND, key_range.KeyRange(), 50, False))
     InputReader.reset()
 
     for param_name in worker_params:
@@ -643,7 +643,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
                            direction="ASC",
                            include_start=False,
                            include_end=True),
-        50)
+        50, False)
     self.handler.schedule_slice("/mapreduce", self.mapreduce_spec,
                                 self.shard_id, 123, input_reader)
 
@@ -662,7 +662,8 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
                              direction="ASC",
                              include_start=False,
                              include_end=True),
-          50)
+          50,
+          False)
       self.handler.schedule_slice("/mapreduce", self.mapreduce_spec,
                                   self.shard_id, 123, query_range)
 
@@ -681,7 +682,8 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
                            direction="ASC",
                            include_start=False,
                            include_end=True),
-        50)
+        50,
+        False)
     self.handler.schedule_slice("/mapreduce", self.mapreduce_spec,
                                 self.shard_id, 123, query_range)
 

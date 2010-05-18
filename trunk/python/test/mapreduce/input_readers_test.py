@@ -199,7 +199,10 @@ class DatastoreInputReaderTest(unittest.TestCase):
     krange = key_range.KeyRange(key_start=self.key(25), key_end=self.key(50),
                                 direction="ASC",
                                 include_start=False, include_end=True)
-    query_range = input_readers.DatastoreInputReader(ENTITY_KIND, krange, 50)
+    query_range = input_readers.DatastoreInputReader(ENTITY_KIND,
+                                                     krange,
+                                                     50,
+                                                     False)
 
     entities = []
 
@@ -212,6 +215,31 @@ class DatastoreInputReaderTest(unittest.TestCase):
           query_range._key_range)
 
     self.assertEquals(25, len(entities))
+
+  def testKeysOnlyGenerator(self):
+    """Test DatastoreInputReader as a keys-only generator."""
+    for _ in range(0, 100):
+      TestEntity().put()
+
+    krange = key_range.KeyRange(key_start=self.key(25), key_end=self.key(50),
+                                direction="ASC",
+                                include_start=False, include_end=True)
+    query_range = input_readers.DatastoreInputReader(ENTITY_KIND,
+                                                     krange,
+                                                     50,
+                                                     True)
+
+    keys = []
+
+    for key in query_range:
+      keys.append(key)
+      self.assertEquals(
+          key_range.KeyRange(key_start=key, key_end=self.key(50),
+                             direction="ASC",
+                             include_start=False, include_end=True),
+          query_range._key_range)
+
+    self.assertEquals(25, len(keys))
 
   def testShardDescription(self):
     """Tests the human-visible description of Datastore readers."""

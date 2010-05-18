@@ -165,11 +165,12 @@ class KeyRange(object):
     else:
       raise KeyRangeError('KeyRange direction unexpected: %s', self.direction)
 
-  def make_directed_query(self, kind_class):
+  def make_directed_query(self, kind_class, keys_only=False):
     """Construct a query for this key range, including the scan direction.
 
     Args:
       kind_class: A kind implementation class.
+      keys_only: bool, default False, use keys_only on Query?
 
     Returns:
       A db.Query instance.
@@ -178,7 +179,7 @@ class KeyRange(object):
       KeyRangeError: if self.direction is not in (KeyRange.ASC, KeyRange.DESC).
     """
     direction = self.__get_direction('', '-')
-    query = db.Query(kind_class)
+    query = db.Query(kind_class, keys_only)
     query.order('%s__key__' % direction)
 
     query = self.filter_query(query)
@@ -205,16 +206,17 @@ class KeyRange(object):
     query = self.filter_datastore_query(query)
     return query
 
-  def make_ascending_query(self, kind_class):
+  def make_ascending_query(self, kind_class, keys_only=False):
     """Construct a query for this key range without setting the scan direction.
 
     Args:
       kind_class: A kind implementation class.
+      keys_only: bool, default False, query only for keys.
 
     Returns:
       A db.Query instance.
     """
-    query = db.Query(kind_class)
+    query = db.Query(kind_class, keys_only)
     query.order('__key__')
 
     query = self.filter_query(query)
