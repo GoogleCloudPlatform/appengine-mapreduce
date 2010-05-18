@@ -4,11 +4,15 @@
 
 // Sets the status butter, optionally indicating if it's an error message.
 function setButter(message, error) {
+  var butter = $("#butter");
+  // Prevent flicker on butter update by hiding it first.
+  butter.css('display', 'none');
   if (error) {
-    $("#butter").removeClass('info').addClass('error').text(message);
+    butter.removeClass('info').addClass('error').text(message);
   } else {
-    $("#butter").removeClass('error').addClass('info').text(message);
+    butter.removeClass('error').addClass('info').text(message);
   }
+  butter.css('display', null)
   $(document).scrollTop(0);
 }
 
@@ -217,7 +221,7 @@ function initJobOverview(jobs, cursor) {
   body.empty();
 
   if (!jobs || (jobs && jobs.length == 0)) {
-    $('<td colspan="9">').text("No job records found.").appendTo(body);
+    $('<td colspan="8">').text("No job records found.").appendTo(body);
     return;
   }
 
@@ -230,7 +234,7 @@ function initJobOverview(jobs, cursor) {
 
     // TODO: Style running colgroup for capitalization.
     var status = (job.active ? 'running' : job.result_status) || 'unknown';
-    row.append($('<td>').text(status));
+    row.append($('<td class="status-text">').text(status));
 
     $('<td>').append(
       $('<a>')
@@ -247,8 +251,6 @@ function initJobOverview(jobs, cursor) {
 
     row.append($('<td>').text(getElapsedTimeString(
         job.start_timestamp_ms, job.updated_timestamp_ms)));
-
-    row.append($('<td>').text(job.chart_url));
 
     // Controller links for abort, cleanup, etc.
     if (job.active) {
@@ -290,6 +292,7 @@ function initJobOverview(jobs, cursor) {
   } else {
     $('#running-next-page').css('display', 'none');
   }
+  $('#running-list > tfoot').css('display', null);
 }
 
 //////// Launching jobs.
@@ -364,10 +367,13 @@ function initJobLaunching(configs) {
     $.each(FIXED_JOB_PARAMS, function(unused, key) {
       var value = config[key];
       if (!value) return;
-      $('<p class="job-static-param">')
-        .append($('<span class="param-key">').text(getNiceParamKey(key)))
-        .append($('<span class="param-value">').text(value))
-        .appendTo(jobForm);
+      if (key != 'name') {
+        // Name is up in the page title so doesn't need to be shown again.
+        $('<p class="job-static-param">')
+          .append($('<span class="param-key">').text(getNiceParamKey(key)))
+          .append($('<span class="param-value">').text(value))
+          .appendTo(jobForm);
+      }
       $('<input type="hidden">')
         .attr('name', key)
         .attr('value', value)
@@ -430,7 +436,7 @@ function refreshJobDetail(jobId, detail) {
 
   // TODO: Style running colgroup for capitalization.
   var status = (detail.active ? 'running' : detail.result_status) || 'unknown';
-  $('<li>').text(status).appendTo(jobParams);
+  $('<li class="status-text">').text(status).appendTo(jobParams);
 
   $('<li>')
     .append($('<span class="param-key">').text('Elapsed time'))
@@ -470,10 +476,11 @@ function refreshJobDetail(jobId, detail) {
   // Graph image.
   var detailGraph = $('#detail-graph');
   detailGraph.empty();
+  $('<div>').text('Processed items per shard').appendTo(detailGraph);
   $('<img>')
     .attr('src', detail.chart_url)
-    .attr('width', 500)
-    .attr('height', 400)
+    .attr('width', 300)
+    .attr('height', 200)
     .appendTo(detailGraph);
 
   // Aggregated counters.
@@ -527,7 +534,7 @@ function initJobDetail(jobId, detail) {
   // Set control buttons.
   if (detail.active) {
     var control = $('<a href="">')
-      .text('Abort')
+      .text('Abort Job')
       .click(function(event) {
         abortJob(detail.name, jobId);
         event.stopPropagation();
@@ -536,7 +543,7 @@ function initJobDetail(jobId, detail) {
     $('#job-control').append(control);
   } else {
     var control = $('<a href="">')
-      .text('Cleanup')
+      .text('Cleanup Job')
       .click(function(event) {
         cleanUpJob(detail.name, jobId);
         event.stopPropagation();

@@ -26,6 +26,7 @@ import google
 
 import datetime
 import logging
+import math
 import os
 from mapreduce.lib import simplejson
 import time
@@ -415,7 +416,8 @@ class ControllerCallbackHandler(base_handler.BaseHandler):
     current_time = int(self._time())
     last_poll_time = time.mktime(last_poll_time.timetuple())
     total_quota_refill = processing_rate * max(0, current_time - last_poll_time)
-    quota_refill = int(total_quota_refill / len(active_shard_states))
+    quota_refill = int(math.ceil(
+        1.0 * total_quota_refill / len(active_shard_states)))
 
     if not quota_refill:
       return

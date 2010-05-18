@@ -4,7 +4,7 @@ runtime: python
 api_version: 1
 
 handlers:
-- url: /mapreduce/.*
+- url: /mapreduce(/.*)?
   script: mapreduce/main.py
   login: admin
 - url: .*

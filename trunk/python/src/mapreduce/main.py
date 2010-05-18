@@ -20,7 +20,7 @@
 This module should be specified as a handler for mapreduce URLs in app.yaml:
 
   handlers:
-  - url: /mapreduce/.*
+  - url: /mapreduce(/.*)?
     login: admin
     script: google/appengine/ext/mapreduce/main.py
 """
@@ -35,6 +35,17 @@ from mapreduce import handlers
 from mapreduce import status
 
 
+class RedirectHandler(webapp.RequestHandler):
+  """Redirects the user back to the status page."""
+
+  def get(self):
+    new_path = self.request.path
+    if not new_path.endswith('/'):
+      new_path += '/'
+    new_path += 'status'
+    self.redirect(new_path)
+
+
 def create_application():
   """Create new WSGIApplication and register all handlers.
 
@@ -43,6 +54,7 @@ def create_application():
     registered.
   """
   return webapp.WSGIApplication([
+
 
       (r".*/worker_callback", handlers.MapperWorkerCallbackHandler),
       (r".*/controller_callback", handlers.ControllerCallbackHandler),
@@ -56,7 +68,10 @@ def create_application():
       (r".*/command/get_job_detail", status.GetJobDetailHandler),
 
 
-      (r".*/([a-zA-Z0-9]+(?:\.(?:css|js))?)", status.ResourceHandler),
+      (r"/[^/]+(?:/)?", RedirectHandler),
+
+
+      (r".+/([a-zA-Z0-9]+(?:\.(?:css|js))?)", status.ResourceHandler),
   ],
   debug=True)
 
