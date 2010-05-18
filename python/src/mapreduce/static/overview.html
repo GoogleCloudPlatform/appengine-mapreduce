@@ -11,16 +11,14 @@
 </head>
 <body>
 
-<div id="butter"></div>
+<div id="butter" style="display: none"></div>
 
 <h1>MapReduce Overview</h1>
 
-<!-- TODO(bslatkin): Add nav here for page sections -->
-
 <div id="running">
   <h2>Running jobs</h2>
-  <table id="running-list">
-    <thead border="1" style="display: none">
+  <table id="running-list" class="status-table">
+    <thead style="display: none">
     <tr>  
       <th>Status</th>
       <th>View</th>
@@ -29,14 +27,13 @@
       <th>Activity</th>
       <th>Start time</th>
       <th>Time elapsed</th>
-      <th>Graph</th>
       <th>Control</th>
     </tr>
     </thead>
 
-    <tfoot>
+    <tfoot style="display: none">
       <tr>
-        <td colspan="9">
+        <td colspan="8">
           <a id="running-first-page" style="display: none" href="">First page</a>
           <a id="running-next-page" style="display: none" href="">Next page &raquo;</a>
         </td>
@@ -45,7 +42,7 @@
 
     <tbody>
       <tr>
-        <td colspan="9">Loading...</td>
+        <td colspan="8">Loading...</td>
       </tr>
     </tbody>
   </table>

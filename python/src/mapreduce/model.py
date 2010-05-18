@@ -497,7 +497,12 @@ class MapreduceState(db.Model):
         each shard
     """
     chart = google_chart_api.BarChart(shards_processed)
-    self.chart_url = chart.display.Url(200, 100)
+    if self.mapreduce_spec and shards_processed:
+      chart.bottom.labels = [
+          str(x) for x in xrange(self.mapreduce_spec.mapper.shard_count)]
+      chart.left.labels = ['0', str(max(shards_processed))]
+      chart.left.min = 0
+    self.chart_url = chart.display.Url(300, 200)
 
   def get_processed(self):
     """Number of processed entities.

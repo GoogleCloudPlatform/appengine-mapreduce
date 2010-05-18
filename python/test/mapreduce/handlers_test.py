@@ -1032,7 +1032,7 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
     self.handler.post()
 
     for shard_state in shard_states:
-      self.assertEquals(33, self.quota_manager.get(shard_state.shard_id))
+      self.assertEquals(34, self.quota_manager.get(shard_state.shard_id))
 
   def testQuotaIsSplitOnlyBetweenActiveShards(self):
     """Test that quota is split only between active shards."""

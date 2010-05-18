@@ -11,26 +11,20 @@
 </head>
 <body>
 
-<div id="butter"></div>
+<div id="butter" style="display: none"></div>
 
 <div id="control">
-  <!-- TODO(bslatkin): Add Nav here for page sections -->
-  <h3>Control</h3>
-  <div id="job-control"></div>
-  <h3>Status refresh:</h3>
-  <ul>
-    <!-- TODO(bslatkin): Make this work -->
-    <li><a href="">15 seconds</a></li>
-    <li><a href="">30 seconds</a></li>
-    <li><a href="">1 minute</a></li>
-    <li><a href="">2 minutes</a></li>
-    <li><a href="">5 minutes</a></li>
-    <li><a href="">Now</a></li>
+  <a href="status">&laquo; Back to Overview</a>
+  |
+  <span id="job-control"></span>
+  <!--
+  Add refresh control.
+  -->
   </ul>
 </div>
 
 <h1 id="detail-page-title">Loading Job Status...</h1>
-<h2 id="detail-page-undertext"></h2>
+<h3 id="detail-page-undertext"></h3>
 
 <div id="detail">
 
@@ -50,7 +44,7 @@
 
   <div>
     <h2>Mapper status</h2>
-    <table border="1">
+    <table class="status-table">
       <thead>
         <tr>
           <th>Shard</th>
@@ -64,8 +58,6 @@
       <tbody id="mapper-shard-status"></tbody>
     </table>
   </div>
-
-  <!-- TODO(bslatkin): Add logging panel. -->
 </div>
 
 </body>
