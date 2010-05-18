@@ -112,8 +112,9 @@ class InputReader(JsonMixin):
 class DatastoreInputReader(InputReader):
   """Represents a range in query results.
 
-  DatastoreInputReader is a generator for entities in the key range. Iterating
-  over DatastoreInputReader changes its range past consumed entities.
+  DatastoreInputReader is a generator for either entities or keys in the key
+  range, depending on the value of the keys_only parameter. Iterating over
+  DatastoreInputReader changes its range past consumed entries.
 
   The class shouldn't be instantiated directly. Use split_input class method
   instead.
@@ -123,7 +124,7 @@ class DatastoreInputReader(InputReader):
 
   _MAX_SHARD_COUNT = 256
 
-  def __init__(self, entity_kind, key_range_param, batch_size):
+  def __init__(self, entity_kind, key_range_param, batch_size, keys_only):
     """Create new DatastoreInputReader object.
 
     This is internal constructor. Use split_query instead.
@@ -132,34 +133,41 @@ class DatastoreInputReader(InputReader):
       entity_kind: entity kind as string.
       key_range_param: key range to process as key_range.KeyRange.
       batch_size: batch size of entity fetching.
+      keys_only: if True, then send only keys to the mapper.
     """
     self._entity_kind = entity_kind
     self._key_range = key_range_param
     self.batch_size = batch_size
+    self._keys_only = keys_only
 
   def __iter__(self):
-    """Create a generator for entities in the range.
+    """Create a generator for entities or keys in the range.
 
-    Iterating through entities moves query range past the consumed entity.
+    Iterating through entries moves query range past the consumed entries.
 
     Yields:
-      next entity.
+      next entry.
     """
     while True:
-      entities_query = self._key_range.make_ascending_query(
-          util.for_name(self._entity_kind))
-      entities_list = entities_query.fetch(limit=self.batch_size)
+      entries_query = self._key_range.make_ascending_query(
+          util.for_name(self._entity_kind), self._keys_only)
+      entries_list = entries_query.fetch(limit=self.batch_size)
 
-      if not entities_list:
+      if not entries_list:
         return
 
-      for entity in entities_list:
-        self._key_range = key_range.KeyRange(entity.key(),
+      for entry in entries_list:
+        if hasattr(entry, 'key'):
+          key = entry.key()
+        else:
+          key = entry
+
+        self._key_range = key_range.KeyRange(key,
                                              self._key_range.key_end,
                                              self._key_range.direction,
                                              False,
                                              self._key_range.include_end)
-        yield entity
+        yield entry
 
   @classmethod
   def split_input(cls, mapper_spec):
@@ -197,6 +205,7 @@ class DatastoreInputReader(InputReader):
     entity_kind = util.for_name(entity_kind_name)
     shard_count = mapper_spec.shard_count
     batch_size = int(params.get("batch_size", cls._BATCH_SIZE))
+    keys_only = int(params.get("keys_only", False))
 
     ds_query = entity_kind.all()._get_query()
     ds_query.Order("__key__")
@@ -227,7 +236,7 @@ class DatastoreInputReader(InputReader):
         new_ranges += r.split_range(1)
       key_ranges = new_ranges
 
-    return [DatastoreInputReader(entity_kind_name, r, batch_size)
+    return [DatastoreInputReader(entity_kind_name, r, batch_size, keys_only)
             for r in key_ranges]
 
   def to_json(self):
@@ -236,9 +245,13 @@ class DatastoreInputReader(InputReader):
     Returns:
       all the data in json-compatible map.
     """
-    return {"key_range": self._key_range.to_json(),
-            "entity_kind": self._entity_kind,
-            "batch_size": self.batch_size}
+    json_dict = {"key_range": self._key_range.to_json(),
+                 "entity_kind": self._entity_kind,
+                 "batch_size": self.batch_size}
+    if self._keys_only:
+      json_dict["keys_only"] = True
+
+    return json_dict
 
   def __str__(self):
     """Returns the string representation of this DatastoreInputReader."""
@@ -256,7 +269,8 @@ class DatastoreInputReader(InputReader):
     """
     query_range = cls(json["entity_kind"],
                       key_range.KeyRange.from_json(json["key_range"]),
-                      json["batch_size"])
+                      json["batch_size"],
+                      json.get("keys_only", False))
     return query_range
 
 
