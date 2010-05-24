@@ -18,7 +18,7 @@
 """A simple guestbook app that demonstrates using the MapReduce libraries."""
 
 
-import auto_import_fixer
+
 
 from google.appengine.ext import db
 from google.appengine.ext import webapp
