@@ -387,9 +387,21 @@ function initJobLaunching(configs) {
         var value = config.mapper_params[key];
         var paramId = 'job-' + key + '-mapper-param';
         var paramP = $('<p class="editable-input">');
+
+        // Deal with the case in which the value is an object rather than
+        // just the default value string.
+        var prettyKey = key;
+        if (value["human_name"]) {
+          prettyKey = value["human_name"];
+        }
+
+        if (value["default_value"]) {
+          value = value["default_value"];
+        }
+
         $('<label>')
           .attr('for', paramId)
-          .text(key)
+          .text(prettyKey)
           .appendTo(paramP);
         $('<input type="text">')
           .attr('id', paramId)
