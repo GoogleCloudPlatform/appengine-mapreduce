@@ -51,7 +51,7 @@
     <mkdir dir="${build}" />
   </target>
 
-  <target name="compile" depends="init">
+  <target name="compile" depends="init,download_sdk">
     <javac srcdir="${src}" destdir="${build}">
       <classpath>
         <path refid="sdkjars" />
@@ -126,5 +126,15 @@
        usually only needs to be done once. -->
   <target name="clean_sdk">
     <delete dir="${sdk}" />
+  </target>
+
+  <target name="copy_libs_to_example" depends="dist">
+    <copy todir="example/WEB-INF/lib">
+      <fileset dir="${dist}/lib" />
+    </copy>
+  </target>
+
+  <target name="clean_example">
+    <delete dir="example/WEB-INF/lib" />
   </target>
 </project>
