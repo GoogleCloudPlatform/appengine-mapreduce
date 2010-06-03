@@ -1,0 +1,130 @@
+<project name="AppEngineMapper" default="dist" basedir=".">
+  <description>
+    A user space mapper library for AppEngine.
+  </description>
+  <property name="src" location="src" />
+  <property name="build" location="build" />
+  <property name="lib" location="lib" />
+  <property name="dist" location="dist" />
+  <property name="static" location="static" />
+
+  <property name="testsrc" location="test" />
+  <property name="testbuild" location="test_build" />
+  <property name="testlib" location="test_lib" />
+
+  <property name="sdk" location="sdk" />
+  <property name="version" value="1.3.4" />
+  <property name="sdkdirname" value="appengine-java-sdk-${version}" />
+  <property name="sdkfilename" value="${sdkdirname}.zip" />
+  <property name="sdklibdir" location="${sdk}/${sdkdirname}/lib" />
+
+  <path id="sdkjars">
+    <pathelement
+      path="${sdklibdir}/user/appengine-api-1.0-sdk-${version}.jar"
+      />
+    <pathelement
+      path="${sdklibdir}/user/appengine-api-labs-${version}.jar" />
+    <pathelement
+      path="${sdklibdir}/shared/geronimo-servlet_2.5_spec-1.2.jar" />
+  </path>
+
+  <!-- We plan to move to downloading all of these on the fly, but for now
+       hadoop is modified, json is jar'ed up, and the other two are released
+       relatively infrequently. -->
+  <path id="thirdpartyjars">
+    <fileset dir="${lib}">
+      <include name="*.jar" />
+    </fileset>
+  </path>
+
+  <path id="testjars">
+    <pathelement path="${testlib}/easymock-2.5.2.jar" />
+    <pathelement path="${testlib}/easymockclassextension-2.5.2.jar" />
+    <pathelement path="${testlib}/junit-4.8.2.jar" />
+    <pathelement path="${testlib}/cglib-nodep-2.2.jar" />
+    <pathelement path="${testlib}/objenesis-1.2.jar" />
+    <pathelement path="${sdklibdir}/testing/appengine-testing.jar" />
+    <pathelement path="${sdklibdir}/impl/appengine-api-stubs.jar" />
+  </path>
+
+  <target name="init">
+    <mkdir dir="${build}" />
+  </target>
+
+  <target name="compile" depends="init">
+    <javac srcdir="${src}" destdir="${build}">
+      <classpath>
+        <path refid="sdkjars" />
+        <path refid="thirdpartyjars" />
+      </classpath>
+    </javac>
+  </target>
+
+  <target name="test_init">
+    <mkdir dir="${testbuild}" />
+  </target>
+
+  <target name="test_compile" depends="test_init,dist,download_sdk">
+    <javac srcdir="${testsrc}" destdir="${testbuild}">
+      <classpath>
+        <path refid="sdkjars" />
+        <path refid="thirdpartyjars" />
+        <path refid="testjars" />
+        <pathelement location="${dist}/lib/appengine-mapper.jar" />
+      </classpath>
+    </javac>
+  </target>
+
+  <target name="test" depends="test_compile">
+    <junit filtertrace="off">
+      <test name="com.google.appengine.tools.mapreduce.AllTests" />
+      <classpath>
+        <path refid="sdkjars" />
+        <path refid="thirdpartyjars" />
+        <path refid="testjars" />
+        <pathelement location="${dist}/lib/appengine-mapper.jar" />
+        <pathelement location="${testbuild}" />
+      </classpath>
+      <formatter type="brief" usefile="false" />
+    </junit>
+  </target>
+
+  <target name="dist" depends="compile">
+    <mkdir dir="${dist}/lib" />
+    <copy todir="${build}/com/google/appengine/tools/mapreduce">
+      <fileset dir="${static}" />
+    </copy>
+    <jar jarfile="${dist}/lib/appengine-mapper.jar" basedir="${build}" />
+    <copy todir="${dist}/lib">
+      <path refid="thirdpartyjars" />
+    </copy>
+  </target>
+
+  <target name="clean">
+    <delete dir="${build}" />
+    <delete dir="${dist}" />
+    <delete dir="${testbuild}" />
+  </target>
+
+  <target name="check_sdk_extracted">
+    <available file="${sdk}/${sdkdirname}" property="sdkextracted" />
+  </target>
+
+  <target
+    name="download_sdk"
+    description="Gets the AppEngine SDK"
+    depends="check_sdk_extracted"
+    unless="sdkextracted">
+      <mkdir dir="${sdk}" />
+      <get
+        src="http://googleappengine.googlecode.com/files/${sdkfilename}"
+        dest="${sdk}/${sdkfilename}" />
+      <unzip src="${sdk}/${sdkfilename}" dest="${sdk}" />
+  </target>
+
+  <!-- Separate target because downloading the SDK can be expensive and
+       usually only needs to be done once. -->
+  <target name="clean_sdk">
+    <delete dir="${sdk}" />
+  </target>
+</project>
