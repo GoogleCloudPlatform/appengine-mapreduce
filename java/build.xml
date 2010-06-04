@@ -19,13 +19,16 @@
   <property name="sdklibdir" location="${sdk}/${sdkdirname}/lib" />
 
   <path id="sdkjars">
-    <pathelement
-      path="${sdklibdir}/user/appengine-api-1.0-sdk-${version}.jar"
-      />
-    <pathelement
-      path="${sdklibdir}/user/appengine-api-labs-${version}.jar" />
-    <pathelement
-      path="${sdklibdir}/shared/geronimo-servlet_2.5_spec-1.2.jar" />
+    <fileset dir="${sdklibdir}/user">
+      <include name="appengine-api-1.0-sdk-${version}.jar" />
+      <include name="appengine-api-labs-${version}.jar" />
+    </fileset>
+    <fileset dir="${sdklibdir}/impl">
+      <include name="appengine-api-stubs.jar" />
+    </fileset>
+    <fileset dir="${sdklibdir}/shared">
+      <include name="geronimo-servlet_2.5_spec-1.2.jar" />
+    </fileset>
   </path>
 
   <!-- We plan to move to downloading all of these on the fly, but for now
@@ -129,12 +132,24 @@
   </target>
 
   <target name="copy_libs_to_example" depends="dist">
-    <copy todir="example/WEB-INF/lib">
+    <copy todir="example/war/WEB-INF/lib">
       <fileset dir="${dist}/lib" />
+      <path refid="sdkjars" />
     </copy>
   </target>
 
+  <target name="compile_example" depends="copy_libs_to_example">
+    <mkdir dir="example/war/WEB-INF/classes" />
+    <javac srcdir="example" destdir="example/war/WEB-INF/classes">
+      <classpath>
+        <fileset dir="example/war/WEB-INF/lib" />
+        <path refid="sdkjars" />
+      </classpath>
+    </javac>
+  </target>
+
   <target name="clean_example">
-    <delete dir="example/WEB-INF/lib" />
+    <delete dir="example/war/WEB-INF/lib" />
+    <delete dir="example/war/WEB-INF/classes" />
   </target>
 </project>
