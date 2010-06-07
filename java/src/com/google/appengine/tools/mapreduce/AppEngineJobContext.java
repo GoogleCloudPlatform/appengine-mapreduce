@@ -75,12 +75,12 @@ public class AppEngineJobContext extends JobContext {
   /**
    * Default rate of map() calls
    */
-  public static final int DEFAULT_MAP_INPUT_PROCESSING_RATE = 20;
+  public static final int DEFAULT_MAP_INPUT_PROCESSING_RATE = 1000;
   
   /**
    * Default number of mappers to run in parallel.
    */
-  public static final int DEFAULT_MAPPER_SHARD_COUNT = 4;
+  public static final int DEFAULT_MAPPER_SHARD_COUNT = 8;
   
   // Current request
   private final HttpServletRequest request;
