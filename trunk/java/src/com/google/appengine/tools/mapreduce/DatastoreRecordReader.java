@@ -126,7 +126,7 @@ public class DatastoreRecordReader extends RecordReader<Key, Entity> implements 
   @Override
   public void readFields(DataInput in) throws IOException {
     currentKey = DatastoreSerializationUtil.readKeyOrNull(in);
-    log.fine("DatastoreRecordReader reconsituted: " + currentKey);
+    log.fine("DatastoreRecordReader reconstituted: " + currentKey);
   }
 
   @Override
