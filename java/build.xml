@@ -97,7 +97,7 @@
     <copy todir="${build}/com/google/appengine/tools/mapreduce">
       <fileset dir="${static}" />
     </copy>
-    <jar jarfile="${dist}/lib/appengine-mapper.jar" basedir="${build}" />
+    <jar jarfile="${dist}/lib/appengine-mapper.jar" basedir="${build}" debuglevel="lines,source" />
     <copy todir="${dist}/lib">
       <path refid="thirdpartyjars" />
     </copy>
