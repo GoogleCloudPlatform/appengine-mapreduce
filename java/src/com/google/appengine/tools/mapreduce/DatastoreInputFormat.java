@@ -88,11 +88,6 @@ public class DatastoreInputFormat extends InputFormat<Key, Entity> {
    * {@value #ENTITY_KIND_KEY} attribute, which will be the entity kind
    * parititioned. The partitioning happens lexicographically by key name
    * or numerically by id, as appropriate.
-=======
-  
-  /**
-   * Gets the splits for the entity kind named by the current configuration's
-   * {@link #ENTITY_KIND_KEY} property, splitting lexicographically by key.
    */
   @Override
   public List<InputSplit> getSplits(JobContext context) throws IOException {
