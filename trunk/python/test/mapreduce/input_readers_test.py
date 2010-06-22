@@ -27,10 +27,12 @@ import os
 import zipfile
 
 from google.appengine.api import apiproxy_stub_map
-from google.appengine.api import datastore_file_stub
+from google.appengine.api import datastore
 from mapreduce.lib import blobstore
+from google.appengine.api import datastore_file_stub
 from google.appengine.ext import db
 from mapreduce.lib import key_range
+from google.appengine.ext.blobstore import blobstore as blobstore_internal
 from mapreduce import input_readers
 from mapreduce import model
 import unittest
@@ -199,10 +201,8 @@ class DatastoreInputReaderTest(unittest.TestCase):
     krange = key_range.KeyRange(key_start=self.key(25), key_end=self.key(50),
                                 direction="ASC",
                                 include_start=False, include_end=True)
-    query_range = input_readers.DatastoreInputReader(ENTITY_KIND,
-                                                     krange,
-                                                     50,
-                                                     False)
+    query_range = input_readers.DatastoreInputReader(
+        ENTITY_KIND, krange, {"batch_size": 50})
 
     entities = []
 
@@ -224,10 +224,8 @@ class DatastoreInputReaderTest(unittest.TestCase):
     krange = key_range.KeyRange(key_start=self.key(25), key_end=self.key(50),
                                 direction="ASC",
                                 include_start=False, include_end=True)
-    query_range = input_readers.DatastoreInputReader(ENTITY_KIND,
-                                                     krange,
-                                                     50,
-                                                     True)
+    query_range = input_readers.DatastoreInputReader(
+        ENTITY_KIND, krange, {"batch_size": 50, "keys_only": True})
 
     keys = []
 
@@ -235,6 +233,38 @@ class DatastoreInputReaderTest(unittest.TestCase):
       keys.append(key)
       self.assertEquals(
           key_range.KeyRange(key_start=key, key_end=self.key(50),
+                             direction="ASC",
+                             include_start=False, include_end=True),
+          query_range._key_range)
+
+    self.assertEquals(25, len(keys))
+
+  def testKeysOnlyGeneratorNoModelOtherApp(self):
+    """Test DatastoreInputReader when raw kind is given and not a Model path."""
+    OTHER_KIND = "blahblah"
+    OTHER_APP = "blah"
+    apiproxy_stub_map.apiproxy.GetStub("datastore_v3").SetTrusted(True)
+
+    for _ in range(0, 100):
+      datastore.Put(datastore.Entity(OTHER_KIND, _app=OTHER_APP))
+
+    key_start = db.Key.from_path(OTHER_KIND, 25, _app=OTHER_APP)
+    key_end = db.Key.from_path(OTHER_KIND, 50, _app=OTHER_APP)
+    krange = key_range.KeyRange(key_start=key_start, key_end=key_end,
+                                direction="ASC",
+                                include_start=False, include_end=True,
+                                _app=OTHER_APP)
+
+    query_range = input_readers.DatastoreInputReader(
+        OTHER_KIND, krange,
+        {"app": OTHER_APP, "batch_size": 50, "keys_only": True})
+
+    keys = []
+
+    for key in query_range:
+      keys.append(key)
+      self.assertEquals(
+          key_range.KeyRange(key_start=key, key_end=key_end,
                              direction="ASC",
                              include_start=False, include_end=True),
           query_range._key_range)
@@ -267,10 +297,12 @@ class InputReaderTest(unittest.TestCase):
     self.appid = "testapp"
     os.environ["APPLICATION_ID"] = self.appid
     self.mox = mox.Mox()
+    self.original_fetch_data = blobstore.fetch_data
 
   def tearDown(self):
     self.mox.UnsetStubs()
     self.mox.ResetAll()
+    blobstore.fetch_data = self.original_fetch_data
 
   def initMockedBlobstoreLineReader(self,
                                     initial_position,
@@ -281,19 +313,11 @@ class InputReaderTest(unittest.TestCase):
                                     data):
     input_readers.BlobstoreLineInputReader._BLOB_BUFFER_SIZE = buffer_size
     blob_key_str = "foo"
-    self.mox.StubOutWithMock(blobstore, "fetch_data")
-    for block_index in range(num_blocks_read):
-      block_start = initial_position + buffer_size * block_index
-      block_end = initial_position + buffer_size * (block_index + 1)
-      data_slice = data[block_start:block_end]
-      blobstore.fetch_data(blob_key_str,
-                           block_start,
-                           block_end
-                          ).AndReturn(data_slice)
-    if eof_read:
-      blobstore.fetch_data(blob_key_str, len(data),
-                           len(data) + buffer_size).AndReturn('')
-    self.mox.ReplayAll()
+
+    def fetch_data(blob_key, start, end):
+      return data[start:end + 1]
+    blobstore_internal.fetch_data = fetch_data
+
     r = input_readers.BlobstoreLineInputReader(blob_key_str,
                                                initial_position,
                                                initial_position + end_offset)
@@ -310,24 +334,23 @@ class InputReaderTest(unittest.TestCase):
   def testAtStart(self):
     """If we start at position 0, read the first record."""
     blob_reader = self.initMockedBlobstoreLineReader(
-        0, 1, True, 100, 100, "foo\nbar")
+        0, 1, True, 100, 100, "foo\nbar\nfoobar")
     self.assertNextEquals(blob_reader, 0, "foo")
     self.assertNextEquals(blob_reader, len("foo\n"), "bar")
-    self.mox.VerifyAll()
+    self.assertNextEquals(blob_reader, len("foo\nbar\n"), "foobar")
 
   def testOmitFirst(self):
     """If we start in the middle of a record, start with the next record."""
     blob_reader = self.initMockedBlobstoreLineReader(
-        1, 1, True, 100, 100, "foo\nbar")
+        1, 1, True, 100, 100, "foo\nbar\nfoobar")
     self.assertNextEquals(blob_reader, len("foo\n"), "bar")
-    self.mox.VerifyAll()
+    self.assertNextEquals(blob_reader, len("foo\nbar\n"), "foobar")
 
   def testOmitNewline(self):
     """If we start on a newline, start with the record on the next byte."""
     blob_reader = self.initMockedBlobstoreLineReader(
         3, 1, True, 100, 100, "foo\nbar")
     self.assertNextEquals(blob_reader, len("foo\n"), "bar")
-    self.mox.VerifyAll()
 
   def testSpanBlocks(self):
     """Test the multi block case."""
@@ -335,7 +358,6 @@ class InputReaderTest(unittest.TestCase):
         0, 4, True, 100, 2, "foo\nbar")
     self.assertNextEquals(blob_reader, 0, "foo")
     self.assertNextEquals(blob_reader, len("foo\n"), "bar")
-    self.mox.VerifyAll()
 
   def testStopAtEnd(self):
     """If we pass end position, then we don't get a record past the end."""
@@ -343,7 +365,6 @@ class InputReaderTest(unittest.TestCase):
         0, 1, False, 1, 100, "foo\nbar")
     self.assertNextEquals(blob_reader, 0, "foo")
     self.assertDone(blob_reader)
-    self.mox.VerifyAll()
 
   def testDontReturnAnythingIfPassEndBeforeFirst(self):
     """Test end behavior.
@@ -354,7 +375,6 @@ class InputReaderTest(unittest.TestCase):
     blob_reader = self.initMockedBlobstoreLineReader(
         3, 1, False, 0, 100, "foo\nbar")
     self.assertDone(blob_reader)
-    self.mox.VerifyAll()
 
   def mockOutBlobInfoSize(self, size):
     blob_key_str = "foo"

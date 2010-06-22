@@ -131,5 +131,15 @@ class IsGeneratorFunctionTest(unittest.TestCase):
     self.assertFalse(util.is_generator_function(test_handler_function))
 
 
+class GetShortNameTest(unittest.TestCase):
+  """Test util.get_short_name function."""
+
+  def testGetShortName(self):
+    self.assertEquals("blah", util.get_short_name("blah"))
+    self.assertEquals("blah", util.get_short_name(".blah"))
+    self.assertEquals("blah", util.get_short_name("__mmm__.blah"))
+    self.assertEquals("blah", util.get_short_name("__mmm__.Krb.blah"))
+
+
 if __name__ == "__main__":
   unittest.main()

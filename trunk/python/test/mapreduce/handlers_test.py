@@ -46,6 +46,9 @@ import testutil
 from testlib import mock_webapp
 
 
+MAPPER_PARAMS = {"batch_size": 50}
+
+
 class TestException(Exception):
   """Test exception to use in test handlers."""
 
@@ -518,11 +521,13 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
     MapreduceHandlerTestBase.setUp(self)
     self.init()
 
-  def init(self, mapper_handler_spec=MAPPER_HANDLER_SPEC):
+  def init(self, mapper_handler_spec=MAPPER_HANDLER_SPEC,
+           mapper_params=None):
     """Init everything needed for testing worker callbacks.
 
     Args:
       mapper_handler_spec: handler specification to use in test.
+      mapper_params: mapper specification to use in test.
     """
     self.handler = handlers.MapperWorkerCallbackHandler(MockTime.time)
     self.handler.initialize(mock_webapp.MockRequest(),
@@ -539,9 +544,12 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
         self.mapreduce_id, self.shard_number)
     self.shard_id = self.shard_state.shard_id
 
+    if not mapper_params:
+      mapper_params = MAPPER_PARAMS
+
     worker_params = handlers.MapperWorkerCallbackHandler.worker_parameters(
         self.mapreduce_spec, self.shard_id, self.slice_id,
-        InputReader(ENTITY_KIND, key_range.KeyRange(), 50, False))
+        InputReader(ENTITY_KIND, key_range.KeyRange(), mapper_params))
     InputReader.reset()
 
     for param_name in worker_params:
@@ -643,7 +651,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
                            direction="ASC",
                            include_start=False,
                            include_end=True),
-        50, False)
+        MAPPER_PARAMS)
     self.handler.schedule_slice("/mapreduce", self.mapreduce_spec,
                                 self.shard_id, 123, input_reader)
 
@@ -662,8 +670,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
                              direction="ASC",
                              include_start=False,
                              include_end=True),
-          50,
-          False)
+          MAPPER_PARAMS)
       self.handler.schedule_slice("/mapreduce", self.mapreduce_spec,
                                   self.shard_id, 123, query_range)
 
@@ -682,8 +689,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
                            direction="ASC",
                            include_start=False,
                            include_end=True),
-        50,
-        False)
+        MAPPER_PARAMS)
     self.handler.schedule_slice("/mapreduce", self.mapreduce_spec,
                                 self.shard_id, 123, query_range)
 
@@ -692,6 +698,25 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
 
     tasks = self.taskqueue.GetTasks("default")
     self.assertEquals(1, len(tasks))
+
+  def testQuotaCanBeOptedOut(self):
+    """Test work cycle if there was no quota at the very beginning."""
+    e1 = TestEntity()
+    e1.put()
+    self.quota_manager.set(self.shard_id, 0)
+
+    self.init(mapper_params={"enable_quota": False})
+    self.handler.post()
+
+    self.assertEquals([str(e1.key())], TestHandler.processed_keys)
+    self.assertEquals(1, InputReader.yields)
+
+    self.verify_shard_state(
+        model.ShardState.get_by_shard_id(self.shard_id),
+        processed=1, active=False, result_status="success")
+
+    tasks = self.taskqueue.GetTasks("default")
+    self.assertEquals(0, len(tasks))
 
   def testNoQuotaAtAll(self):
     """Test work cycle if there was no quota at the very beginning."""
