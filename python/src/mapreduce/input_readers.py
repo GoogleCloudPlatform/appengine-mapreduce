@@ -65,6 +65,9 @@ class InputReader(JsonMixin):
      interface.
   """
 
+  _APP_PARAM = "_app"
+  MAPPER_PARAMS = "mapper_params"
+
   def __iter__(self):
     return self
 
@@ -124,7 +127,12 @@ class DatastoreInputReader(InputReader):
 
   _MAX_SHARD_COUNT = 256
 
-  def __init__(self, entity_kind, key_range_param, batch_size, keys_only):
+  ENTITY_KIND_PARAM = "entity_kind"
+  KEYS_ONLY_PARAM = "keys_only"
+  BATCH_SIZE_PARAM = "batch_size"
+  KEY_RANGE_PARAM = "key_range"
+
+  def __init__(self, entity_kind, key_range_param, mapper_params):
     """Create new DatastoreInputReader object.
 
     This is internal constructor. Use split_query instead.
@@ -132,13 +140,14 @@ class DatastoreInputReader(InputReader):
     Args:
       entity_kind: entity kind as string.
       key_range_param: key range to process as key_range.KeyRange.
-      batch_size: batch size of entity fetching.
-      keys_only: if True, then send only keys to the mapper.
+      mapper_params: mapper parameters as defined by user.
     """
     self._entity_kind = entity_kind
     self._key_range = key_range_param
-    self.batch_size = batch_size
-    self._keys_only = keys_only
+    self._mapper_params = mapper_params
+    self._batch_size = self._mapper_params.get(
+        self.BATCH_SIZE_PARAM, self._BATCH_SIZE)
+    self._keys_only = self._mapper_params.get(self.KEYS_ONLY_PARAM, False)
 
   def __iter__(self):
     """Create a generator for entities or keys in the range.
@@ -149,24 +158,26 @@ class DatastoreInputReader(InputReader):
       next entry.
     """
     while True:
-      entries_query = self._key_range.make_ascending_query(
-          util.for_name(self._entity_kind), self._keys_only)
-      entries_list = entries_query.fetch(limit=self.batch_size)
+      if self._keys_only:
+        raw_entity_kind = util.get_short_name(self._entity_kind)
+        entries_query = self._key_range.make_ascending_datastore_query(
+            raw_entity_kind, keys_only=self._keys_only)
+        entries_list = entries_query.Get(limit=self._batch_size)
+      else:
+        entries_query = self._key_range.make_ascending_query(
+            util.for_name(self._entity_kind), self._keys_only)
+        entries_list = entries_query.fetch(limit=self._batch_size)
 
       if not entries_list:
         return
 
       for entry in entries_list:
-        if hasattr(entry, 'key'):
+        if hasattr(entry, "key"):
           key = entry.key()
         else:
           key = entry
 
-        self._key_range = key_range.KeyRange(key,
-                                             self._key_range.key_end,
-                                             self._key_range.direction,
-                                             False,
-                                             self._key_range.include_end)
+        self._key_range.advance(key)
         yield entry
 
   @classmethod
@@ -198,35 +209,36 @@ class DatastoreInputReader(InputReader):
     if mapper_spec.input_reader_class() != cls:
       raise BadReaderParamsError("Input reader class mismatch")
     params = mapper_spec.params
-    if "entity_kind" not in params:
+    if cls.ENTITY_KIND_PARAM not in params:
       raise BadReaderParamsError("Missing mapper parameter 'entity_kind'")
 
-    entity_kind_name = params["entity_kind"]
-    entity_kind = util.for_name(entity_kind_name)
+    entity_kind_name = params[cls.ENTITY_KIND_PARAM]
     shard_count = mapper_spec.shard_count
-    batch_size = int(params.get("batch_size", cls._BATCH_SIZE))
-    keys_only = int(params.get("keys_only", False))
+    app = params.get(cls._APP_PARAM)
+    keys_only = int(params.get(cls.KEYS_ONLY_PARAM, False))
 
-    ds_query = entity_kind.all()._get_query()
+    if not keys_only:
+      util.for_name(entity_kind_name)
+
+    raw_entity_kind = util.get_short_name(entity_kind_name)
+    ds_query = datastore.Query(kind=raw_entity_kind, _app=app, keys_only=True)
     ds_query.Order("__key__")
-    first_entity = ds_query.Get(1)
-    if not first_entity:
+    first_entity_key_list = ds_query.Get(1)
+    if not first_entity_key_list:
       return []
-    else:
-      first_entity_key = first_entity[0].key()
+    first_entity_key = first_entity_key_list[0]
 
     ds_query.Order(("__key__", datastore.Query.DESCENDING))
     try:
-      last_entity = ds_query.Get(1)
-      last_entity_key = last_entity[0].key()
+      last_entity_key, = ds_query.Get(1)
     except db.NeedIndexError, e:
       logging.warning("Cannot create accurate approximation of keyspace, "
                       "guessing instead. Please address this problem: %s", e)
       last_entity_key = key_range.KeyRange.guess_end_key(
-          entity_kind.kind(), first_entity_key)
+          raw_entity_kind, first_entity_key)
 
     full_keyrange = key_range.KeyRange(
-        first_entity_key, last_entity_key, None, True, True)
+        first_entity_key, last_entity_key, None, True, True, _app=app)
     key_ranges = [full_keyrange]
 
     number_of_half_splits = int(math.floor(math.log(shard_count, 2)))
@@ -236,8 +248,7 @@ class DatastoreInputReader(InputReader):
         new_ranges += r.split_range(1)
       key_ranges = new_ranges
 
-    return [DatastoreInputReader(entity_kind_name, r, batch_size, keys_only)
-            for r in key_ranges]
+    return [cls(entity_kind_name, r, params) for r in key_ranges]
 
   def to_json(self):
     """Serializes all the data in this query range into json form.
@@ -245,12 +256,9 @@ class DatastoreInputReader(InputReader):
     Returns:
       all the data in json-compatible map.
     """
-    json_dict = {"key_range": self._key_range.to_json(),
-                 "entity_kind": self._entity_kind,
-                 "batch_size": self.batch_size}
-    if self._keys_only:
-      json_dict["keys_only"] = True
-
+    json_dict = {self.KEY_RANGE_PARAM: self._key_range.to_json(),
+                 self.ENTITY_KIND_PARAM: self._entity_kind,
+                 self.MAPPER_PARAMS: self._mapper_params}
     return json_dict
 
   def __str__(self):
@@ -267,10 +275,9 @@ class DatastoreInputReader(InputReader):
     Returns:
       an instance of DatastoreInputReader with all data deserialized from json.
     """
-    query_range = cls(json["entity_kind"],
-                      key_range.KeyRange.from_json(json["key_range"]),
-                      json["batch_size"],
-                      json.get("keys_only", False))
+    query_range = cls(json[cls.ENTITY_KIND_PARAM],
+                      key_range.KeyRange.from_json(json[cls.KEY_RANGE_PARAM]),
+                      json[cls.MAPPER_PARAMS])
     return query_range
 
 
@@ -282,6 +289,10 @@ class BlobstoreLineInputReader(InputReader):
   _MAX_SHARD_COUNT = 256
 
   _MAX_BLOB_KEYS_COUNT = 246
+
+  INITIAL_POSITION_PARAM = "initial_position"
+  END_POSITION_PARAM = "end_position"
+  BLOB_KEY_PARAM = "blob_key"
 
   def __init__(self, blob_key, start_position, end_position):
     """Initializes this instance with the given blob key and character range.
@@ -297,127 +308,53 @@ class BlobstoreLineInputReader(InputReader):
       end_position: a position in the last record to read.
     """
     self._blob_key = blob_key
-    self._current_request_position = start_position
-    self._array_start_position = start_position
-    self._current_record_start_0_offset = 0
+    self._blob_reader = blobstore.BlobReader(blob_key,
+                                             self._BLOB_BUFFER_SIZE,
+                                             start_position)
     self._end_position = end_position
-    self._data = []
     self._has_iterated = False
-
-    self._read_before_start = (start_position != 0)
-
-  def _get_next_block(self):
-    """Adds the next _BLOB_BUFFER_SIZE block of data to the _data array.
-
-    Increments _current_request_offset by the amount of data returned.
-
-    Returns:
-      False if no data was read, true otherwise.
-    """
-    blob_data = blobstore.fetch_data(
-        self._blob_key,
-        self._current_request_position,
-        self._current_request_position + self._BLOB_BUFFER_SIZE)
-    if not blob_data:
-      return False
-    self._current_request_position += len(blob_data)
-    self._data.append(blob_data)
-    return True
-
-  def _current_record_position(self):
-    """Returns the character position of the current record in the blob."""
-    return self._current_record_start_0_offset + self._array_start_position
-
-  def _find_end_of_current_record(self):
-    """Finds the index of the newline terminating the current record.
-
-    Doesn't read any additional data.
-
-    Returns:
-      -1 if the newline hasn't been read. An index in self._data[-1] otherwise.
-    """
-    start_of_neg1_search = 0
-    if len(self._data) == 1:
-      start_of_neg1_search = self._current_record_start_0_offset
-    return self._data[-1].find("\n", start_of_neg1_search)
-
-  def _has_complete_record(self):
-    """True iff there is a complete and unprocessed record in self._data."""
-    return self._data and self._find_end_of_current_record() != -1
-
-  def _extract_record(self, newline_neg1_offset):
-    """Returns the string containing the current record.
-
-    The current record's boundaries are defined by
-    _current_record_start_0_offset inclusive and newline_neg1_offset exclusive.
-    """
-    if len(self._data) == 1:
-      record = self._data[0][
-          self._current_record_start_0_offset:newline_neg1_offset]
-    elif len(self._data) > 1:
-      remaining_blocks = self._data[1:-1]
-      remaining_blocks.append(self._data[-1][:newline_neg1_offset])
-      record = "".join([self._data[0][self._current_record_start_0_offset:]] +
-                       remaining_blocks)
-    return record
-
-  def _read(self):
-    if self._read_before_start:
-      self._read_before_start = False
-      self._read()
-
-
-    if self._current_record_position() > self._end_position:
-      return None
-
-    while not self._has_complete_record():
-      if not self._get_next_block():
-        if not self._data:
-          return None
-        break
-
-    newline_neg1_offset = self._find_end_of_current_record()
-    if newline_neg1_offset == -1:
-      newline_neg1_offset = len(self._data[-1])
-
-    record = self._extract_record(newline_neg1_offset)
-    record_start_position = self._current_record_position()
-
-    self._array_start_position += sum([len(d) for d in self._data[:-1]])
-    self._data = self._data[-1:]
-    self._current_record_start_0_offset = newline_neg1_offset + 1
-
-    return record_start_position, record
+    self._read_before_start = bool(start_position)
 
   def next(self):
     """Returns the next input from this input reader."""
     self._has_iterated = True
-    resp = self._read()
-    if not resp:
+
+    if self._read_before_start:
+      self._blob_reader.readline()
+      self._read_before_start = False
+    start_position = self._blob_reader.tell()
+
+    if start_position >= self._end_position:
       raise StopIteration()
-    return resp
+
+    line = self._blob_reader.readline()
+
+    if not line:
+      raise StopIteration()
+
+    return start_position, line.rstrip("\n")
 
   def to_json(self):
     """Returns an json-compatible input shard spec for remaining inputs."""
-    new_pos = self._current_record_position()
+    new_pos = self._blob_reader.tell()
     if self._has_iterated:
       new_pos -= 1
-    return {"blob_key": self._blob_key,
-            "initial_position": new_pos,
-            "end_position": self._end_position}
+    return {self.BLOB_KEY_PARAM: self._blob_key,
+            self.INITIAL_POSITION_PARAM: new_pos,
+            self.END_POSITION_PARAM: self._end_position}
 
   def __str__(self):
     """Returns the string representation of this BlobstoreLineInputReader."""
     return "blobstore.BlobKey(%r):[%d, %d]" % (
-        self._blob_key, self._current_request_position, self._end_position)
+        self._blob_key, self._blob_reader.tell(), self._end_position)
 
   @classmethod
   def from_json(cls, json):
     """Instantiates an instance of this InputReader for the given shard spec.
     """
-    return cls(json["blob_key"],
-               json["initial_position"],
-               json["end_position"])
+    return cls(json[cls.BLOB_KEY_PARAM],
+               json[cls.INITIAL_POSITION_PARAM],
+               json[cls.END_POSITION_PARAM])
 
   @classmethod
   def split_input(cls, mapper_spec):
@@ -440,7 +377,7 @@ class BlobstoreLineInputReader(InputReader):
 
     blob_keys = params["blob_keys"]
     if isinstance(blob_keys, basestring):
-      blob_keys = [blob_keys]
+      blob_keys = blob_keys.split(',')
     if len(blob_keys) > cls._MAX_BLOB_KEYS_COUNT:
       raise BadReaderParamsError("Too many 'blob_keys' for mapper input")
     if not blob_keys:
@@ -461,13 +398,13 @@ class BlobstoreLineInputReader(InputReader):
       blob_chunk_size = blob_size // shards_per_blob
       for i in xrange(shards_per_blob - 1):
         chunks.append(BlobstoreLineInputReader.from_json(
-            {"blob_key": blob_key,
-             "initial_position": blob_chunk_size * i,
-             "end_position": blob_chunk_size * (i + 1)}))
+            {cls.BLOB_KEY_PARAM: blob_key,
+             cls.INITIAL_POSITION_PARAM: blob_chunk_size * i,
+             cls.END_POSITION_PARAM: blob_chunk_size * (i + 1)}))
       chunks.append(BlobstoreLineInputReader.from_json(
-          {"blob_key": blob_key,
-           "initial_position": blob_chunk_size * (shard_count - 1),
-           "end_position": blob_size}))
+          {cls.BLOB_KEY_PARAM: blob_key,
+           cls.INITIAL_POSITION_PARAM: blob_chunk_size * (shard_count - 1),
+           cls.END_POSITION_PARAM: blob_size}))
     return chunks
 
 
@@ -479,6 +416,10 @@ class BlobstoreZipInputReader(InputReader):
   """
 
   _MAX_SHARD_COUNT = 256
+
+  BLOB_KEY_PARAM = "blob_key"
+  START_INDEX_PARAM = "start_index"
+  END_INDEX_PARAM = "end_index"
 
   def __init__(self, blob_key, start_index, end_index,
                _reader=blobstore.BlobReader):
@@ -527,7 +468,9 @@ class BlobstoreZipInputReader(InputReader):
     Args:
       input_shard_state: The InputReader state as a dict-like object.
     """
-    return cls(json["blob_key"], json["start_index"], json["end_index"])
+    return cls(json[cls.BLOB_KEY_PARAM],
+               json[cls.START_INDEX_PARAM],
+               json[cls.END_INDEX_PARAM])
 
   def to_json(self):
     """Returns an input shard state for the remaining inputs.
@@ -535,9 +478,9 @@ class BlobstoreZipInputReader(InputReader):
     Returns:
       A json-izable version of the remaining InputReader.
     """
-    return {"blob_key": self._blob_key,
-            "start_index": self._start_index,
-            "end_index": self._end_index}
+    return {cls.BLOB_KEY_PARAM: self._blob_key,
+            cls.START_INDEX_PARAM: self._start_index,
+            cls.END_INDEX_PARAM: self._end_index}
 
   def __str__(self):
     """Returns the string representation of this BlobstoreZipInputReader."""
@@ -562,10 +505,10 @@ class BlobstoreZipInputReader(InputReader):
     if mapper_spec.input_reader_class() != cls:
       raise BadReaderParamsError("Mapper input reader class mismatch")
     params = mapper_spec.params
-    if "blob_key" not in params:
+    if cls.BLOB_KEY_PARAM not in params:
       raise BadReaderParamsError("Must specify 'blob_key' for mapper input")
 
-    blob_key = params["blob_key"]
+    blob_key = params[cls.BLOB_KEY_PARAM]
     zip_input = zipfile.ZipFile(_reader(blob_key))
     files = zip_input.infolist()
     total_size = sum(x.file_size for x in files)

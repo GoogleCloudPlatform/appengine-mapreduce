@@ -18,7 +18,7 @@
 """Utility functions for use with the mapreduce library."""
 
 
-__all__ = ["for_name", "is_generator_function"]
+__all__ = ["for_name", "is_generator_function", "get_short_name"]
 
 
 import inspect
@@ -98,3 +98,8 @@ def is_generator_function(obj):
   CO_GENERATOR = 0x20
   return bool(((inspect.isfunction(obj) or inspect.ismethod(obj)) and
                obj.func_code.co_flags & CO_GENERATOR))
+
+
+def get_short_name(fq_name):
+  """Returns the last component of the name."""
+  return fq_name.split(".")[-1:][0]

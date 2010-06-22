@@ -107,29 +107,33 @@ class MapperWorkerCallbackHandler(base_handler.BaseHandler):
 
     input_reader = self.input_reader(spec.mapper)
 
-    quota_consumer = quota.QuotaConsumer(
-        quota.QuotaManager(memcache.Client()),
-        shard_id,
-        _QUOTA_BATCH_SIZE)
+    if spec.mapper.params.get("enable_quota", True):
+      quota_consumer = quota.QuotaConsumer(
+          quota.QuotaManager(memcache.Client()),
+          shard_id,
+          _QUOTA_BATCH_SIZE)
+    else:
+      quota_consumer = None
 
     ctx = context.Context(spec, shard_state)
     context.Context._set(ctx)
 
     try:
-      if quota_consumer.check():
+      if not quota_consumer or quota_consumer.check():
         scan_aborted = False
         entity = None
 
-        if quota_consumer.consume():
+        if not quota_consumer or quota_consumer.consume():
           for entity in input_reader:
             if isinstance(entity, db.Model):
               shard_state.last_work_item = repr(entity.key())
             else:
               shard_state.last_work_item = repr(entity)[:100]
 
-            scan_aborted = not self.process_entity(entity, quota_consumer, ctx)
+            scan_aborted = not self.process_entity(entity, ctx)
 
-            if not scan_aborted and not quota_consumer.consume():
+            if (quota_consumer and not scan_aborted and
+                not quota_consumer.consume()):
               scan_aborted = True
             if scan_aborted:
               break
@@ -140,26 +144,27 @@ class MapperWorkerCallbackHandler(base_handler.BaseHandler):
         if not scan_aborted:
           logging.info("Processing done for shard %d of job '%s'",
                        shard_state.shard_number, shard_state.mapreduce_id)
-          quota_consumer.put(1)
+          if quota_consumer:
+            quota_consumer.put(1)
           shard_state.active = False
           shard_state.result_status = model.ShardState.RESULT_SUCCESS
 
       ctx.flush()
     finally:
       context.Context._set(None)
-      quota_consumer.dispose()
+      if quota_consumer:
+        quota_consumer.dispose()
 
     if shard_state.active:
       self.reschedule(spec, input_reader)
 
-  def process_entity(self, entity, quota_consumer, ctx):
+  def process_entity(self, entity, ctx):
     """Process a single entity.
 
     Call mapper handler on the entity.
 
     Args:
       entity: an entity to process.
-      quota_consumer: an instance of quota.QuotaConsumer for current run.
       ctx: current execution context.
 
     Returns:
@@ -461,29 +466,11 @@ class StartJobHandler(base_handler.JsonHandler):
         mapper_input_reader_spec,
         mapper_params,
         int(mapper_params.get("shard_count", model._DEFAULT_SHARD_COUNT)))
-    mapper_spec.get_handler()
-    mapper_input_reader_class = mapper_spec.input_reader_class()
-    mapper_input_readers = mapper_input_reader_class.split_input(mapper_spec)
-    if not mapper_input_readers:
-      raise NoDataError("Found no mapper input readers to process.")
-    mapper_spec.shard_count = len(mapper_input_readers)
 
-    state = model.MapreduceState.create_new()
-    mapreduce_spec = model.MapreduceSpec(
-        mapreduce_name,
-        state.key().id_or_name(),
-        mapper_spec.to_json())
-    state.mapreduce_spec = mapreduce_spec
-    state.active = True
-
-    state.char_url = ""
-    state.sparkline_url = ""
-
-    state.put()
-    self._schedule_shards(mapreduce_spec, mapper_input_readers, queue_name)
-    ControllerCallbackHandler.schedule(self.base_path(), mapreduce_spec,
-                                       queue_name=queue_name)
-    self.json_response["mapreduce_id"] = state.key().id_or_name()
+    mapreduce_id = type(self)._start_map(mapreduce_name, mapper_spec,
+                                         base_path=self.base_path(),
+                                         queue_name=queue_name)
+    self.json_response["mapreduce_id"] = mapreduce_id
 
   def _get_mapper_params(self):
     """Retrieves additional user-supplied params for the job and validates them.
@@ -527,7 +514,40 @@ class StartJobHandler(base_handler.JsonHandler):
       raise NotEnoughArgumentsError(param_name + " not specified")
     return value
 
-  def _schedule_shards(self, spec, input_readers, queue_name):
+
+  @classmethod
+  def _start_map(cls, name, mapper_spec, base_path="/mapreduce",
+                 queue_name="default"):
+    mapper_spec.get_handler()
+
+    mapper_input_reader_class = mapper_spec.input_reader_class()
+    mapper_input_readers = mapper_input_reader_class.split_input(mapper_spec)
+    if not mapper_input_readers:
+      raise NoDataError("Found no mapper input readers to process.")
+    mapper_spec.shard_count = len(mapper_input_readers)
+
+    state = model.MapreduceState.create_new()
+    mapreduce_spec = model.MapreduceSpec(
+        name,
+        state.key().id_or_name(),
+        mapper_spec.to_json())
+    state.mapreduce_spec = mapreduce_spec
+    state.active = True
+
+    state.char_url = ""
+    state.sparkline_url = ""
+
+    state.put()
+    StartJobHandler._schedule_shards(mapreduce_spec, mapper_input_readers,
+                                     queue_name, base_path)
+    ControllerCallbackHandler.schedule(
+        base_path, mapreduce_spec, queue_name=queue_name)
+
+    return state.key().id_or_name()
+
+
+  @classmethod
+  def _schedule_shards(cls, spec, input_readers, queue_name, base_path):
     """Prepares shard states and schedules their execution.
 
     Args:
@@ -546,7 +566,7 @@ class StartJobHandler(base_handler.JsonHandler):
       shard_id = model.ShardState.shard_id_from_number(
           spec.mapreduce_id, shard_number)
       MapperWorkerCallbackHandler.schedule_slice(
-          self.base_path(), spec, shard_id, 0, input_reader,
+          base_path, spec, shard_id, 0, input_reader,
           queue_name=queue_name)
 
 

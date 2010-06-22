@@ -50,15 +50,16 @@ class KeyRange(object):
   and a scan direction (KeyRange.DESC or KeyRange.ASC).
   """
 
-  DESC = 'DESC'
-  ASC = 'ASC'
+  DESC = "DESC"
+  ASC = "ASC"
 
   def __init__(self,
                key_start=None,
                key_end=None,
                direction=None,
                include_start=True,
-               include_end=True):
+               include_end=True,
+               _app=None):
     """Initialize a KeyRange object.
 
     Args:
@@ -76,26 +77,36 @@ class KeyRange(object):
     self.key_end = key_end
     self.include_start = include_start
     self.include_end = include_end
+    self._app = _app
 
   def __str__(self):
     if self.include_start:
-      left_side = '['
+      left_side = "["
     else:
-      left_side = '('
+      left_side = "("
     if self.include_end:
-      right_side = ']'
+      right_side = "]"
     else:
-      right_side = '('
-    return '%s%s%s to %s%s' % (self.direction, left_side, repr(self.key_start),
+      right_side = "("
+    return "%s%s%s to %s%s" % (self.direction, left_side, repr(self.key_start),
                             repr(self.key_end), right_side)
 
   def __repr__(self):
-    return ('key_range.KeyRange(key_start=%s,key_end=%s,direction=%s,'
-            'include_start=%s,include_end=%s)') % (repr(self.key_start),
+    return ("key_range.KeyRange(key_start=%s,key_end=%s,direction=%s,"
+            "include_start=%s,include_end=%s)") % (repr(self.key_start),
                                                    repr(self.key_end),
                                                    repr(self.direction),
                                                    repr(self.include_start),
                                                    repr(self.include_end))
+
+  def advance(self, key):
+    """Updates the start of the range immediately past the specified key.
+
+    Args:
+      key: A db.Key.
+    """
+    self.include_start = False
+    self.key_start = key
 
   def filter_query(self, query):
     """Add query filter to restrict to this key range.
@@ -108,17 +119,17 @@ class KeyRange(object):
     """
     assert isinstance(query, db.Query)
     if self.include_start:
-      start_comparator = '>='
+      start_comparator = ">="
     else:
-      start_comparator = '>'
+      start_comparator = ">"
     if self.include_end:
-      end_comparator = '<='
+      end_comparator = "<="
     else:
-      end_comparator = '<'
+      end_comparator = "<"
     if self.key_start:
-      query.filter('__key__ %s' % start_comparator, self.key_start)
+      query.filter("__key__ %s" % start_comparator, self.key_start)
     if self.key_end:
-      query.filter('__key__ %s' % end_comparator, self.key_end)
+      query.filter("__key__ %s" % end_comparator, self.key_end)
     return query
 
   def filter_datastore_query(self, query):
@@ -131,18 +142,20 @@ class KeyRange(object):
       The input query restricted to this key range.
     """
     assert isinstance(query, datastore.Query)
+    if self._app:
+      query.__app = self._app
     if self.include_start:
-      start_comparator = '>='
+      start_comparator = ">="
     else:
-      start_comparator = '>'
+      start_comparator = ">"
     if self.include_end:
-      end_comparator = '<='
+      end_comparator = "<="
     else:
-      end_comparator = '<'
+      end_comparator = "<"
     if self.key_start:
-      query.update({'__key__ %s' % start_comparator: self.key_start})
+      query.update({"__key__ %s" % start_comparator: self.key_start})
     if self.key_end:
-      query.update({'__key__ %s' % end_comparator: self.key_end})
+      query.update({"__key__ %s" % end_comparator: self.key_end})
     return query
 
   def __get_direction(self, asc, desc):
@@ -163,7 +176,7 @@ class KeyRange(object):
     elif self.direction == KeyRange.DESC:
       return desc
     else:
-      raise KeyRangeError('KeyRange direction unexpected: %s', self.direction)
+      raise KeyRangeError("KeyRange direction unexpected: %s", self.direction)
 
   def make_directed_query(self, kind_class, keys_only=False):
     """Construct a query for this key range, including the scan direction.
@@ -178,9 +191,9 @@ class KeyRange(object):
     Raises:
       KeyRangeError: if self.direction is not in (KeyRange.ASC, KeyRange.DESC).
     """
-    direction = self.__get_direction('', '-')
-    query = db.Query(kind_class, keys_only)
-    query.order('%s__key__' % direction)
+    direction = self.__get_direction("", "-")
+    query = db.Query(kind_class, keys_only=keys_only)
+    query.order("%s__key__" % direction)
 
     query = self.filter_query(query)
     return query
@@ -200,8 +213,8 @@ class KeyRange(object):
     """
     direction = self.__get_direction(datastore.Query.ASCENDING,
                                      datastore.Query.DESCENDING)
-    query = datastore.Query(kind, keys_only=keys_only)
-    query.Order(('__key__', direction))
+    query = datastore.Query(kind, _app=self._app, keys_only=keys_only)
+    query.Order(("__key__", direction))
 
     query = self.filter_datastore_query(query)
     return query
@@ -216,8 +229,8 @@ class KeyRange(object):
     Returns:
       A db.Query instance.
     """
-    query = db.Query(kind_class, keys_only)
-    query.order('__key__')
+    query = db.Query(kind_class, keys_only=keys_only)
+    query.order("__key__")
 
     query = self.filter_query(query)
     return query
@@ -232,8 +245,8 @@ class KeyRange(object):
     Returns:
       A datastore.Query instance.
     """
-    query = datastore.Query(kind, keys_only=keys_only)
-    query.Order(('__key__', datastore.Query.ASCENDING))
+    query = datastore.Query(kind, _app=self._app, keys_only=keys_only)
+    query.Order(("__key__", datastore.Query.ASCENDING))
 
     query = self.filter_datastore_query(query)
     return query
@@ -290,7 +303,8 @@ class KeyRange(object):
                        include_start=include_start,
                        key_end=end,
                        include_end=include_end,
-                       direction=direction)
+                       direction=direction,
+                       _app=self._app)
               for (start, include_start, end, include_end, direction)
               in key_pairs]
 
@@ -366,8 +380,8 @@ class KeyRange(object):
     """
     if start == end:
       return start
-    start += '\0'
-    end += '\0'
+    start += "\0"
+    end += "\0"
     midpoint = []
     expected_max = 127
     for i in xrange(min(len(start), len(end))):
@@ -387,7 +401,7 @@ class KeyRange(object):
             ord_split = (0xFFFF + ord_start) / 2
           midpoint.append(unichr(ord_split))
         break
-    return ''.join(midpoint)
+    return "".join(midpoint)
 
   @staticmethod
   def split_keys(key_start, key_end, batch_size):
@@ -445,7 +459,7 @@ class KeyRange(object):
         out_path.append(id_or_name_split)
         break
 
-    return db.Key.from_path(*out_path)
+    return db.Key.from_path(*out_path, **{"_app": key_start.app()})
 
   @staticmethod
   def _split_id_or_name(id_or_name1, id_or_name2, batch_size, maintain_batches):
@@ -515,16 +529,17 @@ class KeyRange(object):
       highest key existing for this Kind. Doing a query between 'key_start' and
       this returned Key (inclusive) will contain all entities of this Kind.
     """
+    app = key_start.app()
     full_path = key_start.to_path()
     for index, piece in enumerate(full_path):
       if index % 2 == 0:
         continue
       elif isinstance(piece, basestring):
-        full_path[index] = u'\xffff'
+        full_path[index] = u"\xffff"
       else:
         full_path[index] = 2**32
 
-    key_end = datastore.Key.from_path(*full_path)
+    key_end = datastore.Key.from_path(*full_path, **{"_app": app})
     split_key = key_end
 
     for i in xrange(probe_count):
@@ -532,7 +547,8 @@ class KeyRange(object):
         split_key = KeyRange.split_keys(key_start, split_key, 1)
       results = datastore.Query(
           kind,
-          {'__key__ >': split_key},
+          {"__key__ >": split_key},
+          _app=app,
           keys_only=True).Get(1)
       if results:
         split_rate = 1
@@ -559,13 +575,17 @@ class KeyRange(object):
       else:
         return None
 
-    return simplejson.dumps({
+    obj_dict = {
         "direction": self.direction,
         "key_start": key_to_str(self.key_start),
         "key_end": key_to_str(self.key_end),
         "include_start": self.include_start,
         "include_end": self.include_end,
-        }, sort_keys=True)
+        }
+    if self._app:
+      obj_dict["_app"] = self._app
+
+    return simplejson.dumps(obj_dict, sort_keys=True)
 
 
   @staticmethod
@@ -593,4 +613,5 @@ class KeyRange(object):
                     key_from_str(json["key_end"]),
                     json["direction"],
                     json["include_start"],
-                    json["include_end"])
+                    json["include_end"],
+                    _app=json.get("_app"))

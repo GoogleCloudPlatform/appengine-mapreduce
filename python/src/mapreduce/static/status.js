@@ -391,11 +391,11 @@ function initJobLaunching(configs) {
         // Deal with the case in which the value is an object rather than
         // just the default value string.
         var prettyKey = key;
-        if (value["human_name"]) {
+        if (value && value["human_name"]) {
           prettyKey = value["human_name"];
         }
 
-        if (value["default_value"]) {
+        if (value && value["default_value"]) {
           value = value["default_value"];
         }
 

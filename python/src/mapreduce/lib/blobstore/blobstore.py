@@ -99,8 +99,8 @@ class _GqlQuery(db.GqlQuery):
     """
     from google.appengine.ext import gql
     app = kwds.pop('_app', None)
-    self._proto_query = gql.GQL(query_string, _app=app)
-    super(db.GqlQuery, self).__init__(model_class)
+    self._proto_query = gql.GQL(query_string, _app=app, namespace='')
+    super(db.GqlQuery, self).__init__(model_class, namespace='')
     self.bind(*args, **kwds)
 
 
@@ -195,7 +195,8 @@ class BlobInfo(object):
     """
     if self.__entity is None:
       self.__entity = datastore.Get(
-          datastore_types.Key.from_path(self.kind(), str(self.__key)))
+          datastore_types.Key.from_path(
+              self.kind(), str(self.__key), namespace=''))
     try:
       return self.__entity[name]
     except KeyError:
@@ -250,7 +251,7 @@ class BlobInfo(object):
     Returns:
       A db.Query object querying over BlobInfo's datastore kind.
     """
-    return db.Query(cls)
+    return db.Query(model_class=cls, namespace='')
 
   @classmethod
   def __factory_for_kind(cls, kind):
@@ -315,7 +316,7 @@ class BlobInfo(object):
             'Expected str or BlobKey; received %s (a %s)' % (
                 key,
                 datastore.typename(key)))
-      keys[index] = datastore.Key.from_path(cls.kind(), str(key))
+      keys[index] = datastore.Key.from_path(cls.kind(), str(key), namespace='')
 
     if multiple:
       return keys
@@ -494,7 +495,7 @@ class BlobReader(object):
 
   def __iter__(self):
     """Returns a file iterator for this BlobReader."""
-    return iter(self.readline, None)
+    return self
 
   def __getstate__(self):
     """Returns the serialized state for this BlobReader."""
@@ -523,7 +524,10 @@ class BlobReader(object):
       A string, terminted by \n. The last line may not be terminated by \n.
       If EOF is reached, an empty string will be returned.
     """
-    return self.readline()
+    line = self.readline()
+    if not line:
+      raise StopIteration
+    return line
 
   def __read_from_buffer(self, size):
     """Reads at most size bytes from the buffer.
@@ -535,6 +539,9 @@ class BlobReader(object):
         data: The bytes read from the buffer.
         size: The remaining unread byte count.
     """
+    if not self.__blob_key:
+      raise ValueError("File is closed")
+
     if size < 0:
       end_pos = len(self.__buffer)
     else:
@@ -645,8 +652,9 @@ class BlobReader(object):
       if sizehint:
         sizehint -= len(line)
       if not line:
-        return lines
+        break
       lines.append(line)
+    return lines
 
   def seek(self, offset, whence=SEEK_SET):
     """Set the file's current position, like stdio's fseek().
