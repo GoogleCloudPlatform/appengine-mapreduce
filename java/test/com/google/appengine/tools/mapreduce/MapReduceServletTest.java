@@ -465,6 +465,40 @@ public class MapReduceServletTest extends TestCase {
         0, getDefaultQueueInfo().getCountTasks());
     verify(request);
   }
+
+  /**
+   * Test that the controller schedules done callback.
+   */
+  public void testHandleController_withDoneCallback() {
+    JobID jobId = new JobID("foo", 1);
+    HttpServletRequest request = createMockControllerRequest(0, jobId);
+    replay(request);
+    
+    Configuration sampleConf = getSampleMapReduceConfiguration();
+    sampleConf.set(AppEngineJobContext.DONE_CALLBACK_URL_KEY, "/foo/bar");
+    persistMRState(jobId, sampleConf);
+    
+    ShardState shardState1 = ShardState.generateInitializedShardState(ds,
+        new TaskAttemptID(new TaskID(jobId, true, 1), 1));
+    Counters counters1 = new Counters();
+    counters1.findCounter("a", "z").increment(1);
+    shardState1.setCounters(counters1);
+    shardState1.setInputSplit(sampleConf, new StubInputSplit(1));
+    shardState1.setRecordReader(sampleConf, new StubRecordReader());
+    shardState1.setDone();
+    shardState1.persist();
+    
+    servlet.handleController(request, null);
+    
+    assertEquals("Controller should add done callback.",
+        1, getDefaultQueueInfo().getCountTasks());
+    TaskStateInfo taskInfo =getDefaultQueueInfo().getTaskInfo().get(0);
+    assertEquals("Controller should add done callback url.",
+        "/foo/bar", taskInfo.getUrl());
+    assertTrue("Controller should pass the job ID to the done callback. Got: "
+         + taskInfo.getBody(), taskInfo.getBody().contains("job_foo_0001"));
+    verify(request);
+  }
   
   public void testHandleStart() {
     HttpServletRequest request = createMockStartRequest(getSampleMapReduceConfiguration());

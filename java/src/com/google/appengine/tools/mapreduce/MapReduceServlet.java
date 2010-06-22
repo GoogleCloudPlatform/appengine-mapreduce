@@ -21,6 +21,7 @@ import com.google.appengine.api.datastore.DatastoreService;
 import com.google.appengine.api.datastore.DatastoreServiceFactory;
 import com.google.appengine.api.datastore.EntityNotFoundException;
 import com.google.appengine.api.datastore.Key;
+import com.google.appengine.api.labs.taskqueue.Queue;
 import com.google.appengine.api.labs.taskqueue.TaskAlreadyExistsException;
 import com.google.appengine.api.labs.taskqueue.TaskOptions;
 import com.google.appengine.api.memcache.MemcacheServiceFactory;
@@ -457,11 +458,29 @@ public class MapReduceServlet extends HttpServlet {
         scheduleController(request, context, context.getSliceNumber() + 1);
       } else {
         deleteAllShards(shardStates);
+        if (context.hasDoneCallback()) {
+          scheduleDoneCallback(
+              context.getDoneCallbackQueue(), context.getDoneCallbackUrl(),
+              context.getJobID().toString());
+        }
       }
     } catch (EntityNotFoundException enfe) {
       log.severe("Couldn't find the state for MapReduce: " + context.getJobID()
                  + ". Aborting!");
       return;
+    }
+  }
+
+  private void scheduleDoneCallback(Queue queue, String url, String jobId) {
+    String taskName = ("done_callback" + jobId).replace('_', '-');
+    try {
+      queue.add(
+          TaskOptions.Builder.method(TaskOptions.Method.POST)
+              .url(url)
+              .param("job_id", jobId)
+              .taskName(taskName));
+    } catch (TaskAlreadyExistsException e) {
+      log.warning("Done callback task " + taskName + " already exists.");
     }
   }
 
