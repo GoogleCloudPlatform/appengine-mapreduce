@@ -52,6 +52,13 @@ public class AppEngineJobContext extends JobContext {
    * enqueue worker tasks in.
    */
   public static final String WORKER_QUEUE_KEY = "mapreduce.appengine.mapper.queue";
+
+  /**
+   * The {@code Configuration} key for the entry naming the task queue to 
+   * enqueue the done callback in.
+   */
+  public static final String DONE_CALLBACK_QUEUE_KEY = "mapreduce.appengine.donecallback.queue";
+
   
   /**
    * The {@code Configuration} key for the entry denoting the maximum overall
@@ -65,6 +72,12 @@ public class AppEngineJobContext extends JobContext {
    * mapper worker shards to start in parallel.
    */
   public static final String MAPPER_SHARD_COUNT_KEY = "mapreduce.mapper.shardcount";
+
+  /**
+   * The {@code Configuration} key for the entry containing the URL to be given
+   * to the task queue for the done callback.
+   */
+  public static final String DONE_CALLBACK_URL_KEY = "mapreduce.appengine.donecallbackurl";
   
   // Parameter names for values serialized in the request
   // All VisibleForTesting
@@ -214,6 +227,15 @@ public class AppEngineJobContext extends JobContext {
   }
 
   /**
+   * Gets the task queue to enqueue the done callback task in.
+   * 
+   * @return the done callback taskqueue
+   */
+  public Queue getDoneCallbackQueue() {
+    return QueueFactory.getQueue(getQueueName(DONE_CALLBACK_QUEUE_KEY));
+  }
+
+  /**
    * Returns the input processing rate: this is the number of map() calls
    * that can be made per second.
    */
@@ -221,7 +243,21 @@ public class AppEngineJobContext extends JobContext {
     return getConfiguration().getInt(
         MAPPER_INPUT_PROCESSING_RATE_KEY, DEFAULT_MAP_INPUT_PROCESSING_RATE);  
   }
-  
+
+  /**
+   * Returns true if this job has a done callback registered in the configuration.
+   */
+  public boolean hasDoneCallback() {
+    return getDoneCallbackUrl() != null;
+  }
+
+  /**
+   * Returns the done callback url
+   */
+  public String getDoneCallbackUrl() {
+    return getConfiguration().get(DONE_CALLBACK_URL_KEY);
+  }
+
   /**
    * Returns the shard count: this is the number of parallel worker task
    * queue chains running at a time.
