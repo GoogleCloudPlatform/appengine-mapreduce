@@ -18,12 +18,11 @@
 """Tests for google.appengine.ext.mapreduce.control."""
 
 
-
 import unittest
 
 from google.appengine.ext import db
-from mapreduce import model
 from mapreduce import control
+from mapreduce import model
 import testutil
 
 
@@ -53,7 +52,7 @@ class ControlTest(testutil.HandlerTestBase):
         __name__ + ".test_handler",
         "mapreduce.input_readers.DatastoreInputReader",
         {
-            "entity_kind":__name__ + "." + TestEntity.__name__,
+            "entity_kind": __name__ + "." + TestEntity.__name__,
         },
         shard_count,
         base_path="/mapreduce_base_path",
@@ -67,5 +66,5 @@ class ControlTest(testutil.HandlerTestBase):
     self.assertEquals(mapreduce_id, mapreduce_state.key().id_or_name())
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
   unittest.main()
