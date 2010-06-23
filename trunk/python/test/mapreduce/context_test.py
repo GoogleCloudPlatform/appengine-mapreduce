@@ -252,6 +252,25 @@ class ContextTest(unittest.TestCase):
     context.Context._set(None)
     self.assertEquals(None, context.get())
 
+  def testArbitraryPool(self):
+    """Test arbitrary pool registration."""
+    m = mox.Mox()
 
-if __name__ == '__main__':
+    ctx = context.Context(None, None)
+    self.assertFalse(ctx.get_pool("test"))
+    pool = m.CreateMockAnything()
+    ctx.register_pool("test", pool)
+    self.assertEquals(pool, ctx.get_pool("test"))
+
+    pool.flush()
+
+    m.ReplayAll()
+    try:
+      ctx.flush()
+      m.VerifyAll()
+    finally:
+      m.UnsetStubs()
+
+
+if __name__ == "__main__":
   unittest.main()

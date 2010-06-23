@@ -196,13 +196,38 @@ class Context(object):
     self.mutation_pool = MutationPool()
     self.counters = Counters(shard_state)
 
+    self._pools = {}
+    self.register_pool("mutation_pool", self.mutation_pool)
+    self.register_pool("counters", self.counters)
+
   def flush(self):
     """Flush all information recorded in context."""
-    self.mutation_pool.flush()
-    self.counters.flush()
-    self.shard_state.put()
+    for pool in self._pools.values():
+      pool.flush()
+    if self.shard_state:
+      self.shard_state.put()
 
 
+
+  def register_pool(self, key, pool):
+    """Register an arbitrary pool to be flushed together with this context.
+
+    Args:
+      key: pool key as string.
+      pool: a pool instance. Pool should implement flush(self) method.
+    """
+    self._pools[key] = pool
+
+  def get_pool(self, key):
+    """Obtains an instance of registered pool.
+
+    Args:
+      key: pool key as string.
+
+    Returns:
+      an instance of the pool registered earlier, or None.
+    """
+    return self._pools.get(key, None)
 
   @classmethod
   def _set(cls, context):
