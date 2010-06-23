@@ -20,10 +20,11 @@
 
 __all__ = ["start_map"]
 
+
 import google
 
-from mapreduce import model
 from mapreduce import handlers
+from mapreduce import model
 
 
 def start_map(name,
