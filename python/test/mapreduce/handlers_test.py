@@ -408,6 +408,38 @@ class StartJobHandlerTest(MapreduceHandlerTestBase):
     self.assertEquals(1, len(tasks))
     self.verify_controller_task(tasks[0], shard_count=8)
 
+  def testSmokeOtherApp(self):
+    """Verifies main execution path of starting scan over several entities."""
+    apiproxy_stub_map.apiproxy.GetStub("datastore_v3").SetTrusted(True)
+    self.handler.request.set("mapper_params._app", "otherapp")
+    TestEntity(_app="otherapp").put()
+    self.handler.post()
+    shard_count = 8
+
+    tasks = self.taskqueue.GetTasks("default")
+    self.assertEquals(shard_count + 1, len(tasks))
+
+    mapreduce_state = model.MapreduceState.all().fetch(limit=1)[0]
+    self.assertEquals("otherapp", mapreduce_state.app_id)
+    self.verify_mapreduce_state(mapreduce_state, shard_count=8)
+    mapreduce_id = mapreduce_state.mapreduce_spec.mapreduce_id
+
+    for i in xrange(shard_count):
+      shard_id = model.ShardState.shard_id_from_number(mapreduce_id, i)
+      task_name = handlers.MapperWorkerCallbackHandler.get_task_name(
+          shard_id, 0)
+
+      shard_task = self.find_task_by_name(tasks, task_name)
+      self.assertTrue(shard_task)
+      tasks.remove(shard_task)
+      self.verify_shard_task(shard_task, shard_id, shard_count=8)
+
+      self.verify_shard_state(
+          model.ShardState.get_by_shard_id(shard_id))
+
+    self.assertEquals(1, len(tasks))
+    self.verify_controller_task(tasks[0], shard_count=8)
+
   def testRequiredParams(self):
     """Tests that required parameters are enforced."""
     TestEntity().put()

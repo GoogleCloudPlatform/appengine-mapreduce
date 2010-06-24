@@ -33,7 +33,8 @@ def start_map(name,
               reader_parameters,
               shard_count,
               base_path="/mapreduce",
-              queue_name="default"):
+              queue_name="default",
+              _app=None):
   """Start a new, mapper-only mapreduce.
 
   Args:
@@ -55,5 +56,5 @@ def start_map(name,
 
   return handlers.StartJobHandler._start_map(name, mapper_spec,
                                              base_path=base_path,
-                                             queue_name=queue_name)
-
+                                             queue_name=queue_name,
+                                             _app=_app)

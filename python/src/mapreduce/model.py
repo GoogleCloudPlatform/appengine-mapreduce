@@ -470,6 +470,7 @@ class MapreduceState(db.Model):
   active = db.BooleanProperty(default=True, indexed=False)
   last_poll_time = db.DateTimeProperty(required=True)
   counters_map = JsonProperty(CountersMap, default=CountersMap(), indexed=False)
+  app_id = db.StringProperty(required=False, indexed=True)
 
   chart_url = db.TextProperty(default="")
   sparkline_url = db.TextProperty(default="")
