@@ -124,11 +124,12 @@ class MutationPool(object):
     Args:
       entity: an entity to delete.
     """
-    entity_size = _get_entity_size(entity)
+    key = db._coerce_to_key(entity)
+    key_size = len(key._ToPb().Encode())
     if (self.deletes.length >= MAX_ENTITY_COUNT or
-        (self.deletes.size + entity_size) > self.max_pool_size):
+        (self.deletes.size + key_size) > self.max_pool_size):
       self.__flush_deletes()
-    self.deletes.append(entity, entity_size)
+    self.deletes.append(key, key_size)
 
   def flush(self):
     """Flush(apply) all changed to datastore."""
