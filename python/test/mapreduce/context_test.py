@@ -78,11 +78,20 @@ class MutationPoolTest(unittest.TestCase):
     self.assertEquals([], self.pool.deletes.entities)
 
   def testDelete(self):
-    """Test delete method."""
-    e = TestEntity()
+    """Test delete method with a model instance"""
+    e = TestEntity(key_name='goingaway')
     self.pool.delete(e)
     self.assertEquals([], self.pool.puts.entities)
-    self.assertEquals([e], self.pool.deletes.entities)
+    self.assertEquals([e.key()], self.pool.deletes.entities)
+
+  def testDeleteKey(self):
+    """Test delete method with a key instance."""
+    k = db.Key.from_path('MyKind', 'MyKeyName', _app='myapp')
+    self.pool.delete(k)
+    self.assertEquals([], self.pool.puts.entities)
+    self.assertEquals([k], self.pool.deletes.entities)
+    self.pool.delete(str(k))
+    self.assertEquals([k, k], self.pool.deletes.entities)
 
   def testPutOverPoolSize(self):
     """Test putting more than pool size."""
@@ -134,23 +143,23 @@ class MutationPoolTest(unittest.TestCase):
 
   def testDeleteOverPoolSize(self):
     """Test deleting more than pool size."""
-    self.pool = context.MutationPool(1000)
+    self.pool = context.MutationPool(500)
 
     m = mox.Mox()
     m.StubOutWithMock(db, 'delete', use_mock_anything=True)
 
-    e1 = TestEntity()
-    e2 = TestEntity(tag=' ' * 1000)
+    e1 = TestEntity(key_name='goingaway')
+    e2 = TestEntity(key_name='x' * 500)
 
-    db.delete([e1])
+    db.delete([e1.key()])
 
     m.ReplayAll()
     try:
       self.pool.delete(e1)
-      self.assertEquals([e1], self.pool.deletes.entities)
+      self.assertEquals([e1.key()], self.pool.deletes.entities)
 
       self.pool.delete(e2)
-      self.assertEquals([e2], self.pool.deletes.entities)
+      self.assertEquals([e2.key()], self.pool.deletes.entities)
 
       m.VerifyAll()
     finally:
@@ -165,9 +174,9 @@ class MutationPoolTest(unittest.TestCase):
 
     entities = []
     for i in range(context.MAX_ENTITY_COUNT + 50):
-      entities.append(TestEntity())
+      entities.append(TestEntity(key_name='die%d' % i))
 
-    db.delete(entities[:context.MAX_ENTITY_COUNT])
+    db.delete([e.key() for e in entities[:context.MAX_ENTITY_COUNT]])
 
     m.ReplayAll()
     try:
@@ -189,10 +198,10 @@ class MutationPoolTest(unittest.TestCase):
     m.StubOutWithMock(db, 'put', use_mock_anything=True)
 
     e1 = TestEntity()
-    e2 = TestEntity()
+    e2 = TestEntity(key_name='flushme')
 
     db.put([e1])
-    db.delete([e2])
+    db.delete([e2.key()])
 
     m.ReplayAll()
     try:
@@ -200,7 +209,7 @@ class MutationPoolTest(unittest.TestCase):
       self.assertEquals([e1], self.pool.puts.entities)
 
       self.pool.delete(e2)
-      self.assertEquals([e2], self.pool.deletes.entities)
+      self.assertEquals([e2.key()], self.pool.deletes.entities)
 
       self.pool.flush()
 

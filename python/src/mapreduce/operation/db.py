@@ -54,7 +54,7 @@ class Delete(object):
     """Constructor.
 
     Args:
-      entity: an entity to delete.
+      entity: a key or model instance to delete.
     """
     self.entity = entity
 
