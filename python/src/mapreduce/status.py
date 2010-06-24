@@ -162,12 +162,15 @@ def find_mapreduce_yaml():
   Returns:
     the path of mapreduce.yaml file or None if not found.
   """
-  dir = os.getcwd()
+  dir = os.path.dirname(__file__)
   while dir:
     for mr_yaml_name in MR_YAML_NAMES:
       yaml_path = os.path.join(dir, mr_yaml_name)
       if os.path.exists(yaml_path):
         return yaml_path
+    if parent == dir:
+      break
+    dir = parent
     dir = os.path.dirname(dir)
   return None
 
