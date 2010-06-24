@@ -28,9 +28,8 @@ This module should be specified as a handler for mapreduce URLs in app.yaml:
 
 
 
-import wsgiref.handlers
-
 from google.appengine.ext import webapp
+from google.appengine.ext.webapp import util
 from mapreduce import handlers
 from mapreduce import status
 
@@ -80,7 +79,7 @@ APP = create_application()
 
 
 def main():
-  wsgiref.handlers.CGIHandler().run(APP)
+  util.run_wsgi_app(APP)
 
 
 if __name__ == "__main__":
