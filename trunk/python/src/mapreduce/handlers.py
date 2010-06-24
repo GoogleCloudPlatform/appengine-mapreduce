@@ -469,7 +469,8 @@ class StartJobHandler(base_handler.JsonHandler):
 
     mapreduce_id = type(self)._start_map(mapreduce_name, mapper_spec,
                                          base_path=self.base_path(),
-                                         queue_name=queue_name)
+                                         queue_name=queue_name,
+                                         _app=mapper_params.get("_app"))
     self.json_response["mapreduce_id"] = mapreduce_id
 
   def _get_mapper_params(self):
@@ -516,8 +517,10 @@ class StartJobHandler(base_handler.JsonHandler):
 
 
   @classmethod
-  def _start_map(cls, name, mapper_spec, base_path="/mapreduce",
-                 queue_name="default"):
+  def _start_map(cls, name, mapper_spec,
+                 base_path="/mapreduce",
+                 queue_name="default",
+                 _app=None):
     mapper_spec.get_handler()
 
     mapper_input_reader_class = mapper_spec.input_reader_class()
@@ -533,6 +536,8 @@ class StartJobHandler(base_handler.JsonHandler):
         mapper_spec.to_json())
     state.mapreduce_spec = mapreduce_spec
     state.active = True
+    if _app:
+      state.app_id = _app
 
     state.char_url = ""
     state.sparkline_url = ""
