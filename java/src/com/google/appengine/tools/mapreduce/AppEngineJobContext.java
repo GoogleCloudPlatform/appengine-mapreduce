@@ -77,7 +77,7 @@ public class AppEngineJobContext extends JobContext {
    * The {@code Configuration} key for the entry containing the URL to be given
    * to the task queue for the done callback.
    */
-  public static final String DONE_CALLBACK_URL_KEY = "mapreduce.appengine.donecallbackurl";
+  public static final String DONE_CALLBACK_URL_KEY = "mapreduce.appengine.donecallback.url";
   
   // Parameter names for values serialized in the request
   // All VisibleForTesting
