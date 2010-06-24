@@ -403,7 +403,7 @@ class BlobstoreLineInputReader(InputReader):
              cls.END_POSITION_PARAM: blob_chunk_size * (i + 1)}))
       chunks.append(BlobstoreLineInputReader.from_json(
           {cls.BLOB_KEY_PARAM: blob_key,
-           cls.INITIAL_POSITION_PARAM: blob_chunk_size * (shard_count - 1),
+           cls.INITIAL_POSITION_PARAM: blob_chunk_size * (shards_per_blob - 1),
            cls.END_POSITION_PARAM: blob_size}))
     return chunks
 

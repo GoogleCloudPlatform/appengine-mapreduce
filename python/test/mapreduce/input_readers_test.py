@@ -299,6 +299,9 @@ class InputReaderTest(unittest.TestCase):
     self.mox = mox.Mox()
     self.original_fetch_data = blobstore.fetch_data
 
+    self.mox.StubOutWithMock(blobstore, "BlobKey", use_mock_anything=True)
+    self.mox.StubOutWithMock(blobstore.BlobInfo, "get", use_mock_anything=True)
+
   def tearDown(self):
     self.mox.UnsetStubs()
     self.mox.ResetAll()
@@ -376,16 +379,13 @@ class InputReaderTest(unittest.TestCase):
         3, 1, False, 0, 100, "foo\nbar")
     self.assertDone(blob_reader)
 
-  def mockOutBlobInfoSize(self, size):
-    blob_key_str = "foo"
-    self.mox.StubOutWithMock(blobstore, "BlobKey", use_mock_anything=True)
-    blob_key = "bar"
+  def mockOutBlobInfoSize(self, size, blob_key_str="foo"):
+    blob_key = "bar" + blob_key_str
     blobstore.BlobKey(blob_key_str).AndReturn(blob_key)
-    self.mox.StubOutWithMock(blobstore.BlobInfo, "get", use_mock_anything=True)
-    blobstore.BlobInfo.get("bar").AndReturn(MockBlobInfo(size))
+    blobstore.BlobInfo.get(blob_key).AndReturn(MockBlobInfo(size))
 
   BLOBSTORE_READER_NAME = (
-      'mapreduce.input_readers.BlobstoreLineInputReader')
+      "mapreduce.input_readers.BlobstoreLineInputReader")
 
   def testSplitInput(self):
     """Test Google3CSVFileInputReader.split_input."""
@@ -402,6 +402,26 @@ class InputReaderTest(unittest.TestCase):
                         "initial_position": 0,
                         "end_position": 200}],
                       [r.to_json() for r in blob_readers])
+    self.mox.VerifyAll()
+
+  def testSplitInputMultiKey(self):
+    """Test Google3CSVFileInputReader.split_input."""
+    for i in range(5):
+      self.mockOutBlobInfoSize(200, "foo%d" % i)
+    self.mox.ReplayAll()
+    mapper_spec = model.MapperSpec.from_json({
+        "mapper_handler_spec": "FooHandler",
+        "mapper_input_reader": self.BLOBSTORE_READER_NAME,
+        "mapper_params": {"blob_keys": ["foo%d" % i for i in range(5)]},
+        "mapper_shard_count": 2})
+    blob_readers = input_readers.BlobstoreLineInputReader.split_input(
+        mapper_spec)
+    blob_readers_json = [r.to_json() for r in blob_readers]
+    blob_readers_json.sort(key=lambda r: r["blob_key"])
+    self.assertEquals([{"blob_key": "foo%d" % i,
+                        "initial_position": 0,
+                        "end_position": 200} for i in range(5)],
+                      blob_readers_json)
     self.mox.VerifyAll()
 
   def testSplitInputMultiSplit(self):
@@ -440,7 +460,7 @@ class InputReaderTest(unittest.TestCase):
     self.assertEquals(
         ["blobstore.BlobKey('foo'):[0, 99]",
          "blobstore.BlobKey('foo'):[99, 199]"],
-         stringified)
+        stringified)
     self.mox.VerifyAll()
 
   def testTooManyKeys(self):
