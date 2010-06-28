@@ -24,11 +24,12 @@ from handlers such as counters, log messages, mutation pools.
 
 
 __all__ = ["MAX_ENTITY_COUNT", "MAX_POOL_SIZE", "Context", "MutationPool",
-           "Counters", "EntityList", "get", "COUNTER_MAPPER_CALLS"]
+           "Counters", "ItemList", "EntityList", "get", "COUNTER_MAPPER_CALLS"]
 
 
 
 
+from google.appengine.api import datastore
 from google.appengine.ext import db
 
 MAX_POOL_SIZE = 900 * 1000
@@ -38,60 +39,68 @@ MAX_ENTITY_COUNT = 500
 COUNTER_MAPPER_CALLS = "mapper_calls"
 
 
-def _get_entity_size(entity):
-  """Get entity size in bytes.
+def _normalize_entity(value):
+  """Return an entity from an entity or model instance."""
+  if getattr(value, "_populate_internal_entity", None):
+    return value._populate_internal_entity()
+  return value
 
-  Should computes size of entity representation in wire format when sent
-  to datastore.
+def _normalize_key(value):
+  """Return a key from an entity, model instance, key, or key string."""
+  if getattr(value, "key", None):
+    return value.key()
+  elif isinstance(value, basestring):
+    return datastore.Key(value)
+  else:
+    return value
 
-  Args:
-    entity: an entity as db.Model subclass.
-
-  Returns:
-    the size of entity protobuf representation in bytes as int.
-  """
-  return len(db.model_to_protobuf(entity).Encode())
-
-
-class EntityList(object):
-  """Holds list of entities, and their total size.
+class ItemList(object):
+  """Holds list of arbitrary items, and their total size.
 
   Properties:
-    entities: list of entities.
-    length: length of entity list.
-    size: aggregate entities size in bytes.
+    items: list of objects.
+    length: length of item list.
+    size: aggregate item size in bytes.
   """
 
   def __init__(self):
     """Constructor."""
-    self.entities = []
+    self.items = []
     self.length = 0
     self.size = 0
 
-  def append(self, entity, entity_size):
-    """Add new entity to the list.
+  def append(self, item, item_size):
+    """Add new item to the list.
 
     Args:
-      entity: an entity to add to the list.
-      entity_size: entity size in bytes as int.
+      item: an item to add to the list.
+      item_size: item size in bytes as int.
     """
-    self.entities.append(entity)
+    self.items.append(item)
     self.length += 1
-    self.size += entity_size
+    self.size += item_size
 
   def clear(self):
-    """Clear entity list."""
-    self.entities = []
+    """Clear item list."""
+    self.items = []
     self.length = 0
     self.size = 0
+
+  @property
+  def entities(self):
+    """Return items. For backwards compatability."""
+    return self.items
+
+
+EntityList = ItemList
 
 
 class MutationPool(object):
   """Mutation pool accumulates datastore changes to perform them in batch.
 
   Properties:
-    puts: EntityList of entities to put to datastore.
-    deletes: EntityList of entities to delete from datastore.
+    puts: ItemList of entities to put to datastore.
+    deletes: ItemList of keys to delete from datastore.
     max_pool_size: maximum single list pool size. List changes will be flushed
       when this size is reached.
   """
@@ -103,28 +112,29 @@ class MutationPool(object):
       max_pool_size: maximum pools size in bytes before flushing it to db.
     """
     self.max_pool_size = max_pool_size
-    self.puts = EntityList()
-    self.deletes = EntityList()
+    self.puts = ItemList()
+    self.deletes = ItemList()
 
   def put(self, entity):
     """Registers entity to put to datastore.
 
     Args:
-      entity: an entity to put.
+      entity: an entity or model instance to put.
     """
-    entity_size = _get_entity_size(entity)
+    actual_entity = _normalize_entity(entity)
+    entity_size = len(actual_entity._ToPb().Encode())
     if (self.puts.length >= MAX_ENTITY_COUNT or
         (self.puts.size + entity_size) > self.max_pool_size):
       self.__flush_puts()
-    self.puts.append(entity, entity_size)
+    self.puts.append(actual_entity, entity_size)
 
   def delete(self, entity):
     """Registers entity to delete from datastore.
 
     Args:
-      entity: an entity to delete.
+      entity: an entity, model instance, or key to delete.
     """
-    key = db._coerce_to_key(entity)
+    key = _normalize_key(entity)
     key_size = len(key._ToPb().Encode())
     if (self.deletes.length >= MAX_ENTITY_COUNT or
         (self.deletes.size + key_size) > self.max_pool_size):
@@ -138,12 +148,12 @@ class MutationPool(object):
 
   def __flush_puts(self):
     """Flush all puts to datastore."""
-    db.put(self.puts.entities)
+    datastore.Put(self.puts.items)
     self.puts.clear()
 
   def __flush_deletes(self):
     """Flush all deletes to datastore."""
-    db.delete(self.deletes.entities)
+    datastore.Delete(self.deletes.items)
     self.deletes.clear()
 
 
