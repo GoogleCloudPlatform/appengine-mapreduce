@@ -476,6 +476,8 @@ class MapreduceState(db.Model):
   sparkline_url = db.TextProperty(default="")
   result_status = db.StringProperty(required=False, choices=_RESULTS)
   active_shards = db.IntegerProperty(default=0, indexed=False)
+  failed_shards = db.IntegerProperty(default=0, indexed=False)
+  aborted_shards = db.IntegerProperty(default=0, indexed=False)
   start_time = db.DateTimeProperty(indexed=False, auto_now_add=True)
 
   @classmethod

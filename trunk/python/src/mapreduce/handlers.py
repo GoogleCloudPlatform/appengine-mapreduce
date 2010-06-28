@@ -354,9 +354,15 @@ class ControllerCallbackHandler(base_handler.BaseHandler):
       model.MapreduceControl.abort(spec.mapreduce_id)
 
     active_shards = [s for s in shard_states if s.active]
+    failed_shards = [s for s in shard_states
+                     if s.result_status == model.ShardState.RESULT_FAILED]
+    aborted_shards = [s for s in shard_states
+                     if s.result_status == model.ShardState.RESULT_ABORTED]
     if state.active:
       state.active = bool(active_shards)
       state.active_shards = len(active_shards)
+      state.failed_shards = len(failed_shards)
+      state.aborted_shards = len(aborted_shards)
 
     if (not state.active and control and
         control.command == model.MapreduceControl.ABORT):
@@ -536,6 +542,7 @@ class StartJobHandler(base_handler.JsonHandler):
         mapper_spec.to_json())
     state.mapreduce_spec = mapreduce_spec
     state.active = True
+    state.active_shards = mapper_spec.shard_count
     if _app:
       state.app_id = _app
 
