@@ -168,10 +168,10 @@ def find_mapreduce_yaml():
       yaml_path = os.path.join(dir, mr_yaml_name)
       if os.path.exists(yaml_path):
         return yaml_path
+    parent = os.path.dirname(dir)
     if parent == dir:
       break
     dir = parent
-    dir = os.path.dirname(dir)
   return None
 
 
