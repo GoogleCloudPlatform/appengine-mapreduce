@@ -32,6 +32,7 @@ def start_map(name,
               reader_spec,
               reader_parameters,
               shard_count,
+              mapreduce_parameters={},
               base_path="/mapreduce",
               queue_name="default",
               _app=None):
@@ -44,6 +45,8 @@ def start_map(name,
     reader_parameters: dictionary of parameters to pass to reader. These are
       reader-specific.
     shard_count: number of shards to create.
+    mapreduce_parameters: dictionary of mapreduce parameters relevant to the
+      whole job.
     base_path: base path of mapreduce library handler specified in app.yaml.
       "/mapreduce" by default.
     queue_name: executor queue name to be used for mapreduce tasks.
@@ -54,7 +57,11 @@ def start_map(name,
   mapper_spec = model.MapperSpec(handler_spec, reader_spec, reader_parameters,
                                  shard_count)
 
-  return handlers.StartJobHandler._start_map(name, mapper_spec,
-                                             base_path=base_path,
-                                             queue_name=queue_name,
-                                             _app=_app)
+  return handlers.StartJobHandler._start_map(
+      name,
+      mapper_spec,
+      mapreduce_parameters,
+      base_path=base_path,
+      queue_name=queue_name,
+      _app=_app)
+

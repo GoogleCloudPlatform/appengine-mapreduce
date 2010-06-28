@@ -55,6 +55,7 @@ class ControlTest(testutil.HandlerTestBase):
             "entity_kind": __name__ + "." + TestEntity.__name__,
         },
         shard_count,
+        mapreduce_parameters={"foo": "bar"},
         base_path="/mapreduce_base_path",
         queue_name="crazy-queue")
 
@@ -65,6 +66,8 @@ class ControlTest(testutil.HandlerTestBase):
     self.assertTrue(mapreduce_state)
     self.assertEquals(mapreduce_id, mapreduce_state.key().id_or_name())
 
+    mapreduce_spec = mapreduce_state.mapreduce_spec
+    self.assertEquals({"foo": "bar"}, mapreduce_spec.params)
 
 if __name__ == "__main__":
   unittest.main()

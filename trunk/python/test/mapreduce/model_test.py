@@ -227,6 +227,7 @@ class MapreduceSpecTest(unittest.TestCase):
         {"name": "my job",
          "mapreduce_id": "mr0",
          "mapper_spec": mapper_spec_dict,
+         "params": {},
         },
         mapreduce_spec.to_json())
 
