@@ -390,6 +390,8 @@ class StartJobHandlerTest(MapreduceHandlerTestBase):
 
     mapreduce_state = model.MapreduceState.all().fetch(limit=1)[0]
     self.verify_mapreduce_state(mapreduce_state, shard_count=8)
+    self.assertEquals(0, mapreduce_state.failed_shards)
+    self.assertEquals(0, mapreduce_state.aborted_shards)
     mapreduce_id = mapreduce_state.mapreduce_spec.mapreduce_id
 
     for i in xrange(shard_count):
@@ -422,6 +424,8 @@ class StartJobHandlerTest(MapreduceHandlerTestBase):
     mapreduce_state = model.MapreduceState.all().fetch(limit=1)[0]
     self.assertEquals("otherapp", mapreduce_state.app_id)
     self.verify_mapreduce_state(mapreduce_state, shard_count=8)
+    self.assertEquals(0, mapreduce_state.failed_shards)
+    self.assertEquals(0, mapreduce_state.aborted_shards)
     mapreduce_id = mapreduce_state.mapreduce_spec.mapreduce_id
 
     for i in xrange(shard_count):
@@ -922,6 +926,8 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
 
     mapreduce_state = model.MapreduceState.get_by_key_name(self.mapreduce_id)
     self.verify_mapreduce_state(mapreduce_state, processed=9, shard_count=3)
+    self.assertEquals(0, mapreduce_state.failed_shards)
+    self.assertEquals(0, mapreduce_state.aborted_shards)
 
     tasks = self.taskqueue.GetTasks("default")
     self.assertEquals(1, len(tasks))
@@ -934,6 +940,8 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
     mapreduce_state = model.MapreduceState.get_by_key_name(self.mapreduce_id)
     self.verify_mapreduce_state(mapreduce_state, active=False, shard_count=3,
                                 result_status=model.ShardState.RESULT_FAILED)
+    self.assertEquals(0, mapreduce_state.failed_shards)
+    self.assertEquals(0, mapreduce_state.aborted_shards)
 
     self.assertEquals(
         model.MapreduceControl.ABORT,
@@ -959,6 +967,8 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
     self.verify_mapreduce_state(
         mapreduce_state, processed=9, active=False, shard_count=3,
         result_status=model.MapreduceState.RESULT_SUCCESS)
+    self.assertEquals(0, mapreduce_state.failed_shards)
+    self.assertEquals(0, mapreduce_state.aborted_shards)
 
     tasks = self.taskqueue.GetTasks("default")
     self.assertEquals(0, len(tasks))
@@ -982,6 +992,8 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
     mapreduce_state = model.MapreduceState.get_by_key_name(self.mapreduce_id)
     self.verify_mapreduce_state(
         mapreduce_state, active=True, shard_count=3)
+    self.assertEquals(1, mapreduce_state.failed_shards)
+    self.assertEquals(0, mapreduce_state.aborted_shards)
 
     tasks = self.taskqueue.GetTasks("default")
     self.assertEquals(1, len(tasks))
@@ -1004,6 +1016,8 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
     self.verify_mapreduce_state(
         mapreduce_state, active=False, shard_count=3,
         result_status=model.ShardState.RESULT_FAILED)
+    self.assertEquals(1, mapreduce_state.failed_shards)
+    self.assertEquals(0, mapreduce_state.aborted_shards)
 
     tasks = self.taskqueue.GetTasks("default")
     self.assertEquals(0, len(tasks))
@@ -1022,6 +1036,8 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
     mapreduce_state = model.MapreduceState.get_by_key_name(self.mapreduce_id)
     self.verify_mapreduce_state(
         mapreduce_state, active=True, shard_count=3)
+    self.assertEquals(0, mapreduce_state.failed_shards)
+    self.assertEquals(0, mapreduce_state.aborted_shards)
 
     tasks = self.taskqueue.GetTasks("default")
     self.assertEquals(1, len(tasks))
@@ -1031,6 +1047,8 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
     mapreduce_state = model.MapreduceState.get_by_key_name(self.mapreduce_id)
     self.verify_mapreduce_state(
         mapreduce_state, active=True, shard_count=3)
+    self.assertEquals(0, mapreduce_state.failed_shards)
+    self.assertEquals(0, mapreduce_state.aborted_shards)
 
     tasks = self.taskqueue.GetTasks("default")
     self.assertEquals(2, len(tasks))
@@ -1051,6 +1069,8 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
     self.verify_mapreduce_state(
         mapreduce_state, active=False, shard_count=3,
         result_status=model.ShardState.RESULT_ABORTED)
+    self.assertEquals(1, mapreduce_state.failed_shards)
+    self.assertEquals(1, mapreduce_state.aborted_shards)
 
     tasks = self.taskqueue.GetTasks("default")
     self.assertEquals(2, len(tasks))
