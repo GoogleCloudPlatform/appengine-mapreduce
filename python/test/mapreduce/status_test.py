@@ -248,7 +248,11 @@ class ListConfigsTest(testutil.HandlerTestBase):
         "- name: Mapreduce2\n"
         "  mapper:\n"
         "    handler: Handler2\n"
-        "    input_reader: Reader2\n")
+        "    input_reader: Reader2\n"
+        "  params_validator: MapreduceValidator\n"
+        "  params:\n"
+        "  - name: foo\n"
+        "    value: bar\n")
     try:
       self.handler.get()
     finally:
@@ -266,7 +270,10 @@ class ListConfigsTest(testutil.HandlerTestBase):
             u'name': u'Mapreduce1'},
           {u'mapper_input_reader': u'Reader2',
            u'mapper_handler': u'Handler2',
-           u'name': u'Mapreduce2'}]},
+           u'name': u'Mapreduce2',
+           u'params': {
+               u'foo': u'bar',},
+           }]},
         simplejson.loads(self.handler.response.out.getvalue()))
     self.assertEquals("text/javascript",
                       self.handler.response.headers["Content-Type"])
@@ -381,7 +388,7 @@ class GetJobDetailTest(testutil.HandlerTestBase):
     expected_keys = set([
         "active", "chart_url", "counters", "mapper_spec", "mapreduce_id",
         "name", "result_status", "shards", "start_timestamp_ms",
-        "updated_timestamp_ms"])
+        "updated_timestamp_ms", "params"])
     expected_shard_keys = set([
         "active", "counters", "last_work_item", "result_status",
         "shard_description", "shard_id", "shard_number",

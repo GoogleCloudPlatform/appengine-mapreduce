@@ -391,25 +391,32 @@ class MapreduceSpec(JsonMixin):
   passed as a payload to all mapreduce tasks in json encoding.
   """
 
+  PARAM_DONE_CALLBACK = "done_callback"
+  PARAM_DONE_CALLBACK_QUEUE = "done_callback_queue"
+
   def __init__(self,
                name,
                mapreduce_id,
-               mapper_spec):
+               mapper_spec,
+               params = {}):
     """Create new MapreduceSpec.
 
     Args:
       name: The name of this mapreduce job type.
       mapreduce_id: ID of the mapreduce.
       mapper_spec: JSON-encoded string containing a MapperSpec.
+      params: dictionary of additional mapreduce parameters.
 
     Properties:
       name: The name of this mapreduce job type.
       mapreduce_id: unique id of this mapreduce as string.
       mapper: This MapreduceSpec's instance of MapperSpec.
+      params: dictionary of additional mapreduce parameters.
     """
     self.name = name
     self.mapreduce_id = mapreduce_id
     self.mapper = MapperSpec.from_json(mapper_spec)
+    self.params = params
 
   def to_json(self):
     """Serializes all data in this mapreduce spec into json form.
@@ -422,6 +429,7 @@ class MapreduceSpec(JsonMixin):
         "name": self.name,
         "mapreduce_id": self.mapreduce_id,
         "mapper_spec": mapper_spec,
+        "params": self.params,
     }
 
   @classmethod
@@ -436,7 +444,8 @@ class MapreduceSpec(JsonMixin):
     """
     mapreduce_spec = cls(json["name"],
                          json["mapreduce_id"],
-                         json["mapper_spec"])
+                         json["mapper_spec"],
+                         json.get("params"))
     return mapreduce_spec
 
 

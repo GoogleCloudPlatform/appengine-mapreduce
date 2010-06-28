@@ -383,9 +383,24 @@ class ControllerCallbackHandler(base_handler.BaseHandler):
     self.aggregate_state(state, shard_states)
     poll_time = state.last_poll_time
     state.last_poll_time = datetime.datetime.utcfromtimestamp(self._time())
-    state.put()
+
     if not state.active:
+      def put_state(state):
+        state.put()
+        done_callback = spec.params.get(
+            model.MapreduceSpec.PARAM_DONE_CALLBACK)
+        if done_callback:
+          taskqueue.Task(
+              url=done_callback,
+              headers={"Mapreduce-Id": spec.mapreduce_id}).add(
+                  spec.params.get(
+                      model.MapreduceSpec.PARAM_DONE_CALLBACK_QUEUE,
+                      "default"),
+                  transactional=True)
+      db.run_in_transaction(put_state, state)
       return
+    else:
+      state.put()
 
     processing_rate = int(spec.mapper.params.get(
         "processing_rate") or model._DEFAULT_PROCESSING_RATE_PER_SEC)
@@ -460,7 +475,10 @@ class StartJobHandler(base_handler.JsonHandler):
     mapreduce_name = self._get_required_param("name")
     mapper_input_reader_spec = self._get_required_param("mapper_input_reader")
     mapper_handler_spec = self._get_required_param("mapper_handler")
-    mapper_params = self._get_mapper_params()
+    mapper_params = self._get_params(
+        "mapper_params_validator", "mapper_params.")
+    params = self._get_params(
+        "params_validator", "params.")
 
     mapper_params["processing_rate"] = int(mapper_params.get(
           "processing_rate") or model._DEFAULT_PROCESSING_RATE_PER_SEC)
@@ -473,26 +491,34 @@ class StartJobHandler(base_handler.JsonHandler):
         mapper_params,
         int(mapper_params.get("shard_count", model._DEFAULT_SHARD_COUNT)))
 
-    mapreduce_id = type(self)._start_map(mapreduce_name, mapper_spec,
-                                         base_path=self.base_path(),
-                                         queue_name=queue_name,
-                                         _app=mapper_params.get("_app"))
+    mapreduce_id = type(self)._start_map(
+        mapreduce_name,
+        mapper_spec,
+        params,
+        base_path=self.base_path(),
+        queue_name=queue_name,
+        _app=mapper_params.get("_app"))
     self.json_response["mapreduce_id"] = mapreduce_id
 
-  def _get_mapper_params(self):
+  def _get_params(self, validator_parameter, name_prefix):
     """Retrieves additional user-supplied params for the job and validates them.
+
+    Args:
+      validator_parameter: name of the request parameter which supplies
+        validator for this parameter set.
+      name_prefix: common prefix for all parameter names in the request.
 
     Raises:
       Any exception raised by the 'params_validator' request parameter if
       the params fail to validate.
     """
-    params_validator = self.request.get("mapper_params_validator")
+    params_validator = self.request.get(validator_parameter)
 
     user_params = {}
     for key in self.request.arguments():
-      if key.startswith("mapper_params."):
+      if key.startswith(name_prefix):
         values = self.request.get_all(key)
-        adjusted_key = key[len("mapper_params."):]
+        adjusted_key = key[len(name_prefix):]
         if len(values) == 1:
           user_params[adjusted_key] = values[0]
         else:
@@ -524,6 +550,7 @@ class StartJobHandler(base_handler.JsonHandler):
 
   @classmethod
   def _start_map(cls, name, mapper_spec,
+                 mapreduce_params,
                  base_path="/mapreduce",
                  queue_name="default",
                  _app=None):
@@ -539,7 +566,8 @@ class StartJobHandler(base_handler.JsonHandler):
     mapreduce_spec = model.MapreduceSpec(
         name,
         state.key().id_or_name(),
-        mapper_spec.to_json())
+        mapper_spec.to_json(),
+        mapreduce_params)
     state.mapreduce_spec = mapreduce_spec
     state.active = True
     state.active_shards = mapper_spec.shard_count

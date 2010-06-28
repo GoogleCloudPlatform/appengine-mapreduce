@@ -66,6 +66,7 @@ class UserParam(validation.Validated):
   ATTRIBUTES = {
       "name":  r"[a-zA-Z0-9_\.]+",
       "default": validation.Optional(r".*"),
+      "value": validation.Optional(r".*"),
   }
 
 
@@ -86,6 +87,8 @@ class MapreduceInfo(validation.Validated):
   ATTRIBUTES = {
       "name": r".+",
       "mapper": MapperInfo,
+      "params": validation.Optional(validation.Repeated(UserParam)),
+      "params_validator": validation.Optional(r".+"),
   }
 
 
@@ -149,8 +152,13 @@ class MapReduceYaml(validation.Validated):
       if config.mapper.params:
         param_defaults = {}
         for param in config.mapper.params:
-          param_defaults[param.name] = param.default
+          param_defaults[param.name] = param.default or param.value
         out["mapper_params"] = param_defaults
+      if config.params:
+        param_defaults = {}
+        for param in config.params:
+          param_defaults[param.name] = param.default or param.value
+        out["params"] = param_defaults
       all_configs.append(out)
 
     return all_configs

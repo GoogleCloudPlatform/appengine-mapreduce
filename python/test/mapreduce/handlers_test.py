@@ -33,8 +33,8 @@ import unittest
 from google.appengine.api import apiproxy_stub_map
 from google.appengine.api import datastore_file_stub
 from google.appengine.api import memcache
-from google.appengine.api.memcache import memcache_stub
 from google.appengine.api.labs.taskqueue import taskqueue_stub
+from google.appengine.api.memcache import memcache_stub
 from google.appengine.ext import db
 from mapreduce.lib import key_range
 from mapreduce import context
@@ -47,6 +47,8 @@ from testlib import mock_webapp
 
 
 MAPPER_PARAMS = {"batch_size": 50}
+PARAM_DONE_CALLBACK = model.MapreduceSpec.PARAM_DONE_CALLBACK
+PARAM_DONE_CALLBACK_QUEUE = model.MapreduceSpec.PARAM_DONE_CALLBACK_QUEUE
 
 
 class TestException(Exception):
@@ -488,6 +490,20 @@ class StartJobHandlerTest(MapreduceHandlerTestBase):
                       params["processing_rate"])
     self.assertEquals("default", params["queue_name"])
 
+  def testMapreduceParameters(self):
+    """Tests propagation of user-supplied mapreduce parameters."""
+    TestEntity().put()
+    self.handler.request.set("params.one", ["red", "blue"])
+    self.handler.request.set("params.two", "green")
+    self.handler.request.set("params_validator",
+                             __name__ + ".test_param_validator_success")
+    self.handler.handle()
+    params = model.MapreduceState.all().get().mapreduce_spec.params
+    self.assertEquals(["red", "blue"], params["one"])
+    self.assertEquals("green", params["two"])
+
+    self.assertEquals("good", params["test"])
+
   def testParameterValidationFailure(self):
     """Tests when validating user-supplied parameters fails."""
     self.handler.request.set("mapper_params_validator",
@@ -895,6 +911,8 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
 
     self.mapreduce_id = self.mapreduce_state.key().name()
     mapreduce_spec = self.create_mapreduce_spec(self.mapreduce_id, 3)
+    mapreduce_spec.params[PARAM_DONE_CALLBACK] = "/fin"
+    mapreduce_spec.params[PARAM_DONE_CALLBACK_QUEUE] = "crazy-queue"
 
     self.mapreduce_state.mapreduce_spec = mapreduce_spec
     self.mapreduce_state.chart_url = "http://chart.apis.google.com/chart?"
@@ -905,6 +923,17 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
 
     self.handler.request.set("mapreduce_spec", mapreduce_spec.to_json_str())
     self.quota_manager = quota.QuotaManager(memcache.Client())
+
+  def verify_done_task(self):
+    tasks = self.taskqueue.GetTasks("crazy-queue")
+    self.assertEquals(1, len(tasks))
+    task = tasks[0]
+    self.assertTrue(task)
+
+    self.assertEquals("/fin", task["url"])
+    self.assertEquals("POST", task["method"])
+    headers = dict(task["headers"])
+    self.assertEquals(self.mapreduce_id, headers["Mapreduce-Id"])
 
   def testSmoke(self):
     """Verify main execution path.
@@ -951,6 +980,8 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
     tasks = self.taskqueue.GetTasks("default")
     self.assertEquals(0, len(tasks))
 
+    self.verify_done_task()
+
   def testAllShardsAreDone(self):
     """Mapreduce should become inactive when all shards have finished."""
     for i in range(3):
@@ -972,6 +1003,9 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
 
     tasks = self.taskqueue.GetTasks("default")
     self.assertEquals(0, len(tasks))
+
+    self.verify_done_task()
+
     self.assertEquals(
         3, len(model.ShardState.find_by_mapreduce_id(self.mapreduce_id)))
 
@@ -1021,6 +1055,9 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
 
     tasks = self.taskqueue.GetTasks("default")
     self.assertEquals(0, len(tasks))
+
+    self.verify_done_task()
+
     self.assertEquals(
         3, len(model.ShardState.find_by_mapreduce_id(self.mapreduce_id)))
 
@@ -1042,6 +1079,7 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
     tasks = self.taskqueue.GetTasks("default")
     self.assertEquals(1, len(tasks))
     self.verify_controller_task(tasks[0], shard_count=3)
+    self.taskqueue.FlushQueue("default")
 
     self.handler.post()
     mapreduce_state = model.MapreduceState.get_by_key_name(self.mapreduce_id)
@@ -1051,8 +1089,9 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
     self.assertEquals(0, mapreduce_state.aborted_shards)
 
     tasks = self.taskqueue.GetTasks("default")
-    self.assertEquals(2, len(tasks))
-    self.verify_controller_task(tasks[1], shard_count=3)
+    self.assertEquals(1, len(tasks))
+    self.verify_controller_task(tasks[0], shard_count=3)
+    self.taskqueue.FlushQueue("default")
 
     shard_state_list = model.ShardState.find_by_mapreduce_id(self.mapreduce_id)
     self.assertEquals(3, len(shard_state_list))
@@ -1073,7 +1112,9 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
     self.assertEquals(1, mapreduce_state.aborted_shards)
 
     tasks = self.taskqueue.GetTasks("default")
-    self.assertEquals(2, len(tasks))
+    self.assertEquals(0, len(tasks))
+
+    self.verify_done_task()
 
   def testInitialQuota(self):
     """Tests that the controller gives shards no quota to start."""

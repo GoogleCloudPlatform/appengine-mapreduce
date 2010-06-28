@@ -380,12 +380,16 @@ function initJobLaunching(configs) {
         .appendTo(jobForm);
     });
 
-    // User-supplied form values.
-    if (config.mapper_params) {
-      var sortedParams = getSortedKeys(config.mapper_params);
+    // Add parameter values to the job form.
+    function addParameters(params, prefix) {
+      if (!params) {
+        return;
+      }
+
+      var sortedParams = getSortedKeys(params);
       $.each(sortedParams, function(index, key) {
-        var value = config.mapper_params[key];
-        var paramId = 'job-' + key + '-mapper-param';
+        var value = params[key];
+        var paramId = 'job-' + prefix + key + '-param';
         var paramP = $('<p class="editable-input">');
 
         // Deal with the case in which the value is an object rather than
@@ -405,12 +409,15 @@ function initJobLaunching(configs) {
           .appendTo(paramP);
         $('<input type="text">')
           .attr('id', paramId)
-          .attr('name', 'mapper_params.' + key)
+          .attr('name', prefix + key)
           .attr('value', value)
           .appendTo(paramP);
         paramP.appendTo(jobForm);
       });
     }
+
+    addParameters(config.params, "params.");
+    addParameters(config.mapper_params, "mapper_params.");
 
     $('<input type="submit">')
       .attr('value', 'Run')

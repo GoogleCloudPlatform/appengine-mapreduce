@@ -22,8 +22,8 @@
 
 from google.appengine.ext import db
 from google.appengine.ext import webapp
-from mapreduce.operation import db as db_op
 from google.appengine.ext.webapp import util
+from mapreduce.operation import db as db_op
 
 
 HEADER = FOOTER = None
@@ -65,8 +65,15 @@ class Guestbook(webapp.RequestHandler):
     self.response.out.write(FOOTER)
 
 
+class DoneHandler(webapp.RequestHandler):
+
+  def post(self):
+    pass
+
+
 def main():
-  application = webapp.WSGIApplication([('/', Guestbook)])
+  application = webapp.WSGIApplication([('/', Guestbook),
+                                        ('/done', DoneHandler)])
   util.run_wsgi_app(application)
 
 
