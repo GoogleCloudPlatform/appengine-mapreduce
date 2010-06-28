@@ -24,6 +24,7 @@ from testlib import mox
 import os
 
 import unittest
+from google.appengine.api import datastore
 from google.appengine.ext import db
 from mapreduce import context
 
@@ -34,32 +35,44 @@ class TestEntity(db.Model):
   tag = db.TextProperty()
 
 
-class EntityListTest(unittest.TestCase):
-  """Tests for context.EntityList class."""
+def new_datastore_entity(key_name=None):
+  return datastore.Entity('TestEntity', name=key_name)
+
+
+class ItemListTest(unittest.TestCase):
+  """Tests for context.ItemList class."""
 
   def setUp(self):
-    self.list = context.EntityList()
+    self.list = context.ItemList()
 
   def testAppend(self):
     """Test append method."""
-    self.assertEquals([], self.list.entities)
+    self.assertEquals([], self.list.items)
     self.assertEquals(0, self.list.size)
 
     self.list.append('abc', 100)
 
-    self.assertEquals(['abc'], self.list.entities)
+    self.assertEquals(['abc'], self.list.items)
     self.assertEquals(100, self.list.size)
 
   def testClear(self):
     """Test clear method."""
     self.list.append('abc', 100)
-    self.assertEquals(['abc'], self.list.entities)
+    self.assertEquals(['abc'], self.list.items)
     self.assertEquals(100, self.list.size)
 
     self.list.clear()
 
-    self.assertEquals([], self.list.entities)
+    self.assertEquals([], self.list.items)
     self.assertEquals(0, self.list.size)
+
+  def testBackwardsCompat(self):
+    """Old class name and 'entities' property should still work."""
+    self.list = context.EntityList()
+    self.list.append('abc', 100)
+    self.assertEquals(['abc'], self.list.entities)
+    self.assertEquals(self.list.items, self.list.entities)
+    self.assertEquals(100, self.list.size)
 
 
 class MutationPoolTest(unittest.TestCase):
@@ -74,44 +87,61 @@ class MutationPoolTest(unittest.TestCase):
     """Test put method."""
     e = TestEntity()
     self.pool.put(e)
-    self.assertEquals([e], self.pool.puts.entities)
-    self.assertEquals([], self.pool.deletes.entities)
+    self.assertEquals([e._populate_internal_entity()], self.pool.puts.items)
+    self.assertEquals([], self.pool.deletes.items)
+
+  def testPutEntity(self):
+    """Test put method using a datastore Entity directly."""
+    e = new_datastore_entity()
+    self.pool.put(e)
+    self.assertEquals([e], self.pool.puts.items)
+    self.assertEquals([], self.pool.deletes.items)
+    e2 = TestEntity()
+    self.pool.put(e2)
+    self.assertEquals([e, e2._populate_internal_entity()], self.pool.puts.items)
 
   def testDelete(self):
     """Test delete method with a model instance"""
     e = TestEntity(key_name='goingaway')
     self.pool.delete(e)
-    self.assertEquals([], self.pool.puts.entities)
-    self.assertEquals([e.key()], self.pool.deletes.entities)
+    self.assertEquals([], self.pool.puts.items)
+    self.assertEquals([e.key()], self.pool.deletes.items)
+
+  def testDeleteEntity(self):
+    """Test delete method with a datastore entity"""
+    e = new_datastore_entity(key_name='goingaway')
+    self.pool.delete(e)
+    self.assertEquals([], self.pool.puts.items)
+    self.assertEquals([e.key()], self.pool.deletes.items)
 
   def testDeleteKey(self):
     """Test delete method with a key instance."""
     k = db.Key.from_path('MyKind', 'MyKeyName', _app='myapp')
     self.pool.delete(k)
-    self.assertEquals([], self.pool.puts.entities)
-    self.assertEquals([k], self.pool.deletes.entities)
+    self.assertEquals([], self.pool.puts.items)
+    self.assertEquals([k], self.pool.deletes.items)
     self.pool.delete(str(k))
-    self.assertEquals([k, k], self.pool.deletes.entities)
+    self.assertEquals([k, k], self.pool.deletes.items)
 
   def testPutOverPoolSize(self):
     """Test putting more than pool size."""
     self.pool = context.MutationPool(1000)
 
     m = mox.Mox()
-    m.StubOutWithMock(db, 'put', use_mock_anything=True)
+    m.StubOutWithMock(datastore, 'Put', use_mock_anything=True)
 
     e1 = TestEntity()
     e2 = TestEntity(tag=' ' * 1000)
 
-    db.put([e1])
+    datastore.Put([e1._populate_internal_entity()])
 
     m.ReplayAll()
     try:
       self.pool.put(e1)
-      self.assertEquals([e1], self.pool.puts.entities)
+      self.assertEquals([e1._populate_internal_entity()], self.pool.puts.items)
 
       self.pool.put(e2)
-      self.assertEquals([e2], self.pool.puts.entities)
+      self.assertEquals([e2._populate_internal_entity()], self.pool.puts.items)
 
       m.VerifyAll()
     finally:
@@ -122,13 +152,14 @@ class MutationPoolTest(unittest.TestCase):
     self.pool = context.MutationPool()
 
     m = mox.Mox()
-    m.StubOutWithMock(db, 'put', use_mock_anything=True)
+    m.StubOutWithMock(datastore, 'Put', use_mock_anything=True)
 
     entities = []
     for i in range(context.MAX_ENTITY_COUNT + 50):
       entities.append(TestEntity())
 
-    db.put(entities[:context.MAX_ENTITY_COUNT])
+    datastore.Put([e._populate_internal_entity()
+                   for e in entities[:context.MAX_ENTITY_COUNT]])
 
     m.ReplayAll()
     try:
@@ -146,20 +177,20 @@ class MutationPoolTest(unittest.TestCase):
     self.pool = context.MutationPool(500)
 
     m = mox.Mox()
-    m.StubOutWithMock(db, 'delete', use_mock_anything=True)
+    m.StubOutWithMock(datastore, 'Delete', use_mock_anything=True)
 
     e1 = TestEntity(key_name='goingaway')
     e2 = TestEntity(key_name='x' * 500)
 
-    db.delete([e1.key()])
+    datastore.Delete([e1.key()])
 
     m.ReplayAll()
     try:
       self.pool.delete(e1)
-      self.assertEquals([e1.key()], self.pool.deletes.entities)
+      self.assertEquals([e1.key()], self.pool.deletes.items)
 
       self.pool.delete(e2)
-      self.assertEquals([e2.key()], self.pool.deletes.entities)
+      self.assertEquals([e2.key()], self.pool.deletes.items)
 
       m.VerifyAll()
     finally:
@@ -170,13 +201,13 @@ class MutationPoolTest(unittest.TestCase):
     self.pool = context.MutationPool()
 
     m = mox.Mox()
-    m.StubOutWithMock(db, 'delete', use_mock_anything=True)
+    m.StubOutWithMock(datastore, 'Delete', use_mock_anything=True)
 
     entities = []
     for i in range(context.MAX_ENTITY_COUNT + 50):
       entities.append(TestEntity(key_name='die%d' % i))
 
-    db.delete([e.key() for e in entities[:context.MAX_ENTITY_COUNT]])
+    datastore.Delete([e.key() for e in entities[:context.MAX_ENTITY_COUNT]])
 
     m.ReplayAll()
     try:
@@ -194,27 +225,27 @@ class MutationPoolTest(unittest.TestCase):
     self.pool = context.MutationPool(1000)
 
     m = mox.Mox()
-    m.StubOutWithMock(db, 'delete', use_mock_anything=True)
-    m.StubOutWithMock(db, 'put', use_mock_anything=True)
+    m.StubOutWithMock(datastore, 'Delete', use_mock_anything=True)
+    m.StubOutWithMock(datastore, 'Put', use_mock_anything=True)
 
     e1 = TestEntity()
     e2 = TestEntity(key_name='flushme')
 
-    db.put([e1])
-    db.delete([e2.key()])
+    datastore.Put([e1._populate_internal_entity()])
+    datastore.Delete([e2.key()])
 
     m.ReplayAll()
     try:
       self.pool.put(e1)
-      self.assertEquals([e1], self.pool.puts.entities)
+      self.assertEquals([e1._populate_internal_entity()], self.pool.puts.items)
 
       self.pool.delete(e2)
-      self.assertEquals([e2.key()], self.pool.deletes.entities)
+      self.assertEquals([e2.key()], self.pool.deletes.items)
 
       self.pool.flush()
 
-      self.assertEquals([], self.pool.puts.entities)
-      self.assertEquals([], self.pool.deletes.entities)
+      self.assertEquals([], self.pool.puts.items)
+      self.assertEquals([], self.pool.deletes.items)
 
       m.VerifyAll()
     finally:
