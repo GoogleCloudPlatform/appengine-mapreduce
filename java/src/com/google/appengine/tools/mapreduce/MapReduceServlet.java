@@ -575,7 +575,7 @@ public class MapReduceServlet extends HttpServlet {
           (RecordReader<INKEY,INVALUE>) taskAttemptContext.getRecordReader(split);
       DatastorePersistingStatusReporter reporter =
           new DatastorePersistingStatusReporter(taskAttemptContext.getShardState());
-      Mapper.Context context = getMapperContext(
+      AppEngineMapper.AppEngineContext context = getMapperContext(
           taskAttemptContext, mapper, split, reader, reporter);
       
       if (jobContext.getSliceNumber() == 0) {
@@ -641,17 +641,17 @@ public class MapReduceServlet extends HttpServlet {
    */
   @SuppressWarnings("unchecked")
   private <INKEY, INVALUE, OUTKEY, OUTVALUE> 
-  Mapper<INKEY, INVALUE, OUTKEY, OUTVALUE>.Context getMapperContext(
+  AppEngineMapper<INKEY, INVALUE, OUTKEY, OUTVALUE>.AppEngineContext getMapperContext(
       AppEngineTaskAttemptContext taskAttemptContext,
       AppEngineMapper<INKEY, INVALUE, OUTKEY, OUTVALUE> mapper, 
       InputSplit split,
       RecordReader<INKEY, INVALUE> reader,
       StatusReporter reporter) throws InvocationTargetException {
-    Constructor<Mapper.Context> contextConstructor;
+    Constructor<AppEngineMapper.AppEngineContext> contextConstructor;
     try {
-      contextConstructor = Mapper.Context.class.getConstructor(
+      contextConstructor = AppEngineMapper.AppEngineContext.class.getConstructor(
         new Class[]{
-            Mapper.class,
+            AppEngineMapper.class,
             Configuration.class,
             TaskAttemptID.class,
             RecordReader.class,
@@ -661,15 +661,16 @@ public class MapReduceServlet extends HttpServlet {
             InputSplit.class
         }
       );
-      Mapper<INKEY, INVALUE, OUTKEY, OUTVALUE>.Context context = contextConstructor.newInstance(
-          mapper, 
-          taskAttemptContext.getConfiguration(), 
-          taskAttemptContext.getTaskAttemptID(), 
-          reader, 
-          null, /* not yet implemented */ 
-          null, /* not yet implemented */
-          reporter,
-          split
+      AppEngineMapper<INKEY, INVALUE, OUTKEY, OUTVALUE>.AppEngineContext context =
+          contextConstructor.newInstance(
+              mapper,
+              taskAttemptContext.getConfiguration(), 
+              taskAttemptContext.getTaskAttemptID(), 
+              reader, 
+              null, /* not yet implemented */ 
+              null, /* not yet implemented */
+              reporter,
+              split
       );
       return context;
     } catch (SecurityException e) {

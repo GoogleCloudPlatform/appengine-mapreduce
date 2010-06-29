@@ -16,7 +16,16 @@
 
 package com.google.appengine.tools.mapreduce;
 
+import com.google.appengine.api.datastore.DatastoreServiceFactory;
+
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.mapreduce.Mapper;
+import org.apache.hadoop.mapreduce.InputSplit;
+import org.apache.hadoop.mapreduce.OutputCommitter;
+import org.apache.hadoop.mapreduce.RecordReader;
+import org.apache.hadoop.mapreduce.RecordWriter;
+import org.apache.hadoop.mapreduce.StatusReporter;
+import org.apache.hadoop.mapreduce.TaskAttemptID;
 
 import java.io.IOException;
 
@@ -28,15 +37,53 @@ import java.io.IOException;
  * method is unusable (since task state doesn't persist from one queue iteration
  * to the next).
  * 
- * <p>Additionally, the {@link Mapper} interface is extended with two methods that
- * get executed with each task queue invocation: 
+ * <p>Additionally, the {@link Mapper} interface is extended with two methods
+ * that get executed with each task queue invocation: 
  * {@link #taskSetup(org.apache.hadoop.Mapper.Context)} and 
  * {@link #taskCleanup(org.apache.hadoop.Mapper.Context)}. 
- * 
+ *
+ * <p>The {@link Context} object that is passed to each of the AppEngineMapper
+ * methods is actually an {@link AppEngineContext} object. Therefore, you can
+ * access an automatically flushed {@link DatastoreMutationPool} via the
+ * {@link AppEngineContext#getMutationPool()} method. Note: For the automatic
+ * flushing behavior, you must call
+ * {@link #taskCleanup(org.apache.hadoop.Mapper.Context)} if you redefine that
+ * method in a subclass.
+ *
  * @author frew@google.com (Fred Wulff)
  */
 public abstract class AppEngineMapper<KEYIN,VALUEIN,KEYOUT,VALUEOUT> 
     extends Mapper<KEYIN,VALUEIN,KEYOUT,VALUEOUT> {
+
+  /**
+   * A Context that holds a datastore mutation pool.
+   */
+  public class AppEngineContext extends Mapper<KEYIN,VALUEIN,KEYOUT,VALUEOUT>.Context {
+    private DatastoreMutationPool mutationPool;
+
+    public AppEngineContext(Configuration conf,
+                            TaskAttemptID taskid,
+                            RecordReader<KEYIN, VALUEIN> reader,
+                            RecordWriter<KEYOUT, VALUEOUT> writer,
+                            OutputCommitter committer,
+                            StatusReporter reporter,
+                            InputSplit split) throws IOException, InterruptedException {
+      super(conf, taskid, reader, writer, committer, reporter, split);
+    }
+
+    public DatastoreMutationPool getMutationPool() {
+      if (mutationPool == null) {
+        mutationPool = new DatastoreMutationPool(DatastoreServiceFactory.getDatastoreService());
+      }
+      return mutationPool;
+    }
+
+    public void flush() {
+      if (mutationPool != null) {
+        mutationPool.flush();
+      }
+    }
+  }
   
   /**
    * App Engine mappers have no {@code run(Context)} method, since it would
@@ -70,10 +117,12 @@ public abstract class AppEngineMapper<KEYIN,VALUEIN,KEYOUT,VALUEOUT>
   }
   
   /**
-   * Run at the end of each task queue invocation.
+   * Run at the end of each task queue invocation. The default flushes the context.
    */
   public void taskCleanup(Context context) throws IOException, InterruptedException {
-    // Nothing
+    // We're the only client of this method, so we know that it will really be
+    // an AppEngineContext, although we don't expose this to subclasses for simplicity.
+    ((AppEngineContext) context).flush();
   }
   
   @Override
