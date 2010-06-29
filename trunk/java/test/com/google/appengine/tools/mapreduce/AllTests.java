@@ -30,7 +30,7 @@ public class AllTests extends TestCase {
   public static Test suite() {
     TestSuite suite = new TestSuite();
     suite.addTestSuite(AppEngineJobContextTest.class);
-    // suite.addTestSuite(AppEngineMapperTest.class);
+    suite.addTestSuite(AppEngineMapperTest.class);
     suite.addTestSuite(ConfigurationTemplatePreprocessorTest.class);
     suite.addTestSuite(DatastoreInputFormatTest.class);
     suite.addTestSuite(DatastoreMutationPoolTest.class);
