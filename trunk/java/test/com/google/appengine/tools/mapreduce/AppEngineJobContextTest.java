@@ -87,16 +87,19 @@ public class AppEngineJobContextTest extends TestCase {
   
   public void testGetJobContextFromRequest() {
     HttpServletRequest req = createMock(HttpServletRequest.class);
-    expect(req.getParameter(AppEngineJobContext.CONFIGURATION_PARAMETER_NAME))
-        .andReturn(SIMPLE_CONF_XML);
-    String jobId = new JobID("foo", 1).toString();
+    JobID jobId = new JobID("foo", 1);
     expect(req.getParameter(AppEngineJobContext.JOB_ID_PARAMETER_NAME))
-        .andReturn(jobId);
+        .andReturn(jobId.toString())
+        .anyTimes();
     replay(req);
-    
+
+
+    Configuration conf = ConfigurationXmlUtil.getConfigurationFromXml(SIMPLE_CONF_XML);
+    persistMRState(jobId, conf);
+
     JobContext context = new AppEngineJobContext(req, false);
     assertEquals("/tmp/foo", context.getConfiguration().get("foo.bar"));
-    assertEquals(jobId, context.getJobID().toString());
+    assertEquals(jobId.toString(), context.getJobID().toString());
     verify(req);
   }
 
@@ -116,7 +119,8 @@ public class AppEngineJobContextTest extends TestCase {
     HttpServletRequest req = createMock(HttpServletRequest.class);
     expect(req.getHeader("X-AppEngine-QueueName")).andReturn(null);
     expect(req.getParameter(AppEngineJobContext.JOB_ID_PARAMETER_NAME))
-        .andReturn(jobId.toString());
+        .andReturn(jobId.toString())
+        .anyTimes();
     replay(req);
     
     Configuration conf = new Configuration(false);
@@ -135,7 +139,8 @@ public class AppEngineJobContextTest extends TestCase {
     HttpServletRequest req = createMock(HttpServletRequest.class);
     expect(req.getHeader("X-AppEngine-QueueName")).andReturn("bar");
     expect(req.getParameter(AppEngineJobContext.JOB_ID_PARAMETER_NAME))
-      .andReturn(jobId.toString());
+      .andReturn(jobId.toString())
+      .anyTimes();
     replay(req);
     
     Configuration conf = new Configuration(false);
@@ -154,7 +159,8 @@ public class AppEngineJobContextTest extends TestCase {
     HttpServletRequest req = createMock(HttpServletRequest.class);
     expect(req.getHeader("X-AppEngine-QueueName")).andReturn("bar");
     expect(req.getParameter(AppEngineJobContext.JOB_ID_PARAMETER_NAME))
-      .andReturn(jobId.toString());
+      .andReturn(jobId.toString())
+      .anyTimes();
     replay(req);
     
     Configuration conf = new Configuration(false);
@@ -175,7 +181,8 @@ public class AppEngineJobContextTest extends TestCase {
     HttpServletRequest req = createMock(HttpServletRequest.class);
     expect(req.getHeader("X-AppEngine-QueueName")).andReturn("bar");
     expect(req.getParameter(AppEngineJobContext.JOB_ID_PARAMETER_NAME))
-        .andReturn(jobId.toString());
+        .andReturn(jobId.toString())
+        .anyTimes();
     replay(req);
     
     Configuration conf = new Configuration(false);
