@@ -47,7 +47,7 @@ import java.io.IOException;
  * access an automatically flushed {@link DatastoreMutationPool} via the
  * {@link AppEngineContext#getMutationPool()} method. Note: For the automatic
  * flushing behavior, you must call
- * {@link #taskCleanup(org.apache.hadoop.Mapper.Context)} if you redefine that
+ * {@link #taskCleanup(org.apache.hadoop.Mapper.Context)} if you override that
  * method in a subclass.
  *
  * @author frew@google.com (Fred Wulff)
@@ -120,9 +120,7 @@ public abstract class AppEngineMapper<KEYIN,VALUEIN,KEYOUT,VALUEOUT>
    * Run at the end of each task queue invocation. The default flushes the context.
    */
   public void taskCleanup(Context context) throws IOException, InterruptedException {
-    // We're the only client of this method, so we know that it will really be
-    // an AppEngineContext, although we don't expose this to subclasses for simplicity.
-    ((AppEngineContext) context).flush();
+    getAppEngineContext(context).flush();
   }
   
   @Override
@@ -130,5 +128,15 @@ public abstract class AppEngineMapper<KEYIN,VALUEIN,KEYOUT,VALUEOUT>
       throws IOException, InterruptedException {
     // Nothing (super does the identity map function, which is a bad idea since
     // we don't support shuffle/reduce yet).
+  }
+
+  /**
+   * Get an {@code AppEngineContext} from the {@code Context} that's passed
+   * to the other {@code AppEngineMapper} methods.
+   */
+  public AppEngineContext getAppEngineContext(Context context) {
+    // We're the only client of the other methods, so we know that the context
+    // will really be an AppEngineContext.
+    return (AppEngineContext) context;
   }
 }

@@ -77,8 +77,11 @@ public class AppEngineMapperTest extends TestCase {
     super.tearDown();
   }
 
+  /**
+   * Just makes sure that things don't explode in the no mutation pool
+   * case.
+   */
   public void testNoMutationPool() throws Exception {
-    // The test here is just that things don't explode.
     mapper.setup(context);
     mapper.taskSetup(context);
     mapper.map(NullWritable.get(), NullWritable.get(), context);
@@ -87,7 +90,6 @@ public class AppEngineMapperTest extends TestCase {
   }
 
   public void testPartialMutationPool() throws Exception {
-    // The test here is just that things don't explode.
     mapper.shouldOutputEntity(true);
     mapper.setup(context);
     mapper.taskSetup(context);
