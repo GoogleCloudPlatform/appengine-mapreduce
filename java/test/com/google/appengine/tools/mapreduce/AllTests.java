@@ -29,6 +29,8 @@ public class AllTests extends TestCase {
 
   public static Test suite() {
     TestSuite suite = new TestSuite();
+    suite.addTestSuite(AppEngineJobContextTest.class);
+    // suite.addTestSuite(AppEngineMapperTest.class);
     suite.addTestSuite(ConfigurationTemplatePreprocessorTest.class);
     suite.addTestSuite(DatastoreInputFormatTest.class);
     suite.addTestSuite(DatastoreMutationPoolTest.class);
@@ -36,9 +38,9 @@ public class AllTests extends TestCase {
     suite.addTestSuite(DatastoreSerializationUtilTest.class);
     suite.addTestSuite(MapReduceServletTest.class);
     suite.addTestSuite(MapReduceXmlTest.class);
-    suite.addTestSuite(StringSplitUtilTest.class);
     suite.addTestSuite(QuotaConsumerTest.class);
     suite.addTestSuite(QuotaManagerTest.class);
+    suite.addTestSuite(StringSplitUtilTest.class);
     return suite;
   }
 
