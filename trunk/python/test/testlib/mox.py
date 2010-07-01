@@ -1,4 +1,4 @@
-#!/usr/bin/python2.4
+#!/usr/bin/env python
 #
 # Copyright 2008 Google Inc.
 #
@@ -36,7 +36,7 @@ will be raised.
 WARNING! Mock objects created by Mox are not thread-safe.  If you are
 call a mock in multiple threads, it should be guarded by a mutex.
 
-TODO(stevepm): Add the option to make mocks thread-safe!
+TODO(user): Add the option to make mocks thread-safe!
 
 Suggested usage / workflow:
 

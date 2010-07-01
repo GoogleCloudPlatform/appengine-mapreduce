@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2007 Google Inc.
+# Copyright 2010 Google Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,21 +13,23 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-#
-
-"""Tests for google.appengine.ext.mapreduce.model."""
 
 
+
+
+
+# Disable "Invalid method name"
+# pylint: disable-msg=C6409
 
 import os
 import types
+import unittest
 
 from google.appengine.api import apiproxy_stub_map
 from google.appengine.api import datastore_errors
 from google.appengine.api import datastore_file_stub
 from google.appengine.ext import db
 from mapreduce import model
-import unittest
 
 
 class TestHandler(object):
@@ -190,6 +192,7 @@ class MapperSpecTest(unittest.TestCase):
         __name__ + "." + TestHandler.__name__ + ".process")
     self.assertEquals(types.MethodType,
                       type(mapper_spec.handler))
+    # call it
     mapper_spec.handler(0)
 
   def testFunctionHandler(self):
@@ -198,6 +201,7 @@ class MapperSpecTest(unittest.TestCase):
         __name__ + "." + test_handler_function.__name__)
     self.assertEquals(types.FunctionType,
                       type(mapper_spec.handler))
+    # call it
     mapper_spec.handler(0)
 
   def testHandlerWithConstructorArgs(self):

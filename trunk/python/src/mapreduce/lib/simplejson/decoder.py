@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 """Implementation of JSONDecoder
 """
 import re

@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 def _IsColor(color):
   """Try to determine if color is a hex color string.  
   Labels that look like hex colors will match too, unfortunately."""

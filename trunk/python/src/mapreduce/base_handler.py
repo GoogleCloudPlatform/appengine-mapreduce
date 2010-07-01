@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2007 Google Inc.
+# Copyright 2010 Google Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,14 +13,12 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-#
 
 """Base handler class for all mapreduce handlers.
 """
 
 
 
-import google
 
 import logging
 from mapreduce.lib import simplejson
@@ -60,6 +58,7 @@ class JsonHandler(BaseHandler):
       self.handle()
     except Exception, e:
       logging.exception("Error in JsonHandler, returning exception.")
+      # TODO(user): Include full traceback here for the end-user.
       self.json_response.clear()
       self.json_response["error_class"] = e.__class__.__name__
       self.json_response["error_message"] = str(e)

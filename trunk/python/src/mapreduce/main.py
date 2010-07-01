@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2007 Google Inc.
+# Copyright 2010 Google Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,7 +13,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-#
 
 """Main module for map-reduce implementation.
 
@@ -22,11 +21,12 @@ This module should be specified as a handler for mapreduce URLs in app.yaml:
   handlers:
   - url: /mapreduce(/.*)?
     login: admin
-    script: google/appengine/ext/mapreduce/main.py
+    script: mapreduce/main.py
 """
 
 
 
+import wsgiref.handlers
 
 from google.appengine.ext import webapp
 from google.appengine.ext.webapp import util
@@ -54,11 +54,11 @@ def create_application():
   """
   return webapp.WSGIApplication([
 
-
+      # Task queue handlers.
       (r".*/worker_callback", handlers.MapperWorkerCallbackHandler),
       (r".*/controller_callback", handlers.ControllerCallbackHandler),
 
-
+      # RPC requests with JSON responses
       (r".*/command/start_job", handlers.StartJobHandler),
       (r".*/command/cleanup_job", handlers.CleanUpJobHandler),
       (r".*/command/abort_job", handlers.AbortJobHandler),
@@ -66,10 +66,10 @@ def create_application():
       (r".*/command/list_jobs", status.ListJobsHandler),
       (r".*/command/get_job_detail", status.GetJobDetailHandler),
 
-
+      # Catch all redirects to status page.
       (r"/[^/]+(?:/)?", RedirectHandler),
 
-
+      # UI static files
       (r".+/([a-zA-Z0-9]+(?:\.(?:css|js))?)", status.ResourceHandler),
   ],
   debug=True)

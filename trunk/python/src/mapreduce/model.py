@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2007 Google Inc.
+# Copyright 2010 Google Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,7 +13,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-#
 
 """Model classes which are used to communicate between parts of implementation.
 
@@ -22,12 +21,13 @@ communication messages. They are either stored in the datastore or
 serialized to/from json and passed around with other means.
 """
 
+# Disable "Invalid method name"
+# pylint: disable-msg=C6409
+
 
 
 __all__ = ["JsonMixin", "JsonProperty", "MapreduceState", "MapperSpec",
            "MapreduceControl", "MapreduceSpec", "ShardState", "CountersMap"]
-
-
 
 import copy
 import datetime
@@ -46,8 +46,10 @@ from mapreduce import util
 from mapreduce.lib.graphy.backends import google_chart_api
 
 
+# Default rate of processed entities per second.
 _DEFAULT_PROCESSING_RATE_PER_SEC = 100
 
+# Default number of shards to have.
 _DEFAULT_SHARD_COUNT = 8
 
 
@@ -177,6 +179,7 @@ class JsonProperty(db.UnindexedProperty):
 
 
 
+# Ridiculous future UNIX epoch time, 500 years from now.
 _FUTURE_TIME = 2**34
 
 
@@ -347,8 +350,10 @@ class MapperSpec(JsonMixin):
     if self.__handler is None:
       resolved_spec = util.for_name(self.handler_spec)
       if isinstance(resolved_spec, type):
+        # create new instance if this is type
         self.__handler = resolved_spec()
       elif isinstance(resolved_spec, types.MethodType):
+        # bind the method
         self.__handler = getattr(resolved_spec.im_class(),
                                  resolved_spec.__name__)
       else:
@@ -391,7 +396,9 @@ class MapreduceSpec(JsonMixin):
   passed as a payload to all mapreduce tasks in json encoding.
   """
 
+  # Url to call when mapreduce finishes its execution.
   PARAM_DONE_CALLBACK = "done_callback"
+  # Queue to use to call done callback
   PARAM_DONE_CALLBACK_QUEUE = "done_callback_queue"
 
   def __init__(self,
@@ -475,12 +482,14 @@ class MapreduceState(db.Model):
 
   _RESULTS = frozenset([RESULT_SUCCESS, RESULT_FAILED, RESULT_ABORTED])
 
+  # Functional properties.
   mapreduce_spec = JsonProperty(MapreduceSpec, indexed=False)
   active = db.BooleanProperty(default=True, indexed=False)
   last_poll_time = db.DateTimeProperty(required=True)
   counters_map = JsonProperty(CountersMap, default=CountersMap(), indexed=False)
   app_id = db.StringProperty(required=False, indexed=True)
 
+  # For UI purposes only.
   chart_url = db.TextProperty(default="")
   sparkline_url = db.TextProperty(default="")
   result_status = db.StringProperty(required=False, choices=_RESULTS)
@@ -566,10 +575,12 @@ class ShardState(db.Model):
 
   _RESULTS = frozenset([RESULT_SUCCESS, RESULT_FAILED, RESULT_ABORTED])
 
+  # Functional properties.
   active = db.BooleanProperty(default=True, indexed=False)
   counters_map = JsonProperty(CountersMap, default=CountersMap(), indexed=False)
   result_status = db.StringProperty(choices=_RESULTS, indexed=False)
 
+  # For UI purposes only.
   mapreduce_id = db.StringProperty(required=True)
   update_time = db.DateTimeProperty(auto_now=True, indexed=False)
   shard_description = db.TextProperty(default="")

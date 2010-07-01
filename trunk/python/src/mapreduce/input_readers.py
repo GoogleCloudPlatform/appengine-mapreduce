@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2007 Google Inc.
+# Copyright 2010 Google Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,12 +13,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-#
 
 """Defines input readers for MapReduce."""
-
-
-import google
 
 
 
@@ -65,6 +61,7 @@ class InputReader(JsonMixin):
      interface.
   """
 
+  # Mapreduce parameters.
   _APP_PARAM = "_app"
   MAPPER_PARAMS = "mapper_params"
 
@@ -112,6 +109,7 @@ class InputReader(JsonMixin):
     pass
 
 
+# TODO(user): Use cursor API as soon as we have it available.
 class DatastoreInputReader(InputReader):
   """Represents a range in query results.
 
@@ -123,15 +121,21 @@ class DatastoreInputReader(InputReader):
   instead.
   """
 
+  # Number of entities to fetch at once while doing scanning.
   _BATCH_SIZE = 50
 
+  # Maximum number of shards we'll create.
   _MAX_SHARD_COUNT = 256
 
+  # Mapreduce parameters.
   ENTITY_KIND_PARAM = "entity_kind"
   KEYS_ONLY_PARAM = "keys_only"
   BATCH_SIZE_PARAM = "batch_size"
   KEY_RANGE_PARAM = "key_range"
 
+  # TODO(user): Add support for arbitrary queries. It's not possible to
+  # support them without cursors since right now you can't even serialize query
+  # definition.
   def __init__(self, entity_kind, key_range_param, mapper_params):
     """Create new DatastoreInputReader object.
 
@@ -180,6 +184,8 @@ class DatastoreInputReader(InputReader):
         self._key_range.advance(key)
         yield entry
 
+  # TODO(user): use query splitting functionality when it becomes available
+  # instead.
   @classmethod
   def split_input(cls, mapper_spec):
     """Splits query into shards without fetching query results.
@@ -217,9 +223,12 @@ class DatastoreInputReader(InputReader):
     app = params.get(cls._APP_PARAM)
     keys_only = int(params.get(cls.KEYS_ONLY_PARAM, False))
 
+    # Fail fast if Model cannot be located.
     if not keys_only:
       util.for_name(entity_kind_name)
 
+    # we use datastore.Query instead of ext.db.Query here, because we can't
+    # erase ordering on db.Query once we set it.
     raw_entity_kind = util.get_short_name(entity_kind_name)
     ds_query = datastore.Query(kind=raw_entity_kind, _app=app, keys_only=True)
     ds_query.Order("__key__")
@@ -232,8 +241,12 @@ class DatastoreInputReader(InputReader):
     try:
       last_entity_key, = ds_query.Get(1)
     except db.NeedIndexError, e:
+      # TODO(user): Show this error in the worker log, not the app logs.
       logging.warning("Cannot create accurate approximation of keyspace, "
                       "guessing instead. Please address this problem: %s", e)
+      # TODO(user): Use a key-end hint from the user input parameters
+      # in this case, in the event the user has a good way of figuring out
+      # the range of the keyspace.
       last_entity_key = key_range.KeyRange.guess_end_key(
           raw_entity_kind, first_entity_key)
 
@@ -284,12 +297,16 @@ class DatastoreInputReader(InputReader):
 class BlobstoreLineInputReader(InputReader):
   """Input reader for a newline delimited blob in Blobstore."""
 
+  # TODO(user): Should we set this based on MAX_BLOB_FETCH_SIZE?
   _BLOB_BUFFER_SIZE = 64000
 
+  # Maximum number of shards to allow.
   _MAX_SHARD_COUNT = 256
 
+  # Maximum number of blobs to allow.
   _MAX_BLOB_KEYS_COUNT = 246
 
+  # Mapreduce parameters.
   INITIAL_POSITION_PARAM = "initial_position"
   END_POSITION_PARAM = "end_position"
   BLOB_KEY_PARAM = "blob_key"
@@ -377,6 +394,8 @@ class BlobstoreLineInputReader(InputReader):
 
     blob_keys = params["blob_keys"]
     if isinstance(blob_keys, basestring):
+      # This is a mechanism to allow multiple blob keys (which do not contain
+      # commas) in a single string. It may go away.
       blob_keys = blob_keys.split(',')
     if len(blob_keys) > cls._MAX_BLOB_KEYS_COUNT:
       raise BadReaderParamsError("Too many 'blob_keys' for mapper input")
@@ -415,8 +434,10 @@ class BlobstoreZipInputReader(InputReader):
   and then only the contained files which it is responsible for.
   """
 
+  # Maximum number of shards to allow.
   _MAX_SHARD_COUNT = 256
 
+  # Mapreduce parameters.
   BLOB_KEY_PARAM = "blob_key"
   START_INDEX_PARAM = "start_index"
   END_INDEX_PARAM = "end_index"
@@ -453,6 +474,7 @@ class BlobstoreZipInputReader(InputReader):
     """
     if not self._zip:
       self._zip = zipfile.ZipFile(self._reader(self._blob_key))
+      # Get a list of entries, reversed so we can pop entries off in order
       self._entries = self._zip.infolist()[self._start_index:self._end_index]
       self._entries.reverse()
     if not self._entries:
@@ -515,6 +537,8 @@ class BlobstoreZipInputReader(InputReader):
     num_shards = min(mapper_spec.shard_count, cls._MAX_SHARD_COUNT)
     size_per_shard = total_size // num_shards
 
+    # Break the list of files into sublists, each of approximately
+    # size_per_shard bytes.
     shard_start_indexes = [0]
     current_shard_size = 0
     for i, file in enumerate(files):

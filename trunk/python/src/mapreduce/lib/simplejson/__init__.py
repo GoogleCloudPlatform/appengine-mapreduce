@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 r"""A simple, fast, extensible JSON encoder and decoder
 
 JSON (JavaScript Object Notation) <http://json.org> is a subset of

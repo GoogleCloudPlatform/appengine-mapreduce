@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2007 Google Inc.
+# Copyright 2010 Google Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,9 +13,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-#
 
 """Utility functions for use with the mapreduce library."""
+
 
 
 __all__ = ["for_name", "is_generator_function", "get_short_name"]
@@ -48,6 +48,8 @@ def for_name(fq_name, recursive=False):
     ImportError: when specified module could not be loaded or the class
     was not found in the module.
   """
+#  if "." not in fq_name:
+#    raise ImportError("'%s' is not a full-qualified name" % fq_name)
 
   fq_name = str(fq_name)
   module_name = __name__
@@ -61,23 +63,35 @@ def for_name(fq_name, recursive=False):
     result = __import__(module_name, None, None, [short_name])
     return result.__dict__[short_name]
   except KeyError:
+    # If we're recursively inside a for_name() chain, then we want to raise
+    # this error as a key error so we can report the actual source of the
+    # problem. If we're *not* recursively being called, that means the
+    # module was found and the specific item could not be loaded, and thus
+    # we want to raise an ImportError directly.
     if recursive:
       raise
     else:
       raise ImportError("Could not find '%s' on path '%s'" % (
                         short_name, module_name))
   except ImportError, e:
+    # module_name is not actually a module. Try for_name for it to figure
+    # out what's this.
     try:
       module = for_name(module_name, recursive=True)
       if hasattr(module, short_name):
         return getattr(module, short_name)
       else:
+        # The module was found, but the function component is missing.
         raise KeyError()
     except KeyError:
       raise ImportError("Could not find '%s' on path '%s'" % (
                         short_name, module_name))
     except ImportError:
+      # This means recursive import attempts failed, thus we will raise the
+      # first ImportError we encountered, since it's likely the most accurate.
       pass
+    # Raise the original import error that caused all of this, since it is
+    # likely the real cause of the overall problem.
     raise
 
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2007 Google Inc.
+# Copyright 2010 Google Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,10 +19,8 @@
 
 
 
-
-import google
-
-
+# Disable "Invalid method name"
+# pylint: disable-msg=C6409
 
 import datetime
 import logging
@@ -42,8 +40,11 @@ from mapreduce import quota
 from mapreduce import util
 
 
+# TODO(user): Make this a product of the reader or in quotas.py
 _QUOTA_BATCH_SIZE = 20
 
+# The amount of time to perform scanning in one slice. New slice will be
+# scheduled as soon as current one takes this long.
 _SLICE_DURATION_SEC = 15
 
 
@@ -84,6 +85,7 @@ class MapperWorkerCallbackHandler(base_handler.BaseHandler):
     self._start_time = self._time()
     shard_id = self.shard_id()
 
+    # TODO(user): Make this prettier
     logging.debug("post: shard=%s slice=%s headers=%s",
                   shard_id, self.slice_id(), self.request.headers)
 
@@ -92,6 +94,8 @@ class MapperWorkerCallbackHandler(base_handler.BaseHandler):
         model.MapreduceControl.get_key_by_job_id(spec.mapreduce_id),
     ])
     if not shard_state:
+      # We're letting this task to die. It's up to controller code to
+      # reinitialize and restart the task.
       logging.error("State not found for shard ID %r; shutting down",
                     shard_id)
       return
@@ -119,10 +123,14 @@ class MapperWorkerCallbackHandler(base_handler.BaseHandler):
     context.Context._set(ctx)
 
     try:
+      # consume quota ahead, because we do not want to run a datastore
+      # query if there's not enough quota for the shard.
       if not quota_consumer or quota_consumer.check():
         scan_aborted = False
         entity = None
 
+        # We shouldn't fetch an entity from the reader if there's not enough
+        # quota to process it. Perform all quota checks proactively.
         if not quota_consumer or quota_consumer.consume():
           for entity in input_reader:
             if isinstance(entity, db.Model):
@@ -132,6 +140,7 @@ class MapperWorkerCallbackHandler(base_handler.BaseHandler):
 
             scan_aborted = not self.process_entity(entity, ctx)
 
+            # Check if we've got enough quota for the next entity.
             if (quota_consumer and not scan_aborted and
                 not quota_consumer.consume()):
               scan_aborted = True
@@ -144,17 +153,23 @@ class MapperWorkerCallbackHandler(base_handler.BaseHandler):
         if not scan_aborted:
           logging.info("Processing done for shard %d of job '%s'",
                        shard_state.shard_number, shard_state.mapreduce_id)
+          # We consumed extra quota item at the end of for loop.
+          # Just be nice here and give it back :)
           if quota_consumer:
             quota_consumer.put(1)
           shard_state.active = False
           shard_state.result_status = model.ShardState.RESULT_SUCCESS
 
+      # TODO(user): Mike said we don't want this happen in case of
+      # exception while scanning. Figure out when it's appropriate to skip.
       ctx.flush()
     finally:
       context.Context._set(None)
       if quota_consumer:
         quota_consumer.dispose()
 
+    # Rescheduling work should always be the last statement. It shouldn't happen
+    # if there were any exceptions in code before it.
     if shard_state.active:
       self.reschedule(spec, input_reader)
 
@@ -262,6 +277,8 @@ class MapperWorkerCallbackHandler(base_handler.BaseHandler):
     Returns:
       task name which should be used to process specified shard/slice.
     """
+    # Prefix the task name with something unique to this framework's
+    # namespace so we don't conflict with user tasks on the queue.
     return "appengine-mrshard-%s-%s" % (shard_id, slice_id)
 
   def reschedule(self, mapreduce_spec, input_reader):
@@ -331,6 +348,7 @@ class ControllerCallbackHandler(base_handler.BaseHandler):
     spec = model.MapreduceSpec.from_json_str(
         self.request.get("mapreduce_spec"))
 
+    # TODO(user): Make this logging prettier.
     logging.debug("post: id=%s headers=%s",
                   spec.mapreduce_id, self.request.headers)
 
@@ -345,6 +363,7 @@ class ControllerCallbackHandler(base_handler.BaseHandler):
 
     shard_states = model.ShardState.find_by_mapreduce_id(spec.mapreduce_id)
     if state.active and len(shard_states) != spec.mapper.shard_count:
+      # Some shards were lost
       logging.error("Incorrect number of shard states: %d vs %d; "
                     "aborting job '%s'",
                     len(shard_states), spec.mapper.shard_count,
@@ -366,12 +385,14 @@ class ControllerCallbackHandler(base_handler.BaseHandler):
 
     if (not state.active and control and
         control.command == model.MapreduceControl.ABORT):
+      # User-initiated abort *after* all shards have completed.
       logging.info("Abort signal received for job '%s'", spec.mapreduce_id)
       state.result_status = model.MapreduceState.RESULT_ABORTED
 
     if not state.active:
       state.active_shards = 0
       if not state.result_status:
+        # Set final result status derived from shard states.
         if [s for s in shard_states
             if s.result_status != model.ShardState.RESULT_SUCCESS]:
           state.result_status = model.MapreduceState.RESULT_FAILED
@@ -380,11 +401,15 @@ class ControllerCallbackHandler(base_handler.BaseHandler):
         logging.info("Final result for job '%s' is '%s'",
                      spec.mapreduce_id, state.result_status)
 
+    # We don't need a transaction here, since we change only statistics data,
+    # and we don't care if it gets overwritten/slightly inconsistent.
     self.aggregate_state(state, shard_states)
     poll_time = state.last_poll_time
     state.last_poll_time = datetime.datetime.utcfromtimestamp(self._time())
 
     if not state.active:
+      # This is the last execution.
+      # Enqueue done_callback if needed.
       def put_state(state):
         state.put()
         done_callback = spec.params.get(
@@ -448,6 +473,7 @@ class ControllerCallbackHandler(base_handler.BaseHandler):
     if not quota_refill:
       return
 
+    # TODO(user): use batch memcache API to refill quota in one API call.
     for shard_state in active_shard_states:
       quota_manager.put(shard_state.shard_id, quota_refill)
 
@@ -472,6 +498,7 @@ class StartJobHandler(base_handler.JsonHandler):
   """Command handler starts a mapreduce job."""
 
   def handle(self):
+    # Mapper spec as form arguments.
     mapreduce_name = self._get_required_param("name")
     mapper_input_reader_spec = self._get_required_param("mapper_input_reader")
     mapper_handler_spec = self._get_required_param("mapper_handler")
@@ -480,11 +507,13 @@ class StartJobHandler(base_handler.JsonHandler):
     params = self._get_params(
         "params_validator", "params.")
 
+    # Set some mapper param defaults if not present.
     mapper_params["processing_rate"] = int(mapper_params.get(
           "processing_rate") or model._DEFAULT_PROCESSING_RATE_PER_SEC)
     queue_name = mapper_params["queue_name"] = mapper_params.get(
         "queue_name", "default")
 
+    # Validate the Mapper spec, handler, and input reader.
     mapper_spec = model.MapperSpec(
         mapper_handler_spec,
         mapper_input_reader_spec,
@@ -554,6 +583,7 @@ class StartJobHandler(base_handler.JsonHandler):
                  base_path="/mapreduce",
                  queue_name="default",
                  _app=None):
+    # Check that handler can be instantiated.
     mapper_spec.get_handler()
 
     mapper_input_reader_class = mapper_spec.input_reader_class()
@@ -574,9 +604,11 @@ class StartJobHandler(base_handler.JsonHandler):
     if _app:
       state.app_id = _app
 
+    # TODO(user): Initialize UI fields correctly.
     state.char_url = ""
     state.sparkline_url = ""
 
+    # Point of no return: We're actually going to run this job!
     state.put()
     StartJobHandler._schedule_shards(mapreduce_spec, mapper_input_readers,
                                      queue_name, base_path)
@@ -600,6 +632,8 @@ class StartJobHandler(base_handler.JsonHandler):
       shard = model.ShardState.create_new(spec.mapreduce_id, shard_number)
       shard.shard_description = str(input_reader)
       shard_states.append(shard)
+    # TODO(user): this put together with task creation is not transactional.
+    # either retry or some kind of error handling should be added here.
     db.put(shard_states)
 
     for shard_number, input_reader in enumerate(input_readers):
@@ -614,6 +648,8 @@ class CleanUpJobHandler(base_handler.JsonHandler):
   """Command to kick off tasks to clean up a job's data."""
 
   def handle(self):
+    # TODO(user): Have this kick off a task to clean up all MapreduceState,
+    # ShardState, and MapreduceControl entities for a job ID.
     self.json_response["status"] = "This does nothing yet."
 
 
