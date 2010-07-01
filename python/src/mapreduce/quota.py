@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2007 Google Inc.
+# Copyright 2010 Google Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,14 +13,17 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-#
 
 """Simple quota system backed by memcache storage."""
 
 
 
+
+# Memcache namespace to use.
 _QUOTA_NAMESPACE = "quota"
 
+# Offset all quota values by this amount since memcache incr/decr
+# operate only with unsigned values.
 _OFFSET = 2**32
 
 
@@ -74,6 +77,7 @@ class QuotaManager(object):
       return amount
 
     if consume_some and _OFFSET - new_quota < amount:
+      # we still can consume some
       self.put(bucket, _OFFSET - new_quota)
       return amount - (_OFFSET - new_quota)
     else:

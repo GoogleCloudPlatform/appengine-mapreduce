@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2007 Google Inc.
+# Copyright 2010 Google Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,12 +13,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-#
 
 """Status page handler for mapreduce framework."""
-
-
-import google
 
 
 
@@ -36,7 +32,11 @@ from mapreduce import model
 from google.appengine.ext.webapp import template
 
 
+# TODO(user): a list of features we'd like to have in status page:
+# - show sparklet of entities/sec on index page
+# - shard bar chart should color finished shards differently
 
+# mapreduce.yaml file names
 MR_YAML_NAMES = ["mapreduce.yaml", "mapreduce.yml"]
 
 
@@ -164,6 +164,9 @@ class MapReduceYaml(validation.Validated):
     return all_configs
 
 
+# N.B. Sadly, we currently don't have and ability to determine
+# application root dir at run time. We need to walk up the directory structure
+# to find it.
 def find_mapreduce_yaml():
   """Traverse up from current directory and find mapreduce.yaml file.
 
@@ -292,7 +295,7 @@ class ListJobsHandler(base_handler.JsonHandler):
     all_jobs = []
     for job in jobs_list:
       out = {
-
+          # Data shared between overview and detail pages.
           "name": job.mapreduce_spec.name,
           "mapreduce_id": job.mapreduce_spec.mapreduce_id,
           "active": job.active,
@@ -301,7 +304,7 @@ class ListJobsHandler(base_handler.JsonHandler):
           "updated_timestamp_ms":
               int(time.mktime(job.last_poll_time.utctimetuple()) * 1000),
 
-
+          # Specific to overview page.
           "chart_url": job.sparkline_url,
           "active_shards": job.active_shards,
           "shards": job.mapreduce_spec.mapper.shard_count,
@@ -327,14 +330,14 @@ class GetJobDetailHandler(base_handler.JsonHandler):
     self.json_response.update(job.mapreduce_spec.to_json())
     self.json_response.update(job.counters_map.to_json())
     self.json_response.update({
-
+        # Shared with overview page.
         "active": job.active,
         "start_timestamp_ms":
             int(time.mktime(job.start_time.utctimetuple()) * 1000),
         "updated_timestamp_ms":
             int(time.mktime(job.last_poll_time.utctimetuple()) * 1000),
 
-
+        # Specific to detail page.
         "chart_url": job.chart_url,
     })
     self.json_response["result_status"] = job.result_status

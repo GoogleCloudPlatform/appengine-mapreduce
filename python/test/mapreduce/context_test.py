@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2007 Google Inc.
+# Copyright 2010 Google Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,15 +13,14 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-#
-
-"""Tests for google.appengine.ext.mapreduce.context."""
 
 
-import google
+
+
 
 from testlib import mox
 import os
+import unittest
 
 import unittest
 from google.appengine.api import datastore
@@ -96,6 +95,7 @@ class MutationPoolTest(unittest.TestCase):
     self.pool.put(e)
     self.assertEquals([e], self.pool.puts.items)
     self.assertEquals([], self.pool.deletes.items)
+    # Mix in a model instance.
     e2 = TestEntity()
     self.pool.put(e2)
     self.assertEquals([e, e2._populate_internal_entity()], self.pool.puts.items)
@@ -120,6 +120,7 @@ class MutationPoolTest(unittest.TestCase):
     self.pool.delete(k)
     self.assertEquals([], self.pool.puts.items)
     self.assertEquals([k], self.pool.deletes.items)
+    # String of keys should work too. No, there's no collapsing of dupes.
     self.pool.delete(str(k))
     self.assertEquals([k, k], self.pool.deletes.items)
 
@@ -133,10 +134,11 @@ class MutationPoolTest(unittest.TestCase):
     e1 = TestEntity()
     e2 = TestEntity(tag=' ' * 1000)
 
+    # Record Calls
     datastore.Put([e1._populate_internal_entity()])
 
     m.ReplayAll()
-    try:
+    try:  # test, verify
       self.pool.put(e1)
       self.assertEquals([e1._populate_internal_entity()], self.pool.puts.items)
 
@@ -158,14 +160,16 @@ class MutationPoolTest(unittest.TestCase):
     for i in range(context.MAX_ENTITY_COUNT + 50):
       entities.append(TestEntity())
 
+    # Record Calls
     datastore.Put([e._populate_internal_entity()
                    for e in entities[:context.MAX_ENTITY_COUNT]])
 
     m.ReplayAll()
-    try:
+    try:  # test, verify
       for e in entities:
         self.pool.put(e)
 
+      # only 50 entities should be left.
       self.assertEquals(50, self.pool.puts.length)
 
       m.VerifyAll()
@@ -182,10 +186,11 @@ class MutationPoolTest(unittest.TestCase):
     e1 = TestEntity(key_name='goingaway')
     e2 = TestEntity(key_name='x' * 500)
 
+    # Record Calls
     datastore.Delete([e1.key()])
 
     m.ReplayAll()
-    try:
+    try:  # test, verify
       self.pool.delete(e1)
       self.assertEquals([e1.key()], self.pool.deletes.items)
 
@@ -207,13 +212,15 @@ class MutationPoolTest(unittest.TestCase):
     for i in range(context.MAX_ENTITY_COUNT + 50):
       entities.append(TestEntity(key_name='die%d' % i))
 
+    # Record Calls
     datastore.Delete([e.key() for e in entities[:context.MAX_ENTITY_COUNT]])
 
     m.ReplayAll()
-    try:
+    try:  # test, verify
       for e in entities:
         self.pool.delete(e)
 
+      # only 50 entities should be left.
       self.assertEquals(50, self.pool.deletes.length)
 
       m.VerifyAll()
@@ -231,11 +238,12 @@ class MutationPoolTest(unittest.TestCase):
     e1 = TestEntity()
     e2 = TestEntity(key_name='flushme')
 
+    # Record Calls
     datastore.Put([e1._populate_internal_entity()])
     datastore.Delete([e2.key()])
 
     m.ReplayAll()
-    try:
+    try:  # test, verify
       self.pool.put(e1)
       self.assertEquals([e1._populate_internal_entity()], self.pool.puts.items)
 
@@ -259,15 +267,17 @@ class CountersTest(unittest.TestCase):
     """Test increment() method."""
     m = mox.Mox()
 
+    # Set up mocks
     shard_state = m.CreateMockAnything()
     counters_map = m.CreateMockAnything()
     shard_state.counters_map = counters_map
     counters = context.Counters(shard_state)
 
+    # Record call
     counters_map.increment('test', 19)
 
     m.ReplayAll()
-    try:
+    try:  # test, verify
       counters.increment('test', 19)
 
       m.VerifyAll()
@@ -302,10 +312,11 @@ class ContextTest(unittest.TestCase):
     ctx.register_pool("test", pool)
     self.assertEquals(pool, ctx.get_pool("test"))
 
+    # Record calls
     pool.flush()
 
     m.ReplayAll()
-    try:
+    try:  # test, verify
       ctx.flush()
       m.VerifyAll()
     finally:

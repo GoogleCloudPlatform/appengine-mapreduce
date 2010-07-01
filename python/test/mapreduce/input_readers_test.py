@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2007 Google Inc.
+# Copyright 2010 Google Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,17 +13,24 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-#
-
-"""Tests for mapreduce.input_readers."""
 
 
 
+
+
+# Disable "Invalid method name"
+# pylint: disable-msg=C6409
+
+# os_compat must be first to ensure timezones are UTC.
+# Disable "unused import" and "invalid import order"
+# pylint: disable-msg=W0611
 from google.appengine.tools import os_compat
+# pylint: enable-msg=W0611
 
 import cStringIO
 from testlib import mox
 import os
+import unittest
 import zipfile
 
 from google.appengine.api import apiproxy_stub_map
@@ -32,10 +39,9 @@ from mapreduce.lib import blobstore
 from google.appengine.api import datastore_file_stub
 from google.appengine.ext import db
 from mapreduce.lib import key_range
-from google.appengine.ext.blobstore import blobstore as blobstore_internal
+from mapreduce.lib.blobstore import blobstore as blobstore_internal
 from mapreduce import input_readers
 from mapreduce import model
-import unittest
 
 
 class TestJsonType(object):
@@ -118,25 +124,25 @@ class DatastoreInputReaderTest(unittest.TestCase):
     TestEntity().put()
     TestEntity().put()
     self.assertEqual([
-
+        # [1, 1]
         key_range.KeyRange(key_start=self.key(1),
                            key_end=self.key(1),
                            direction="DESC",
                            include_start=True,
                            include_end=True),
-
+        # (1, 1)
         key_range.KeyRange(key_start=self.key(1),
                            key_end=self.key(1),
                            direction="ASC",
                            include_start=False,
                            include_end=False),
-
+        # (1, 1)
         key_range.KeyRange(key_start=self.key(1),
                            key_end=self.key(1),
                            direction="DESC",
                            include_start=False,
                            include_end=False),
-
+        # (1, 2]
         key_range.KeyRange(key_start=self.key(1),
                            key_end=self.key(2),
                            direction="ASC",
@@ -152,25 +158,25 @@ class DatastoreInputReaderTest(unittest.TestCase):
       TestEntity().put()
 
     self.assertEqual([
-
+        # [1, 25]
         key_range.KeyRange(key_start=self.key(1),
                            key_end=self.key(25),
                            direction="DESC",
                            include_start=True,
                            include_end=True),
-
+        # (25, 50]
         key_range.KeyRange(key_start=self.key(25),
                            key_end=self.key(50),
                            direction="ASC",
                            include_start=False,
                            include_end=True),
-
+        # (50, 75]
         key_range.KeyRange(key_start=self.key(50),
                            key_end=self.key(75),
                            direction="DESC",
                            include_start=False,
                            include_end=True),
-
+        # (75, 100]
         key_range.KeyRange(key_start=self.key(75),
                            key_end=self.key(100),
                            direction="ASC",
@@ -315,6 +321,7 @@ class InputReaderTest(unittest.TestCase):
                                     buffer_size,
                                     data):
     input_readers.BlobstoreLineInputReader._BLOB_BUFFER_SIZE = buffer_size
+    # Mock out blob key so as to avoid validation.
     blob_key_str = "foo"
 
     def fetch_data(blob_key, start, end):
@@ -388,7 +395,8 @@ class InputReaderTest(unittest.TestCase):
       "mapreduce.input_readers.BlobstoreLineInputReader")
 
   def testSplitInput(self):
-    """Test Google3CSVFileInputReader.split_input."""
+    
+    # TODO(user): Mock out equiv
     self.mockOutBlobInfoSize(200)
     self.mox.ReplayAll()
     mapper_spec = model.MapperSpec.from_json({
@@ -405,7 +413,8 @@ class InputReaderTest(unittest.TestCase):
     self.mox.VerifyAll()
 
   def testSplitInputMultiKey(self):
-    """Test Google3CSVFileInputReader.split_input."""
+    
+    # TODO(user): Mock out equiv
     for i in range(5):
       self.mockOutBlobInfoSize(200, "foo%d" % i)
     self.mox.ReplayAll()
@@ -416,6 +425,7 @@ class InputReaderTest(unittest.TestCase):
         "mapper_shard_count": 2})
     blob_readers = input_readers.BlobstoreLineInputReader.split_input(
         mapper_spec)
+    # Blob readers are built out of a dictionary of blob_keys and thus unsorted.
     blob_readers_json = [r.to_json() for r in blob_readers]
     blob_readers_json.sort(key=lambda r: r["blob_key"])
     self.assertEquals([{"blob_key": "foo%d" % i,
@@ -425,7 +435,7 @@ class InputReaderTest(unittest.TestCase):
     self.mox.VerifyAll()
 
   def testSplitInputMultiSplit(self):
-    """Test Google3CSVFileInputReader.split_input."""
+    
     self.mockOutBlobInfoSize(199)
     self.mox.ReplayAll()
     mapper_spec = model.MapperSpec.from_json({

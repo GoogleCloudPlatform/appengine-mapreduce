@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 """JSON token scanner
 """
 import re
