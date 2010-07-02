@@ -23,9 +23,6 @@
       <include name="appengine-api-1.0-sdk-${version}.jar" />
       <include name="appengine-api-labs-${version}.jar" />
     </fileset>
-    <fileset dir="${sdklibdir}/impl">
-      <include name="appengine-api-stubs.jar" />
-    </fileset>
     <fileset dir="${sdklibdir}/shared">
       <include name="geronimo-servlet_2.5_spec-1.2.jar" />
     </fileset>
@@ -37,6 +34,9 @@
   <path id="thirdpartyjars">
     <fileset dir="${lib}">
       <include name="*.jar" />
+    </fileset>
+    <fileset dir="${sdklibdir}/shared/jsp">
+      <include name="repackaged-appengine-commons-logging-1.1.1.jar" />
     </fileset>
   </path>
 
