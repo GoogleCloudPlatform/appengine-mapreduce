@@ -231,7 +231,7 @@ class DatastoreInputReaderTest(unittest.TestCase):
                                 direction="ASC",
                                 include_start=False, include_end=True)
     query_range = input_readers.DatastoreInputReader(
-        ENTITY_KIND, krange, {"batch_size": 50, "keys_only": True})
+        ENTITY_KIND, krange, {"batch_size": "50", "keys_only": "True"})
 
     keys = []
 
