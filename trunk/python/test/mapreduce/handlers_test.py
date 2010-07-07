@@ -47,7 +47,7 @@ from mapreduce import handlers
 from mapreduce import input_readers
 from mapreduce import model
 from mapreduce import quota
-from mapreduce import testutil
+from testlib import testutil
 from testlib import mock_webapp
 
 
