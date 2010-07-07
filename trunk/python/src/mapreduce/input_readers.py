@@ -18,26 +18,17 @@
 
 
 
-import datetime
+# pylint: disable-msg=C6409
+
 import logging
 import math
-import time
 import zipfile
 
-from google.appengine.api import apiproxy_stub_map
 from google.appengine.api import datastore
-from google.appengine.api import memcache
-from google.appengine.api.labs import taskqueue
-
-from google.appengine.datastore import datastore_pb
 
 from mapreduce.lib import blobstore
 from google.appengine.ext import db
 from mapreduce.lib import key_range
-from mapreduce import base_handler
-from mapreduce import context
-from mapreduce import model
-from mapreduce import quota
 from mapreduce import util
 from mapreduce.model import JsonMixin
 
@@ -74,7 +65,7 @@ class InputReader(JsonMixin):
     Returns:
       The next input from this input reader.
     """
-    pass
+    raise NotImplementedError
 
   @classmethod
   def from_json(cls, input_shard_state):
@@ -82,8 +73,11 @@ class InputReader(JsonMixin):
 
     Args:
       input_shard_state: The InputReader state as a dict-like object.
+
+    Returns:
+      An instance of the InputReader configured using the values of json.
     """
-    pass
+    raise NotImplementedError
 
   def to_json(self):
     """Returns an input shard state for the remaining inputs.
@@ -91,7 +85,7 @@ class InputReader(JsonMixin):
     Returns:
       A json-izable version of the remaining InputReader.
     """
-    pass
+    raise NotImplementedError
 
   @classmethod
   def split_input(cls, mapper_spec):
@@ -104,9 +98,9 @@ class InputReader(JsonMixin):
       A json-izable list of InputReaders.
 
     Raises:
-      BadReaderParamsError if required parameters are missing or invalid.
+      BadReaderParamsError: required parameters are missing or invalid.
     """
-    pass
+    raise NotImplementedError
 
 
 # TODO(user): Use cursor API as soon as we have it available.
@@ -149,9 +143,9 @@ class DatastoreInputReader(InputReader):
     self._entity_kind = entity_kind
     self._key_range = key_range_param
     self._mapper_params = mapper_params
-    self._batch_size = self._mapper_params.get(
-        self.BATCH_SIZE_PARAM, self._BATCH_SIZE)
-    self._keys_only = self._mapper_params.get(self.KEYS_ONLY_PARAM, False)
+    self._batch_size = int(self._mapper_params.get(
+        self.BATCH_SIZE_PARAM, self._BATCH_SIZE))
+    self._keys_only = bool(self._mapper_params.get(self.KEYS_ONLY_PARAM, False))
 
   def __iter__(self):
     """Create a generator for entities or keys in the range.
@@ -210,7 +204,7 @@ class DatastoreInputReader(InputReader):
       A list of DatastoreInputReader objects of length <= number_of_shards.
 
     Raises:
-      BadReaderParamsError if required parameters are missing or invalid.
+      BadReaderParamsError: required parameters are missing or invalid.
     """
     if mapper_spec.input_reader_class() != cls:
       raise BadReaderParamsError("Input reader class mismatch")
@@ -367,8 +361,7 @@ class BlobstoreLineInputReader(InputReader):
 
   @classmethod
   def from_json(cls, json):
-    """Instantiates an instance of this InputReader for the given shard spec.
-    """
+    """Instantiates an instance of this InputReader for the given shard spec."""
     return cls(json[cls.BLOB_KEY_PARAM],
                json[cls.INITIAL_POSITION_PARAM],
                json[cls.END_POSITION_PARAM])
@@ -384,7 +377,7 @@ class BlobstoreLineInputReader(InputReader):
       A list of BlobstoreInputReaders corresponding to the specified shards.
 
     Raises:
-      BadReaderParamsError if required parameters are missing or invalid.
+      BadReaderParamsError: required parameters are missing or invalid.
     """
     if mapper_spec.input_reader_class() != cls:
       raise BadReaderParamsError("Mapper input reader class mismatch")
@@ -396,7 +389,7 @@ class BlobstoreLineInputReader(InputReader):
     if isinstance(blob_keys, basestring):
       # This is a mechanism to allow multiple blob keys (which do not contain
       # commas) in a single string. It may go away.
-      blob_keys = blob_keys.split(',')
+      blob_keys = blob_keys.split(",")
     if len(blob_keys) > cls._MAX_BLOB_KEYS_COUNT:
       raise BadReaderParamsError("Too many 'blob_keys' for mapper input")
     if not blob_keys:
@@ -488,7 +481,10 @@ class BlobstoreZipInputReader(InputReader):
     """Creates an instance of the InputReader for the given input shard state.
 
     Args:
-      input_shard_state: The InputReader state as a dict-like object.
+      json: The InputReader state as a dict-like object.
+
+    Returns:
+      An instance of the InputReader configured using the values of json.
     """
     return cls(json[cls.BLOB_KEY_PARAM],
                json[cls.START_INDEX_PARAM],
@@ -500,9 +496,9 @@ class BlobstoreZipInputReader(InputReader):
     Returns:
       A json-izable version of the remaining InputReader.
     """
-    return {cls.BLOB_KEY_PARAM: self._blob_key,
-            cls.START_INDEX_PARAM: self._start_index,
-            cls.END_INDEX_PARAM: self._end_index}
+    return {self.BLOB_KEY_PARAM: self._blob_key,
+            self.START_INDEX_PARAM: self._start_index,
+            self.END_INDEX_PARAM: self._end_index}
 
   def __str__(self):
     """Returns the string representation of this BlobstoreZipInputReader."""
@@ -522,7 +518,7 @@ class BlobstoreZipInputReader(InputReader):
       A json-izable list of InputReaders.
 
     Raises:
-      BadReaderParamsError if required parameters are missing or invalid.
+      BadReaderParamsError: required parameters are missing or invalid.
     """
     if mapper_spec.input_reader_class() != cls:
       raise BadReaderParamsError("Mapper input reader class mismatch")
@@ -541,8 +537,8 @@ class BlobstoreZipInputReader(InputReader):
     # size_per_shard bytes.
     shard_start_indexes = [0]
     current_shard_size = 0
-    for i, file in enumerate(files):
-      current_shard_size += file.file_size
+    for i, fileinfo in enumerate(files):
+      current_shard_size += fileinfo.file_size
       if current_shard_size >= size_per_shard:
         shard_start_indexes.append(i + 1)
         current_shard_size = 0
