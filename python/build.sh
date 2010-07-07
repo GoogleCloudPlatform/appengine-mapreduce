@@ -32,9 +32,25 @@ $dir/test:\
 "
 
   echo "Using PYTHONPATH=$PYTHONPATH"
+  exit_status=0
   for t in $(find "$dir/test" -name "*test.py"); do
-    python $t
+    if python $t
+    then
+      echo "PASSED"
+    else
+      echo "FAILED"
+      ((exit_status++))
+    fi
   done
+
+  echo "----------------------------------------------------------------------"
+  if [ $exit_status -ne 0 ];
+  then
+    echo "FAILED $exit_status tests"
+  else
+    echo "PASSED all tests"
+  fi
+  exit $exit_status
 }
 
 build_demo () {

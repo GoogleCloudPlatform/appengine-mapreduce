@@ -23,7 +23,7 @@ import unittest
 from google.appengine.ext import db
 from mapreduce import control
 from mapreduce import model
-from mapreduce import testutil
+from testlib import testutil
 
 
 class TestEntity(db.Model):

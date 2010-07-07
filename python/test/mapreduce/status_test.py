@@ -25,7 +25,7 @@ from google.appengine.api import yaml_errors
 from google.appengine.ext import db
 from mapreduce import handlers
 from mapreduce import status
-from mapreduce import testutil
+from testlib import testutil
 from testlib import mock_webapp
 
 
