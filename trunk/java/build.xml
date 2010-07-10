@@ -35,9 +35,6 @@
     <fileset dir="${lib}">
       <include name="*.jar" />
     </fileset>
-    <fileset dir="${sdklibdir}/shared/jsp">
-      <include name="repackaged-appengine-commons-logging-1.1.1.jar" />
-    </fileset>
   </path>
 
   <path id="testjars">
