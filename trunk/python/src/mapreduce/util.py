@@ -18,7 +18,7 @@
 
 
 
-__all__ = ["for_name", "is_generator_function", "get_short_name"]
+__all__ = ["for_name", "is_generator_function", "get_short_name", "parse_bool"]
 
 
 import inspect
@@ -117,3 +117,25 @@ def is_generator_function(obj):
 def get_short_name(fq_name):
   """Returns the last component of the name."""
   return fq_name.split(".")[-1:][0]
+
+
+def parse_bool(obj):
+  """Return true if the object represents a truth value, false otherwise.
+
+  For bool and numeric objects, uses Python's built-in bool function.  For
+  str objects, checks string against a list of possible truth values.
+
+  Args:
+    obj: object to determine boolean value of; expected
+
+  Returns:
+    Boolean value according to 5.1 of Python docs if object is not a str
+      object.  For str objects, return True if str is in TRUTH_VALUE_SET
+      and False otherwise.
+    http://docs.python.org/library/stdtypes.html
+  """
+  if type(obj) is str:
+    TRUTH_VALUE_SET = ["true", "1", "yes", "t", "on"]
+    return obj.lower() in TRUTH_VALUE_SET
+  else:
+    return bool(obj)

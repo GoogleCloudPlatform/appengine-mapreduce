@@ -142,5 +142,18 @@ class GetShortNameTest(unittest.TestCase):
     self.assertEquals("blah", util.get_short_name("__mmm__.Krb.blah"))
 
 
+class ParseBoolTest(unittest.TestCase):
+  """Test util.parse_bool function."""
+
+  def testParseBool(self):
+    self.assertEquals(True, util.parse_bool(True))
+    self.assertEquals(False, util.parse_bool(False))
+    self.assertEquals(True, util.parse_bool("True"))
+    self.assertEquals(False, util.parse_bool("False"))
+    self.assertEquals(True, util.parse_bool(1))
+    self.assertEquals(False, util.parse_bool(0))
+    self.assertEquals(True, util.parse_bool("on"))
+    self.assertEquals(False, util.parse_bool("off"))
+
 if __name__ == "__main__":
   unittest.main()
