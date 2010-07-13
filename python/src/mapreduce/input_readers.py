@@ -22,6 +22,7 @@
 
 import logging
 import math
+import StringIO
 import zipfile
 
 from google.appengine.api import datastore
@@ -50,6 +51,8 @@ class InputReader(JsonMixin):
    * They generate inputs to the mapper via the iterator interface.
    * After creation, they can be serialized and resumed using the JsonMixin
      interface.
+   * They are cast to string for a user-readable description; it may be
+     valuable to implement __str__.
   """
 
   # Mapreduce parameters.
@@ -89,13 +92,13 @@ class InputReader(JsonMixin):
 
   @classmethod
   def split_input(cls, mapper_spec):
-    """Returns a list of input shard states for the input spec.
+    """Returns a list of input readers for the input spec.
 
     Args:
       mapper_spec: The MapperSpec for this InputReader.
 
     Returns:
-      A json-izable list of InputReaders.
+      A list of InputReaders.
 
     Raises:
       BadReaderParamsError: required parameters are missing or invalid.
@@ -145,7 +148,8 @@ class DatastoreInputReader(InputReader):
     self._mapper_params = mapper_params
     self._batch_size = int(self._mapper_params.get(
         self.BATCH_SIZE_PARAM, self._BATCH_SIZE))
-    self._keys_only = bool(self._mapper_params.get(self.KEYS_ONLY_PARAM, False))
+    self._keys_only = util.parse_bool(
+        self._mapper_params.get(self.KEYS_ONLY_PARAM, False))
 
   def __iter__(self):
     """Create a generator for entities or keys in the range.
@@ -215,7 +219,7 @@ class DatastoreInputReader(InputReader):
     entity_kind_name = params[cls.ENTITY_KIND_PARAM]
     shard_count = mapper_spec.shard_count
     app = params.get(cls._APP_PARAM)
-    keys_only = int(params.get(cls.KEYS_ONLY_PARAM, False))
+    keys_only = util.parse_bool(params.get(cls.KEYS_ONLY_PARAM, False))
 
     # Fail fast if Model cannot be located.
     if not keys_only:
@@ -301,6 +305,9 @@ class BlobstoreLineInputReader(InputReader):
   _MAX_BLOB_KEYS_COUNT = 246
 
   # Mapreduce parameters.
+  BLOB_KEYS_PARAM = "blob_keys"
+
+  # Serialization parmaeters.
   INITIAL_POSITION_PARAM = "initial_position"
   END_POSITION_PARAM = "end_position"
   BLOB_KEY_PARAM = "blob_key"
@@ -327,7 +334,7 @@ class BlobstoreLineInputReader(InputReader):
     self._read_before_start = bool(start_position)
 
   def next(self):
-    """Returns the next input from this input reader."""
+    """Returns the next input from as an (offset, line) tuple."""
     self._has_iterated = True
 
     if self._read_before_start:
@@ -371,7 +378,8 @@ class BlobstoreLineInputReader(InputReader):
     """Returns a list of shard_count input_spec_shards for input_spec.
 
     Args:
-      mapper_spec: The mapper specification to split from.
+      mapper_spec: The mapper specification to split from. Must contain
+          'blob_keys' parameter with one or more blob keys.
 
     Returns:
       A list of BlobstoreInputReaders corresponding to the specified shards.
@@ -382,10 +390,10 @@ class BlobstoreLineInputReader(InputReader):
     if mapper_spec.input_reader_class() != cls:
       raise BadReaderParamsError("Mapper input reader class mismatch")
     params = mapper_spec.params
-    if "blob_keys" not in params:
+    if cls.BLOB_KEYS_PARAM not in params:
       raise BadReaderParamsError("Must specify 'blob_keys' for mapper input")
 
-    blob_keys = params["blob_keys"]
+    blob_keys = params[cls.BLOB_KEYS_PARAM]
     if isinstance(blob_keys, basestring):
       # This is a mechanism to allow multiple blob keys (which do not contain
       # commas) in a single string. It may go away.
@@ -510,12 +518,13 @@ class BlobstoreZipInputReader(InputReader):
     """Returns a list of input shard states for the input spec.
 
     Args:
-      mapper_spec: The MapperSpec for this InputReader.
+      mapper_spec: The MapperSpec for this InputReader. Must contain
+          'blob_key' parameter with one blob key.
       _reader: a callable that returns a file-like object for reading blobs.
           Used for dependency injection.
 
     Returns:
-      A json-izable list of InputReaders.
+      A list of InputReaders spanning files within the zip.
 
     Raises:
       BadReaderParamsError: required parameters are missing or invalid.
@@ -549,3 +558,215 @@ class BlobstoreZipInputReader(InputReader):
     return [cls(blob_key, start_index, end_index, _reader)
             for start_index, end_index
             in zip(shard_start_indexes, shard_start_indexes[1:])]
+
+
+class BlobstoreZipLineInputReader(InputReader):
+  """Input reader for newline delimited files in zip archives from  Blobstore.
+
+  This has the same external interface as the BlobstoreLineInputReader, in that
+  it takes a list of blobs as its input and yields lines to the reader.
+  However the blobs themselves are expected to be zip archives of line delimited
+  files instead of the files themselves.
+
+  This is useful as many line delimited files gain greatly from compression.
+  """
+
+  # Maximum number of shards to allow.
+  _MAX_SHARD_COUNT = 256
+
+  # Maximum number of blobs to allow.
+  _MAX_BLOB_KEYS_COUNT = 246
+
+  # Mapreduce parameters.
+  BLOB_KEYS_PARAM = "blob_keys"
+
+  # Serialization parameters.
+  BLOB_KEY_PARAM = "blob_key"
+  START_FILE_INDEX_PARAM = "start_file_index"
+  END_FILE_INDEX_PARAM = "end_file_index"
+  OFFSET_PARAM = "offset"
+
+  def __init__(self, blob_key, start_file_index, end_file_index, offset,
+               _reader=blobstore.BlobReader):
+    """Initializes this instance with the given blob key and file range.
+
+    This BlobstoreZipLineInputReader will read from the file with index
+    start_file_index up to but not including the file with index end_file_index.
+    It will return lines starting at offset within file[start_file_index]
+
+    Args:
+      blob_key: the BlobKey that this input reader is processing.
+      start_file_index: the index of the first file to read within the zip.
+      end_file_index: the index of the first file that will not be read.
+      offset: the byte offset within blob_key.zip[start_file_index] to start
+        reading. The reader will continue to the end of the file.
+      _reader: a callable that returns a file-like object for reading blobs.
+          Used for dependency injection.
+    """
+    self._blob_key = blob_key
+    self._start_file_index = start_file_index
+    self._end_file_index = end_file_index
+    self._initial_offset = offset
+    self._reader = _reader
+    self._zip = None
+    self._entries = None
+    self._filestream = None
+
+  @classmethod
+  def split_input(cls, mapper_spec, _reader=blobstore.BlobReader):
+    """Returns a list of input readers for the input spec.
+
+    Args:
+      mapper_spec: The MapperSpec for this InputReader. Must contain
+          'blob_keys' parameter with one or more blob keys.
+      _reader: a callable that returns a file-like object for reading blobs.
+          Used for dependency injection.
+
+    Returns:
+      A list of InputReaders spanning the subfiles within the blobs.
+      There will be at least one reader per blob, but it will otherwise
+      attempt to keep the expanded size even.
+
+    Raises:
+      BadReaderParamsError: required parameters are missing or invalid.
+    """
+    if mapper_spec.input_reader_class() != cls:
+      raise BadReaderParamsError("Mapper input reader class mismatch")
+    params = mapper_spec.params
+    if cls.BLOB_KEYS_PARAM not in params:
+      raise BadReaderParamsError("Must specify 'blob_key' for mapper input")
+
+    blob_keys = params[cls.BLOB_KEYS_PARAM]
+    if isinstance(blob_keys, basestring):
+      # This is a mechanism to allow multiple blob keys (which do not contain
+      # commas) in a single string. It may go away.
+      blob_keys = blob_keys.split(",")
+    if len(blob_keys) > cls._MAX_BLOB_KEYS_COUNT:
+      raise BadReaderParamsError("Too many 'blob_keys' for mapper input")
+    if not blob_keys:
+      raise BadReaderParamsError("No 'blob_keys' specified for mapper input")
+
+    blob_files = {}
+    total_size = 0
+    for blob_key in blob_keys:
+      zip_input = zipfile.ZipFile(_reader(blob_key))
+      blob_files[blob_key] = zip_input.infolist()
+      total_size += sum(x.file_size for x in blob_files[blob_key])
+
+    shard_count = min(cls._MAX_SHARD_COUNT, mapper_spec.shard_count)
+
+    # We can break on both blob key and file-within-zip boundaries.
+    # A shard will span at minimum a single blob key, but may only
+    # handle a few files within a blob.
+
+    size_per_shard = total_size // shard_count
+
+    readers = []
+    for blob_key in blob_keys:
+      files = blob_files[blob_key]
+      current_shard_size = 0
+      start_file_index = 0
+      next_file_index = 0
+      for fileinfo in files:
+        next_file_index += 1
+        current_shard_size += fileinfo.file_size
+        if current_shard_size >= size_per_shard:
+          readers.append(cls(blob_key, start_file_index, next_file_index, 0,
+                             _reader))
+          current_shard_size = 0
+          start_file_index = next_file_index
+      if current_shard_size != 0:
+        readers.append(cls(blob_key, start_file_index, next_file_index, 0,
+                           _reader))
+
+    return readers
+
+  def next(self):
+    """Returns the next line from this input reader as (lineinfo, line) tuple.
+
+    Returns:
+      The next input from this input reader, in the form of a 2-tuple.
+      The first element of the tuple describes the source, it is itself
+        a tuple (blobkey, filenumber, byteoffset).
+      The second element of the tuple is the line found at that offset.
+    """
+    if not self._filestream:
+      if not self._zip:
+        self._zip = zipfile.ZipFile(self._reader(self._blob_key))
+        # Get a list of entries, reversed so we can pop entries off in order
+        self._entries = self._zip.infolist()[self._start_file_index:
+                                             self._end_file_index]
+        self._entries.reverse()
+      if not self._entries:
+        raise StopIteration()
+      entry = self._entries.pop()
+      value = self._zip.read(entry.filename)
+      self._filestream = StringIO.StringIO(value)
+      if self._initial_offset:
+        self._filestream.seek(self._initial_offset)
+        self._filestream.readline()
+
+    start_position = self._filestream.tell()
+    line = self._filestream.readline()
+
+    if not line:
+      # Done with this file in the zip. Move on to the next file.
+      self._filestream.close()
+      self._filestream = None
+      self._start_file_index += 1
+      self._initial_offset = 0
+      return self.next()
+
+    return ((self._blob_key, self._start_file_index, start_position),
+            line.rstrip("\n"))
+
+  def _next_offset(self):
+    """Return the offset of the next line to read."""
+    if self._filestream:
+      offset = self._filestream.tell()
+      if offset:
+        offset -= 1
+    else:
+      offset = self._initial_offset
+
+    return offset
+
+  def to_json(self):
+    """Returns an input shard state for the remaining inputs.
+
+    Returns:
+      A json-izable version of the remaining InputReader.
+    """
+
+    return {self.BLOB_KEY_PARAM: self._blob_key,
+            self.START_FILE_INDEX_PARAM: self._start_file_index,
+            self.END_FILE_INDEX_PARAM: self._end_file_index,
+            self.OFFSET_PARAM: self._next_offset()}
+
+  @classmethod
+  def from_json(cls, json, _reader=blobstore.BlobReader):
+    """Creates an instance of the InputReader for the given input shard state.
+
+    Args:
+      json: The InputReader state as a dict-like object.
+      _reader: For dependency injection.
+
+    Returns:
+      An instance of the InputReader configured using the values of json.
+    """
+    return cls(json[cls.BLOB_KEY_PARAM],
+               json[cls.START_FILE_INDEX_PARAM],
+               json[cls.END_FILE_INDEX_PARAM],
+               json[cls.OFFSET_PARAM],
+               _reader)
+
+  def __str__(self):
+    """Returns the string representation of this reader.
+
+    Returns:
+      string blobkey:[start file num, end file num]:current offset.
+    """
+    return "blobstore.BlobKey(%r):[%d, %d]:%d" % (
+        self._blob_key, self._start_file_index, self._end_file_index,
+        self._next_offset())
+

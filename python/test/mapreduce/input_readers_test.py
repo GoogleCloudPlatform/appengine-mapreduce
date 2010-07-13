@@ -22,21 +22,19 @@
 # pylint: disable-msg=C6409
 
 # os_compat must be first to ensure timezones are UTC.
-# Disable "unused import" and "invalid import order"
-# pylint: disable-msg=W0611
-from google.appengine.tools import os_compat
-# pylint: enable-msg=W0611
+
+from google.appengine.tools import os_compat  # pylint: disable-msg=W0611
 
 import cStringIO
-from testlib import mox
 import os
 import unittest
 import zipfile
+from testlib import mox
 
 from google.appengine.api import apiproxy_stub_map
 from google.appengine.api import datastore
-from mapreduce.lib import blobstore
 from google.appengine.api import datastore_file_stub
+from mapreduce.lib import blobstore
 from google.appengine.ext import db
 from mapreduce.lib import key_range
 from mapreduce.lib.blobstore import blobstore as blobstore_internal
@@ -114,6 +112,68 @@ class DatastoreInputReaderTest(unittest.TestCase):
     ds_input_readers = input_readers.DatastoreInputReader.split_input(
         mapper_spec)
     return [input_reader._key_range for input_reader in ds_input_readers]
+
+  def testParameters(self):
+    """Test that setting string parameters as they would be passed from a
+    web interface works.
+    """
+    for _ in range(0, 100):
+      TestEntity().put()
+
+    krange = key_range.KeyRange(key_start=self.key(25), key_end=self.key(50),
+                                direction="ASC",
+                                include_start=False, include_end=True)
+
+    params = {}
+    params["app"] = "blah"
+    params["batch_size"] = '24'
+    params["keys_only"] = 'False'
+    reader = input_readers.DatastoreInputReader(
+        ENTITY_KIND, krange, params)
+    self.assertEquals(24, reader._batch_size)
+    self.assertEquals(False, reader._keys_only)
+
+    params["batch_size"] = '42'
+    params["keys_only"] = 'True'
+    reader = input_readers.DatastoreInputReader(
+        ENTITY_KIND, krange, params)
+    self.assertEquals(42, reader._batch_size)
+    self.assertEquals(True, reader._keys_only)
+
+    del params["keys_only"]
+    reader = input_readers.DatastoreInputReader(
+        ENTITY_KIND, krange, params)
+    self.assertEquals(False, reader._keys_only)
+
+    params["entity_kind"] = ENTITY_KIND
+    mapper_spec = model.MapperSpec(
+        "FooHandler",
+        "mapreduce.input_readers.DatastoreInputReader",
+        params, 1)
+    reader = input_readers.DatastoreInputReader.split_input(
+        mapper_spec)
+    self.assertEquals(False, reader[0]._keys_only)
+    self.assertEquals(42, reader[0]._batch_size)
+
+    params["batch_size"] = '24'
+    params["keys_only"] = 'True'
+    mapper_spec = model.MapperSpec(
+        "FooHandler",
+        "mapreduce.input_readers.DatastoreInputReader",
+        params, 1)
+    reader = input_readers.DatastoreInputReader.split_input(
+        mapper_spec)
+    self.assertEquals(True, reader[0]._keys_only)
+    self.assertEquals(24, reader[0]._batch_size)
+
+    params["keys_only"] = 'False'
+    mapper_spec = model.MapperSpec(
+        "FooHandler",
+        "mapreduce.input_readers.DatastoreInputReader",
+        params, 1)
+    reader = input_readers.DatastoreInputReader.split_input(
+        mapper_spec)
+    self.assertEquals(False, reader[0]._keys_only)
 
   def testSplitNoData(self):
     """Empty split should be produced if there's no data in database."""
@@ -296,7 +356,7 @@ class MockBlobInfo(object):
     self.size = size
 
 
-class InputReaderTest(unittest.TestCase):
+class BlobstoreLineInputReaderTest(unittest.TestCase):
   def setUp(self):
     unittest.TestCase.setUp(self)
 
@@ -498,7 +558,7 @@ class InputReaderTest(unittest.TestCase):
 
 class BlobstoreZipInputReaderTest(unittest.TestCase):
   READER_NAME = (
-      'mapreduce.input_readers.BlobstoreZipInputReader')
+      "mapreduce.input_readers.BlobstoreZipInputReader")
 
   def setUp(self):
     unittest.TestCase.setUp(self)
@@ -507,10 +567,10 @@ class BlobstoreZipInputReaderTest(unittest.TestCase):
     os.environ["APPLICATION_ID"] = self.appid
 
     self.zipdata = cStringIO.StringIO()
-    zip = zipfile.ZipFile(self.zipdata, "w")
+    archive = zipfile.ZipFile(self.zipdata, "w")
     for i in range(10):
-      zip.writestr("%d.txt" % i, "%d: %s" % (i, "*"*i))
-    zip.close()
+      archive.writestr("%d.txt" % i, "%d: %s" % (i, "*"*i))
+    archive.close()
 
   def mockZipReader(self, blob_key):
     """Mocked out reader function that returns our in-memory zipfile."""
@@ -550,6 +610,195 @@ class BlobstoreZipInputReaderTest(unittest.TestCase):
     self.assertEqual(str(readers[0]), "blobstore.BlobKey(['foo']):[0, 7]")
     self.assertEqual(str(readers[1]), "blobstore.BlobKey(['foo']):[7, 10]")
 
+  def testJson(self):
+    """Test that we can persist/restore using the json mechanism."""
+    reader = input_readers.BlobstoreZipInputReader("someblob", 0, 1,
+                                                   self.mockZipReader)
+    json = reader.to_json()
+    self.assertEquals({"blob_key": "someblob",
+                       "start_index": 0,
+                       "end_index": 1},
+                      json)
+    reader2 = input_readers.BlobstoreZipInputReader.from_json(json)
+    self.assertEqual(str(reader), str(reader2))
+
+
+class BlobstoreZipLineInputReaderTest(unittest.TestCase):
+  READER_NAME = ("mapreduce.input_readers."
+                 "BlobstoreZipLineInputReader")
+
+  def setUp(self):
+    unittest.TestCase.setUp(self)
+
+    self.appid = "testapp"
+    os.environ["APPLICATION_ID"] = self.appid
+
+  def create_zip_data(self, blob_count):
+    """Create blob_count blobs with uneven zip data."""
+    self.zipdata = {}
+    blob_keys = []
+    for blob_number in range(blob_count):
+      stream = cStringIO.StringIO()
+      archive = zipfile.ZipFile(stream, "w")
+      for file_number in range(3):
+        lines = []
+        for i in range(file_number + 1):
+          lines.append("archive %s file %s line %s" %
+                       (blob_number, file_number, i))
+        archive.writestr("%d.txt" % file_number, "\n".join(lines))
+      archive.close()
+      blob_key = "blob%d" % blob_number
+      self.zipdata[blob_key] = stream
+      blob_keys.append(blob_key)
+
+    return blob_keys
+
+  def mockZipReader(self, blob_key):
+    """Mocked out reader function that returns our in-memory zipfile."""
+    return self.zipdata.get(blob_key)
+
+  def split_input(self, blob_count, shard_count):
+    """Generate some blobs and return the reader's split of them."""
+    blob_keys = self.create_zip_data(blob_count)
+    mapper_spec = model.MapperSpec.from_json({
+        "mapper_handler_spec": "FooHandler",
+        "mapper_input_reader": self.READER_NAME,
+        "mapper_params": {"blob_keys": blob_keys},
+        "mapper_shard_count": shard_count})
+    readers = input_readers.BlobstoreZipLineInputReader.split_input(
+        mapper_spec, self.mockZipReader)
+    return readers
+
+  def testSplitInputOneBlob(self):
+    """Simple case: split one blob into two groups."""
+    readers = self.split_input(1, 2)
+    self.assertEqual(2, len(readers))
+    self.assertEqual("blobstore.BlobKey('blob0'):[0, 2]:0", str(readers[0]))
+    self.assertEqual("blobstore.BlobKey('blob0'):[2, 3]:0", str(readers[1]))
+
+  def testSplitInputOneBlobFourShards(self):
+    """Corner case: Ask for more shards than we can deliver."""
+    readers = self.split_input(1, 4)
+    self.assertEqual(2, len(readers))
+    self.assertEqual("blobstore.BlobKey('blob0'):[0, 2]:0", str(readers[0]))
+    self.assertEqual("blobstore.BlobKey('blob0'):[2, 3]:0", str(readers[1]))
+
+  def testSplitInputTwoBlobsTwoShards(self):
+    """Simple case: Ask for num shards == num blobs."""
+    readers = self.split_input(2, 2)
+    self.assertEqual(2, len(readers))
+    self.assertEqual("blobstore.BlobKey('blob0'):[0, 3]:0", str(readers[0]))
+    self.assertEqual("blobstore.BlobKey('blob1'):[0, 3]:0", str(readers[1]))
+
+  def testSplitInputTwoBlobsFourShards(self):
+    """Easy case: Files split nicely into blobs."""
+    readers = self.split_input(2, 4)
+    self.assertEqual(4, len(readers))
+    self.assertEqual("blobstore.BlobKey('blob0'):[0, 2]:0", str(readers[0]))
+    self.assertEqual("blobstore.BlobKey('blob0'):[2, 3]:0", str(readers[1]))
+    self.assertEqual("blobstore.BlobKey('blob1'):[0, 2]:0", str(readers[2]))
+    self.assertEqual("blobstore.BlobKey('blob1'):[2, 3]:0", str(readers[3]))
+
+  def testSplitInputTwoBlobsSixShards(self):
+    """Corner case: Shards don't split nicely so we get too few."""
+    readers = self.split_input(2, 6)
+    # Note we might be able to make this return 6 with a more clever algorithm.
+    self.assertEqual(4, len(readers))
+    self.assertEqual("blobstore.BlobKey('blob0'):[0, 2]:0", str(readers[0]))
+    self.assertEqual("blobstore.BlobKey('blob0'):[2, 3]:0", str(readers[1]))
+    self.assertEqual("blobstore.BlobKey('blob1'):[0, 2]:0", str(readers[2]))
+    self.assertEqual("blobstore.BlobKey('blob1'):[2, 3]:0", str(readers[3]))
+
+  def testSplitInputTwoBlobsThreeShards(self):
+    """Corner case: Shards don't split nicely so we get too few."""
+    readers = self.split_input(2, 3)
+    # Note we might be able to make this return 3 with a more clever algorithm.
+    self.assertEqual(2, len(readers))
+    self.assertEqual("blobstore.BlobKey('blob0'):[0, 3]:0", str(readers[0]))
+    self.assertEqual("blobstore.BlobKey('blob1'):[0, 3]:0", str(readers[1]))
+
+  def testSplitInputThreeBlobsTwoShards(self):
+    """Corner case: More blobs than requested shards."""
+    readers = self.split_input(3, 2)
+    self.assertEqual(3, len(readers))
+    self.assertEqual("blobstore.BlobKey('blob0'):[0, 3]:0", str(readers[0]))
+    self.assertEqual("blobstore.BlobKey('blob1'):[0, 3]:0", str(readers[1]))
+    self.assertEqual("blobstore.BlobKey('blob2'):[0, 3]:0", str(readers[2]))
+
+  def testReadOneLineFile(self):
+    """Test that the first file in the zip is returned correctly."""
+    self.create_zip_data(1)
+    reader = input_readers.BlobstoreZipLineInputReader("blob0", 0, 1, 0,
+                                                       self.mockZipReader)
+    offset_info, line = reader.next()
+    self.assertEqual(("blob0", 0, 0), offset_info)
+    self.assertEqual("archive 0 file 0 line 0", line)
+
+    # This file only has one line.
+    self.assertRaises(StopIteration, reader.next)
+
+  def testReadTwoLineFile(self):
+    """Test that the second file in the zip is returned correctly."""
+    self.create_zip_data(1)
+    reader = input_readers.BlobstoreZipLineInputReader("blob0", 1, 2, 0,
+                                                       self.mockZipReader)
+    offset_info, line = reader.next()
+    self.assertEqual(("blob0", 1, 0), offset_info)
+    self.assertEqual("archive 0 file 1 line 0", line)
+
+    offset_info, line = reader.next()
+    self.assertEqual(("blob0", 1, 24), offset_info)
+    self.assertEqual("archive 0 file 1 line 1", line)
+
+    # This file only has two lines.
+    self.assertRaises(StopIteration, reader.next)
+
+  def testReadSecondLineFile(self):
+    """Test that the second line is returned correctly."""
+    self.create_zip_data(1)
+    reader = input_readers.BlobstoreZipLineInputReader("blob0", 2, 3, 5,
+                                                       self.mockZipReader)
+    offset_info, line = reader.next()
+    self.assertEqual(("blob0", 2, 24), offset_info)
+    self.assertEqual("archive 0 file 2 line 1", line)
+
+    # If we persist/restore the reader, the new one should pick up where
+    # we left off.
+    reader2 = input_readers.BlobstoreZipLineInputReader.from_json(
+        reader.to_json(), self.mockZipReader)
+
+    offset_info, line = reader2.next()
+    self.assertEqual(("blob0", 2, 48), offset_info)
+    self.assertEqual("archive 0 file 2 line 2", line)
+
+  def testReadAcrossFiles(self):
+    """Test that we can read across all the files in the single blob."""
+    self.create_zip_data(1)
+    reader = input_readers.BlobstoreZipLineInputReader("blob0", 0, 3, 0,
+                                                       self.mockZipReader)
+
+    for file_number in range(3):
+      for i in range(file_number + 1):
+        offset_info, line = reader.next()
+        self.assertEqual("blob0", offset_info[0])
+        self.assertEqual(file_number, offset_info[1])
+        self.assertEqual("archive %s file %s line %s" % (0, file_number, i),
+                         line)
+
+    self.assertRaises(StopIteration, reader.next)
+
+  def testJson(self):
+    """Test that we can persist/restore using the json mechanism."""
+    reader = input_readers.BlobstoreZipLineInputReader("blob0", 0, 3, 20,
+                                                       self.mockZipReader)
+    json = reader.to_json()
+    self.assertEquals({"blob_key": "blob0",
+                       "start_file_index": 0,
+                       "end_file_index": 3,
+                       "offset": 20},
+                      json)
+    reader2 = input_readers.BlobstoreZipLineInputReader.from_json(json)
+    self.assertEqual(str(reader), str(reader2))
 
 if __name__ == "__main__":
   unittest.main()
