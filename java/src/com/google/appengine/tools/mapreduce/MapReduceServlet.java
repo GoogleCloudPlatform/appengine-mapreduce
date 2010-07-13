@@ -56,6 +56,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import javax.servlet.http.HttpServlet;
@@ -202,53 +203,63 @@ public class MapReduceServlet extends HttpServlet {
       String command, HttpServletRequest request, HttpServletResponse response) {
     response.setContentType("application/json");
     JSONObject retValue = null;
-    if (command.equals(LIST_CONFIGS_PATH)) {
-      MapReduceXml xml;
-      try {
-        xml = MapReduceXml.getMapReduceXmlFromFile();
-        retValue = handleListConfigs(xml);
-      } catch (FileNotFoundException e) {
-        retValue = new JSONObject();
+    try {
+      if (command.equals(LIST_CONFIGS_PATH)) {
+        MapReduceXml xml;
         try {
+          xml = MapReduceXml.getMapReduceXmlFromFile();
+          retValue = handleListConfigs(xml);
+        } catch (FileNotFoundException e) {
+          retValue = new JSONObject();
           retValue.put("status", "Couldn't find mapreduce.xml file");
-        } catch (JSONException e1) {
-          throw new RuntimeException("Hard coded string is null", e1);
         }
       }
-    }
-    if (command.equals(LIST_JOBS_PATH)) {
-      String cursor = request.getParameter("cursor");
-      String countString = request.getParameter("count");
-      int count = DEFAULT_JOBS_PER_PAGE_COUNT;
-      if (countString != null) {
-        count = Integer.parseInt(countString);
-      }
-      
-      retValue = handleListJobs(cursor, count);
-    }
-    if (command.equals(CLEANUP_JOB_PATH)) {
-      retValue = handleCleanupJob(request.getParameter("mapreduce_id"));
-    }
-    if (command.equals(ABORT_JOB_PATH)) {
-      retValue = handleAbortJob(request.getParameter("mapreduce_id"));
-    }
-    if (command.equals(GET_JOB_DETAIL_PATH)) {
-      retValue = handleGetJobDetail(request.getParameter("mapreduce_id"));
-    }
-    if (command.equals(START_JOB_PATH)) {
-      Map<String, String> templateParams = new TreeMap<String, String>();
-      Map httpParams = request.getParameterMap();
-      for (Object paramObject : httpParams.keySet()) {
-        String param = (String) paramObject;
-        if (param.startsWith("mapper_params.")) {
-          templateParams.put(param.substring("mapper_params.".length()), 
-              ((String[]) httpParams.get(param))[0]);
+      if (command.equals(LIST_JOBS_PATH)) {
+        String cursor = request.getParameter("cursor");
+        String countString = request.getParameter("count");
+        int count = DEFAULT_JOBS_PER_PAGE_COUNT;
+        if (countString != null) {
+          count = Integer.parseInt(countString);
         }
+        
+        retValue = handleListJobs(cursor, count);
       }
-      retValue = handleStartJob(templateParams, ((String []) httpParams.get("name"))[0], request); 
+      if (command.equals(CLEANUP_JOB_PATH)) {
+        retValue = handleCleanupJob(request.getParameter("mapreduce_id"));
+      }
+      if (command.equals(ABORT_JOB_PATH)) {
+        retValue = handleAbortJob(request.getParameter("mapreduce_id"));
+      }
+      if (command.equals(GET_JOB_DETAIL_PATH)) {
+        retValue = handleGetJobDetail(request.getParameter("mapreduce_id"));
+      }
+      if (command.equals(START_JOB_PATH)) {
+        Map<String, String> templateParams = new TreeMap<String, String>();
+        Map httpParams = request.getParameterMap();
+        for (Object paramObject : httpParams.keySet()) {
+          String param = (String) paramObject;
+          if (param.startsWith("mapper_params.")) {
+            templateParams.put(param.substring("mapper_params.".length()), 
+                ((String[]) httpParams.get(param))[0]);
+          }
+        }
+        retValue = handleStartJob(templateParams, ((String []) httpParams.get("name"))[0], request); 
+      }
+    } catch (Throwable t) {
+      log.log(Level.SEVERE, "Got exception while running command", t); 
+      try {
+        retValue = new JSONObject();  
+        retValue.put("error_class", t.getClass().getName());
+        retValue.put("error_message",
+            "Full stack trace is available in the server logs. Message: "
+            + t.getMessage());
+      } catch (JSONException e) {
+        throw new RuntimeException("Couldn't create error JSON object", e);
+      }
     }
     try {
-      response.getWriter().append(retValue.toString());
+      response.getWriter().print(retValue.toString());
+      response.getWriter().flush();
     } catch (IOException e) {
       throw new RuntimeException("Couldn't write command response", e);
     }
@@ -258,7 +269,7 @@ public class MapReduceServlet extends HttpServlet {
    * Handle the list_configs AJAX command.
    */
   public JSONObject handleListConfigs(MapReduceXml xml) {
-  JSONObject retValue = new JSONObject();
+    JSONObject retValue = new JSONObject();
     JSONArray configArray = new JSONArray();
     Set<String> names = xml.getConfigurationNames();
     for (String name : names) {
