@@ -52,6 +52,7 @@ import org.json.JSONObject;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -824,5 +825,24 @@ public class MapReduceServletTest extends TestCase {
     }
     assertTrue("Response has \"uccess\" in the status: " + response, 
         ((String) response.get("status")).contains("uccess"));
+  }
+
+  public void testCommandError() throws Exception {
+    HttpServletRequest request = createMockRequest(
+        MapReduceServlet.COMMAND_PATH + "/" + MapReduceServlet.GET_JOB_DETAIL_PATH);
+    HttpServletResponse response = createMock(HttpServletResponse.class);
+    PrintWriter responseWriter = createMock(PrintWriter.class);
+    responseWriter.print("{\"error_class\":\"java.lang.RuntimeException\","
+        + "\"error_message\":\"Full stack trace is available in the server logs. "
+        + "Message: blargh\"}");
+    responseWriter.flush();
+    // This method can't actually throw this exception, but that's not
+    // important to the test.
+    expect(request.getParameter("mapreduce_id")).andThrow(new RuntimeException("blargh"));
+    response.setContentType("application/json");
+    expect(response.getWriter()).andReturn(responseWriter).anyTimes();
+    replay(request, response, responseWriter);
+    servlet.doPost(request, response);
+    verify(request, response, responseWriter);
   }
 }
