@@ -68,7 +68,7 @@ ENTITY_KIND = "__main__.TestEntity"
 
 
 class DatastoreInputReaderTest(unittest.TestCase):
-  """Test model.DatastoreInputReader functionality."""
+  """Test model.DatastoreInputReader and DatastoreKeyInputReader."""
 
   def setUp(self):
     unittest.TestCase.setUp(self)
@@ -126,24 +126,20 @@ class DatastoreInputReaderTest(unittest.TestCase):
 
     params = {}
     params["app"] = "blah"
-    params["batch_size"] = '24'
-    params["keys_only"] = 'False'
+    params["batch_size"] = "24"
     reader = input_readers.DatastoreInputReader(
         ENTITY_KIND, krange, params)
     self.assertEquals(24, reader._batch_size)
-    self.assertEquals(False, reader._keys_only)
 
-    params["batch_size"] = '42'
-    params["keys_only"] = 'True'
+    params["batch_size"] = "42"
     reader = input_readers.DatastoreInputReader(
         ENTITY_KIND, krange, params)
     self.assertEquals(42, reader._batch_size)
-    self.assertEquals(True, reader._keys_only)
 
-    del params["keys_only"]
-    reader = input_readers.DatastoreInputReader(
+    # Also try the key input reader.
+    reader = input_readers.DatastoreKeyInputReader(
         ENTITY_KIND, krange, params)
-    self.assertEquals(False, reader._keys_only)
+    self.assertEquals(42, reader._batch_size)
 
     params["entity_kind"] = ENTITY_KIND
     mapper_spec = model.MapperSpec(
@@ -152,28 +148,55 @@ class DatastoreInputReaderTest(unittest.TestCase):
         params, 1)
     reader = input_readers.DatastoreInputReader.split_input(
         mapper_spec)
-    self.assertEquals(False, reader[0]._keys_only)
+    self.assertEquals(input_readers.DatastoreInputReader, reader[0].__class__)
     self.assertEquals(42, reader[0]._batch_size)
 
-    params["batch_size"] = '24'
-    params["keys_only"] = 'True'
+    params["batch_size"] = "24"
     mapper_spec = model.MapperSpec(
         "FooHandler",
         "mapreduce.input_readers.DatastoreInputReader",
         params, 1)
     reader = input_readers.DatastoreInputReader.split_input(
         mapper_spec)
-    self.assertEquals(True, reader[0]._keys_only)
     self.assertEquals(24, reader[0]._batch_size)
 
-    params["keys_only"] = 'False'
+    # Setting keys_only to false is OK (it's ignored.)
+    params["keys_only"] = "False"
     mapper_spec = model.MapperSpec(
         "FooHandler",
         "mapreduce.input_readers.DatastoreInputReader",
         params, 1)
     reader = input_readers.DatastoreInputReader.split_input(
         mapper_spec)
-    self.assertEquals(False, reader[0]._keys_only)
+
+    # Setting keys_only to true is an error.
+    params["keys_only"] = "True"
+    mapper_spec = model.MapperSpec(
+        "FooHandler",
+        "mapreduce.input_readers.DatastoreInputReader",
+        params, 1)
+    self.assertRaises(input_readers.BadReaderParamsError,
+                      input_readers.DatastoreInputReader.split_input,
+                      mapper_spec)
+
+    # But it's totally ignored on the DatastoreKeyInputReader.
+    mapper_spec = model.MapperSpec(
+        "FooHandler",
+        "mapreduce.input_readers."
+        "DatastoreKeyInputReader",
+        params, 1)
+    reader = input_readers.DatastoreKeyInputReader.split_input(mapper_spec)
+
+    del params["keys_only"]
+    mapper_spec = model.MapperSpec(
+        "FooHandler",
+        "mapreduce.input_readers."
+        "DatastoreKeyInputReader",
+        params, 1)
+    reader = input_readers.DatastoreKeyInputReader.split_input(
+        mapper_spec)
+    self.assertEquals(input_readers.DatastoreKeyInputReader,
+                      reader[0].__class__)
 
   def testSplitNoData(self):
     """Empty split should be produced if there's no data in database."""
@@ -290,8 +313,8 @@ class DatastoreInputReaderTest(unittest.TestCase):
     krange = key_range.KeyRange(key_start=self.key(25), key_end=self.key(50),
                                 direction="ASC",
                                 include_start=False, include_end=True)
-    query_range = input_readers.DatastoreInputReader(
-        ENTITY_KIND, krange, {"batch_size": "50", "keys_only": "True"})
+    query_range = input_readers.DatastoreKeyInputReader(
+        ENTITY_KIND, krange, {"batch_size": "50"})
 
     keys = []
 
@@ -321,9 +344,9 @@ class DatastoreInputReaderTest(unittest.TestCase):
                                 include_start=False, include_end=True,
                                 _app=OTHER_APP)
 
-    query_range = input_readers.DatastoreInputReader(
+    query_range = input_readers.DatastoreKeyInputReader(
         OTHER_KIND, krange,
-        {"app": OTHER_APP, "batch_size": 50, "keys_only": True})
+        {"app": OTHER_APP, "batch_size": 50})
 
     keys = []
 
