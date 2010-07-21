@@ -47,6 +47,9 @@ _QUOTA_BATCH_SIZE = 20
 # scheduled as soon as current one takes this long.
 _SLICE_DURATION_SEC = 15
 
+# Delay between consecutive controller callback invocations.
+_CONTROLLER_PERIOD_SEC = 2
+
 
 class Error(Exception):
   """Base class for exceptions in this module."""
@@ -299,7 +302,9 @@ class MapperWorkerCallbackHandler(base_handler.BaseHandler):
                      shard_id,
                      slice_id,
                      input_reader,
-                     queue_name=None):
+                     queue_name=None,
+                     eta=None,
+                     countdown=None):
     """Schedule slice scanning by adding it to the task queue.
 
     Args:
@@ -310,6 +315,11 @@ class MapperWorkerCallbackHandler(base_handler.BaseHandler):
       input_reader: remaining InputReader for given shard.
       queue_name: Optional queue to run on; uses the current queue of
         execution or the default queue if unspecified.
+      eta: Absolute time when the MR should execute. May not be specified
+        if 'countdown' is also supplied. This may be timezone-aware or
+        timezone-naive.
+      countdown: Time in seconds into the future that this MR should execute.
+        Defaults to zero.
     """
     task_params = MapperWorkerCallbackHandler.worker_parameters(
         mapreduce_spec, shard_id, slice_id, input_reader)
@@ -319,7 +329,9 @@ class MapperWorkerCallbackHandler(base_handler.BaseHandler):
     try:
       taskqueue.Task(url=base_path + "/worker_callback",
                      params=task_params,
-                     name=task_name).add(queue_name)
+                     name=task_name,
+                     eta=eta,
+                     countdown=countdown).add(queue_name)
     except (taskqueue.TombstonedTaskError, taskqueue.TaskAlreadyExistsError), e:
       logging.warning("Task %r with params %r already exists. %s: %s",
                       task_name, task_params, e.__class__, e)
@@ -430,7 +442,8 @@ class ControllerCallbackHandler(base_handler.BaseHandler):
     processing_rate = int(spec.mapper.params.get(
         "processing_rate") or model._DEFAULT_PROCESSING_RATE_PER_SEC)
     self.refill_quotas(poll_time, processing_rate, active_shards)
-    ControllerCallbackHandler.schedule(self.base_path(), spec)
+    ControllerCallbackHandler.reschedule(
+        self.base_path(), spec, self.serial_id() + 1)
 
   def aggregate_state(self, mapreduce_state, shard_states):
     """Update current mapreduce state by aggregating shard states.
@@ -477,27 +490,158 @@ class ControllerCallbackHandler(base_handler.BaseHandler):
     for shard_state in active_shard_states:
       quota_manager.put(shard_state.shard_id, quota_refill)
 
+  def serial_id(self):
+    """Get serial unique identifier of this task from request.
+
+    Returns:
+      serial identifier as int.
+    """
+    return int(self.request.get("serial_id"))
+
+  @staticmethod
+  def get_task_name(mapreduce_spec, serial_id):
+    """Compute single controller task name.
+
+    Args:
+      mapreduce_spec: specification of the mapreduce.
+      serial_id: id of the invocation as int.
+
+    Returns:
+      task name which should be used to process specified shard/slice.
+    """
+    # Prefix the task name with something unique to this framework's
+    # namespace so we don't conflict with user tasks on the queue.
+    return "appengine-mrcontrol-%s-%s" % (
+        mapreduce_spec.mapreduce_id, serial_id)
+
+  @staticmethod
+  def controller_parameters(mapreduce_spec, serial_id):
+    """Fill in  controller task parameters.
+
+    Returned parameters map is to be used as task payload, and it contains
+    all the data, required by controller to perform its function.
+
+    Args:
+      mapreduce_spec: specification of the mapreduce.
+      serial_id: id of the invocation as int.
+
+    Returns:
+      string->string map of parameters to be used as task payload.
+    """
+    return {"mapreduce_spec": mapreduce_spec.to_json_str(),
+            "serial_id": str(serial_id)}
+
   @classmethod
-  def schedule(cls, base_path, mapreduce_spec, queue_name=None):
+  def reschedule(cls, base_path, mapreduce_spec, serial_id, queue_name=None):
     """Schedule new update status callback task.
 
     Args:
       base_path: mapreduce handlers url base path as string.
       mapreduce_spec: mapreduce specification as MapreduceSpec.
+      serial_id: id of the invocation as int.
       queue_name: The queue to schedule this task on. Will use the current
         queue of execution if not supplied.
     """
-    queue_name = (
-        os.environ.get("HTTP_X_APPENGINE_QUEUENAME", queue_name) or "default")
-    taskqueue.Task(url=base_path + "/controller_callback",
-                   params={"mapreduce_spec": mapreduce_spec.to_json_str()},
-                   countdown=2).add(queue_name)
+    task_name = ControllerCallbackHandler.get_task_name(
+        mapreduce_spec, serial_id)
+    task_params = ControllerCallbackHandler.controller_parameters(
+        mapreduce_spec, serial_id)
+    if not queue_name:
+      queue_name = os.environ.get("HTTP_X_APPENGINE_QUEUENAME", "default")
+
+    try:
+      taskqueue.Task(url=base_path + "/controller_callback",
+                     name=task_name, params=task_params,
+                     countdown=_CONTROLLER_PERIOD_SEC).add(queue_name)
+    except (taskqueue.TombstonedTaskError, taskqueue.TaskAlreadyExistsError), e:
+      logging.warning("Task %r with params %r already exists. %s: %s",
+                      task_name, task_params, e.__class__, e)
+
+
+class KickOffJobHandler(base_handler.BaseHandler):
+  """Taskqueue handler which kicks off a mapreduce processing.
+
+  Request Parameters:
+    mapreduce_spec: MapreduceSpec of the mapreduce serialized to json.
+    input_readers: List of InputReaders objects separated by semi-colons.
+  """
+
+  def post(self):
+    """Handles kick off request."""
+    spec = model.MapreduceSpec.from_json_str(
+        self._get_required_param("mapreduce_spec"))
+    input_readers_json = simplejson.loads(
+        self._get_required_param("input_readers"))
+
+    queue_name = os.environ.get("HTTP_X_APPENGINE_QUEUENAME", "default")
+
+    mapper_input_reader_class = spec.mapper.input_reader_class()
+    input_readers = [mapper_input_reader_class.from_json_str(reader_json)
+                     for reader_json in input_readers_json]
+
+    KickOffJobHandler._schedule_shards(
+        spec, input_readers, queue_name, self.base_path())
+
+    ControllerCallbackHandler.reschedule(
+        self.base_path(), spec, queue_name=queue_name, serial_id=0)
+
+  def _get_required_param(self, param_name):
+    """Get a required request parameter.
+
+    Args:
+      param_name: name of request parameter to fetch.
+
+    Returns:
+      parameter value
+
+    Raises:
+      NotEnoughArgumentsError: if parameter is not specified.
+    """
+    value = self.request.get(param_name)
+    if not value:
+      raise NotEnoughArgumentsError(param_name + " not specified")
+    return value
+
+  @classmethod
+  def _schedule_shards(cls, spec, input_readers, queue_name, base_path):
+    """Prepares shard states and schedules their execution.
+
+    Args:
+      spec: mapreduce specification as MapreduceSpec.
+      input_readers: list of InputReaders describing shard splits.
+      queue_name: The queue to run this job on.
+      base_path: The base url path of mapreduce callbacks.
+    """
+    # Note: it's safe to re-attempt this handler because:
+    # - shard state has deterministic and unique key.
+    # - schedule_slice will fall back gracefully if a task already exists.
+    shard_states = []
+    for shard_number, input_reader in enumerate(input_readers):
+      shard = model.ShardState.create_new(spec.mapreduce_id, shard_number)
+      shard.shard_description = str(input_reader)
+      shard_states.append(shard)
+
+    # Retrievs already existing shards.
+    existing_shard_states = db.get(shard.key() for shard in shard_states)
+    existing_shard_keys = set(shard.key() for shard in existing_shard_states
+                              if shard is not None)
+
+    # Puts only non-existing shards.
+    db.put(shard for shard in shard_states
+           if shard.key() not in existing_shard_keys)
+
+    for shard_number, input_reader in enumerate(input_readers):
+      shard_id = model.ShardState.shard_id_from_number(
+          spec.mapreduce_id, shard_number)
+      MapperWorkerCallbackHandler.schedule_slice(
+          base_path, spec, shard_id, 0, input_reader, queue_name=queue_name)
 
 
 class StartJobHandler(base_handler.JsonHandler):
   """Command handler starts a mapreduce job."""
 
   def handle(self):
+    """Handles start request."""
     # Mapper spec as form arguments.
     mapreduce_name = self._get_required_param("name")
     mapper_input_reader_spec = self._get_required_param("mapper_input_reader")
@@ -576,12 +720,13 @@ class StartJobHandler(base_handler.JsonHandler):
       raise NotEnoughArgumentsError(param_name + " not specified")
     return value
 
-
   @classmethod
   def _start_map(cls, name, mapper_spec,
                  mapreduce_params,
                  base_path="/mapreduce",
                  queue_name="default",
+                 eta=None,
+                 countdown=None,
                  _app=None):
     # Check that handler can be instantiated.
     mapper_spec.get_handler()
@@ -608,40 +753,20 @@ class StartJobHandler(base_handler.JsonHandler):
     state.char_url = ""
     state.sparkline_url = ""
 
+    def schedule_mapreduce(state, mapper_input_readers, eta, countdown):
+      state.put()
+      readers_json = [reader.to_json_str() for reader in mapper_input_readers]
+      taskqueue.Task(
+          url=base_path + "/kickoffjob_callback",
+          params={"mapreduce_spec": state.mapreduce_spec.to_json_str(),
+                  "input_readers": simplejson.dumps(readers_json)},
+          eta=eta, countdown=countdown).add(queue_name, transactional=True)
+
     # Point of no return: We're actually going to run this job!
-    state.put()
-    StartJobHandler._schedule_shards(mapreduce_spec, mapper_input_readers,
-                                     queue_name, base_path)
-    ControllerCallbackHandler.schedule(
-        base_path, mapreduce_spec, queue_name=queue_name)
+    db.run_in_transaction(
+        schedule_mapreduce, state, mapper_input_readers, eta, countdown)
 
     return state.key().id_or_name()
-
-
-  @classmethod
-  def _schedule_shards(cls, spec, input_readers, queue_name, base_path):
-    """Prepares shard states and schedules their execution.
-
-    Args:
-      spec: mapreduce specification as MapreduceSpec.
-      input_readers: list of InputReaders describing shard splits.
-      queue_name: The queue to run this job on.
-    """
-    shard_states = []
-    for shard_number, input_reader in enumerate(input_readers):
-      shard = model.ShardState.create_new(spec.mapreduce_id, shard_number)
-      shard.shard_description = str(input_reader)
-      shard_states.append(shard)
-    # TODO(user): this put together with task creation is not transactional.
-    # either retry or some kind of error handling should be added here.
-    db.put(shard_states)
-
-    for shard_number, input_reader in enumerate(input_readers):
-      shard_id = model.ShardState.shard_id_from_number(
-          spec.mapreduce_id, shard_number)
-      MapperWorkerCallbackHandler.schedule_slice(
-          base_path, spec, shard_id, 0, input_reader,
-          queue_name=queue_name)
 
 
 class CleanUpJobHandler(base_handler.JsonHandler):

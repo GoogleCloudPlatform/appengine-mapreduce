@@ -496,7 +496,7 @@ class MapreduceState(db.Model):
   active_shards = db.IntegerProperty(default=0, indexed=False)
   failed_shards = db.IntegerProperty(default=0, indexed=False)
   aborted_shards = db.IntegerProperty(default=0, indexed=False)
-  start_time = db.DateTimeProperty(indexed=False, auto_now_add=True)
+  start_time = db.DateTimeProperty(auto_now_add=True)
 
   @classmethod
   def get_key_by_job_id(cls, mapreduce_id):

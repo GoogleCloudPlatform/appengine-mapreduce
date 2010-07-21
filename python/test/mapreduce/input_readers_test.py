@@ -68,12 +68,13 @@ ENTITY_KIND = "__main__.TestEntity"
 
 
 class DatastoreInputReaderTest(unittest.TestCase):
-  """Test model.DatastoreInputReader and DatastoreKeyInputReader."""
+  """Test Datastore{,Key,Entity}InputReader classes."""
 
   def setUp(self):
     unittest.TestCase.setUp(self)
     self.appid = "testapp"
     os.environ["APPLICATION_ID"] = self.appid
+    os.environ["AUTH_DOMAIN"]= "gmail.com"
     self.resetDatastore()
 
   def resetDatastore(self, require_indexes=False):
@@ -86,7 +87,7 @@ class DatastoreInputReaderTest(unittest.TestCase):
   def key(self, entity_id):
     """Create a key for TestEntity with specified id.
 
-    Used to shorted expected data.
+    Used to shorten expected data.
 
     Args:
       entity_id: entity id
@@ -198,6 +199,16 @@ class DatastoreInputReaderTest(unittest.TestCase):
     self.assertEquals(input_readers.DatastoreKeyInputReader,
                       reader[0].__class__)
 
+    # Coverage test: DatastoreEntityInputReader
+    mapper_spec = model.MapperSpec(
+        "FooHandler",
+        "mapreduce.input_readers."
+        "DatastoreEntityInputReader",
+        params, 1)
+    reader = input_readers.DatastoreEntityInputReader.split_input(mapper_spec)
+    self.assertEquals(input_readers.DatastoreEntityInputReader,
+                      reader[0].__class__)
+
   def testSplitNoData(self):
     """Empty split should be produced if there's no data in database."""
     self.assertEquals([], self.split(10))
@@ -284,8 +295,11 @@ class DatastoreInputReaderTest(unittest.TestCase):
 
   def testGenerator(self):
     """Test DatastoreInputReader as generator."""
+    expected_entities = []
     for _ in range(0, 100):
-      TestEntity().put()
+      entity = TestEntity()
+      entity.put()
+      expected_entities.append(entity)
 
     krange = key_range.KeyRange(key_start=self.key(25), key_end=self.key(50),
                                 direction="ASC",
@@ -304,11 +318,16 @@ class DatastoreInputReaderTest(unittest.TestCase):
           query_range._key_range)
 
     self.assertEquals(25, len(entities))
+    # Model instances are not comparable, so we'll compare a serialization.
+    expected_values = [entity.to_xml() for entity in expected_entities[25:50]]
+    actual_values = [entity.to_xml() for entity in entities]
+    self.assertEquals(expected_values, actual_values)
 
   def testKeysOnlyGenerator(self):
-    """Test DatastoreInputReader as a keys-only generator."""
+    """Test DatastoreKeyInputReader."""
+    expected_keys = []
     for _ in range(0, 100):
-      TestEntity().put()
+      expected_keys.append(TestEntity().put())
 
     krange = key_range.KeyRange(key_start=self.key(25), key_end=self.key(50),
                                 direction="ASC",
@@ -327,15 +346,18 @@ class DatastoreInputReaderTest(unittest.TestCase):
           query_range._key_range)
 
     self.assertEquals(25, len(keys))
+    self.assertEquals(expected_keys[25:50], keys)
 
   def testKeysOnlyGeneratorNoModelOtherApp(self):
-    """Test DatastoreInputReader when raw kind is given and not a Model path."""
+    """Test DatastoreKeyInputReader when raw kind is given, not a Model path."""
     OTHER_KIND = "blahblah"
     OTHER_APP = "blah"
     apiproxy_stub_map.apiproxy.GetStub("datastore_v3").SetTrusted(True)
 
+    expected_keys = []
     for _ in range(0, 100):
-      datastore.Put(datastore.Entity(OTHER_KIND, _app=OTHER_APP))
+      expected_keys.append(datastore.Put(datastore.Entity(OTHER_KIND,
+                                                          _app=OTHER_APP)))
 
     key_start = db.Key.from_path(OTHER_KIND, 25, _app=OTHER_APP)
     key_end = db.Key.from_path(OTHER_KIND, 50, _app=OTHER_APP)
@@ -359,6 +381,33 @@ class DatastoreInputReaderTest(unittest.TestCase):
           query_range._key_range)
 
     self.assertEquals(25, len(keys))
+    self.assertEquals(expected_keys[25:50], keys)
+
+  def testEntityGenerator(self):
+    """Test DatastoreEntityInputReader."""
+    expected_entities = []
+    for _ in range(0, 100):
+      model_instance = TestEntity()
+      model_instance.put()
+      expected_entities.append(model_instance._populate_internal_entity())
+
+    krange = key_range.KeyRange(key_start=self.key(25), key_end=self.key(50),
+                                direction="ASC",
+                                include_start=False, include_end=True)
+    query_range = input_readers.DatastoreEntityInputReader(
+        ENTITY_KIND, krange, {"batch_size": "50"})
+
+    entities = []
+    for entity in query_range:
+      entities.append(entity)
+      self.assertEquals(
+          key_range.KeyRange(key_start=entity.key(), key_end=self.key(50),
+                             direction="ASC",
+                             include_start=False, include_end=True),
+          query_range._key_range)
+
+    self.assertEquals(25, len(entities))
+    self.assertEquals(expected_entities[25:50], entities)
 
   def testShardDescription(self):
     """Tests the human-visible description of Datastore readers."""

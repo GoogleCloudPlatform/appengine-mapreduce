@@ -57,6 +57,7 @@ def create_application():
       # Task queue handlers.
       (r".*/worker_callback", handlers.MapperWorkerCallbackHandler),
       (r".*/controller_callback", handlers.ControllerCallbackHandler),
+      (r".*/kickoffjob_callback", handlers.KickOffJobHandler),
 
       # RPC requests with JSON responses
       (r".*/command/start_job", handlers.StartJobHandler),
