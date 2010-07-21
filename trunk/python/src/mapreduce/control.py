@@ -35,6 +35,8 @@ def start_map(name,
               mapreduce_parameters={},
               base_path="/mapreduce",
               queue_name="default",
+              eta=None,
+              countdown=None,
               _app=None):
   """Start a new, mapper-only mapreduce.
 
@@ -50,6 +52,11 @@ def start_map(name,
     base_path: base path of mapreduce library handler specified in app.yaml.
       "/mapreduce" by default.
     queue_name: executor queue name to be used for mapreduce tasks.
+    eta: Absolute time when the MR should execute. May not be specified
+        if 'countdown' is also supplied. This may be timezone-aware or
+        timezone-naive.
+    countdown: Time in seconds into the future that this MR should execute.
+        Defaults to zero.
 
   Returns:
     mapreduce id as string.
@@ -63,5 +70,7 @@ def start_map(name,
       mapreduce_parameters,
       base_path=base_path,
       queue_name=queue_name,
+      eta=eta,
+      countdown=countdown,
       _app=_app)
 

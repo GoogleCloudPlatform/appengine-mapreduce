@@ -28,9 +28,11 @@ from google.appengine.tools import os_compat
 # pylint: enable-msg=W0611
 
 import base64
+import cgi
 import datetime
 from testlib import mox
 import os
+from mapreduce.lib import simplejson
 import time
 import urllib
 import unittest
@@ -207,13 +209,16 @@ class MapreduceHandlerTestBase(testutil.HandlerTestBase):
                   base64.b64decode(task["body"]).split("&")]
     return dict((key, urllib.unquote_plus(value)) for key, value in key_values)
 
-  def verify_shard_task(self, task, shard_id, slice_id=0, **kwargs):
+  def verify_shard_task(self, task, shard_id, slice_id=0, eta=None,
+                        countdown=None, **kwargs):
     """Checks that all shard task properties have expected values.
 
     Args:
       task: task to check.
       shard_id: expected shard id.
       slice_id: expected slice_id.
+      eta: expected task eta.
+      countdown: expected task delay from now.
       kwargs: Extra keyword arguments to pass to verify_mapreduce_spec.
     """
     expected_task_name = handlers.MapperWorkerCallbackHandler.get_task_name(
@@ -221,6 +226,12 @@ class MapreduceHandlerTestBase(testutil.HandlerTestBase):
     self.assertEquals(expected_task_name, task["name"])
     self.assertEquals("POST", task["method"])
     self.assertEquals("/mapreduce/worker_callback", task["url"])
+    if eta:
+      self.assertEquals(eta.strftime("%Y/%m/%d %H:%M:%S"), task["eta"])
+    if countdown:
+      expected_etc_sec = time.time() + countdown
+      eta_sec = time.mktime(time.strptime(task["eta"], "%Y/%m/%d %H:%M:%S"))
+      self.assertTrue(expected_etc_sec < eta_sec + 10)
 
     payload = self.decode_task_payload(task)
     self.assertEquals(str(shard_id), payload["shard_id"])
@@ -389,71 +400,63 @@ class StartJobHandlerTest(MapreduceHandlerTestBase):
   def testSmoke(self):
     """Verifies main execution path of starting scan over several entities."""
     TestEntity().put()
-    self.handler.post()
-    shard_count = 8
+    self.handler.handle()
 
+    # Only kickoff task should be there.
     tasks = self.taskqueue.GetTasks("default")
-    # task for each shard + 1 update task should be created
-    self.assertEquals(shard_count + 1, len(tasks))
+    self.assertEquals(1, len(tasks))
+    params = dict(cgi.parse_qsl(base64.b64decode(tasks[0]["body"])))
 
     mapreduce_state = model.MapreduceState.all().fetch(limit=1)[0]
     self.verify_mapreduce_state(mapreduce_state, shard_count=8)
     self.assertEquals(0, mapreduce_state.failed_shards)
     self.assertEquals(0, mapreduce_state.aborted_shards)
-    mapreduce_id = mapreduce_state.mapreduce_spec.mapreduce_id
 
-    for i in xrange(shard_count):
-      shard_id = model.ShardState.shard_id_from_number(mapreduce_id, i)
-      task_name = handlers.MapperWorkerCallbackHandler.get_task_name(
-          shard_id, 0)
+    self.assertEquals(mapreduce_state.mapreduce_spec.to_json_str(),
+                      params["mapreduce_spec"])
+    self.assertEquals(8, len(simplejson.loads(params["input_readers"])))
 
-      shard_task = self.find_task_by_name(tasks, task_name)
-      self.assertTrue(shard_task)
-      tasks.remove(shard_task)
-      self.verify_shard_task(shard_task, shard_id, shard_count=8)
-
-      self.verify_shard_state(
-          model.ShardState.get_by_shard_id(shard_id))
-
-    # only update task should be left in tasks array
-    self.assertEquals(1, len(tasks))
-    self.verify_controller_task(tasks[0], shard_count=8)
+    for reader_json in simplejson.loads(params["input_readers"]):
+      reader = input_readers.DatastoreInputReader.from_json_str(reader_json)
+      self.assertEquals(self.handler.request.get("mapper_params.entity_kind"),
+                        reader._entity_kind)
+      self.assertEquals(
+          mapreduce_state.mapreduce_spec.mapper.to_json()["mapper_params"],
+          reader._mapper_params)
+      self.assertEquals(input_readers.DatastoreInputReader._BATCH_SIZE,
+                        reader._batch_size)
 
   def testSmokeOtherApp(self):
     """Verifies main execution path of starting scan over several entities."""
     apiproxy_stub_map.apiproxy.GetStub("datastore_v3").SetTrusted(True)
     self.handler.request.set("mapper_params._app", "otherapp")
     TestEntity(_app="otherapp").put()
-    self.handler.post()
-    shard_count = 8
+    self.handler.handle()
 
+    # Only kickoff task should be there.
     tasks = self.taskqueue.GetTasks("default")
-    # task for each shard + 1 update task should be created
-    self.assertEquals(shard_count + 1, len(tasks))
+    self.assertEquals(1, len(tasks))
+    params = dict(cgi.parse_qsl(base64.b64decode(tasks[0]["body"])))
 
     mapreduce_state = model.MapreduceState.all().fetch(limit=1)[0]
     self.assertEquals("otherapp", mapreduce_state.app_id)
     self.verify_mapreduce_state(mapreduce_state, shard_count=8)
     self.assertEquals(0, mapreduce_state.failed_shards)
     self.assertEquals(0, mapreduce_state.aborted_shards)
-    mapreduce_id = mapreduce_state.mapreduce_spec.mapreduce_id
 
-    for i in xrange(shard_count):
-      shard_id = model.ShardState.shard_id_from_number(mapreduce_id, i)
-      task_name = handlers.MapperWorkerCallbackHandler.get_task_name(
-          shard_id, 0)
+    self.assertEquals(mapreduce_state.mapreduce_spec.to_json_str(),
+                      params["mapreduce_spec"])
+    self.assertEquals(8, len(simplejson.loads(params["input_readers"])))
 
-      shard_task = self.find_task_by_name(tasks, task_name)
-      self.assertTrue(shard_task)
-      tasks.remove(shard_task)
-      self.verify_shard_task(shard_task, shard_id, shard_count=8)
-
-      self.verify_shard_state(
-          model.ShardState.get_by_shard_id(shard_id))
-
-    # only update task should be left in tasks array
-    self.assertEquals(1, len(tasks))
-    self.verify_controller_task(tasks[0], shard_count=8)
+    for reader_json in simplejson.loads(params["input_readers"]):
+      reader = input_readers.DatastoreInputReader.from_json_str(reader_json)
+      self.assertEquals(self.handler.request.get("mapper_params.entity_kind"),
+                        reader._entity_kind)
+      self.assertEquals(
+          mapreduce_state.mapreduce_spec.mapper.to_json()["mapper_params"],
+          reader._mapper_params)
+      self.assertEquals(input_readers.DatastoreInputReader._BATCH_SIZE,
+                        reader._batch_size)
 
   def testRequiredParams(self):
     """Tests that required parameters are enforced."""
@@ -555,7 +558,7 @@ class StartJobHandlerTest(MapreduceHandlerTestBase):
         model.MapreduceState.all().get()
             .mapreduce_spec.mapper.params["queue_name"])
     self.assertEquals(0, len(self.taskqueue.GetTasks("default")))
-    self.assertEquals(9, len(self.taskqueue.GetTasks("crazy-queue")))
+    self.assertEquals(1, len(self.taskqueue.GetTasks("crazy-queue")))
 
   def testProcessingRate(self):
     """Tests that the optional processing rate parameter is used."""
@@ -570,11 +573,98 @@ class StartJobHandlerTest(MapreduceHandlerTestBase):
   def testShardCount(self):
     """Tests that the optional shard count parameter is used."""
     TestEntity().put()
-    self.handler.request.set("mapper_params.shard_count", "155")
+    self.handler.request.set("mapper_params.shard_count", "9")
     self.handler.handle()
     self.assertEquals(
-        128,  # Nearest power of two split.
+        8,  # Nearest power of two split.
         model.MapreduceState.all().get().mapreduce_spec.mapper.shard_count)
+
+
+class KickOffJobHandlerTest(MapreduceHandlerTestBase):
+  """Test handlers.StartJobHandler."""
+
+  def setUp(self):
+    """Sets up the test harness."""
+    MapreduceHandlerTestBase.setUp(self)
+
+    self.mapreduce_id = "mapreduce0"
+    self.mapreduce_spec = self.create_mapreduce_spec(self.mapreduce_id)
+
+    self.input_readers = []
+    for _ in xrange(self.mapreduce_spec.mapper.shard_count):
+      self.input_readers.append(input_readers.DatastoreInputReader(
+          self.mapreduce_spec.mapper.params["entity_kind"],
+          key_range.KeyRange(),
+          self.mapreduce_spec.mapper.to_json()))
+
+    self.handler = handlers.KickOffJobHandler()
+    self.handler.initialize(mock_webapp.MockRequest(),
+                            mock_webapp.MockResponse())
+
+    self.handler.request.path = "/mapreduce/kickoffjob_callback"
+    self.handler.request.set(
+        "mapreduce_spec",
+        self.mapreduce_spec.to_json_str())
+    self.handler.request.set(
+        "input_readers",
+        simplejson.dumps([r.to_json_str() for r in self.input_readers]))
+
+  def testSmoke(self):
+    """Verifies main execution path of starting scan over several entities."""
+    self.handler.post()
+    shard_count = 8
+
+    tasks = self.taskqueue.GetTasks("default")
+    self.assertEquals(shard_count + 1, len(tasks))
+
+    for i in xrange(shard_count):
+      shard_id = model.ShardState.shard_id_from_number(self.mapreduce_id, i)
+      task_name = handlers.MapperWorkerCallbackHandler.get_task_name(
+          shard_id, 0)
+
+      shard_task = self.find_task_by_name(tasks, task_name)
+      self.assertTrue(shard_task)
+      tasks.remove(shard_task)
+      self.verify_shard_task(shard_task, shard_id, shard_count=8)
+
+      self.verify_shard_state(
+          model.ShardState.get_by_shard_id(shard_id))
+
+    # only update task should be left in tasks array
+    self.assertEquals(1, len(tasks))
+    self.verify_controller_task(tasks[0], shard_count=8)
+
+  def testRequiredParams(self):
+    """Tests that required parameters are enforced."""
+    self.handler.post()
+
+    self.handler.request.set("mapreduce_spec", None)
+    self.assertRaises(handlers.NotEnoughArgumentsError, self.handler.post)
+
+    self.handler.request.set("mapreduce_spec",
+                             self.mapreduce_spec.to_json_str())
+    self.handler.request.set("input_readers", None)
+    self.assertRaises(handlers.NotEnoughArgumentsError, self.handler.post)
+
+    self.handler.request.set("input_readers", simplejson.dumps([]))
+    self.handler.post()
+
+  def testInputReaderUnknown(self):
+    """Tests when the input reader function cannot be found."""
+    self.mapreduce_spec.mapper.input_reader_spec = "does_not_exist"
+    self.handler.request.set("mapreduce_spec",
+                             self.mapreduce_spec.to_json_str())
+
+    self.assertRaises(ImportError, self.handler.post)
+
+  def testQueueName(self):
+    """Tests that the optional queue_name parameter is used."""
+    os.environ["HTTP_X_APPENGINE_QUEUENAME"] = "crazy-queue"
+    self.handler.post()
+    del os.environ["HTTP_X_APPENGINE_QUEUENAME"]
+
+    self.assertEquals(0, len(self.taskqueue.GetTasks("default")))
+    self.assertEquals(9, len(self.taskqueue.GetTasks("crazy-queue")))
 
 
 class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
@@ -729,6 +819,44 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
     tasks = self.taskqueue.GetTasks("default")
     self.assertEquals(1, len(tasks))
     self.verify_shard_task(tasks[0], self.shard_id, 123)
+
+  def testScheduleSlice_Eta(self):
+    """Test schedule_slice method."""
+    eta = datetime.datetime.utcnow() + datetime.timedelta(hours=1)
+    input_reader = input_readers.DatastoreInputReader(
+        ENTITY_KIND,
+        key_range.KeyRange(key_start=self.key(75),
+                           key_end=self.key(100),
+                           direction="ASC",
+                           include_start=False,
+                           include_end=True),
+        MAPPER_PARAMS)
+    self.handler.schedule_slice("/mapreduce", self.mapreduce_spec,
+                                self.shard_id, 123, input_reader,
+                                eta=eta)
+
+    tasks = self.taskqueue.GetTasks("default")
+    self.assertEquals(1, len(tasks))
+    self.verify_shard_task(tasks[0], self.shard_id, 123, eta=eta)
+
+  def testScheduleSlice_Countdown(self):
+    """Test schedule_slice method."""
+    countdown = 60 * 60
+    input_reader = input_readers.DatastoreInputReader(
+        ENTITY_KIND,
+        key_range.KeyRange(key_start=self.key(75),
+                           key_end=self.key(100),
+                           direction="ASC",
+                           include_start=False,
+                           include_end=True),
+        MAPPER_PARAMS)
+    self.handler.schedule_slice("/mapreduce", self.mapreduce_spec,
+                                self.shard_id, 123, input_reader,
+                                countdown=countdown)
+
+    tasks = self.taskqueue.GetTasks("default")
+    self.assertEquals(1, len(tasks))
+    self.verify_shard_task(tasks[0], self.shard_id, 123, countdown=countdown)
 
   def testScheduleSlice_QueuePreserved(self):
     """Tests that schedule_slice will enqueue tasks on the calling queue."""
@@ -965,6 +1093,7 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
     self.verify_mapreduce_state(self.mapreduce_state, shard_count=3)
 
     self.handler.request.set("mapreduce_spec", mapreduce_spec.to_json_str())
+    self.handler.request.set("serial_id", "1234")
     self.quota_manager = quota.QuotaManager(memcache.Client())
 
   def verify_done_task(self):
@@ -1236,7 +1365,7 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
     for shard_state in active_shard_states:
       self.assertEquals(50, self.quota_manager.get(shard_state.shard_id))
 
-  def testSchduleQueueName(self):
+  def testScheduleQueueName(self):
     """Tests that the calling queue name is preserved on schedule calls."""
     os.environ["HTTP_X_APPENGINE_QUEUENAME"] = "crazy-queue"
     try:

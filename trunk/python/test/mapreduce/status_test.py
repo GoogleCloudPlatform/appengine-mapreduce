@@ -18,6 +18,8 @@
 
 
 
+import base64
+import cgi
 from mapreduce.lib import simplejson
 import unittest
 
@@ -377,8 +379,20 @@ class GetJobDetailTest(testutil.HandlerTestBase):
                             mock_webapp.MockResponse())
     self.handler.request.path = "/mapreduce/list"
 
+  def kickOffMapreduce(self):
+    """Executes pending kickoff task."""
+    kickoff_task = self.taskqueue.GetTasks("default")[0]
+    handler = handlers.KickOffJobHandler()
+    handler.initialize(mock_webapp.MockRequest(), mock_webapp.MockResponse())
+    handler.request.path = "/mapreduce/kickoffjob_callback"
+    handler.request.params.update(
+        cgi.parse_qsl(base64.b64decode(kickoff_task["body"])))
+    handler.post()
+    self.taskqueue.DeleteTask("default", kickoff_task["name"])
+
   def testBasic(self):
     """Tests getting the job details."""
+    self.kickOffMapreduce()
     self.handler.request.set("mapreduce_id", self.mapreduce_id)
     self.handler.post()
     result = simplejson.loads(self.handler.response.out.getvalue())
@@ -395,6 +409,19 @@ class GetJobDetailTest(testutil.HandlerTestBase):
     self.assertEquals(expected_keys, set(result.keys()))
     self.assertEquals(8, len(result["shards"]))
     self.assertEquals(expected_shard_keys, set(result["shards"][0].keys()))
+
+  def testBeforeKickOff(self):
+    """Tests getting the job details."""
+    self.handler.request.set("mapreduce_id", self.mapreduce_id)
+    self.handler.post()
+    result = simplejson.loads(self.handler.response.out.getvalue())
+
+    expected_keys = set([
+        "active", "chart_url", "counters", "mapper_spec", "mapreduce_id",
+        "name", "result_status", "shards", "start_timestamp_ms",
+        "updated_timestamp_ms", "params"])
+
+    self.assertEquals(expected_keys, set(result.keys()))
 
   def testBadJobId(self):
     """Tests when an invalid job ID is supplied."""

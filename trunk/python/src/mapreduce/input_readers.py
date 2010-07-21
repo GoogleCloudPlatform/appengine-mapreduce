@@ -295,7 +295,7 @@ class DatastoreKeyInputReader(DatastoreInputReader):
   """An input reader which takes a Kind and yields Keys for that kind."""
 
   def __iter__(self):
-    """Create a generator for entities or keys in the range.
+    """Create a generator for keys in the range.
 
     Iterating through entries moves query range past the consumed entries.
 
@@ -337,6 +337,69 @@ class DatastoreKeyInputReader(DatastoreInputReader):
 
     Returns:
       A list of DatastoreKeyInputReader objects of length <= number_of_shards.
+
+    Raises:
+      BadReaderParamsError: required parameters are missing or invalid.
+    """
+    if mapper_spec.input_reader_class() != cls:
+      raise BadReaderParamsError("Input reader class mismatch")
+    params = mapper_spec.params
+    if cls.ENTITY_KIND_PARAM not in params:
+      raise BadReaderParamsError("Missing mapper parameter 'entity_kind'")
+
+    entity_kind_name = params[cls.ENTITY_KIND_PARAM]
+    shard_count = mapper_spec.shard_count
+    app = params.get(cls._APP_PARAM)
+
+    return cls._split_input_from_params(
+        app, entity_kind_name, params, shard_count)
+
+
+class DatastoreEntityInputReader(DatastoreInputReader):
+  """An input reader which yields low level datastore entities for a kind."""
+
+  def __iter__(self):
+    """Create a generator for low level entities in the range.
+
+    Iterating through entries moves query range past the consumed entries.
+
+    Yields:
+      next entry.
+    """
+    while True:
+      raw_entity_kind = util.get_short_name(self._entity_kind)
+      query = self._key_range.make_ascending_datastore_query(raw_entity_kind)
+      results = query.Get(limit=self._batch_size)
+
+      if not results:
+        break
+
+      for entity in results:
+        self._key_range.advance(entity.key())
+        yield entity
+
+  @classmethod
+  def split_input(cls, mapper_spec):
+    """Splits query into shards without fetching query results.
+
+    Tries as best as it can to split the whole query result set into equal
+    shards. Due to difficulty of making the perfect split, resulting shards'
+    sizes might differ significantly from each other. The actual number of
+    shards might also be less then requested (even 1), though it is never
+    greater.
+
+    Current implementation does key-lexicographic order splitting. It requires
+    query not to specify any __key__-based ordering. If an index for
+    query.order('-__key__') query is not present, an inaccurate guess at
+    sharding will be made by splitting the full key range.
+
+    Args:
+      mapper_spec: MapperSpec with params containing 'entity_kind'.
+        May also have 'batch_size' in the params to specify the number
+        of entities to process in each batch.
+
+    Returns:
+      List of DatastoreEntityInputReader objects of length <= number_of_shards.
 
     Raises:
       BadReaderParamsError: required parameters are missing or invalid.
