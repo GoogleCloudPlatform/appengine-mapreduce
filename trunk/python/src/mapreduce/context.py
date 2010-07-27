@@ -218,6 +218,10 @@ class Context(object):
     # TODO(user): These properties can stay public.
     self.mutation_pool = MutationPool()
     self.counters = Counters(shard_state)
+    if self.mapreduce_spec:
+      self.mapreduce_id = self.mapreduce_spec.mapreduce_id
+    else:
+      self.mapreduce_id = None
 
     self._pools = {}
     self.register_pool("mutation_pool", self.mutation_pool)
