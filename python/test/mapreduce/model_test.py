@@ -73,13 +73,24 @@ class TestJsonType(object):
     return cls(json['size'])
 
 
+class EmptyDictJsonType(object):
+  """Test class which serializes to empty json dict."""
+
+  def to_json(self):
+    return {}
+
+  @classmethod
+  def from_json(cls, json):
+    return cls()
+
+
 class TestEntity(db.Model):
   """Test entity class."""
 
   json_property = model.JsonProperty(TestJsonType)
   json_property_default_value = model.JsonProperty(
       TestJsonType, default=TestJsonType())
-
+  empty_json_property = model.JsonProperty(EmptyDictJsonType)
 
 ENTITY_KIND = '__main__.TestEntity'
 
@@ -94,6 +105,10 @@ class JsonPropertyTest(unittest.TestCase):
     e.json_property = TestJsonType(5)
     self.assertEquals(
         u'{"size": 5}', TestEntity.json_property.get_value_for_datastore(e))
+
+    e.empty_json_property = EmptyDictJsonType()
+    self.assertEquals(
+        None, TestEntity.empty_json_property.get_value_for_datastore(e))
 
   def testMakeValueFromDatastore(self):
     """Test make_value_from_datastore method."""

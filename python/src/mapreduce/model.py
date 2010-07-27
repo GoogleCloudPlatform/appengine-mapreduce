@@ -117,8 +117,11 @@ class JsonProperty(db.UnindexedProperty):
     value = super(JsonProperty, self).get_value_for_datastore(model_instance)
     if not value:
       return None
+    json_value = value.to_json()
+    if not json_value:
+      return None
     return datastore_types.Text(simplejson.dumps(
-        value.to_json(), sort_keys=True))
+        json_value, sort_keys=True))
 
   def make_value_from_datastore(self, value):
     """Convert value from datastore representation.
