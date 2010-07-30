@@ -41,7 +41,11 @@ public class AllTests extends TestCase {
     suite.addTestSuite(QuotaConsumerTest.class);
     suite.addTestSuite(QuotaManagerTest.class);
     suite.addTestSuite(StringSplitUtilTest.class);
+    suite.addTestSuite(BlobstoreInputFormatTest.class);
+    suite.addTestSuite(BlobstoreInputSplitTest.class);
+    suite.addTestSuite(BlobstoreReadableByteChannelFactoryTest.class);
+    suite.addTestSuite(BlobstoreRecordReaderTest.class);
+    suite.addTestSuite(InputStreamIteratorTest.class);
     return suite;
   }
-
 }
