@@ -715,7 +715,7 @@ public class MapReduceServletTest extends TestCase {
         , retObject);
   }
   
-  public void testStaticResources() throws Exception {
+  public void testStaticResources_status() throws Exception {
     HttpServletResponse resp = createMock(HttpServletResponse.class);
     resp.setContentType("text/html");
     resp.setHeader("Cache-Control", "public; max-age=300");
@@ -729,7 +729,22 @@ public class MapReduceServletTest extends TestCase {
     servlet.handleStaticResources("status", resp);
     verify(resp, sos);
   }
-  
+
+  public void testStaticResources_jQuery() throws Exception {
+    HttpServletResponse resp = createMock(HttpServletResponse.class);
+    resp.setContentType("text/javascript");
+    resp.setHeader("Cache-Control", "public; max-age=300");
+    ServletOutputStream sos = createMock(ServletOutputStream.class);
+    expect(resp.getOutputStream()).andReturn(sos);
+    sos.write((byte[]) EasyMock.anyObject(), EasyMock.eq(0), EasyMock.anyInt());
+    EasyMock.expectLastCall().atLeastOnce();
+    sos.flush();
+    EasyMock.expectLastCall().anyTimes();
+    replay(resp, sos);
+    servlet.handleStaticResources("jquery.js", resp);
+    verify(resp, sos);
+  }
+
   // Tests that an job that has just been initialized returns a reasonable
   // job detail.
   public void testGetJobDetail_empty() throws Exception {
