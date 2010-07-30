@@ -135,4 +135,34 @@ public class InputStreamIteratorTest extends TestCase {
     long start = byteContentOffsets.get(startIndex);
     test(start, start, false, startIndex, startIndex + 1);
   }
+
+  /**
+   * Makes sure that the basic method of offset record pair behave correctly,
+   */
+  public void test_offsetRecordPair() throws Exception {
+    byte[] testArray1 = new byte[]{0x20, 0x40};
+    // Logically equal to array 1, but not referentially equal
+    byte[] testArray1copy = new byte[]{0x20, 0x40};
+    byte[] testArray2 = new byte[]{0x30};
+    byte[] testArray3 = null;
+    long offset1 = 10;
+    long offset2 = 4;
+    InputStreamIterator.OffsetRecordPair pair11 = new InputStreamIterator.OffsetRecordPair(
+        offset1, testArray1);
+    InputStreamIterator.OffsetRecordPair pair21 = new InputStreamIterator.OffsetRecordPair(
+        offset2, testArray1);
+    InputStreamIterator.OffsetRecordPair pair11copy = new InputStreamIterator.OffsetRecordPair(
+        offset1, testArray1copy);
+    InputStreamIterator.OffsetRecordPair pair12 = new InputStreamIterator.OffsetRecordPair(
+        offset1, testArray2);
+    InputStreamIterator.OffsetRecordPair pair13 = new InputStreamIterator.OffsetRecordPair(
+        offset1, testArray3);
+    assertEquals(pair11, pair11copy);
+    assertFalse(pair11.equals(pair21));
+    assertFalse(pair11.equals(pair12));
+    assertFalse(pair11.equals(pair13));
+    assertFalse(pair11.equals("foo"));
+    assertFalse(pair11.equals(null));
+    assertEquals(pair11.hashCode(), pair11copy.hashCode());
+  }
 }

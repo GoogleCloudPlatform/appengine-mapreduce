@@ -22,6 +22,7 @@ import com.google.common.io.CountingInputStream;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.Arrays;
 import java.util.Iterator;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -33,8 +34,8 @@ import java.util.logging.Logger;
  */
 class InputStreamIterator implements Iterator<InputStreamIterator.OffsetRecordPair> {
   public static class OffsetRecordPair {
-    private long offset;
-    private byte[] record;
+    final private long offset;
+    final private byte[] record;
 
     public OffsetRecordPair(long offset, byte[] record) {
       this.offset = offset;
@@ -47,6 +48,19 @@ class InputStreamIterator implements Iterator<InputStreamIterator.OffsetRecordPa
 
     public byte[] getRecord() {
       return record;
+    }
+
+    public boolean equals(Object rhs) {
+      if (!(rhs instanceof OffsetRecordPair)) {
+        return false;
+      }
+      OffsetRecordPair rhsPair = (OffsetRecordPair) rhs;
+      return offset == rhsPair.getOffset()
+          && Arrays.equals(record, rhsPair.getRecord());
+    }
+
+    public int hashCode() {
+      return new Long(offset).hashCode() ^ Arrays.hashCode(record);
     }
   }
 
