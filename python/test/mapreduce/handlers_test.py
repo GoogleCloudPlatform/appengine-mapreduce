@@ -397,6 +397,14 @@ class StartJobHandlerTest(MapreduceHandlerTestBase):
     self.handler.request.set("mapper_params.entity_kind",
                              (__name__ + "." + TestEntity.__name__))
 
+    self.handler.request.headers["X-AppEngine-QueueName"] = "default"
+
+  def testCSRF(self):
+    """Tests that that handler only accepts requests from the task queue."""
+    del self.handler.request.headers["X-AppEngine-QueueName"]
+    self.handler.post()
+    self.assertEquals(403, self.handler.response.status)
+
   def testSmoke(self):
     """Verifies main execution path of starting scan over several entities."""
     TestEntity().put()
@@ -609,6 +617,14 @@ class KickOffJobHandlerTest(MapreduceHandlerTestBase):
         "input_readers",
         simplejson.dumps([r.to_json_str() for r in self.input_readers]))
 
+    self.handler.request.headers["X-AppEngine-QueueName"] = "default"
+
+  def testCSRF(self):
+    """Tests that that handler only accepts requests from the task queue."""
+    del self.handler.request.headers["X-AppEngine-QueueName"]
+    self.handler.post()
+    self.assertEquals(403, self.handler.response.status)
+
   def testSmoke(self):
     """Verifies main execution path of starting scan over several entities."""
     self.handler.post()
@@ -712,6 +728,14 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
     self.quota_manager = quota.QuotaManager(memcache.Client())
     self.initial_quota = 100000
     self.quota_manager.set(self.shard_id, self.initial_quota)
+
+    self.handler.request.headers["X-AppEngine-QueueName"] = "default"
+
+  def testCSRF(self):
+    """Tests that that handler only accepts requests from the task queue."""
+    del self.handler.request.headers["X-AppEngine-QueueName"]
+    self.handler.post()
+    self.assertEquals(403, self.handler.response.status)
 
   def testSmoke(self):
     """Test main execution path of entity scanning."""
@@ -1096,6 +1120,8 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
     self.handler.request.set("serial_id", "1234")
     self.quota_manager = quota.QuotaManager(memcache.Client())
 
+    self.handler.request.headers["X-AppEngine-QueueName"] = "default"
+
   def verify_done_task(self):
     tasks = self.taskqueue.GetTasks("crazy-queue")
     self.assertEquals(1, len(tasks))
@@ -1106,6 +1132,12 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
     self.assertEquals("POST", task["method"])
     headers = dict(task["headers"])
     self.assertEquals(self.mapreduce_id, headers["Mapreduce-Id"])
+
+  def testCSRF(self):
+    """Tests that that handler only accepts requests from the task queue."""
+    del self.handler.request.headers["X-AppEngine-QueueName"]
+    self.handler.post()
+    self.assertEquals(403, self.handler.response.status)
 
   def testSmoke(self):
     """Verify main execution path.

@@ -63,7 +63,7 @@ class NoDataError(Error):
   """There is no data present for a desired input."""
 
 
-class MapperWorkerCallbackHandler(base_handler.BaseHandler):
+class MapperWorkerCallbackHandler(base_handler.TaskQueueHandler):
   """Callback handler for mapreduce worker task.
 
   Request Parameters:
@@ -78,11 +78,11 @@ class MapperWorkerCallbackHandler(base_handler.BaseHandler):
     Args:
       time_function: time function to use to obtain current time.
     """
-    base_handler.BaseHandler.__init__(self)
+    base_handler.TaskQueueHandler.__init__(self)
     self._time = time_function
 
-  def post(self):
-    """Handle post request."""
+  def handle(self):
+    """Handle request."""
     spec = model.MapreduceSpec.from_json_str(
         self.request.get("mapreduce_spec"))
     self._start_time = self._time()
@@ -337,7 +337,7 @@ class MapperWorkerCallbackHandler(base_handler.BaseHandler):
                       task_name, task_params, e.__class__, e)
 
 
-class ControllerCallbackHandler(base_handler.BaseHandler):
+class ControllerCallbackHandler(base_handler.TaskQueueHandler):
   """Supervises mapreduce execution.
 
   Is also responsible for gathering execution status from shards together.
@@ -352,11 +352,11 @@ class ControllerCallbackHandler(base_handler.BaseHandler):
     Args:
       time_function: time function to use to obtain current time.
     """
-    base_handler.BaseHandler.__init__(self)
+    base_handler.TaskQueueHandler.__init__(self)
     self._time = time_function
 
-  def post(self):
-    """Handle post request."""
+  def handle(self):
+    """Handle request."""
     spec = model.MapreduceSpec.from_json_str(
         self.request.get("mapreduce_spec"))
 
@@ -558,7 +558,7 @@ class ControllerCallbackHandler(base_handler.BaseHandler):
                       task_name, task_params, e.__class__, e)
 
 
-class KickOffJobHandler(base_handler.BaseHandler):
+class KickOffJobHandler(base_handler.TaskQueueHandler):
   """Taskqueue handler which kicks off a mapreduce processing.
 
   Request Parameters:
@@ -566,7 +566,7 @@ class KickOffJobHandler(base_handler.BaseHandler):
     input_readers: List of InputReaders objects separated by semi-colons.
   """
 
-  def post(self):
+  def handle(self):
     """Handles kick off request."""
     spec = model.MapreduceSpec.from_json_str(
         self._get_required_param("mapreduce_spec"))
