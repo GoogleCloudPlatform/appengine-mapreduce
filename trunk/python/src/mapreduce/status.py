@@ -167,22 +167,47 @@ class MapReduceYaml(validation.Validated):
 # N.B. Sadly, we currently don't have and ability to determine
 # application root dir at run time. We need to walk up the directory structure
 # to find it.
-def find_mapreduce_yaml():
-  """Traverse up from current directory and find mapreduce.yaml file.
+def find_mapreduce_yaml(status_file=__file__):
+  """Traverse directory trees to find mapreduce.yaml file.
+
+  Begins with the location of status.py and then moves on to check the working
+  directory.
+
+  Args:
+    status_file: location of status.py, overridable for testing purposes.
 
   Returns:
     the path of mapreduce.yaml file or None if not found.
   """
-  dir = os.path.dirname(__file__)
-  while dir:
+  checked = set()
+  yaml = _find_mapreduce_yaml(os.path.dirname(status_file), checked)
+  if not yaml:
+    yaml = _find_mapreduce_yaml(os.getcwd(), checked)
+  return yaml
+
+
+def _find_mapreduce_yaml(start, checked):
+  """Traverse the directory tree identified by start until a directory already
+  in checked is encountered or the path of mapreduce.yaml is found.
+
+  Checked is present both to make loop termination easy to reason about and so
+  that the same directories do not get rechecked.
+
+  Args:
+    start: the path to start in and work upward from
+    checked: the set of already examined directories
+
+  Returns:
+    the path of mapreduce.yaml file or None if not found.
+  """
+  dir = start
+  while dir not in checked:
+    checked.add(dir)
     for mr_yaml_name in MR_YAML_NAMES:
       yaml_path = os.path.join(dir, mr_yaml_name)
       if os.path.exists(yaml_path):
         return yaml_path
-    parent = os.path.dirname(dir)
-    if parent == dir:
-      break
-    dir = parent
+    dir = os.path.dirname(dir)
   return None
 
 

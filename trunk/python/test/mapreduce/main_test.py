@@ -18,6 +18,7 @@
 
 
 
+import re
 import unittest
 
 from mapreduce import main
@@ -33,6 +34,36 @@ class MainTest(unittest.TestCase):
     """
     main.create_application()
 
+  def testRedirectRegularExpression(self):
+    """Verify that depth of mapped path does not impact redirect RE matching."""
+    basepath = '/mapreduce'
+    extensions = {'': True, '/': True, '/resource.css': False, '/status': False}
+    self.redirectMatchesExtensions(basepath, extensions)
+    basepath = '/_ah/mapper'
+    self.redirectMatchesExtensions(basepath, extensions)
+    basepath = '/contains/status/but/does/not/end/in/it'
+    self.redirectMatchesExtensions(basepath, extensions)
+
+  def redirectMatchesExtensions(self, basepath, extensions):
+    """Iterates over extensions to assert whether or not regex should match."""
+    for ext, should_match in extensions.iteritems():
+      if should_match:
+        self.assertMatches(basepath+ext, main.REDIRECT_RE)
+      else:
+        self.assertNotMatches(basepath+ext, main.REDIRECT_RE)
+
+  def assertMatches(self, text, regex):
+    """Corresponding re.match version of assertRegexpMatches."""
+    m = re.match(regex, text)
+    if not m:
+      self.fail('Text %s was not matched by pattern %s.' % (text, regex))
+
+  def assertNotMatches(self, text, regex):
+    """Corresponding re.match version of assertNotRegexpMatches."""
+    m = re.match(regex, text)
+    if m:
+      self.fail('Text %s was matched by pattern %s as %s.'
+                % (text, regex, m.group(0)))
 
 if __name__ == '__main__':
   unittest.main()
