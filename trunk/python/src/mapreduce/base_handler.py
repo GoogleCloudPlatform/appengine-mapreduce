@@ -34,6 +34,25 @@ class BaseHandler(webapp.RequestHandler):
     path = self.request.path
     return path[:path.rfind("/")]
 
+class TaskQueueHandler(BaseHandler):
+  """Base class for handlers intended to be run only from the task queue.
+
+  Sub-classes should implement the 'handle' method.
+  """
+
+  def post(self):
+    if "X-AppEngine-QueueName" not in self.request.headers:
+      logging.error(self.request.headers)
+      logging.error("Task queue handler received non-task queue request")
+      self.response.set_status(
+          403, message="Task queue handler received non-task queue request")
+      return
+    self.handle()
+
+  def handle(self):
+    """To be implemented by subclasses."""
+    raise NotImplementedError()
+
 
 class JsonHandler(BaseHandler):
   """Base class for JSON handlers for user interface.
@@ -49,10 +68,14 @@ class JsonHandler(BaseHandler):
     super(BaseHandler, self).__init__()
     self.json_response = {}
 
-  def get(self):
-    self.post()
-
   def post(self):
+    if self.request.headers.get("X-Requested-With") != "XMLHttpRequest":
+      logging.error(self.request.headers)
+      logging.error("Got JSON request with no X-Requested-With header")
+      self.response.set_status(
+          403, message="Got JSON request with no X-Requested-With header")
+      return
+
     self.json_response.clear()
     try:
       self.handle()

@@ -281,6 +281,13 @@ class ListConfigsTest(testutil.HandlerTestBase):
     self.handler.initialize(mock_webapp.MockRequest(),
                             mock_webapp.MockResponse())
     self.handler.request.path = "/mapreduce/path"
+    self.handler.request.headers["X-Requested-With"] = "XMLHttpRequest"
+
+  def testCSRF(self):
+    """Test that we check the X-Requested-With header."""
+    del self.handler.request.headers["X-Requested-With"]
+    self.handler.post()
+    self.assertEquals(403, self.handler.response.status)
 
   def testBasic(self):
     """Tests listing available configs."""
@@ -306,7 +313,7 @@ class ListConfigsTest(testutil.HandlerTestBase):
         "  - name: foo\n"
         "    value: bar\n")
     try:
-      self.handler.get()
+      self.handler.post()
     finally:
       status.get_mapreduce_yaml = old_get_yaml
 
@@ -346,11 +353,26 @@ class ListJobsTest(testutil.HandlerTestBase):
         "mapreduce.input_readers.DatastoreInputReader")
     self.start.request.set("mapper_handler", "__main__.TestMap")
     self.start.request.set("mapper_params.entity_kind", "__main__.TestKind")
+    self.start.request.headers["X-Requested-With"] = "XMLHttpRequest"
 
     self.handler = status.ListJobsHandler()
     self.handler.initialize(mock_webapp.MockRequest(),
                             mock_webapp.MockResponse())
     self.handler.request.path = "/mapreduce/list"
+
+    self.handler.request.headers["X-Requested-With"] = "XMLHttpRequest"
+
+  def testCSRF(self):
+    """Test that we check the X-Requested-With header."""
+    TestKind().put()
+
+    del self.start.request.headers["X-Requested-With"]
+    self.start.post()
+    self.assertEquals(403, self.start.response.status)
+
+    del self.handler.request.headers["X-Requested-With"]
+    self.handler.post()
+    self.assertEquals(403, self.handler.response.status)
 
   def testBasic(self):
     """Tests when there are fewer than the max results to render."""
@@ -422,6 +444,9 @@ class GetJobDetailTest(testutil.HandlerTestBase):
         "mapreduce.input_readers.DatastoreInputReader")
     self.start.request.set("mapper_handler", "__main__.TestMap")
     self.start.request.set("mapper_params.entity_kind", "__main__.TestKind")
+
+    self.start.request.headers["X-Requested-With"] = "XMLHttpRequest"
+
     self.start.post()
     result = simplejson.loads(self.start.response.out.getvalue())
     self.mapreduce_id = result["mapreduce_id"]
@@ -431,6 +456,8 @@ class GetJobDetailTest(testutil.HandlerTestBase):
                             mock_webapp.MockResponse())
     self.handler.request.path = "/mapreduce/list"
 
+    self.handler.request.headers["X-Requested-With"] = "XMLHttpRequest"
+
   def kickOffMapreduce(self):
     """Executes pending kickoff task."""
     kickoff_task = self.taskqueue.GetTasks("default")[0]
@@ -439,8 +466,15 @@ class GetJobDetailTest(testutil.HandlerTestBase):
     handler.request.path = "/mapreduce/kickoffjob_callback"
     handler.request.params.update(
         cgi.parse_qsl(base64.b64decode(kickoff_task["body"])))
+    handler.request.headers["X-AppEngine-QueueName"] = "default"
     handler.post()
     self.taskqueue.DeleteTask("default", kickoff_task["name"])
+
+  def testCSRF(self):
+    """Test that we check the X-Requested-With header."""
+    del self.handler.request.headers["X-Requested-With"]
+    self.handler.post()
+    self.assertEquals(403, self.handler.response.status)
 
   def testBasic(self):
     """Tests getting the job details."""
