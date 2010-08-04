@@ -20,7 +20,10 @@
 
 import base64
 import cgi
+import os
 from mapreduce.lib import simplejson
+import shutil
+import tempfile
 import unittest
 
 from google.appengine.api import yaml_errors
@@ -44,6 +47,55 @@ def TestMap(entity):
 
 class MapreduceYamlTest(unittest.TestCase):
   """Testing mapreduce.yaml-related functionality."""
+
+  def set_up_directory_tree(self, dir_tree_contents):
+    """Create directory tree from dict of path:contents entries."""
+    for full_path, contents in dir_tree_contents.iteritems():
+      dir_name = os.path.dirname(full_path)
+      if not os.path.isdir(dir_name):
+        os.makedirs(dir_name)
+      f = open(full_path, 'w')
+      f.write(contents)
+      f.close()
+
+  def setUp(self):
+    """Initialize temporary application variable."""
+    self.tempdir = tempfile.mkdtemp()
+
+  def tearDown(self):
+    """Remove temporary application directory."""
+    if self.tempdir:
+      shutil.rmtree(self.tempdir)
+
+  def testFindYamlFile(self):
+    """Test if mapreduce.yaml can be found with different app/library trees."""
+    test_status = os.path.join(self.tempdir, "library_root", "google",
+                               "appengine", "ext", "mapreduce", "status.py")
+    test_mapreduce_yaml = os.path.join(self.tempdir, "application_root",
+                                       "mapreduce.yaml")
+    test_dict = {
+        test_status: "test",
+        test_mapreduce_yaml: "test",
+    }
+    self.set_up_directory_tree(test_dict)
+    os.chdir(os.path.dirname(test_mapreduce_yaml))
+    yaml_loc = status.find_mapreduce_yaml(status_file=test_status)
+    self.assertEqual(test_mapreduce_yaml, yaml_loc)
+
+  def testFindYamlFileSameTree(self):
+    """Test if mapreduce.yaml can be found with the same app/library tree."""
+    test_status = os.path.join(self.tempdir, "application_root", "google",
+                               "appengine", "ext", "mapreduce", "status.py")
+    test_mapreduce_yaml = os.path.join(self.tempdir, "application_root",
+                                       "mapreduce.yaml")
+    test_dict = {
+        test_status: "test",
+        test_mapreduce_yaml: "test",
+    }
+    self.set_up_directory_tree(test_dict)
+    os.chdir(os.path.dirname(test_mapreduce_yaml))
+    yaml_loc = status.find_mapreduce_yaml(status_file=test_status)
+    self.assertEqual(test_mapreduce_yaml, yaml_loc)
 
   def testParseEmptyFile(self):
     """Parsing empty mapreduce.yaml file."""
