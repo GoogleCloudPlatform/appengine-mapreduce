@@ -286,7 +286,7 @@ class ListConfigsTest(testutil.HandlerTestBase):
   def testCSRF(self):
     """Test that we check the X-Requested-With header."""
     del self.handler.request.headers["X-Requested-With"]
-    self.handler.post()
+    self.handler.get()
     self.assertEquals(403, self.handler.response.status)
 
   def testBasic(self):
@@ -313,7 +313,7 @@ class ListConfigsTest(testutil.HandlerTestBase):
         "  - name: foo\n"
         "    value: bar\n")
     try:
-      self.handler.post()
+      self.handler.get()
     finally:
       status.get_mapreduce_yaml = old_get_yaml
 
@@ -371,7 +371,7 @@ class ListJobsTest(testutil.HandlerTestBase):
     self.assertEquals(403, self.start.response.status)
 
     del self.handler.request.headers["X-Requested-With"]
-    self.handler.post()
+    self.handler.get()
     self.assertEquals(403, self.handler.response.status)
 
   def testBasic(self):
@@ -384,7 +384,7 @@ class ListJobsTest(testutil.HandlerTestBase):
     self.start.request.set("name", "my job 3")
     self.start.post()
 
-    self.handler.post()
+    self.handler.get()
     result = simplejson.loads(self.handler.response.out.getvalue())
     expected_args = set([
         "name", "updated_timestamp_ms", "shards", "start_timestamp_ms",
@@ -406,7 +406,7 @@ class ListJobsTest(testutil.HandlerTestBase):
     self.start.post()
 
     self.handler.request.set("count", "1")
-    self.handler.post()
+    self.handler.get()
     result = simplejson.loads(self.handler.response.out.getvalue())
     self.assertEquals(1, len(result["jobs"]))
     self.assertTrue("cursor" in result)
@@ -414,14 +414,14 @@ class ListJobsTest(testutil.HandlerTestBase):
     self.handler.response.out.truncate(0)
     self.handler.request.set("count", "1")
     self.handler.request.set("cursor", result['cursor'])
-    self.handler.post()
+    self.handler.get()
     result2 = simplejson.loads(self.handler.response.out.getvalue())
     self.assertEquals(1, len(result2["jobs"]))
     self.assertFalse("cursor" in result2)
 
   def testNoJobs(self):
     """Tests when there are no jobs."""
-    self.handler.post()
+    self.handler.get()
     result = simplejson.loads(self.handler.response.out.getvalue())
     self.assertEquals({'jobs': []}, result)
 
@@ -458,7 +458,7 @@ class GetJobDetailTest(testutil.HandlerTestBase):
 
     self.handler.request.headers["X-Requested-With"] = "XMLHttpRequest"
 
-  def kickOffMapreduce(self):
+  def KickOffMapreduce(self):
     """Executes pending kickoff task."""
     kickoff_task = self.taskqueue.GetTasks("default")[0]
     handler = handlers.KickOffJobHandler()
@@ -473,14 +473,14 @@ class GetJobDetailTest(testutil.HandlerTestBase):
   def testCSRF(self):
     """Test that we check the X-Requested-With header."""
     del self.handler.request.headers["X-Requested-With"]
-    self.handler.post()
+    self.handler.get()
     self.assertEquals(403, self.handler.response.status)
 
   def testBasic(self):
     """Tests getting the job details."""
-    self.kickOffMapreduce()
+    self.KickOffMapreduce()
     self.handler.request.set("mapreduce_id", self.mapreduce_id)
-    self.handler.post()
+    self.handler.get()
     result = simplejson.loads(self.handler.response.out.getvalue())
 
     expected_keys = set([
@@ -499,7 +499,7 @@ class GetJobDetailTest(testutil.HandlerTestBase):
   def testBeforeKickOff(self):
     """Tests getting the job details."""
     self.handler.request.set("mapreduce_id", self.mapreduce_id)
-    self.handler.post()
+    self.handler.get()
     result = simplejson.loads(self.handler.response.out.getvalue())
 
     expected_keys = set([
@@ -512,7 +512,7 @@ class GetJobDetailTest(testutil.HandlerTestBase):
   def testBadJobId(self):
     """Tests when an invalid job ID is supplied."""
     self.handler.request.set("mapreduce_id", "does not exist")
-    self.handler.post()
+    self.handler.get()
     result = simplejson.loads(self.handler.response.out.getvalue())
     self.assertEquals(
         {"error_message": "\"Could not find job with ID 'does not exist'\"",

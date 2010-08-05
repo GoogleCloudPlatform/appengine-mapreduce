@@ -68,7 +68,7 @@ class JsonHandler(BaseHandler):
     super(BaseHandler, self).__init__()
     self.json_response = {}
 
-  def post(self):
+  def _handle_wrapper(self):
     if self.request.headers.get("X-Requested-With") != "XMLHttpRequest":
       logging.error(self.request.headers)
       logging.error("Got JSON request with no X-Requested-With header")
@@ -99,3 +99,17 @@ class JsonHandler(BaseHandler):
   def handle(self):
     """To be implemented by sub-classes."""
     raise NotImplementedError()
+
+
+class PostJsonHandler(JsonHandler):
+  """JSON handler that accepts POST requests."""
+
+  def post(self):
+    self._handle_wrapper()
+
+
+class GetJsonHandler(JsonHandler):
+  """JSON handler that accepts GET posts."""
+
+  def get(self):
+    self._handle_wrapper()

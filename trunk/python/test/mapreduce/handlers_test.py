@@ -45,6 +45,7 @@ from google.appengine.api.memcache import memcache_stub
 from google.appengine.ext import db
 from mapreduce.lib import key_range
 from mapreduce import context
+from mapreduce import control
 from mapreduce import handlers
 from mapreduce import input_readers
 from mapreduce import model
@@ -56,6 +57,17 @@ from testlib import mock_webapp
 MAPPER_PARAMS = {"batch_size": 50}
 PARAM_DONE_CALLBACK = model.MapreduceSpec.PARAM_DONE_CALLBACK
 PARAM_DONE_CALLBACK_QUEUE = model.MapreduceSpec.PARAM_DONE_CALLBACK_QUEUE
+
+
+class TestKind(db.Model):
+  """Used for testing."""
+
+  foobar = db.StringProperty(default="meep")
+
+
+def TestMap(entity):
+  """Used for testing."""
+  pass
 
 
 class TestException(Exception):
@@ -397,18 +409,18 @@ class StartJobHandlerTest(MapreduceHandlerTestBase):
     self.handler.request.set("mapper_params.entity_kind",
                              (__name__ + "." + TestEntity.__name__))
 
-    self.handler.request.headers["X-AppEngine-QueueName"] = "default"
+    self.handler.request.headers["X-Requested-With"] = "XMLHttpRequest"
 
   def testCSRF(self):
-    """Tests that that handler only accepts requests from the task queue."""
-    del self.handler.request.headers["X-AppEngine-QueueName"]
+    """Tests that that handler only accepts AJAX requests."""
+    del self.handler.request.headers["X-Requested-With"]
     self.handler.post()
     self.assertEquals(403, self.handler.response.status)
 
   def testSmoke(self):
     """Verifies main execution path of starting scan over several entities."""
     TestEntity().put()
-    self.handler.handle()
+    self.handler.post()
 
     # Only kickoff task should be there.
     tasks = self.taskqueue.GetTasks("default")
@@ -439,7 +451,7 @@ class StartJobHandlerTest(MapreduceHandlerTestBase):
     apiproxy_stub_map.apiproxy.GetStub("datastore_v3").SetTrusted(True)
     self.handler.request.set("mapper_params._app", "otherapp")
     TestEntity(_app="otherapp").put()
-    self.handler.handle()
+    self.handler.post()
 
     # Only kickoff task should be there.
     tasks = self.taskqueue.GetTasks("default")
@@ -469,7 +481,7 @@ class StartJobHandlerTest(MapreduceHandlerTestBase):
   def testRequiredParams(self):
     """Tests that required parameters are enforced."""
     TestEntity().put()
-    self.handler.handle()
+    self.handler.post()
 
     self.handler.request.set("name", None)
     self.assertRaises(handlers.NotEnoughArgumentsError, self.handler.handle)
@@ -490,7 +502,7 @@ class StartJobHandlerTest(MapreduceHandlerTestBase):
 
     self.handler.request.set("mapper_params.entity_kind",
                              (__name__ + "." + TestEntity.__name__))
-    self.handler.handle()
+    self.handler.post()
 
   def testParameterValidationSuccess(self):
     """Tests validating user-supplied parameters."""
@@ -499,7 +511,7 @@ class StartJobHandlerTest(MapreduceHandlerTestBase):
     self.handler.request.set("mapper_params.two", "green")
     self.handler.request.set("mapper_params_validator",
                              __name__ + ".test_param_validator_success")
-    self.handler.handle()
+    self.handler.post()
     params = model.MapreduceState.all().get().mapreduce_spec.mapper.params
     self.assertEquals(["red", "blue"], params["one"])
     self.assertEquals("green", params["two"])
@@ -519,7 +531,7 @@ class StartJobHandlerTest(MapreduceHandlerTestBase):
     self.handler.request.set("params.two", "green")
     self.handler.request.set("params_validator",
                              __name__ + ".test_param_validator_success")
-    self.handler.handle()
+    self.handler.post()
     params = model.MapreduceState.all().get().mapreduce_spec.params
     self.assertEquals(["red", "blue"], params["one"])
     self.assertEquals("green", params["two"])
@@ -560,7 +572,7 @@ class StartJobHandlerTest(MapreduceHandlerTestBase):
     """Tests that the optional queue_name parameter is used."""
     TestEntity().put()
     self.handler.request.set("mapper_params.queue_name", "crazy-queue")
-    self.handler.handle()
+    self.handler.post()
     self.assertEquals(
         "crazy-queue",
         model.MapreduceState.all().get()
@@ -572,7 +584,7 @@ class StartJobHandlerTest(MapreduceHandlerTestBase):
     """Tests that the optional processing rate parameter is used."""
     TestEntity().put()
     self.handler.request.set("mapper_params.processing_rate", "1234")
-    self.handler.handle()
+    self.handler.post()
     self.assertEquals(
         1234,
         model.MapreduceState.all().get()
@@ -582,7 +594,7 @@ class StartJobHandlerTest(MapreduceHandlerTestBase):
     """Tests that the optional shard count parameter is used."""
     TestEntity().put()
     self.handler.request.set("mapper_params.shard_count", "9")
-    self.handler.handle()
+    self.handler.post()
     self.assertEquals(
         8,  # Nearest power of two split.
         model.MapreduceState.all().get().mapreduce_spec.mapper.shard_count)
@@ -1414,6 +1426,64 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
       self.verify_controller_task(tasks[0], shard_count=3)
     finally:
       del os.environ["HTTP_X_APPENGINE_QUEUENAME"]
+
+
+class CleanUpJobTest(testutil.HandlerTestBase):
+  """Tests cleaning up jobs."""
+
+  def setUp(self):
+    """Sets up the test harness."""
+    testutil.HandlerTestBase.setUp(self)
+
+    TestKind().put()
+    self.mapreduce_id = control.start_map(
+        "my job 1",
+        "__main__.TestMap",
+        "mapreduce.input_readers.DatastoreInputReader",
+        {"entity_kind": "__main__.TestKind"},
+        4)
+
+    self.handler = handlers.CleanUpJobHandler()
+    self.handler.initialize(mock_webapp.MockRequest(),
+                            mock_webapp.MockResponse())
+    self.handler.request.path = "/mapreduce/clean_up_job"
+
+    self.handler.request.headers["X-Requested-With"] = "XMLHttpRequest"
+
+  def KickOffMapreduce(self):
+    """Executes pending kickoff task."""
+    kickoff_task = self.taskqueue.GetTasks("default")[0]
+    handler = handlers.KickOffJobHandler()
+    handler.initialize(mock_webapp.MockRequest(), mock_webapp.MockResponse())
+    handler.request.path = "/mapreduce/kickoffjob_callback"
+    handler.request.params.update(
+        cgi.parse_qsl(base64.b64decode(kickoff_task["body"])))
+    handler.request.headers["X-AppEngine-QueueName"] = "default"
+    handler.post()
+    self.taskqueue.DeleteTask("default", kickoff_task["name"])
+
+  def testCSRF(self):
+    """Test that we check the X-Requested-With header."""
+    del self.handler.request.headers["X-Requested-With"]
+    self.handler.post()
+    self.assertEquals(403, self.handler.response.status)
+
+  def testBasic(self):
+    """Tests cleaning up the job.
+
+    Note: This cleans up a running mapreduce, but that's okay because
+    the prohibition against doing so is done on the client side.
+    """
+    self.KickOffMapreduce()
+    key = model.MapreduceState.get_key_by_job_id(self.mapreduce_id)
+    self.assertTrue(db.get(key))
+    self.handler.request.set("mapreduce_id", self.mapreduce_id)
+    self.handler.post()
+    result = simplejson.loads(self.handler.response.out.getvalue())
+    self.assertEquals({"status": ("Job %s successfully cleaned up." %
+                                  self.mapreduce_id) },
+                      result)
+    self.assertFalse(db.get(key))
 
 
 if __name__ == "__main__":
