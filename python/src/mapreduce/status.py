@@ -293,14 +293,14 @@ class ResourceHandler(base_handler.BaseHandler):
     self.response.out.write(open(path).read())
 
 
-class ListConfigsHandler(base_handler.JsonHandler):
+class ListConfigsHandler(base_handler.GetJsonHandler):
   """Lists mapreduce configs as JSON for users to start jobs."""
 
   def handle(self):
     self.json_response["configs"] = MapReduceYaml.to_dict(get_mapreduce_yaml())
 
 
-class ListJobsHandler(base_handler.JsonHandler):
+class ListJobsHandler(base_handler.GetJsonHandler):
   """Lists running and completed mapreduce jobs for an overview as JSON."""
 
   def handle(self):
@@ -341,7 +341,7 @@ class ListJobsHandler(base_handler.JsonHandler):
     self.json_response["jobs"] = all_jobs
 
 
-class GetJobDetailHandler(base_handler.JsonHandler):
+class GetJobDetailHandler(base_handler.GetJsonHandler):
   """Retrieves the details of a mapreduce job as JSON."""
 
   def handle(self):

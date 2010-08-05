@@ -34,7 +34,7 @@ from mapreduce import handlers
 from mapreduce import status
 
 
-REDIRECT_RE = r"^/[^\.]*(?<!status)$"
+STATIC_RE = r".*/([^/]*\.(?:css|js)|status|detail)$"
 
 
 class RedirectHandler(webapp.RequestHandler):
@@ -70,11 +70,11 @@ def create_application():
       (r".*/command/list_jobs", status.ListJobsHandler),
       (r".*/command/get_job_detail", status.GetJobDetailHandler),
 
-      # Redirect non-file URLs that do not end in status to status page
-      (REDIRECT_RE, RedirectHandler),
-
       # UI static files
-      (r".+/([a-zA-Z0-9]+(?:\.(?:css|js))?)", status.ResourceHandler),
+      (STATIC_RE, status.ResourceHandler),
+
+      # Redirect non-file URLs that do not end in status to status page
+      (r".*", RedirectHandler),
   ],
   debug=True)
 

@@ -637,7 +637,7 @@ class KickOffJobHandler(base_handler.TaskQueueHandler):
           base_path, spec, shard_id, 0, input_reader, queue_name=queue_name)
 
 
-class StartJobHandler(base_handler.JsonHandler):
+class StartJobHandler(base_handler.PostJsonHandler):
   """Command handler starts a mapreduce job."""
 
   def handle(self):
@@ -769,16 +769,24 @@ class StartJobHandler(base_handler.JsonHandler):
     return state.key().id_or_name()
 
 
-class CleanUpJobHandler(base_handler.JsonHandler):
+class CleanUpJobHandler(base_handler.PostJsonHandler):
   """Command to kick off tasks to clean up a job's data."""
 
   def handle(self):
-    # TODO(user): Have this kick off a task to clean up all MapreduceState,
-    # ShardState, and MapreduceControl entities for a job ID.
-    self.json_response["status"] = "This does nothing yet."
+    mapreduce_id = self.request.get("mapreduce_id")
+    db.delete(model.MapreduceControl.get_key_by_job_id(mapreduce_id))
+
+    shards = model.ShardState.find_by_mapreduce_id(mapreduce_id)
+    db.delete(shards)
+
+    state = model.MapreduceState.get_key_by_job_id(mapreduce_id)
+    db.delete(state)
+
+    self.json_response["status"] = ("Job %s successfully cleaned up." %
+                                    mapreduce_id)
 
 
-class AbortJobHandler(base_handler.JsonHandler):
+class AbortJobHandler(base_handler.PostJsonHandler):
   """Command to abort a running job."""
 
   def handle(self):

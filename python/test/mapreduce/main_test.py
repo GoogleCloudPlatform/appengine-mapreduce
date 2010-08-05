@@ -35,22 +35,26 @@ class MainTest(unittest.TestCase):
     main.create_application()
 
   def testRedirectRegularExpression(self):
-    """Verify that depth of mapped path does not impact redirect RE matching."""
+    """Verify that depth of mapped path does not impact static RE matching."""
     basepath = '/mapreduce'
-    extensions = {'': True, '/': True, '/resource.css': False, '/status': False}
-    self.redirectMatchesExtensions(basepath, extensions)
+    extensions = {'': False,
+                  '/': False,
+                  '/resource.css': True,
+                  '/status': True,
+                  '/detail': True}
+    self.staticMatchesExtensions(basepath, extensions)
     basepath = '/_ah/mapper'
-    self.redirectMatchesExtensions(basepath, extensions)
+    self.staticMatchesExtensions(basepath, extensions)
     basepath = '/contains/status/but/does/not/end/in/it'
-    self.redirectMatchesExtensions(basepath, extensions)
+    self.staticMatchesExtensions(basepath, extensions)
 
-  def redirectMatchesExtensions(self, basepath, extensions):
+  def staticMatchesExtensions(self, basepath, extensions):
     """Iterates over extensions to assert whether or not regex should match."""
     for ext, should_match in extensions.iteritems():
       if should_match:
-        self.assertMatches(basepath+ext, main.REDIRECT_RE)
+        self.assertMatches(basepath+ext, main.STATIC_RE)
       else:
-        self.assertNotMatches(basepath+ext, main.REDIRECT_RE)
+        self.assertNotMatches(basepath+ext, main.STATIC_RE)
 
   def assertMatches(self, text, regex):
     """Corresponding re.match version of assertRegexpMatches."""
