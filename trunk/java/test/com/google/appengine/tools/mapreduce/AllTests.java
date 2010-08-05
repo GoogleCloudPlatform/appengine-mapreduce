@@ -46,6 +46,8 @@ public class AllTests extends TestCase {
     suite.addTestSuite(BlobstoreReadableByteChannelFactoryTest.class);
     suite.addTestSuite(BlobstoreRecordReaderTest.class);
     suite.addTestSuite(InputStreamIteratorTest.class);
+    suite.addTestSuite(RangeInputFormatTest.class);
+    suite.addTestSuite(RangeRecordReaderTest.class);
     return suite;
   }
 }
