@@ -163,14 +163,67 @@ public class MapReduceServlet extends HttpServlet {
   }
 
   /**
+   * Checks to ensure that the current request was sent via the task queue.
+   *
+   * If the request is not in the task queue, returns false, and sets the
+   * response status code to 403. This protects against CSRF attacks against
+   * task queue-only handlers.
+   *
+   * @return true if the request is a task queue request
+   */
+  private boolean checkForTaskQueue(HttpServletRequest request, HttpServletResponse response) {
+    if (request.getHeader("X-AppEngine-QueueName") == null) {
+      log.log(Level.SEVERE, "Received unexpected non-task queue request. Possible CSRF attack.");
+      try {
+        response.sendError(
+            HttpServletResponse.SC_FORBIDDEN, "Received unexpected non-task queue request.");
+      } catch (IOException ioe) {
+        throw new RuntimeException("Encountered error writing error", ioe);
+      }
+      return false;
+    }
+    return true;
+  }
+
+  /**
+   * Checks to ensure that the current request was sent via an AJAX request.
+   *
+   * If the request was not sent by an AJAX request, returns false, and sets
+   * the response status code to 403. This protects against CSRF attacks against
+   * AJAX only handlers.
+   *
+   * @return true if the request is a task queue request
+   */
+  private boolean checkForAjax(HttpServletRequest request, HttpServletResponse response) {
+    if (!"XMLHttpRequest".equals(request.getHeader("X-Requested-With"))) {
+      log.log(
+          Level.SEVERE, "Received unexpected non-XMLHttpRequest command. Possible CSRF attack.");
+      try {
+        response.sendError(HttpServletResponse.SC_FORBIDDEN,
+            "Received unexpected non-XMLHttpRequest command.");
+      } catch (IOException ioe) {
+        throw new RuntimeException("Encountered error writing error", ioe);
+      }
+      return false;
+    }
+    return true;
+  }
+
+  /**
    * Handles all MapReduce callbacks.
    */
   @Override
   public void doPost(HttpServletRequest request, HttpServletResponse response) {
     String handler = MapReduceServlet.getHandler(request);
     if (handler.startsWith(CONTROLLER_PATH)) {
+      if (!checkForTaskQueue(request, response)) {
+        return;
+      }
       handleController(request, response);
     } else if (handler.startsWith(MAPPER_WORKER_PATH)) {
+      if (!checkForTaskQueue(request, response)) {
+        return;
+      }
       handleMapperWorker(request, response);
     } else if (handler.startsWith(START_PATH)) {
       // We don't add a GET handler for this one, since we're expecting the user 
@@ -178,9 +231,12 @@ public class MapReduceServlet extends HttpServlet {
       // TODO(frew): Make name customizable.
       // TODO(frew): Add ability to specify a redirect.
       handleStart(
-          ConfigurationXmlUtil.getConfigurationFromXml(request.getParameter("configuration")), 
+          ConfigurationXmlUtil.getConfigurationFromXml(request.getParameter("configuration")),
           "Automatically run request", request);
     } else if (handler.startsWith(COMMAND_PATH)) {
+      if (!checkForAjax(request, response)) {
+        return;
+      }
       handleCommand(handler.substring(COMMAND_PATH.length() + 1), request, response);
     } else {
       throw new RuntimeException(
@@ -191,6 +247,9 @@ public class MapReduceServlet extends HttpServlet {
   public void doGet(HttpServletRequest request, HttpServletResponse response) {
     String handler = MapReduceServlet.getHandler(request);
     if (handler.startsWith(COMMAND_PATH)) {
+      if (!checkForAjax(request, response)) {
+        return;
+      }
       handleCommand(handler.substring(COMMAND_PATH.length() + 1), request, response);
     } else {
       handleStaticResources(handler, response);
@@ -202,10 +261,11 @@ public class MapReduceServlet extends HttpServlet {
    */
   public void handleCommand(
       String command, HttpServletRequest request, HttpServletResponse response) {
-    response.setContentType("application/json");
     JSONObject retValue = null;
+    response.setContentType("application/json");
+    boolean isPost = "POST".equals(request.getMethod());
     try {
-      if (command.equals(LIST_CONFIGS_PATH)) {
+      if (command.equals(LIST_CONFIGS_PATH) && !isPost) {
         MapReduceXml xml;
         try {
           xml = MapReduceXml.getMapReduceXmlFromFile();
@@ -214,8 +274,7 @@ public class MapReduceServlet extends HttpServlet {
           retValue = new JSONObject();
           retValue.put("status", "Couldn't find mapreduce.xml file");
         }
-      }
-      if (command.equals(LIST_JOBS_PATH)) {
+      } else if (command.equals(LIST_JOBS_PATH) && !isPost) {
         String cursor = request.getParameter("cursor");
         String countString = request.getParameter("count");
         int count = DEFAULT_JOBS_PER_PAGE_COUNT;
@@ -224,27 +283,26 @@ public class MapReduceServlet extends HttpServlet {
         }
         
         retValue = handleListJobs(cursor, count);
-      }
-      if (command.equals(CLEANUP_JOB_PATH)) {
+      } else if (command.equals(CLEANUP_JOB_PATH) && isPost) {
         retValue = handleCleanupJob(request.getParameter("mapreduce_id"));
-      }
-      if (command.equals(ABORT_JOB_PATH)) {
+      } else if (command.equals(ABORT_JOB_PATH) && isPost) {
         retValue = handleAbortJob(request.getParameter("mapreduce_id"));
-      }
-      if (command.equals(GET_JOB_DETAIL_PATH)) {
+      } else if (command.equals(GET_JOB_DETAIL_PATH) && !isPost) {
         retValue = handleGetJobDetail(request.getParameter("mapreduce_id"));
-      }
-      if (command.equals(START_JOB_PATH)) {
+      } else if (command.equals(START_JOB_PATH) && isPost) {
         Map<String, String> templateParams = new TreeMap<String, String>();
         Map httpParams = request.getParameterMap();
         for (Object paramObject : httpParams.keySet()) {
           String param = (String) paramObject;
           if (param.startsWith("mapper_params.")) {
-            templateParams.put(param.substring("mapper_params.".length()), 
+            templateParams.put(param.substring("mapper_params.".length()),
                 ((String[]) httpParams.get(param))[0]);
           }
         }
-        retValue = handleStartJob(templateParams, ((String []) httpParams.get("name"))[0], request); 
+        retValue = handleStartJob(templateParams, ((String []) httpParams.get("name"))[0], request);
+      } else {
+        response.sendError(404);
+        return;
       }
     } catch (Throwable t) {
       log.log(Level.SEVERE, "Got exception while running command", t); 
