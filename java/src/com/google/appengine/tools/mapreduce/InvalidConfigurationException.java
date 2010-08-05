@@ -24,6 +24,10 @@ package com.google.appengine.tools.mapreduce;
  *
  */
 public class InvalidConfigurationException extends RuntimeException {
+  public InvalidConfigurationException(String s) {
+    super(s);
+  }
+  
   public InvalidConfigurationException(String s, Exception e) {
     super(s, e);
   }

@@ -41,6 +41,7 @@ import org.apache.hadoop.mapreduce.RecordWriter;
 import org.apache.hadoop.mapreduce.StatusReporter;
 import org.apache.hadoop.mapreduce.TaskAttemptID;
 import org.apache.hadoop.mapreduce.TaskID;
+import org.apache.hadoop.mapreduce.Mapper.Context;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -591,12 +592,12 @@ public class MapReduceServlet extends HttpServlet {
       
       if (jobContext.getSliceNumber() == 0) {
         // This is the first invocation for this mapper.
-        mapper.setup(context);
+        mapper.setup((Context) context);
       }
       
       QuotaConsumer consumer = getQuotaConsumer(taskAttemptContext);
       
-      boolean shouldContinue = processMapper(mapper, context, consumer, startTime);
+      boolean shouldContinue = processMapper(mapper, (Context) context, consumer, startTime);
       
       if (shouldContinue) {
         taskAttemptContext.getShardState().setRecordReader(jobContext.getConfiguration(), reader);
@@ -614,7 +615,7 @@ public class MapReduceServlet extends HttpServlet {
             request, jobContext, context.getTaskAttemptID(), jobContext.getSliceNumber() + 1);
       } else {
         // This is the last invocation for this mapper.
-        mapper.cleanup(context);
+        mapper.cleanup((Context) context);
       }
     } catch (IOException ioe) {
       // TODO(frew): Currently all user errors result in retry. We should
