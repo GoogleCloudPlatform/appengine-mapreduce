@@ -59,8 +59,6 @@ import java.util.List;
  *
  */
 public class MapReduceState {
-  // The midpoint on the y axis of the generated graphs.
-  private static final double GRAPH_MIDPOINT_Y = (Data.MIN_VALUE + Data.MAX_VALUE) / 2;
   
   // Property names
   public static final String ACTIVE_SHARD_COUNT_PROPERTY = "activeShardCount";
@@ -306,35 +304,28 @@ public class MapReduceState {
       return;
     }
     
-    long min = Collections.min(processedCounts);
-    long max = Collections.max(processedCounts);
+    // If max == 0, the numeric range will be from 0 to 0. This causes some
+    // problems when scaling to the range, so add 1 to max, assuming that the
+    // smallest value can be 0, and this ensures that the chart always shows,
+    // at a minimum, a range from 0 to 1 - when all shards are just starting.
+    long maxPlusOne = Collections.max(processedCounts) + 1;
     
     List<String> countLabels = new ArrayList<String>();
     for (int i = 0; i < processedCounts.size(); i++) {
       countLabels.add(String.valueOf(i));
     }
     
-    Data countData;
-    if (min < max) {
-      countData = DataUtil.scale(processedCounts);
-    } else {
-      // charts4j doesn't like it if we try to scale data with min == max,
-      // so we special case it to just draw all the points at the y axis midpoint
-      // of the graph.
-      ArrayList<Double> points = new ArrayList<Double>(processedCounts.size());
-      for (int i = 0; i < processedCounts.size(); i++) {
-        points.add(GRAPH_MIDPOINT_Y);
-      }
-      countData = Data.newData(points);
-    }
+    Data countData = DataUtil.scaleWithinRange(0, maxPlusOne, processedCounts);
     
     // TODO(frew): Rather than returning charts from both servers, let's just
     // do it on the client's end.
     Plot countPlot = Plots.newBarChartPlot(countData);
     BarChart countChart = GCharts.newBarChart(countPlot);
-    countChart.addYAxisLabels(AxisLabelsFactory.newNumericRangeAxisLabels(min, max));
+    countChart.addYAxisLabels(AxisLabelsFactory.newNumericRangeAxisLabels(0, maxPlusOne));
     countChart.addXAxisLabels(AxisLabelsFactory.newAxisLabels(countLabels));
     countChart.setSize(300, 200);
+    countChart.setBarWidth(BarChart.AUTO_RESIZE);
+    countChart.setSpaceBetweenGroupsOfBars(1);
     entity.setUnindexedProperty(CHART_PROPERTY, new Text(countChart.toURLString()));
   }
   
