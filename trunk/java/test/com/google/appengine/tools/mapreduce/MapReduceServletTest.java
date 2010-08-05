@@ -101,11 +101,27 @@ public class MapReduceServletTest extends TestCase {
     verify(req);
   }
   
-  private HttpServletRequest createMockRequest(String handler) {
+  private HttpServletRequest createMockRequest(
+      String handler, boolean taskQueueRequest, boolean ajaxRequest) {
     HttpServletRequest request = createMock(HttpServletRequest.class);
-    expect(request.getHeader("X-AppEngine-QueueName"))
-      .andReturn("default")
-      .anyTimes();
+    if (taskQueueRequest) {
+      expect(request.getHeader("X-AppEngine-QueueName"))
+        .andReturn("default")
+        .anyTimes();
+    } else {
+      expect(request.getHeader("X-AppEngine-QueueName"))
+        .andReturn(null)
+        .anyTimes();
+    }
+    if (ajaxRequest) {
+      expect(request.getHeader("X-Requested-With"))
+        .andReturn("XMLHttpRequest")
+        .anyTimes();
+    } else {
+      expect(request.getHeader("X-Requested-With"))
+        .andReturn(null)
+        .anyTimes();
+    }
     expect(request.getRequestURI())
       .andReturn("/mapreduce/" + handler)
       .anyTimes();
@@ -113,7 +129,7 @@ public class MapReduceServletTest extends TestCase {
   }
   
   private HttpServletRequest createMockStartRequest(Configuration conf) {
-    HttpServletRequest request = createMockRequest(MapReduceServlet.START_PATH);
+    HttpServletRequest request = createMockRequest(MapReduceServlet.START_PATH, false, false);
     expect(request.getParameter(AppEngineJobContext.CONFIGURATION_PARAMETER_NAME))
       .andReturn(ConfigurationXmlUtil.convertConfigurationToXml(conf))
       .anyTimes();
@@ -122,12 +138,15 @@ public class MapReduceServletTest extends TestCase {
   
   private HttpServletRequest createMockStartJobRequest(Configuration conf) {
     HttpServletRequest request = createMockRequest(
-        MapReduceServlet.COMMAND_PATH + "/" + MapReduceServlet.START_JOB_PATH);
+        MapReduceServlet.COMMAND_PATH + "/" + MapReduceServlet.START_JOB_PATH, false, true);
+    expect(request.getMethod())
+      .andReturn("POST")
+      .anyTimes();
     return request;
   }
   
   private HttpServletRequest createMockControllerRequest(int sliceNumber, JobID jobId) {
-    HttpServletRequest request = createMockRequest(MapReduceServlet.CONTROLLER_PATH);
+    HttpServletRequest request = createMockRequest(MapReduceServlet.CONTROLLER_PATH, true, false);
     expect(request.getParameter(AppEngineJobContext.SLICE_NUMBER_PARAMETER_NAME))
       .andReturn("" + sliceNumber)
       .anyTimes();
@@ -136,10 +155,59 @@ public class MapReduceServletTest extends TestCase {
       .anyTimes();
     return request;
   }
-  
+
+  public void testControllerCSRF() {
+    JobID jobId = new JobID("foo", 1);
+    // Send it as an AJAX request but not a task queue request - should be denied.
+    HttpServletRequest request = createMockRequest(MapReduceServlet.CONTROLLER_PATH, false, true);
+    expect(request.getParameter(AppEngineJobContext.SLICE_NUMBER_PARAMETER_NAME))
+      .andReturn("" + 0)
+      .anyTimes();
+    expect(request.getParameter(AppEngineJobContext.JOB_ID_PARAMETER_NAME))
+      .andReturn("" + jobId)
+      .anyTimes();
+    HttpServletResponse response = createMock(HttpServletResponse.class);
+    try {
+      response.sendError(403, "Received unexpected non-task queue request.");
+    } catch (IOException ioe) {
+      // Can't actually be sent in mock setup
+    }
+    replay(request, response);
+    servlet.doPost(request, response);
+    verify(request, response);
+  }
+
+  public void testGetJobDetailCSRF() {
+    JobID jobId = new JobID("foo", 1);
+    // Send it as a task queue request but not an ajax request - should be denied.
+    HttpServletRequest request = createMockRequest(
+        MapReduceServlet.COMMAND_PATH + "/" + MapReduceServlet.GET_JOB_DETAIL_PATH, true, false);
+    expect(request.getMethod())
+      .andReturn("POST")
+      .anyTimes();
+    expect(request.getParameter(AppEngineJobContext.JOB_ID_PARAMETER_NAME))
+      .andReturn("" + jobId)
+      .anyTimes();
+
+    HttpServletResponse response = createMock(HttpServletResponse.class);
+
+    // Set before error and last one wins, so this is harmless.
+    response.setContentType("application/json");
+    EasyMock.expectLastCall().anyTimes();
+
+    try {
+      response.sendError(403, "Received unexpected non-XMLHttpRequest command.");
+    } catch (IOException ioe) {
+      // Can't actually be sent in mock setup
+    }
+    replay(request, response);
+    servlet.doGet(request, response);
+    verify(request, response);
+  }
+
   private HttpServletRequest createMockMapperWorkerRequest(int sliceNumber,
       JobID jobId, TaskAttemptID taskAttemptId) {
-    HttpServletRequest request = createMockRequest(MapReduceServlet.CONTROLLER_PATH);
+    HttpServletRequest request = createMockRequest(MapReduceServlet.CONTROLLER_PATH, true, false);
     expect(request.getParameter(AppEngineJobContext.SLICE_NUMBER_PARAMETER_NAME))
       .andReturn("" + sliceNumber)
       .anyTimes();
@@ -225,7 +293,7 @@ public class MapReduceServletTest extends TestCase {
   }
   
   public void testBailsOnBadHandler() {
-    HttpServletRequest request = createMockRequest("fizzle");
+    HttpServletRequest request = createMockRequest("fizzle", true, true);
     HttpServletResponse response = createMock(HttpServletResponse.class);
     replay(request, response);
     try {
@@ -844,7 +912,10 @@ public class MapReduceServletTest extends TestCase {
 
   public void testCommandError() throws Exception {
     HttpServletRequest request = createMockRequest(
-        MapReduceServlet.COMMAND_PATH + "/" + MapReduceServlet.GET_JOB_DETAIL_PATH);
+        MapReduceServlet.COMMAND_PATH + "/" + MapReduceServlet.GET_JOB_DETAIL_PATH, false, true);
+    expect(request.getMethod())
+      .andReturn("GET")
+      .anyTimes();
     HttpServletResponse response = createMock(HttpServletResponse.class);
     PrintWriter responseWriter = createMock(PrintWriter.class);
     responseWriter.print("{\"error_class\":\"java.lang.RuntimeException\","
