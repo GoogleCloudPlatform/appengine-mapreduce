@@ -132,6 +132,16 @@ class InputStreamIterator implements Iterator<InputStreamIterator.OffsetRecordPa
       ByteStreams.readFully(input, byteValue);
       if (!eofReached) {
         Preconditions.checkState(1 == input.skip(1)); // skip the terminator
+      } else if (byteValue.length > 0 
+                 && byteValue[byteValue.length - 1] == terminator) {
+        // Lop the terminator off the end if we got the sequence
+        // {record} {terminator} EOF.
+        // Unfortunately, due to our underlying interface, we don't have
+        // enough information to do this without the possibility of a copy
+        // in one of the terminator/non-terminator before EOF cases.
+        byte[] newByteValue = new byte[byteValueLen - 1];
+        System.arraycopy(byteValue, 0, newByteValue, 0, byteValueLen - 1);
+        byteValue = newByteValue;
       }
       currentValue = new OffsetRecordPair(recordStart, byteValue);
       return true;
