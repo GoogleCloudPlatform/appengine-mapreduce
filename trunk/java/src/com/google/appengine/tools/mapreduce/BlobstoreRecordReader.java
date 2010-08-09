@@ -130,7 +130,8 @@ class BlobstoreRecordReader extends RecordReader<BlobstoreRecordKey, byte[]> imp
 
   @Override
   public boolean nextKeyValue() {
-    return recordIterator.hasNext();
+    boolean hasNext = recordIterator.hasNext();
+    return hasNext;
   }
 
   @Override

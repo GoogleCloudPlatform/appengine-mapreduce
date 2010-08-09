@@ -83,14 +83,17 @@ class InputStreamIterator implements Iterator<InputStreamIterator.OffsetRecordPa
     this.terminator = terminator;
   }
 
-  // Returns false if the end of stream is reached.
-  private boolean skipUntillNextRecord(InputStream stream) throws IOException {
+  // Returns false if the end of stream is reached and no characters have been
+  // read since the last terminator.
+  private boolean skipUntilNextRecord(InputStream stream) throws IOException {
+    boolean readCharSinceTerminator = false;
     int value;
     do {
       value = stream.read();
       if (value == -1) {
-        return false;
+        return readCharSinceTerminator;
       }
+      readCharSinceTerminator = true;
     } while (value != (terminator & 0xff));
     return true;
   }
@@ -100,7 +103,7 @@ class InputStreamIterator implements Iterator<InputStreamIterator.OffsetRecordPa
     try {
       if (input.getCount() == 0 && skipFirstTerminator) {
         // find the first record start;
-        if (!skipUntillNextRecord(input)) {
+        if (!skipUntilNextRecord(input)) {
           return false;
         }
       }
@@ -113,15 +116,23 @@ class InputStreamIterator implements Iterator<InputStreamIterator.OffsetRecordPa
 
       long recordStart = input.getCount();
       input.mark(READ_LIMIT);
-      if (!skipUntillNextRecord(input)) {
+      if (!skipUntilNextRecord(input)) {
         return false;
       }
+      
       long recordEnd = input.getCount();
+      boolean eofReached = input.read() == -1;
       input.reset();
-      // we return stream without the terminator
-      byte[] byteValue = new byte[(int) (recordEnd - recordStart - 1)];
+      int byteValueLen = (int) (recordEnd - recordStart);
+      if (!eofReached) {
+        // Skip separator
+        byteValueLen--;
+      }
+      byte[] byteValue = new byte[byteValueLen];
       ByteStreams.readFully(input, byteValue);
-      Preconditions.checkState(1 == input.skip(1)); // skip the terminator
+      if (!eofReached) {
+        Preconditions.checkState(1 == input.skip(1)); // skip the terminator
+      }
       currentValue = new OffsetRecordPair(recordStart, byteValue);
       return true;
     } catch (IOException e) {
