@@ -400,7 +400,7 @@ class StartJobHandlerTest(MapreduceHandlerTestBase):
     self.handler.initialize(mock_webapp.MockRequest(),
                             mock_webapp.MockResponse())
 
-    self.handler.request.path = "/mapreduce/start"
+    self.handler.request.path = "/mapreduce/command/start_job"
     self.handler.request.set("name", "my job")
     self.handler.request.set(
         "mapper_input_reader",
@@ -1446,7 +1446,7 @@ class CleanUpJobTest(testutil.HandlerTestBase):
     self.handler = handlers.CleanUpJobHandler()
     self.handler.initialize(mock_webapp.MockRequest(),
                             mock_webapp.MockResponse())
-    self.handler.request.path = "/mapreduce/clean_up_job"
+    self.handler.request.path = "/mapreduce/command/clean_up_job"
 
     self.handler.request.headers["X-Requested-With"] = "XMLHttpRequest"
 

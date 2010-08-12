@@ -215,6 +215,16 @@ class BlobInfo(object):
     """Permanently delete blob from Blobstore."""
     delete(self.key())
 
+  def open(self, *args, **kwargs):
+    """Returns a BlobReader for this blob.
+
+    Args:
+      *args, **kwargs: Passed to BlobReader constructor.
+    Returns:
+      A BlobReader instance.
+    """
+    return BlobReader(self, *args, **kwargs)
+
   @classmethod
   def get(cls, blob_keys):
     """Retrieve BlobInfo by key or list of keys.
@@ -477,21 +487,25 @@ class BlobReader(object):
   SEEK_CUR = 1
   SEEK_END = 2
 
-  def __init__(self, blob_key, buffer_size=131072, position=0):
+  def __init__(self, blob, buffer_size=131072, position=0):
     """Constructor.
 
     Args:
-      blob_key: The blob key or string blob key to read from.
+      blob: The blob key, blob info, or string blob key to read from.
       buffer_size: The minimum size to fetch chunks of data from blobstore.
       position: The initial position in the file.
     """
-    self.__blob_key = blob_key
+    if hasattr(blob, 'key'):
+      self.__blob_key = blob.key()
+      self.__blob_info = blob
+    else:
+      self.__blob_key = blob
+      self.__blob_info = None
     self.__buffer_size = buffer_size
     self.__buffer = ""
     self.__position = position
     self.__buffer_position = 0
     self.__eof = False
-    self.__blob_info = None
 
   def __iter__(self):
     """Returns a file iterator for this BlobReader."""

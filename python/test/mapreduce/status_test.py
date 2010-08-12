@@ -280,7 +280,7 @@ class ListConfigsTest(testutil.HandlerTestBase):
     self.handler = status.ListConfigsHandler()
     self.handler.initialize(mock_webapp.MockRequest(),
                             mock_webapp.MockResponse())
-    self.handler.request.path = "/mapreduce/path"
+    self.handler.request.path = "/mapreduce/command/path"
     self.handler.request.headers["X-Requested-With"] = "XMLHttpRequest"
 
   def testCSRF(self):
@@ -347,7 +347,7 @@ class ListJobsTest(testutil.HandlerTestBase):
     self.start = handlers.StartJobHandler()
     self.start.initialize(mock_webapp.MockRequest(),
                           mock_webapp.MockResponse())
-    self.start.request.path = "/mapreduce/start"
+    self.start.request.path = "/mapreduce/command/start"
     self.start.request.set(
         "mapper_input_reader",
         "mapreduce.input_readers.DatastoreInputReader")
@@ -358,7 +358,7 @@ class ListJobsTest(testutil.HandlerTestBase):
     self.handler = status.ListJobsHandler()
     self.handler.initialize(mock_webapp.MockRequest(),
                             mock_webapp.MockResponse())
-    self.handler.request.path = "/mapreduce/list"
+    self.handler.request.path = "/mapreduce/command/list"
 
     self.handler.request.headers["X-Requested-With"] = "XMLHttpRequest"
 
@@ -437,7 +437,7 @@ class GetJobDetailTest(testutil.HandlerTestBase):
     self.start = handlers.StartJobHandler()
     self.start.initialize(mock_webapp.MockRequest(),
                           mock_webapp.MockResponse())
-    self.start.request.path = "/mapreduce/start"
+    self.start.request.path = "/mapreduce/command/start"
     self.start.request.set("name", "my job 1")
     self.start.request.set(
         "mapper_input_reader",
@@ -454,7 +454,7 @@ class GetJobDetailTest(testutil.HandlerTestBase):
     self.handler = status.GetJobDetailHandler()
     self.handler.initialize(mock_webapp.MockRequest(),
                             mock_webapp.MockResponse())
-    self.handler.request.path = "/mapreduce/list"
+    self.handler.request.path = "/mapreduce/command/list"
 
     self.handler.request.headers["X-Requested-With"] = "XMLHttpRequest"
 
