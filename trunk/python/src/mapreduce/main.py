@@ -56,13 +56,13 @@ def create_application():
     registered.
   """
   return webapp.WSGIApplication([
-
       # Task queue handlers.
       (r".*/worker_callback", handlers.MapperWorkerCallbackHandler),
       (r".*/controller_callback", handlers.ControllerCallbackHandler),
       (r".*/kickoffjob_callback", handlers.KickOffJobHandler),
 
       # RPC requests with JSON responses
+      # All JSON handlers should have /command/ prefix.
       (r".*/command/start_job", handlers.StartJobHandler),
       (r".*/command/cleanup_job", handlers.CleanUpJobHandler),
       (r".*/command/abort_job", handlers.AbortJobHandler),

@@ -26,6 +26,14 @@ from mapreduce.lib import simplejson
 from google.appengine.ext import webapp
 
 
+class Error(Exception):
+  """Base-class for exceptions in this module."""
+
+
+class BadRequestPathError(Error):
+  """The request path for the handler is invalid."""
+
+
 class BaseHandler(webapp.RequestHandler):
   """Base class for all mapreduce handlers."""
 
@@ -67,6 +75,19 @@ class JsonHandler(BaseHandler):
     """Initializer."""
     super(BaseHandler, self).__init__()
     self.json_response = {}
+
+  def base_path(self):
+    """Base path for all mapreduce-related urls.
+
+    JSON handlers are mapped to /base_path/command/command_name thus they
+    require special treatment.
+    """
+    path = self.request.path
+    base_path = path[:path.rfind("/")]
+    if not base_path.endswith("/command"):
+      raise BadRequestPathError(
+          "Json handlers should have /command path prefix")
+    return base_path[:base_path.rfind("/")]
 
   def _handle_wrapper(self):
     if self.request.headers.get("X-Requested-With") != "XMLHttpRequest":
