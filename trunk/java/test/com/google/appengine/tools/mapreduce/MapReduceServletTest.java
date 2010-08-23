@@ -707,7 +707,7 @@ public class MapReduceServletTest extends TestCase {
    */
   public void assertJsonEquals(String expected, JSONObject actual) {
     assertEquals(expected.replace('\'', '"').replace(" ", ""), 
-        actual.toString().replace(" ", "").replace("\\n", ""));
+        actual.toString().replace(" ", "").replace("\\r\\n", "").replace("\\n", ""));
   }
   
   public void testHandleListConfigs() throws Exception {
