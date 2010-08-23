@@ -150,10 +150,40 @@ public class MapReduceXml {
     }
   }
 
+  private static boolean tryTransformerFactoryGuess(String guess) {
+    try {
+      Class.forName(guess);
+      System.setProperty("javax.xml.transform.TransformerFactory", guess);
+      return true;
+    } catch (ClassNotFoundException e) {
+      return false;
+    }
+  }
+
+  private static boolean guessAttempted = false;
+
+  /**
+   * Some JDKs apparently don't set the TransformerFactory setting to a class
+   * that actually exists, so probe a couple of possible values here.
+   */
+  private static void guessAndSetTransformerFactoryProp() {
+    guessAttempted = true;
+    if (tryTransformerFactoryGuess("org.apache.xalan.processor.TransformerFactoryImpl")) {
+      return;
+    }
+    if (tryTransformerFactoryGuess(
+        "com.sun.org.apache.xalan.internal.xsltc.trax.TransformerFactoryImpl")) {
+      return;
+    }
+    // If we didn't find any, just continue and hope the JDK does the right
+    // thing by default.
+  }
+
   /**
    * Returns the template named by {@code name} as an xml string.
    */
   public String getTemplateAsXmlString(String name) {
+    guessAndSetTransformerFactoryProp();
     Element templateElement = nameToConfigMap.get(name);
     
     if (templateElement == null) {
