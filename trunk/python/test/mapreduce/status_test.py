@@ -486,7 +486,7 @@ class GetJobDetailTest(testutil.HandlerTestBase):
     expected_keys = set([
         "active", "chart_url", "counters", "mapper_spec", "mapreduce_id",
         "name", "result_status", "shards", "start_timestamp_ms",
-        "updated_timestamp_ms", "params"])
+        "updated_timestamp_ms", "params", "hooks_class_name"])
     expected_shard_keys = set([
         "active", "counters", "last_work_item", "result_status",
         "shard_description", "shard_id", "shard_number",
@@ -505,7 +505,7 @@ class GetJobDetailTest(testutil.HandlerTestBase):
     expected_keys = set([
         "active", "chart_url", "counters", "mapper_spec", "mapreduce_id",
         "name", "result_status", "shards", "start_timestamp_ms",
-        "updated_timestamp_ms", "params"])
+        "updated_timestamp_ms", "params", "hooks_class_name"])
 
     self.assertEquals(expected_keys, set(result.keys()))
 

@@ -186,6 +186,8 @@ class DatastoreInputReader(InputReader):
     ds_query.Order("__key__")
     first_entity_key_list = ds_query.Get(1)
     if not first_entity_key_list:
+      logging.warning("Could not retrieve an entity of type %s." %
+                      raw_entity_kind)
       return []
     first_entity_key = first_entity_key_list[0]
     ds_query.Order(("__key__", datastore.Query.DESCENDING))

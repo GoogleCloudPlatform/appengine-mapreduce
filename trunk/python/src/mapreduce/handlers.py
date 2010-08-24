@@ -63,6 +63,30 @@ class NoDataError(Error):
   """There is no data present for a desired input."""
 
 
+def _run_task_hook(hooks, method, task, queue_name):
+  """Invokes hooks.method(task, queue_name).
+
+  Args:
+    hooks: A hooks.Hooks instance or None.
+    method: The name of the method to invoke on the hooks class e.g.
+        "enqueue_kickoff_task".
+    task: The taskqueue.Task to pass to the hook method.
+    queue_name: The name of the queue to pass to the hook method.
+
+  Returns:
+    True if the hooks.Hooks instance handled the method, False otherwise.
+  """
+  if hooks is not None:
+    try:
+      getattr(hooks, method)(task, queue_name)
+    except NotImplementedError:
+      # Use the default task addition implementation.
+      return False
+
+    return True
+  return False
+
+
 class MapperWorkerCallbackHandler(base_handler.TaskQueueHandler):
   """Callback handler for mapreduce worker task.
 
@@ -326,15 +350,23 @@ class MapperWorkerCallbackHandler(base_handler.TaskQueueHandler):
     task_name = MapperWorkerCallbackHandler.get_task_name(shard_id, slice_id)
     queue_name = os.environ.get("HTTP_X_APPENGINE_QUEUENAME",
                                 queue_name or "default")
-    try:
-      taskqueue.Task(url=base_path + "/worker_callback",
-                     params=task_params,
-                     name=task_name,
-                     eta=eta,
-                     countdown=countdown).add(queue_name)
-    except (taskqueue.TombstonedTaskError, taskqueue.TaskAlreadyExistsError), e:
-      logging.warning("Task %r with params %r already exists. %s: %s",
-                      task_name, task_params, e.__class__, e)
+
+    worker_task = taskqueue.Task(url=base_path + "/worker_callback",
+                                 params=task_params,
+                                 name=task_name,
+                                 eta=eta,
+                                 countdown=countdown)
+
+    if not _run_task_hook(mapreduce_spec.get_hooks(),
+                          "enqueue_worker_task",
+                          worker_task,
+                          queue_name):
+      try:
+        worker_task.add(queue_name)
+      except (taskqueue.TombstonedTaskError,
+              taskqueue.TaskAlreadyExistsError), e:
+        logging.warning("Task %r with params %r already exists. %s: %s",
+                        task_name, task_params, e.__class__, e)
 
 
 class ControllerCallbackHandler(base_handler.TaskQueueHandler):
@@ -427,13 +459,18 @@ class ControllerCallbackHandler(base_handler.TaskQueueHandler):
         done_callback = spec.params.get(
             model.MapreduceSpec.PARAM_DONE_CALLBACK)
         if done_callback:
-          taskqueue.Task(
+          done_task = taskqueue.Task(
               url=done_callback,
-              headers={"Mapreduce-Id": spec.mapreduce_id}).add(
-                  spec.params.get(
-                      model.MapreduceSpec.PARAM_DONE_CALLBACK_QUEUE,
-                      "default"),
-                  transactional=True)
+              headers={"Mapreduce-Id": spec.mapreduce_id})
+          queue_name = spec.params.get(
+              model.MapreduceSpec.PARAM_DONE_CALLBACK_QUEUE,
+              "default")
+
+          if not _run_task_hook(spec.get_hooks(),
+                                "enqueue_done_task",
+                                done_task,
+                                queue_name):
+            done_task.add(queue_name, transactional=True)
       db.run_in_transaction(put_state, state)
       return
     else:
@@ -549,13 +586,21 @@ class ControllerCallbackHandler(base_handler.TaskQueueHandler):
     if not queue_name:
       queue_name = os.environ.get("HTTP_X_APPENGINE_QUEUENAME", "default")
 
-    try:
-      taskqueue.Task(url=base_path + "/controller_callback",
-                     name=task_name, params=task_params,
-                     countdown=_CONTROLLER_PERIOD_SEC).add(queue_name)
-    except (taskqueue.TombstonedTaskError, taskqueue.TaskAlreadyExistsError), e:
-      logging.warning("Task %r with params %r already exists. %s: %s",
-                      task_name, task_params, e.__class__, e)
+    controller_callback_task = taskqueue.Task(
+        url=base_path + "/controller_callback",
+        name=task_name, params=task_params,
+        countdown=_CONTROLLER_PERIOD_SEC)
+
+    if not _run_task_hook(mapreduce_spec.get_hooks(),
+                          "enqueue_controller_task",
+                          controller_callback_task,
+                          queue_name):
+      try:
+        controller_callback_task.add(queue_name)
+      except (taskqueue.TombstonedTaskError,
+              taskqueue.TaskAlreadyExistsError), e:
+        logging.warning("Task %r with params %r already exists. %s: %s",
+                        task_name, task_params, e.__class__, e)
 
 
 class KickOffJobHandler(base_handler.TaskQueueHandler):
@@ -727,6 +772,7 @@ class StartJobHandler(base_handler.PostJsonHandler):
                  queue_name="default",
                  eta=None,
                  countdown=None,
+                 hooks_class_name=None,
                  _app=None):
     # Check that handler can be instantiated.
     mapper_spec.get_handler()
@@ -742,7 +788,8 @@ class StartJobHandler(base_handler.PostJsonHandler):
         name,
         state.key().id_or_name(),
         mapper_spec.to_json(),
-        mapreduce_params)
+        mapreduce_params,
+        hooks_class_name)
     state.mapreduce_spec = mapreduce_spec
     state.active = True
     state.active_shards = mapper_spec.shard_count
@@ -756,11 +803,23 @@ class StartJobHandler(base_handler.PostJsonHandler):
     def schedule_mapreduce(state, mapper_input_readers, eta, countdown):
       state.put()
       readers_json = [reader.to_json_str() for reader in mapper_input_readers]
-      taskqueue.Task(
+      kickoff_worker_task = taskqueue.Task(
           url=base_path + "/kickoffjob_callback",
           params={"mapreduce_spec": state.mapreduce_spec.to_json_str(),
                   "input_readers": simplejson.dumps(readers_json)},
-          eta=eta, countdown=countdown).add(queue_name, transactional=True)
+          eta=eta, countdown=countdown)
+
+      hooks = mapreduce_spec.get_hooks()
+      if hooks is not None:
+        try:
+          hooks.enqueue_kickoff_task(kickoff_worker_task, queue_name)
+        except NotImplementedError:
+          # Use the default task addition implementation.
+          pass
+        else:
+          return
+
+      kickoff_worker_task.add(queue_name, transactional=True)
 
     # Point of no return: We're actually going to run this job!
     db.run_in_transaction(
