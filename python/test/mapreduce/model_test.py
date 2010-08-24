@@ -29,6 +29,8 @@ from google.appengine.api import apiproxy_stub_map
 from google.appengine.api import datastore_errors
 from google.appengine.api import datastore_file_stub
 from google.appengine.ext import db
+from mapreduce import control
+from mapreduce import hooks
 from mapreduce import model
 
 
@@ -52,6 +54,11 @@ class TestHandlerWithArgs(object):
   def process(self, entity):
     """Empty process function."""
     pass
+
+
+class TestHooks(hooks.Hooks):
+  """Test hooks class."""
+  pass
 
 
 def test_handler_function(entity):
@@ -241,17 +248,22 @@ class MapreduceSpecTest(unittest.TestCase):
                         "mapper_input_reader": "TestInputReader",
                         "mapper_params": {"entity_kind": "bar"},
                         "mapper_shard_count": 8}
-    mapreduce_spec = model.MapreduceSpec("my job", "mr0", mapper_spec_dict)
+    mapreduce_spec = model.MapreduceSpec("my job",
+                                         "mr0",
+                                         mapper_spec_dict,
+                                         {"extra": "value"},
+                                         __name__+"."+TestHooks.__name__)
     self.assertEquals(
         {"name": "my job",
          "mapreduce_id": "mr0",
          "mapper_spec": mapper_spec_dict,
-         "params": {},
+         "params": {"extra": "value"},
+         "hooks_class_name": __name__+"."+TestHooks.__name__,
         },
         mapreduce_spec.to_json())
 
-  def testFromJson(self):
-    """Test from_json method."""
+  def testFromJsonWithoutOptionalArgs(self):
+    """Test from_json method without params and hooks_class_name present."""
     mapper_spec_dict = {"mapper_handler_spec": "TestHandler",
                         "mapper_input_reader": "TestInputReader",
                         "mapper_params": {"entity_kind": "bar"},
@@ -266,6 +278,30 @@ class MapreduceSpecTest(unittest.TestCase):
     self.assertEquals("mr0", mapreduce_spec.mapreduce_id)
     self.assertEquals(mapper_spec_dict, mapreduce_spec.mapper.to_json())
     self.assertEquals("TestHandler", mapreduce_spec.mapper.handler_spec)
+    self.assertEquals(None, mapreduce_spec.params)
+    self.assertEquals(None, mapreduce_spec.hooks_class_name)
+
+  def testFromJsonWithOptionalArgs(self):
+    """Test from_json method with params and hooks_class_name present."""
+    mapper_spec_dict = {"mapper_handler_spec": "TestHandler",
+                        "mapper_input_reader": "TestInputReader",
+                        "mapper_params": {"entity_kind": "bar"},
+                        "mapper_shard_count": 8}
+    mapreduce_spec = model.MapreduceSpec.from_json(
+        {"mapper_spec": mapper_spec_dict,
+         "mapreduce_id": "mr0",
+         "name": "my job",
+         "params": {"extra": "value"},
+         "hooks_class_name": __name__+"."+TestHooks.__name__
+        })
+
+    self.assertEquals("my job", mapreduce_spec.name)
+    self.assertEquals("mr0", mapreduce_spec.mapreduce_id)
+    self.assertEquals(mapper_spec_dict, mapreduce_spec.mapper.to_json())
+    self.assertEquals("TestHandler", mapreduce_spec.mapper.handler_spec)
+    self.assertEquals({"extra": "value"}, mapreduce_spec.params)
+    self.assertEquals(__name__+"."+TestHooks.__name__,
+                      mapreduce_spec.hooks_class_name)
 
 
 class MapreduceStateTest(unittest.TestCase):

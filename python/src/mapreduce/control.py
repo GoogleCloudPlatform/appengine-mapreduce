@@ -32,11 +32,12 @@ def start_map(name,
               reader_spec,
               reader_parameters,
               shard_count,
-              mapreduce_parameters={},
+              mapreduce_parameters=None,
               base_path="/mapreduce",
               queue_name="default",
               eta=None,
               countdown=None,
+              hooks_class_name=None,
               _app=None):
   """Start a new, mapper-only mapreduce.
 
@@ -57,6 +58,7 @@ def start_map(name,
         timezone-naive.
     countdown: Time in seconds into the future that this MR should execute.
         Defaults to zero.
+    hooks_class_name: fully qualified name of a hooks.Hooks subclass.
 
   Returns:
     mapreduce id as string.
@@ -67,10 +69,11 @@ def start_map(name,
   return handlers.StartJobHandler._start_map(
       name,
       mapper_spec,
-      mapreduce_parameters,
+      mapreduce_parameters or {},
       base_path=base_path,
       queue_name=queue_name,
       eta=eta,
       countdown=countdown,
+      hooks_class_name=hooks_class_name,
       _app=_app)
 

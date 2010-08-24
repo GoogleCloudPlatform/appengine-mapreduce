@@ -47,6 +47,7 @@ from mapreduce.lib import key_range
 from mapreduce import context
 from mapreduce import control
 from mapreduce import handlers
+from mapreduce import hooks
 from mapreduce import input_readers
 from mapreduce import model
 from mapreduce import quota
@@ -57,6 +58,28 @@ from testlib import mock_webapp
 MAPPER_PARAMS = {"batch_size": 50}
 PARAM_DONE_CALLBACK = model.MapreduceSpec.PARAM_DONE_CALLBACK
 PARAM_DONE_CALLBACK_QUEUE = model.MapreduceSpec.PARAM_DONE_CALLBACK_QUEUE
+
+
+class TestHooks(hooks.Hooks):
+  """Test hooks class."""
+
+  def __init__(self):
+    TestHooks.enqueue_worker_task_calls = []
+    TestHooks.enqueue_done_task_calls = []
+    TestHooks.enqueue_controller_task_calls = []
+
+  def enqueue_worker_task(self, task, queue_name):
+    self.enqueue_worker_task_calls.append((task, queue_name))
+
+  def enqueue_kickoff_task(self, task, queue_name):
+    # Tested by control_test.ControlTest.testStartMap_Hooks.
+    pass
+
+  def enqueue_done_task(self, task, queue_name):
+    self.enqueue_done_task_calls.append((task, queue_name))
+
+  def enqueue_controller_task(self, task, queue_name):
+    self.enqueue_controller_task_calls.append((task, queue_name))
 
 
 class TestKind(db.Model):
@@ -269,6 +292,8 @@ class MapreduceHandlerTestBase(testutil.HandlerTestBase):
                       mapreduce_spec.mapper.params["entity_kind"])
     self.assertEquals(kwargs.get("shard_count", 8),
                       mapreduce_spec.mapper.shard_count)
+    self.assertEquals(kwargs.get("hooks_class_name"),
+                      mapreduce_spec.hooks_class_name)
 
   def verify_shard_state(self, shard_state, **kwargs):
     """Checks that all shard state properties have expected values.
@@ -325,13 +350,15 @@ class MapreduceHandlerTestBase(testutil.HandlerTestBase):
     self.verify_mapreduce_spec(mapreduce_spec, **kwargs)
 
   def create_mapreduce_spec(self, mapreduce_id, shard_count=8,
-                            mapper_handler_spec=MAPPER_HANDLER_SPEC):
+                            mapper_handler_spec=MAPPER_HANDLER_SPEC,
+                            hooks_class_name=None):
     """Create a new valid mapreduce_spec.
 
     Args:
       mapreduce_id: mapreduce id.
       shard_count: number of shards in the handlers.
       mapper_handler_spec: handler specification to use for handlers.
+      hooks_class_name: fully qualified name of the hooks class.
 
     Returns:
       new MapreduceSpec.
@@ -343,10 +370,12 @@ class MapreduceHandlerTestBase(testutil.HandlerTestBase):
         shard_count)
     mapreduce_spec = model.MapreduceSpec("my job",
                                          mapreduce_id,
-                                         mapper_spec.to_json())
+                                         mapper_spec.to_json(),
+                                         hooks_class_name=hooks_class_name)
     self.verify_mapreduce_spec(mapreduce_spec,
                                shard_count=shard_count,
-                               mapper_handler_spec=mapper_handler_spec)
+                               mapper_handler_spec=mapper_handler_spec,
+                               hooks_class_name=hooks_class_name)
     return mapreduce_spec
 
   def create_shard_state(self, mapreduce_id, shard_number):
@@ -662,6 +691,20 @@ class KickOffJobHandlerTest(MapreduceHandlerTestBase):
     self.assertEquals(1, len(tasks))
     self.verify_controller_task(tasks[0], shard_count=8)
 
+  def testHooks(self):
+    """Verifies main execution path with a hooks class installed."""
+    self.mapreduce_spec.hooks_class_name = __name__ + "." + TestHooks.__name__
+    self.handler.request.set(
+        "mapreduce_spec",
+        self.mapreduce_spec.to_json_str())
+
+    self.handler.post()
+    self.assertEquals(8, len(TestHooks.enqueue_worker_task_calls))
+    self.assertEquals(1, len(TestHooks.enqueue_controller_task_calls))
+    task, queue_name = TestHooks.enqueue_controller_task_calls[0]
+    self.assertEquals("default", queue_name)
+    self.assertEquals("/mapreduce/controller_callback", task.url)
+
   def testRequiredParams(self):
     """Tests that required parameters are enforced."""
     self.handler.post()
@@ -703,13 +746,16 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
     MapreduceHandlerTestBase.setUp(self)
     self.init()
 
-  def init(self, mapper_handler_spec=MAPPER_HANDLER_SPEC,
-           mapper_params=None):
+  def init(self,
+           mapper_handler_spec=MAPPER_HANDLER_SPEC,
+           mapper_params=None,
+           hooks_class_name=None):
     """Init everything needed for testing worker callbacks.
 
     Args:
       mapper_handler_spec: handler specification to use in test.
       mapper_params: mapper specification to use in test.
+      hooks_class_name: fully qualified name of the hooks class to use in test.
     """
     self.handler = handlers.MapperWorkerCallbackHandler(MockTime.time)
     self.handler.initialize(mock_webapp.MockRequest(),
@@ -718,7 +764,9 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
 
     self.mapreduce_id = "mapreduce0"
     self.mapreduce_spec = self.create_mapreduce_spec(
-        self.mapreduce_id, mapper_handler_spec=mapper_handler_spec)
+        self.mapreduce_id,
+        mapper_handler_spec=mapper_handler_spec,
+        hooks_class_name=hooks_class_name)
     self.shard_number = 1
     self.slice_id = 3
 
@@ -935,6 +983,53 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
     # The task won't re-enqueue because it has the same name.
     tasks = self.taskqueue.GetTasks("default")
     self.assertEquals(1, len(tasks))
+
+  def testScheduleSlice_Hooks(self):
+    """Test schedule_slice method with a hooks class installed."""
+    hooks_class_name = __name__ + '.' + TestHooks.__name__
+    self.init(hooks_class_name=hooks_class_name)
+
+    input_reader = input_readers.DatastoreInputReader(
+        ENTITY_KIND,
+        key_range.KeyRange(key_start=self.key(75),
+                           key_end=self.key(100),
+                           direction="ASC",
+                           include_start=False,
+                           include_end=True),
+        MAPPER_PARAMS)
+    self.handler.schedule_slice("/mapreduce", self.mapreduce_spec,
+                                self.shard_id, 123, input_reader)
+
+    self.assertEquals(0, len(self.taskqueue.GetTasks("default")))
+    self.assertEquals(1, len(TestHooks.enqueue_worker_task_calls))
+    task, queue_name = TestHooks.enqueue_worker_task_calls[0]
+    self.assertEquals("/mapreduce/worker_callback", task.url)
+    self.assertEquals("default", queue_name)
+
+  def testScheduleSlice_RaisingHooks(self):
+    """Test schedule_slice method with an empty hooks class installed.
+
+    The installed hooks class will raise NotImplementedError in response to
+    all method calls.
+    """
+    hooks_class_name = hooks.__name__ + '.' + hooks.Hooks.__name__
+    self.init(hooks_class_name=hooks_class_name)
+
+    input_reader = input_readers.DatastoreInputReader(
+        ENTITY_KIND,
+        key_range.KeyRange(key_start=self.key(75),
+                           key_end=self.key(100),
+                           direction="ASC",
+                           include_start=False,
+                           include_end=True),
+        MAPPER_PARAMS)
+    self.handler.schedule_slice("/mapreduce", self.mapreduce_spec,
+                                self.shard_id, 123, input_reader)
+
+    tasks = self.taskqueue.GetTasks("default")
+    self.assertEquals(1, len(tasks))
+    self.verify_shard_task(tasks[0], self.shard_id, 123,
+                           hooks_class_name=hooks_class_name)
 
   def testQuotaCanBeOptedOut(self):
     """Test work cycle if there was no quota at the very beginning."""
@@ -1232,6 +1327,24 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
 
     self.assertEquals(
         3, len(model.ShardState.find_by_mapreduce_id(self.mapreduce_id)))
+
+  def testShardsDoneWithHooks(self):
+    self.mapreduce_state.mapreduce_spec.hooks_class_name = (
+        __name__ + '.' + TestHooks.__name__)
+    self.handler.request.set("mapreduce_spec",
+                             self.mapreduce_state.mapreduce_spec.to_json_str())
+
+    for i in range(3):
+      shard_state = self.create_shard_state(self.mapreduce_id, i)
+      shard_state.active = False
+      shard_state.result_status = model.ShardState.RESULT_SUCCESS
+      shard_state.put()
+
+    self.handler.post()
+    self.assertEquals(1, len(TestHooks.enqueue_done_task_calls))
+    task, queue_name = TestHooks.enqueue_done_task_calls[0]
+    self.assertEquals('crazy-queue', queue_name)
+    self.assertEquals('/fin', task.url)
 
   def testShardFailureContinue(self):
     """Tests that when one shard fails the whole job continues."""

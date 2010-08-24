@@ -24,12 +24,22 @@ import unittest
 
 from google.appengine.ext import db
 from mapreduce import control
+from mapreduce import hooks
 from mapreduce import model
 from testlib import testutil
 
 
 class TestEntity(db.Model):
   """Test entity class."""
+
+
+class TestHooks(hooks.Hooks):
+  """Test hooks class."""
+
+  enqueue_kickoff_task_calls = []
+
+  def enqueue_kickoff_task(self, task, queue_name):
+    TestHooks.enqueue_kickoff_task_calls.append((task, queue_name))
 
 
 def test_handler(entity):
@@ -39,6 +49,28 @@ def test_handler(entity):
 
 class ControlTest(testutil.HandlerTestBase):
   """Tests for control module."""
+
+  QUEUE_NAME = "crazy-queue"
+
+  def setUp(self):
+    testutil.HandlerTestBase.setUp(self)
+    TestHooks.enqueue_kickoff_task_calls = []
+
+  def validate_map_started(self, mapreduce_id):
+    """Tests that the map has been started."""
+    self.assertTrue(mapreduce_id)
+    mapreduce_state = model.MapreduceState.all().fetch(limit=1)[0]
+    self.assertTrue(mapreduce_state)
+    self.assertEquals(mapreduce_id, mapreduce_state.key().id_or_name())
+    self.assertEquals({"foo": "bar"}, mapreduce_state.mapreduce_spec.params)
+
+    # Note: only a kickoff job is pending at this stage, shards come later.
+    tasks = self.taskqueue.GetTasks(self.QUEUE_NAME)
+    self.assertEquals(1, len(tasks))
+    # Checks that tasks are scheduled into the future.
+    task = tasks[0]
+    self.assertEquals("/mapreduce_base_path/kickoffjob_callback", task["url"])
+    return task["eta"]
 
   def testStartMap(self):
     """Test start_map function.
@@ -59,19 +91,12 @@ class ControlTest(testutil.HandlerTestBase):
         shard_count,
         mapreduce_parameters={"foo": "bar"},
         base_path="/mapreduce_base_path",
-        queue_name="crazy-queue")
+        queue_name=self.QUEUE_NAME)
 
-    self.assertTrue(mapreduce_id)
-    # Note: only a kickoff job is pending at this stage, shards come later.
-    self.assertEquals(1, len(self.taskqueue.GetTasks("crazy-queue")))
-    mapreduce_state = model.MapreduceState.all().fetch(limit=1)[0]
-    self.assertTrue(mapreduce_state)
-    self.assertEquals(mapreduce_id, mapreduce_state.key().id_or_name())
+    self.validate_map_started(mapreduce_id)
 
-    mapreduce_spec = mapreduce_state.mapreduce_spec
-    self.assertEquals({"foo": "bar"}, mapreduce_spec.params)
 
-  def testStartMap_Contdown(self):
+  def testStartMap_Countdown(self):
     """Test that MR can be scheduled into the future.
 
     Most of start_map functionality is already tested by handlers_test.
@@ -93,21 +118,11 @@ class ControlTest(testutil.HandlerTestBase):
         shard_count,
         mapreduce_parameters={"foo": "bar"},
         base_path="/mapreduce_base_path",
-        queue_name="crazy-queue",
+        queue_name=self.QUEUE_NAME,
         countdown=1000)
 
-    self.assertTrue(mapreduce_id)
-    mapreduce_state = model.MapreduceState.all().fetch(limit=1)[0]
-    self.assertTrue(mapreduce_state)
-    self.assertEquals(mapreduce_id, mapreduce_state.key().id_or_name())
-    self.assertEquals({"foo": "bar"}, mapreduce_state.mapreduce_spec.params)
-
-    # Checks that tasks are scheduled into the future.
-    tasks = self.taskqueue.GetTasks("crazy-queue")
-    self.assertEquals(1, len(tasks))
-    task = tasks[0]
-    self.assertEquals("/mapreduce_base_path/kickoffjob_callback", task["url"])
-    eta_sec = time.mktime(time.strptime(task["eta"], "%Y/%m/%d %H:%M:%S"))
+    task_eta = self.validate_map_started(mapreduce_id)
+    eta_sec = time.mktime(time.strptime(task_eta, "%Y/%m/%d %H:%M:%S"))
     self.assertTrue(now_sec + 1000 <= eta_sec)
 
   def testStartMap_Eta(self):
@@ -132,21 +147,80 @@ class ControlTest(testutil.HandlerTestBase):
         shard_count,
         mapreduce_parameters={"foo": "bar"},
         base_path="/mapreduce_base_path",
-        queue_name="crazy-queue",
+        queue_name=self.QUEUE_NAME,
         eta=eta)
+
+    task_eta = self.validate_map_started(mapreduce_id)
+    self.assertEquals(eta.strftime("%Y/%m/%d %H:%M:%S"), task_eta)
+
+  def testStartMap_Hooks(self):
+    """Tests that MR can be scheduled with a hook class installed.
+
+    Most of start_map functionality is already tested by handlers_test.
+    Just a smoke test is enough.
+    """
+    TestEntity().put()
+
+    shard_count = 4
+    mapreduce_id = control.start_map(
+        "test_map",
+        __name__ + ".test_handler",
+        "mapreduce.input_readers.DatastoreInputReader",
+        {
+            "entity_kind": __name__ + "." + TestEntity.__name__,
+        },
+        shard_count,
+        mapreduce_parameters={"foo": "bar"},
+        base_path="/mapreduce_base_path",
+        queue_name="crazy-queue",
+        hooks_class_name=__name__+"."+TestHooks.__name__)
 
     self.assertTrue(mapreduce_id)
     mapreduce_state = model.MapreduceState.all().fetch(limit=1)[0]
     self.assertTrue(mapreduce_state)
     self.assertEquals(mapreduce_id, mapreduce_state.key().id_or_name())
-    self.assertEquals({"foo": "bar"}, mapreduce_state.mapreduce_spec.params)
+    self.assertTrue(isinstance(mapreduce_state.mapreduce_spec.get_hooks(),
+                               TestHooks))
+    tasks = self.taskqueue.GetTasks("crazy-queue")
+    self.assertEquals(0, len(tasks))
+    self.assertEquals(1, len(TestHooks.enqueue_kickoff_task_calls))
+    task, queue_name = TestHooks.enqueue_kickoff_task_calls[0]
+    self.assertEquals("/mapreduce_base_path/kickoffjob_callback", task.url)
+    self.assertEquals("crazy-queue", queue_name)
 
-    # Checks that tasks are scheduled into the future.
+  def testStartMap_RaisingHooks(self):
+    """Tests that MR can be scheduled with a dummy hook class installed.
+
+    The dummy hook class raises NotImplementedError for all method calls so the
+    default scheduling logic should be used.
+
+    Most of start_map functionality is already tested by handlers_test.
+    Just a smoke test is enough.
+    """
+    TestEntity().put()
+
+    shard_count = 4
+    mapreduce_id = control.start_map(
+        "test_map",
+        __name__ + ".test_handler",
+        "mapreduce.input_readers.DatastoreInputReader",
+        {
+            "entity_kind": __name__ + "." + TestEntity.__name__,
+        },
+        shard_count,
+        mapreduce_parameters={"foo": "bar"},
+        base_path="/mapreduce_base_path",
+        queue_name="crazy-queue",
+        hooks_class_name=hooks.__name__+"."+hooks.Hooks.__name__)
+
+    self.assertTrue(mapreduce_id)
+    mapreduce_state = model.MapreduceState.all().fetch(limit=1)[0]
+    self.assertTrue(mapreduce_state)
+    self.assertEquals(mapreduce_id, mapreduce_state.key().id_or_name())
+    self.assertTrue(isinstance(mapreduce_state.mapreduce_spec.get_hooks(),
+                               hooks.Hooks))
     tasks = self.taskqueue.GetTasks("crazy-queue")
     self.assertEquals(1, len(tasks))
-    task = tasks[0]
-    self.assertEquals("/mapreduce_base_path/kickoffjob_callback", task["url"])
-    self.assertEquals(eta.strftime("%Y/%m/%d %H:%M:%S"), task["eta"])
 
 
 if __name__ == "__main__":
