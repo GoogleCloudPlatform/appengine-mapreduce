@@ -42,6 +42,8 @@ from google.appengine.api.labs.taskqueue import taskqueue_stub
 class HandlerTestBase(unittest.TestCase):
   """Base class for all webapp.RequestHandler tests."""
 
+  MAPREDUCE_URL = "/_ah/mapreduce/kickoffjob_callback"
+
   def setUp(self):
     unittest.TestCase.setUp(self)
 
@@ -66,3 +68,7 @@ class HandlerTestBase(unittest.TestCase):
     apiproxy_stub_map.apiproxy.RegisterStub("memcache", self.memcache)
     apiproxy_stub_map.apiproxy.RegisterStub("datastore_v3", self.datastore)
 
+  def assertTaskStarted(self, queue="default"):
+    tasks = self.taskqueue.GetTasks(queue)
+    self.assertEquals(1, len(tasks))
+    self.assertEquals(tasks[0]["url"], self.MAPREDUCE_URL)

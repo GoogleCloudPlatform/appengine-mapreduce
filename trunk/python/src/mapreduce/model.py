@@ -541,6 +541,18 @@ class MapreduceState(db.Model):
     """
     return db.Key.from_path(cls.kind(), mapreduce_id)
 
+  @classmethod
+  def get_by_job_id(cls, mapreduce_id):
+    """Retrieves the instance of state for a Job.
+
+    Args:
+      mapreduce_id: The mapreduce job to retrieve.
+
+    Returns:
+      instance of MapreduceState for passed id.
+    """
+    return db.get(cls.get_key_by_job_id(mapreduce_id))
+
   def set_processed_counts(self, shards_processed):
     """Updates a chart url to display processed count for each shard.
 

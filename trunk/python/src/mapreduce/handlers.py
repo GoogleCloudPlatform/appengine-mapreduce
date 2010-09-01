@@ -34,7 +34,6 @@ from google.appengine.api.labs import taskqueue
 from google.appengine.ext import db
 from mapreduce import base_handler
 from mapreduce import context
-from mapreduce import quota
 from mapreduce import model
 from mapreduce import quota
 from mapreduce import util
@@ -615,14 +614,24 @@ class KickOffJobHandler(base_handler.TaskQueueHandler):
     """Handles kick off request."""
     spec = model.MapreduceSpec.from_json_str(
         self._get_required_param("mapreduce_spec"))
-    input_readers_json = simplejson.loads(
-        self._get_required_param("input_readers"))
-
     queue_name = os.environ.get("HTTP_X_APPENGINE_QUEUENAME", "default")
-
     mapper_input_reader_class = spec.mapper.input_reader_class()
-    input_readers = [mapper_input_reader_class.from_json_str(reader_json)
-                     for reader_json in input_readers_json]
+    state = model.MapreduceState.get_by_job_id(spec.mapreduce_id)
+
+    input_readers = mapper_input_reader_class.split_input(spec.mapper)
+    if not input_readers:
+      # We don't have any data. Finish map.
+      logging.warning("Found no mapper input data to process.")
+      state.active = False
+      state.active_shards = 0
+      state.put()
+      return
+
+    spec.shard_count = len(input_readers)
+
+    # Update state with actual shard count.
+    state.mapreduce_spec = spec
+    state.put()
 
     KickOffJobHandler._schedule_shards(
         spec, input_readers, queue_name, self.base_path())
@@ -777,11 +786,9 @@ class StartJobHandler(base_handler.PostJsonHandler):
     # Check that handler can be instantiated.
     mapper_spec.get_handler()
 
+    # Check that reader can be instantiated and is configured correctly
     mapper_input_reader_class = mapper_spec.input_reader_class()
-    mapper_input_readers = mapper_input_reader_class.split_input(mapper_spec)
-    if not mapper_input_readers:
-      raise NoDataError("Found no mapper input readers to process.")
-    mapper_spec.shard_count = len(mapper_input_readers)
+    mapper_input_reader_class.validate(mapper_spec)
 
     state = model.MapreduceState.create_new()
     mapreduce_spec = model.MapreduceSpec(
@@ -800,13 +807,11 @@ class StartJobHandler(base_handler.PostJsonHandler):
     state.char_url = ""
     state.sparkline_url = ""
 
-    def schedule_mapreduce(state, mapper_input_readers, eta, countdown):
+    def schedule_mapreduce(state, eta, countdown):
       state.put()
-      readers_json = [reader.to_json_str() for reader in mapper_input_readers]
       kickoff_worker_task = taskqueue.Task(
           url=base_path + "/kickoffjob_callback",
-          params={"mapreduce_spec": state.mapreduce_spec.to_json_str(),
-                  "input_readers": simplejson.dumps(readers_json)},
+          params={"mapreduce_spec": state.mapreduce_spec.to_json_str()},
           eta=eta, countdown=countdown)
 
       hooks = mapreduce_spec.get_hooks()
@@ -823,7 +828,7 @@ class StartJobHandler(base_handler.PostJsonHandler):
 
     # Point of no return: We're actually going to run this job!
     db.run_in_transaction(
-        schedule_mapreduce, state, mapper_input_readers, eta, countdown)
+        schedule_mapreduce, state, eta, countdown)
 
     return state.key().id_or_name()
 
@@ -838,8 +843,7 @@ class CleanUpJobHandler(base_handler.PostJsonHandler):
     shards = model.ShardState.find_by_mapreduce_id(mapreduce_id)
     db.delete(shards)
 
-    state = model.MapreduceState.get_key_by_job_id(mapreduce_id)
-    db.delete(state)
+    db.delete(model.MapreduceState.get_key_by_job_id(mapreduce_id))
 
     self.json_response["status"] = ("Job %s successfully cleaned up." %
                                     mapreduce_id)

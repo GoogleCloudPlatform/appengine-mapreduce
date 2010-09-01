@@ -27,11 +27,14 @@ from mapreduce import handlers
 from mapreduce import model
 
 
+_DEFAULT_SHARD_COUNT = 8
+
+
 def start_map(name,
               handler_spec,
               reader_spec,
               reader_parameters,
-              shard_count,
+              shard_count=_DEFAULT_SHARD_COUNT,
               mapreduce_parameters=None,
               base_path="/mapreduce",
               queue_name="default",

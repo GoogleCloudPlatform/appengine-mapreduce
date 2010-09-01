@@ -42,6 +42,7 @@ class BaseHandler(webapp.RequestHandler):
     path = self.request.path
     return path[:path.rfind("/")]
 
+
 class TaskQueueHandler(BaseHandler):
   """Base class for handlers intended to be run only from the task queue.
 
