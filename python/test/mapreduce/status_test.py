@@ -24,6 +24,7 @@ import os
 from mapreduce.lib import simplejson
 import shutil
 import tempfile
+import time
 import unittest
 
 from google.appengine.api import yaml_errors
@@ -379,8 +380,10 @@ class ListJobsTest(testutil.HandlerTestBase):
     TestKind().put()
     self.start.request.set("name", "my job 1")
     self.start.post()
+    time.sleep(.1)
     self.start.request.set("name", "my job 2")
     self.start.post()
+    time.sleep(.1)
     self.start.request.set("name", "my job 3")
     self.start.post()
 

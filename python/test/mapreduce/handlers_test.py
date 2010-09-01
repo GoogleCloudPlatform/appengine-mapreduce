@@ -132,7 +132,7 @@ class TestHandler(object):
     """Main handler process function.
 
     Args:
-      entitiy: entity to process.
+      entity: entity to process.
     """
     TestHandler.processed_keys.append(str(entity.key()))
     MockTime.advance_time(TestHandler.delay)
@@ -244,6 +244,17 @@ class MapreduceHandlerTestBase(testutil.HandlerTestBase):
                   base64.b64decode(task["body"]).split("&")]
     return dict((key, urllib.unquote_plus(value)) for key, value in key_values)
 
+  def verify_input_reader_state(self, str_state, **kwargs):
+    """Check that input reader state has expected values.
+
+    Args:
+      str_state: input reader state serialized into string.
+    """
+    state = simplejson.loads(str_state)
+    self.assertEquals(ENTITY_KIND, state["entity_kind"])
+    self.assertTrue(state["key_range"])
+    self.assertEquals(50, state["batch_size"])
+
   def verify_shard_task(self, task, shard_id, slice_id=0, eta=None,
                         countdown=None, **kwargs):
     """Checks that all shard task properties have expected values.
@@ -276,6 +287,7 @@ class MapreduceHandlerTestBase(testutil.HandlerTestBase):
     mapreduce_spec = model.MapreduceSpec.from_json_str(
         payload["mapreduce_spec"])
     self.verify_mapreduce_spec(mapreduce_spec, **kwargs)
+    self.verify_input_reader_state(payload["input_reader_state"], **kwargs)
 
   def verify_mapreduce_spec(self, mapreduce_spec, **kwargs):
     """Check all mapreduce spec properties to have expected values.
@@ -372,10 +384,21 @@ class MapreduceHandlerTestBase(testutil.HandlerTestBase):
                                          mapreduce_id,
                                          mapper_spec.to_json(),
                                          hooks_class_name=hooks_class_name)
+
     self.verify_mapreduce_spec(mapreduce_spec,
                                shard_count=shard_count,
                                mapper_handler_spec=mapper_handler_spec,
                                hooks_class_name=hooks_class_name)
+
+    state = model.MapreduceState(
+        key_name=mapreduce_id,
+        last_poll_time=datetime.datetime.now())
+    state.mapreduce_spec = mapreduce_spec
+    state.active = True
+    state.shard_count = shard_count
+    state.active_shards = shard_count
+    state.put()
+
     return mapreduce_spec
 
   def create_shard_state(self, mapreduce_id, shard_number):
@@ -463,17 +486,6 @@ class StartJobHandlerTest(MapreduceHandlerTestBase):
 
     self.assertEquals(mapreduce_state.mapreduce_spec.to_json_str(),
                       params["mapreduce_spec"])
-    self.assertEquals(8, len(simplejson.loads(params["input_readers"])))
-
-    for reader_json in simplejson.loads(params["input_readers"]):
-      reader = input_readers.DatastoreInputReader.from_json_str(reader_json)
-      self.assertEquals(self.handler.request.get("mapper_params.entity_kind"),
-                        reader._entity_kind)
-      self.assertEquals(
-          mapreduce_state.mapreduce_spec.mapper.to_json()["mapper_params"],
-          reader._mapper_params)
-      self.assertEquals(input_readers.DatastoreInputReader._BATCH_SIZE,
-                        reader._batch_size)
 
   def testSmokeOtherApp(self):
     """Verifies main execution path of starting scan over several entities."""
@@ -495,17 +507,6 @@ class StartJobHandlerTest(MapreduceHandlerTestBase):
 
     self.assertEquals(mapreduce_state.mapreduce_spec.to_json_str(),
                       params["mapreduce_spec"])
-    self.assertEquals(8, len(simplejson.loads(params["input_readers"])))
-
-    for reader_json in simplejson.loads(params["input_readers"]):
-      reader = input_readers.DatastoreInputReader.from_json_str(reader_json)
-      self.assertEquals(self.handler.request.get("mapper_params.entity_kind"),
-                        reader._entity_kind)
-      self.assertEquals(
-          mapreduce_state.mapreduce_spec.mapper.to_json()["mapper_params"],
-          reader._mapper_params)
-      self.assertEquals(input_readers.DatastoreInputReader._BATCH_SIZE,
-                        reader._batch_size)
 
   def testRequiredParams(self):
     """Tests that required parameters are enforced."""
@@ -593,10 +594,6 @@ class StartJobHandlerTest(MapreduceHandlerTestBase):
     self.handler.request.set("mapper_input_reader", "does_not_exist")
     self.assertRaises(ImportError, self.handler.handle)
 
-  def testInputReaderEmpty(self):
-    """Tests when the input reader returns no split points."""
-    self.assertRaises(handlers.NoDataError, self.handler.handle)
-
   def testQueueName(self):
     """Tests that the optional queue_name parameter is used."""
     TestEntity().put()
@@ -624,9 +621,9 @@ class StartJobHandlerTest(MapreduceHandlerTestBase):
     TestEntity().put()
     self.handler.request.set("mapper_params.shard_count", "9")
     self.handler.post()
-    self.assertEquals(
-        8,  # Nearest power of two split.
-        model.MapreduceState.all().get().mapreduce_spec.mapper.shard_count)
+    state = model.MapreduceState.all().get()
+    self.assertEquals(9, state.mapreduce_spec.mapper.shard_count)
+    self.assertEquals(9, state.active_shards)
 
 
 class KickOffJobHandlerTest(MapreduceHandlerTestBase):
@@ -639,13 +636,6 @@ class KickOffJobHandlerTest(MapreduceHandlerTestBase):
     self.mapreduce_id = "mapreduce0"
     self.mapreduce_spec = self.create_mapreduce_spec(self.mapreduce_id)
 
-    self.input_readers = []
-    for _ in xrange(self.mapreduce_spec.mapper.shard_count):
-      self.input_readers.append(input_readers.DatastoreInputReader(
-          self.mapreduce_spec.mapper.params["entity_kind"],
-          key_range.KeyRange(),
-          self.mapreduce_spec.mapper.to_json()))
-
     self.handler = handlers.KickOffJobHandler()
     self.handler.initialize(mock_webapp.MockRequest(),
                             mock_webapp.MockResponse())
@@ -654,9 +644,6 @@ class KickOffJobHandlerTest(MapreduceHandlerTestBase):
     self.handler.request.set(
         "mapreduce_spec",
         self.mapreduce_spec.to_json_str())
-    self.handler.request.set(
-        "input_readers",
-        simplejson.dumps([r.to_json_str() for r in self.input_readers]))
 
     self.handler.request.headers["X-AppEngine-QueueName"] = "default"
 
@@ -668,6 +655,8 @@ class KickOffJobHandlerTest(MapreduceHandlerTestBase):
 
   def testSmoke(self):
     """Verifies main execution path of starting scan over several entities."""
+    for i in range(100):
+      TestEntity().put()
     self.handler.post()
     shard_count = 8
 
@@ -693,6 +682,8 @@ class KickOffJobHandlerTest(MapreduceHandlerTestBase):
 
   def testHooks(self):
     """Verifies main execution path with a hooks class installed."""
+    for i in range(100):
+      TestEntity().put()
     self.mapreduce_spec.hooks_class_name = __name__ + "." + TestHooks.__name__
     self.handler.request.set(
         "mapreduce_spec",
@@ -712,14 +703,6 @@ class KickOffJobHandlerTest(MapreduceHandlerTestBase):
     self.handler.request.set("mapreduce_spec", None)
     self.assertRaises(handlers.NotEnoughArgumentsError, self.handler.post)
 
-    self.handler.request.set("mapreduce_spec",
-                             self.mapreduce_spec.to_json_str())
-    self.handler.request.set("input_readers", None)
-    self.assertRaises(handlers.NotEnoughArgumentsError, self.handler.post)
-
-    self.handler.request.set("input_readers", simplejson.dumps([]))
-    self.handler.post()
-
   def testInputReaderUnknown(self):
     """Tests when the input reader function cannot be found."""
     self.mapreduce_spec.mapper.input_reader_spec = "does_not_exist"
@@ -731,11 +714,20 @@ class KickOffJobHandlerTest(MapreduceHandlerTestBase):
   def testQueueName(self):
     """Tests that the optional queue_name parameter is used."""
     os.environ["HTTP_X_APPENGINE_QUEUENAME"] = "crazy-queue"
+    TestEntity().put()
     self.handler.post()
     del os.environ["HTTP_X_APPENGINE_QUEUENAME"]
 
     self.assertEquals(0, len(self.taskqueue.GetTasks("default")))
     self.assertEquals(9, len(self.taskqueue.GetTasks("crazy-queue")))
+
+  def testNoData(self):
+    self.handler.post()
+    self.assertEquals(0, len(self.taskqueue.GetTasks("default")))
+
+    state = model.MapreduceState.get_by_job_id(self.mapreduce_id)
+    self.assertFalse(state.active)
+    self.assertEquals(0, state.active_shards)
 
 
 class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
@@ -779,7 +771,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
 
     worker_params = handlers.MapperWorkerCallbackHandler.worker_parameters(
         self.mapreduce_spec, self.shard_id, self.slice_id,
-        InputReader(ENTITY_KIND, key_range.KeyRange(), mapper_params))
+        InputReader(ENTITY_KIND, key_range.KeyRange()))
     InputReader.reset()
 
     for param_name in worker_params:
@@ -895,8 +887,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
                            key_end=self.key(100),
                            direction="ASC",
                            include_start=False,
-                           include_end=True),
-        MAPPER_PARAMS)
+                           include_end=True))
     self.handler.schedule_slice("/mapreduce", self.mapreduce_spec,
                                 self.shard_id, 123, input_reader)
 
@@ -913,8 +904,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
                            key_end=self.key(100),
                            direction="ASC",
                            include_start=False,
-                           include_end=True),
-        MAPPER_PARAMS)
+                           include_end=True))
     self.handler.schedule_slice("/mapreduce", self.mapreduce_spec,
                                 self.shard_id, 123, input_reader,
                                 eta=eta)
@@ -932,8 +922,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
                            key_end=self.key(100),
                            direction="ASC",
                            include_start=False,
-                           include_end=True),
-        MAPPER_PARAMS)
+                           include_end=True))
     self.handler.schedule_slice("/mapreduce", self.mapreduce_spec,
                                 self.shard_id, 123, input_reader,
                                 countdown=countdown)
@@ -952,8 +941,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
                              key_end=self.key(100),
                              direction="ASC",
                              include_start=False,
-                             include_end=True),
-          MAPPER_PARAMS)
+                             include_end=True))
       self.handler.schedule_slice("/mapreduce", self.mapreduce_spec,
                                   self.shard_id, 123, query_range)
 
@@ -971,8 +959,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
                            key_end=self.key(100),
                            direction="ASC",
                            include_start=False,
-                           include_end=True),
-        MAPPER_PARAMS)
+                           include_end=True))
     self.handler.schedule_slice("/mapreduce", self.mapreduce_spec,
                                 self.shard_id, 123, query_range)
 
@@ -995,8 +982,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
                            key_end=self.key(100),
                            direction="ASC",
                            include_start=False,
-                           include_end=True),
-        MAPPER_PARAMS)
+                           include_end=True))
     self.handler.schedule_slice("/mapreduce", self.mapreduce_spec,
                                 self.shard_id, 123, input_reader)
 
@@ -1021,8 +1007,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
                            key_end=self.key(100),
                            direction="ASC",
                            include_start=False,
-                           include_end=True),
-        MAPPER_PARAMS)
+                           include_end=True))
     self.handler.schedule_slice("/mapreduce", self.mapreduce_spec,
                                 self.shard_id, 123, input_reader)
 

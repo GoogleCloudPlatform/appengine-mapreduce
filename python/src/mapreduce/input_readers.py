@@ -68,7 +68,7 @@ class InputReader(JsonMixin):
     Returns:
       The next input from this input reader.
     """
-    raise NotImplementedError
+    raise NotImplementedError("next() not implemented in %s" % cls)
 
   @classmethod
   def from_json(cls, input_shard_state):
@@ -80,7 +80,7 @@ class InputReader(JsonMixin):
     Returns:
       An instance of the InputReader configured using the values of json.
     """
-    raise NotImplementedError
+    raise NotImplementedError("from_json() not implemented in %s" % cls)
 
   def to_json(self):
     """Returns an input shard state for the remaining inputs.
@@ -88,7 +88,7 @@ class InputReader(JsonMixin):
     Returns:
       A json-izable version of the remaining InputReader.
     """
-    raise NotImplementedError
+    raise NotImplementedError("to_json() not implemented in %s" % cls)
 
   @classmethod
   def split_input(cls, mapper_spec):
@@ -99,11 +99,20 @@ class InputReader(JsonMixin):
 
     Returns:
       A list of InputReaders.
+    """
+    raise NotImplementedError("split_input() not implemented in %s" % cls)
+
+  @classmethod
+  def validate(cls, mapper_spec):
+    """Validates mapper spec and all mapper parameters.
+
+    Args:
+      mapper_spec: The MapperSpec for this InputReader.
 
     Raises:
       BadReaderParamsError: required parameters are missing or invalid.
     """
-    raise NotImplementedError
+    raise NotImplementedError("validate() not implemented in %s" % cls)
 
 
 # TODO(user): Use cursor API as soon as we have it available.
@@ -133,7 +142,7 @@ class DatastoreInputReader(InputReader):
   # TODO(user): Add support for arbitrary queries. It's not possible to
   # support them without cursors since right now you can't even serialize query
   # definition.
-  def __init__(self, entity_kind, key_range_param, mapper_params):
+  def __init__(self, entity_kind, key_range_param, batch_size = _BATCH_SIZE):
     """Create new DatastoreInputReader object.
 
     This is internal constructor. Use split_query instead.
@@ -141,13 +150,11 @@ class DatastoreInputReader(InputReader):
     Args:
       entity_kind: entity kind as string.
       key_range_param: key range to process as key_range.KeyRange.
-      mapper_params: mapper parameters as defined by user.
+      batch_size: size of read batch as int.
     """
     self._entity_kind = entity_kind
     self._key_range = key_range_param
-    self._mapper_params = mapper_params
-    self._batch_size = int(self._mapper_params.get(
-        self.BATCH_SIZE_PARAM, self._BATCH_SIZE))
+    self._batch_size = int(batch_size)
 
   def __iter__(self):
     """Create a generator for model instances for entities.
@@ -211,7 +218,59 @@ class DatastoreInputReader(InputReader):
       for r in key_ranges:
         new_ranges += r.split_range(1)
       key_ranges = new_ranges
-    return [cls(entity_kind_name, r, params) for r in key_ranges]
+    batch_size = int(params.get(cls.BATCH_SIZE_PARAM, cls._BATCH_SIZE))
+    return [cls(entity_kind_name, r, batch_size) for r in key_ranges]
+
+  @classmethod
+  def validate(cls, mapper_spec):
+    """Validates mapper spec and all mapper parameters.
+
+    Args:
+      mapper_spec: The MapperSpec for this InputReader.
+
+    Raises:
+      BadReaderParamsError: required parameters are missing or invalid.
+    """
+    cls._common_validate(mapper_spec)
+    params = mapper_spec.params
+    keys_only = util.parse_bool(params.get(cls.KEYS_ONLY_PARAM, False))
+    if keys_only:
+      raise BadReaderParamsError("The keys_only parameter is obsolete. "
+                                 "Use DatastoreKeyInputReader instead.")
+
+    entity_kind_name = params[cls.ENTITY_KIND_PARAM]
+    # Fail fast if Model cannot be located.
+    try:
+      util.for_name(entity_kind_name)
+    except ImportError, e:
+      raise BadReaderParamsError("Bad entity kind: %s" % e)
+
+  @classmethod
+  def _common_validate(cls, mapper_spec):
+    """Validates mapper spec and all mapper parameters.
+
+    Common portion of validate method shared between DatastoreInputReader,
+    DatastoreKeyInputReader, and DatastoreEntityInputReader.
+
+    Args:
+      cls: The class argument from the calling class method.
+      mapper_spec: The MapperSpec for this InputReader.
+
+    Raises:
+      BadReaderParamsError: required parameters are missing or invalid.
+    """
+    if mapper_spec.input_reader_class() != cls:
+      raise BadReaderParamsError("Input reader class mismatch")
+    params = mapper_spec.params
+    if cls.ENTITY_KIND_PARAM not in params:
+      raise BadReaderParamsError("Missing mapper parameter 'entity_kind'")
+    if cls.BATCH_SIZE_PARAM in params:
+      try:
+        batch_size = int(params[cls.BATCH_SIZE_PARAM])
+        if batch_size < 1:
+          raise BadReaderParamsError("Bad batch size: %s" % batch_size)
+      except ValueError, e:
+        raise BadReaderParamsError("Bad batch size: %s" % e)
 
   @classmethod
   def split_input(cls, mapper_spec):
@@ -236,28 +295,11 @@ class DatastoreInputReader(InputReader):
     Returns:
       A list of InputReader objects of length <= number_of_shards. These
       may be DatastoreInputReader or DatastoreKeyInputReader objects.
-
-    Raises:
-      BadReaderParamsError: required parameters are missing or invalid.
     """
-    if mapper_spec.input_reader_class() != cls:
-      raise BadReaderParamsError("Input reader class mismatch")
     params = mapper_spec.params
-    if cls.ENTITY_KIND_PARAM not in params:
-      raise BadReaderParamsError("Missing mapper parameter 'entity_kind'")
-
     entity_kind_name = params[cls.ENTITY_KIND_PARAM]
     shard_count = mapper_spec.shard_count
     app = params.get(cls._APP_PARAM)
-    # keys_only remains for backwards compatability. It may go away.
-    keys_only = util.parse_bool(params.get(cls.KEYS_ONLY_PARAM, False))
-
-    if keys_only:
-      raise BadReaderParamsError("The keys_only parameter is obsolete. "
-                                 "Use DatastoreKeyInputReader instead.")
-
-    # Fail fast if Model cannot be located.
-    util.for_name(entity_kind_name)
 
     return cls._split_input_from_params(
         app, entity_kind_name, params, shard_count)
@@ -270,7 +312,7 @@ class DatastoreInputReader(InputReader):
     """
     json_dict = {self.KEY_RANGE_PARAM: self._key_range.to_json(),
                  self.ENTITY_KIND_PARAM: self._entity_kind,
-                 self.MAPPER_PARAMS: self._mapper_params}
+                 self.BATCH_SIZE_PARAM: self._batch_size}
     return json_dict
 
   def __str__(self):
@@ -289,7 +331,7 @@ class DatastoreInputReader(InputReader):
     """
     query_range = cls(json[cls.ENTITY_KIND_PARAM],
                       key_range.KeyRange.from_json(json[cls.KEY_RANGE_PARAM]),
-                      json[cls.MAPPER_PARAMS])
+                      json[cls.BATCH_SIZE_PARAM])
     return query_range
 
 
@@ -318,6 +360,18 @@ class DatastoreKeyInputReader(DatastoreInputReader):
         yield key
 
   @classmethod
+  def validate(cls, mapper_spec):
+    """Validates mapper spec and all mapper parameters.
+
+    Args:
+      mapper_spec: The MapperSpec for this InputReader.
+
+    Raises:
+      BadReaderParamsError: required parameters are missing or invalid.
+    """
+    cls._common_validate(mapper_spec)
+
+  @classmethod
   def split_input(cls, mapper_spec):
     """Splits query into shards without fetching query results.
 
@@ -339,16 +393,8 @@ class DatastoreKeyInputReader(DatastoreInputReader):
 
     Returns:
       A list of DatastoreKeyInputReader objects of length <= number_of_shards.
-
-    Raises:
-      BadReaderParamsError: required parameters are missing or invalid.
     """
-    if mapper_spec.input_reader_class() != cls:
-      raise BadReaderParamsError("Input reader class mismatch")
     params = mapper_spec.params
-    if cls.ENTITY_KIND_PARAM not in params:
-      raise BadReaderParamsError("Missing mapper parameter 'entity_kind'")
-
     entity_kind_name = params[cls.ENTITY_KIND_PARAM]
     shard_count = mapper_spec.shard_count
     app = params.get(cls._APP_PARAM)
@@ -381,6 +427,18 @@ class DatastoreEntityInputReader(DatastoreInputReader):
         yield entity
 
   @classmethod
+  def validate(cls, mapper_spec):
+    """Validates mapper spec and all mapper parameters.
+
+    Args:
+      mapper_spec: The MapperSpec for this InputReader.
+
+    Raises:
+      BadReaderParamsError: required parameters are missing or invalid.
+    """
+    cls._common_validate(mapper_spec)
+
+  @classmethod
   def split_input(cls, mapper_spec):
     """Splits query into shards without fetching query results.
 
@@ -402,16 +460,8 @@ class DatastoreEntityInputReader(DatastoreInputReader):
 
     Returns:
       List of DatastoreEntityInputReader objects of length <= number_of_shards.
-
-    Raises:
-      BadReaderParamsError: required parameters are missing or invalid.
     """
-    if mapper_spec.input_reader_class() != cls:
-      raise BadReaderParamsError("Input reader class mismatch")
     params = mapper_spec.params
-    if cls.ENTITY_KIND_PARAM not in params:
-      raise BadReaderParamsError("Missing mapper parameter 'entity_kind'")
-
     entity_kind_name = params[cls.ENTITY_KIND_PARAM]
     shard_count = mapper_spec.shard_count
     app = params.get(cls._APP_PARAM)
@@ -502,15 +552,11 @@ class BlobstoreLineInputReader(InputReader):
                json[cls.END_POSITION_PARAM])
 
   @classmethod
-  def split_input(cls, mapper_spec):
-    """Returns a list of shard_count input_spec_shards for input_spec.
+  def validate(cls, mapper_spec):
+    """Validates mapper spec and all mapper parameters.
 
     Args:
-      mapper_spec: The mapper specification to split from. Must contain
-          'blob_keys' parameter with one or more blob keys.
-
-    Returns:
-      A list of BlobstoreInputReaders corresponding to the specified shards.
+      mapper_spec: The MapperSpec for this InputReader.
 
     Raises:
       BadReaderParamsError: required parameters are missing or invalid.
@@ -520,7 +566,6 @@ class BlobstoreLineInputReader(InputReader):
     params = mapper_spec.params
     if cls.BLOB_KEYS_PARAM not in params:
       raise BadReaderParamsError("Must specify 'blob_keys' for mapper input")
-
     blob_keys = params[cls.BLOB_KEYS_PARAM]
     if isinstance(blob_keys, basestring):
       # This is a mechanism to allow multiple blob keys (which do not contain
@@ -530,6 +575,24 @@ class BlobstoreLineInputReader(InputReader):
       raise BadReaderParamsError("Too many 'blob_keys' for mapper input")
     if not blob_keys:
       raise BadReaderParamsError("No 'blob_keys' specified for mapper input")
+
+  @classmethod
+  def split_input(cls, mapper_spec):
+    """Returns a list of shard_count input_spec_shards for input_spec.
+
+    Args:
+      mapper_spec: The mapper specification to split from. Must contain
+          'blob_keys' parameter with one or more blob keys.
+
+    Returns:
+      A list of BlobstoreInputReaders corresponding to the specified shards.
+    """
+    params = mapper_spec.params
+    blob_keys = params[cls.BLOB_KEYS_PARAM]
+    if isinstance(blob_keys, basestring):
+      # This is a mechanism to allow multiple blob keys (which do not contain
+      # commas) in a single string. It may go away.
+      blob_keys = blob_keys.split(",")
 
     blob_sizes = {}
     for blob_key in blob_keys:
@@ -642,6 +705,22 @@ class BlobstoreZipInputReader(InputReader):
         self._blob_key, self._start_index, self._end_index)
 
   @classmethod
+  def validate(cls, mapper_spec):
+    """Validates mapper spec and all mapper parameters.
+
+    Args:
+      mapper_spec: The MapperSpec for this InputReader.
+
+    Raises:
+      BadReaderParamsError: required parameters are missing or invalid.
+    """
+    if mapper_spec.input_reader_class() != cls:
+      raise BadReaderParamsError("Mapper input reader class mismatch")
+    params = mapper_spec.params
+    if cls.BLOB_KEY_PARAM not in params:
+      raise BadReaderParamsError("Must specify 'blob_key' for mapper input")
+
+  @classmethod
   def split_input(cls, mapper_spec, _reader=blobstore.BlobReader):
     """Returns a list of input shard states for the input spec.
 
@@ -653,16 +732,8 @@ class BlobstoreZipInputReader(InputReader):
 
     Returns:
       A list of InputReaders spanning files within the zip.
-
-    Raises:
-      BadReaderParamsError: required parameters are missing or invalid.
     """
-    if mapper_spec.input_reader_class() != cls:
-      raise BadReaderParamsError("Mapper input reader class mismatch")
     params = mapper_spec.params
-    if cls.BLOB_KEY_PARAM not in params:
-      raise BadReaderParamsError("Must specify 'blob_key' for mapper input")
-
     blob_key = params[cls.BLOB_KEY_PARAM]
     zip_input = zipfile.ZipFile(_reader(blob_key))
     files = zip_input.infolist()
@@ -741,19 +812,11 @@ class BlobstoreZipLineInputReader(InputReader):
     self._filestream = None
 
   @classmethod
-  def split_input(cls, mapper_spec, _reader=blobstore.BlobReader):
-    """Returns a list of input readers for the input spec.
+  def validate(cls, mapper_spec):
+    """Validates mapper spec and all mapper parameters.
 
     Args:
-      mapper_spec: The MapperSpec for this InputReader. Must contain
-          'blob_keys' parameter with one or more blob keys.
-      _reader: a callable that returns a file-like object for reading blobs.
-          Used for dependency injection.
-
-    Returns:
-      A list of InputReaders spanning the subfiles within the blobs.
-      There will be at least one reader per blob, but it will otherwise
-      attempt to keep the expanded size even.
+      mapper_spec: The MapperSpec for this InputReader.
 
     Raises:
       BadReaderParamsError: required parameters are missing or invalid.
@@ -773,6 +836,28 @@ class BlobstoreZipLineInputReader(InputReader):
       raise BadReaderParamsError("Too many 'blob_keys' for mapper input")
     if not blob_keys:
       raise BadReaderParamsError("No 'blob_keys' specified for mapper input")
+
+  @classmethod
+  def split_input(cls, mapper_spec, _reader=blobstore.BlobReader):
+    """Returns a list of input readers for the input spec.
+
+    Args:
+      mapper_spec: The MapperSpec for this InputReader. Must contain
+          'blob_keys' parameter with one or more blob keys.
+      _reader: a callable that returns a file-like object for reading blobs.
+          Used for dependency injection.
+
+    Returns:
+      A list of InputReaders spanning the subfiles within the blobs.
+      There will be at least one reader per blob, but it will otherwise
+      attempt to keep the expanded size even.
+    """
+    params = mapper_spec.params
+    blob_keys = params[cls.BLOB_KEYS_PARAM]
+    if isinstance(blob_keys, basestring):
+      # This is a mechanism to allow multiple blob keys (which do not contain
+      # commas) in a single string. It may go away.
+      blob_keys = blob_keys.split(",")
 
     blob_files = {}
     total_size = 0

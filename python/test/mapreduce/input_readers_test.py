@@ -67,6 +67,19 @@ class TestEntity(db.Model):
 ENTITY_KIND = "__main__.TestEntity"
 
 
+def key(entity_id):
+  """Create a key for TestEntity with specified id.
+
+  Used to shorten expected data.
+
+  Args:
+    entity_id: entity id
+  Returns:
+    db.Key instance with specified id for TestEntity.
+  """
+  return db.Key.from_path("TestEntity", entity_id)
+
+
 class DatastoreInputReaderTest(unittest.TestCase):
   """Test Datastore{,Key,Entity}InputReader classes."""
 
@@ -84,17 +97,6 @@ class DatastoreInputReaderTest(unittest.TestCase):
     apiproxy_stub_map.apiproxy = apiproxy_stub_map.APIProxyStubMap()
     apiproxy_stub_map.apiproxy.RegisterStub("datastore_v3", self.datastore)
 
-  def key(self, entity_id):
-    """Create a key for TestEntity with specified id.
-
-    Used to shorten expected data.
-
-    Args:
-      entity_id: entity id
-    Returns:
-      db.Key instance with specified id for TestEntity.
-    """
-    return db.Key.from_path("TestEntity", entity_id)
 
   def split(self, shard_count):
     """Generate TestEntity split.
@@ -114,6 +116,118 @@ class DatastoreInputReaderTest(unittest.TestCase):
         mapper_spec)
     return [input_reader._key_range for input_reader in ds_input_readers]
 
+  def testValidate_Passes(self):
+    """Test validate function accepts valid parameters."""
+    params = {
+        "entity_kind": ENTITY_KIND,
+        }
+    mapper_spec = model.MapperSpec(
+        "FooHandler",
+        "mapreduce.input_readers.DatastoreInputReader",
+        params, 1)
+    input_readers.DatastoreInputReader.validate(mapper_spec)
+
+  def testValidate_NoEntityFails(self):
+    """Test validate function raises exception with no entity parameter."""
+    params = {}
+    mapper_spec = model.MapperSpec(
+        "FooHandler",
+        "mapreduce.input_readers.DatastoreInputReader",
+        params, 1)
+    self.assertRaises(input_readers.BadReaderParamsError,
+                      input_readers.DatastoreInputReader.validate,
+                      mapper_spec)
+
+  def testValidate_BadClassFails(self):
+    """Test validate function rejects non-matching class parameter."""
+    params = {}
+    mapper_spec = model.MapperSpec(
+        "FooHandler",
+        "mapreduce.input_readers.DatastoreInputReader",
+        params, 1)
+    self.assertRaises(input_readers.BadReaderParamsError,
+                      input_readers.DatastoreKeyInputReader.validate,
+                      mapper_spec)
+
+  def testValidate_KeysOnly(self):
+    """Test validate function rejects keys_only parameter."""
+    # Setting keys_only to true is an error.
+    params = {
+        "entity_kind": ENTITY_KIND,
+        "keys_only": "True"
+        }
+    mapper_spec = model.MapperSpec(
+        "FooHandler",
+        "mapreduce.input_readers.DatastoreInputReader",
+        params, 1)
+    self.assertRaises(input_readers.BadReaderParamsError,
+                      input_readers.DatastoreInputReader.validate,
+                      mapper_spec)
+
+  def testValidate_BadEntityKind(self):
+    """Test validate function fails without entity kind."""
+    # Setting keys_only to true is an error.
+    params = {}
+    mapper_spec = model.MapperSpec(
+        "FooHandler",
+        "mapreduce.input_readers.DatastoreInputReader",
+        params, 1)
+    self.assertRaises(input_readers.BadReaderParamsError,
+                      input_readers.DatastoreInputReader.validate,
+                      mapper_spec)
+
+
+  def testValidate_BadEntityKind(self):
+    """Test validate function rejects bad entity kind."""
+    # Setting keys_only to true is an error.
+    params = {
+        "entity_kind": "foo",
+        }
+    mapper_spec = model.MapperSpec(
+        "FooHandler",
+        "mapreduce.input_readers.DatastoreInputReader",
+        params, 1)
+    self.assertRaises(input_readers.BadReaderParamsError,
+                      input_readers.DatastoreInputReader.validate,
+                      mapper_spec)
+
+  def testValidate_BadBatchSize(self):
+    """Test validate function rejects bad entity kind."""
+    # Setting keys_only to true is an error.
+    params = {
+        "entity_kind": ENTITY_KIND,
+        "batch_size": "xxx"
+        }
+    mapper_spec = model.MapperSpec(
+        "FooHandler",
+        "mapreduce.input_readers.DatastoreInputReader",
+        params, 1)
+    self.assertRaises(input_readers.BadReaderParamsError,
+                      input_readers.DatastoreInputReader.validate,
+                      mapper_spec)
+    params = {
+        "entity_kind": ENTITY_KIND,
+        "batch_size": "0"
+        }
+    mapper_spec = model.MapperSpec(
+        "FooHandler",
+        "mapreduce.input_readers.DatastoreInputReader",
+        params, 1)
+    self.assertRaises(input_readers.BadReaderParamsError,
+                      input_readers.DatastoreInputReader.validate,
+                      mapper_spec)
+    params = {
+        "entity_kind": ENTITY_KIND,
+        "batch_size": "-1"
+        }
+    mapper_spec = model.MapperSpec(
+        "FooHandler",
+        "mapreduce.input_readers.DatastoreInputReader",
+        params, 1)
+    self.assertRaises(input_readers.BadReaderParamsError,
+                      input_readers.DatastoreInputReader.validate,
+                      mapper_spec)
+
   def testParameters(self):
     """Test that setting string parameters as they would be passed from a
     web interface works.
@@ -121,27 +235,13 @@ class DatastoreInputReaderTest(unittest.TestCase):
     for _ in range(0, 100):
       TestEntity().put()
 
-    krange = key_range.KeyRange(key_start=self.key(25), key_end=self.key(50),
+    krange = key_range.KeyRange(key_start=key(25), key_end=key(50),
                                 direction="ASC",
                                 include_start=False, include_end=True)
 
     params = {}
     params["app"] = "blah"
-    params["batch_size"] = "24"
-    reader = input_readers.DatastoreInputReader(
-        ENTITY_KIND, krange, params)
-    self.assertEquals(24, reader._batch_size)
-
     params["batch_size"] = "42"
-    reader = input_readers.DatastoreInputReader(
-        ENTITY_KIND, krange, params)
-    self.assertEquals(42, reader._batch_size)
-
-    # Also try the key input reader.
-    reader = input_readers.DatastoreKeyInputReader(
-        ENTITY_KIND, krange, params)
-    self.assertEquals(42, reader._batch_size)
-
     params["entity_kind"] = ENTITY_KIND
     mapper_spec = model.MapperSpec(
         "FooHandler",
@@ -169,16 +269,6 @@ class DatastoreInputReaderTest(unittest.TestCase):
         params, 1)
     reader = input_readers.DatastoreInputReader.split_input(
         mapper_spec)
-
-    # Setting keys_only to true is an error.
-    params["keys_only"] = "True"
-    mapper_spec = model.MapperSpec(
-        "FooHandler",
-        "mapreduce.input_readers.DatastoreInputReader",
-        params, 1)
-    self.assertRaises(input_readers.BadReaderParamsError,
-                      input_readers.DatastoreInputReader.split_input,
-                      mapper_spec)
 
     # But it's totally ignored on the DatastoreKeyInputReader.
     mapper_spec = model.MapperSpec(
@@ -219,26 +309,26 @@ class DatastoreInputReaderTest(unittest.TestCase):
     TestEntity().put()
     self.assertEqual([
         # [1, 1]
-        key_range.KeyRange(key_start=self.key(1),
-                           key_end=self.key(1),
+        key_range.KeyRange(key_start=key(1),
+                           key_end=key(1),
                            direction="DESC",
                            include_start=True,
                            include_end=True),
         # (1, 1)
-        key_range.KeyRange(key_start=self.key(1),
-                           key_end=self.key(1),
+        key_range.KeyRange(key_start=key(1),
+                           key_end=key(1),
                            direction="ASC",
                            include_start=False,
                            include_end=False),
         # (1, 1)
-        key_range.KeyRange(key_start=self.key(1),
-                           key_end=self.key(1),
+        key_range.KeyRange(key_start=key(1),
+                           key_end=key(1),
                            direction="DESC",
                            include_start=False,
                            include_end=False),
         # (1, 2]
-        key_range.KeyRange(key_start=self.key(1),
-                           key_end=self.key(2),
+        key_range.KeyRange(key_start=key(1),
+                           key_end=key(2),
                            direction="ASC",
                            include_start=False,
                            include_end=True),
@@ -253,26 +343,26 @@ class DatastoreInputReaderTest(unittest.TestCase):
 
     self.assertEqual([
         # [1, 25]
-        key_range.KeyRange(key_start=self.key(1),
-                           key_end=self.key(25),
+        key_range.KeyRange(key_start=key(1),
+                           key_end=key(25),
                            direction="DESC",
                            include_start=True,
                            include_end=True),
         # (25, 50]
-        key_range.KeyRange(key_start=self.key(25),
-                           key_end=self.key(50),
+        key_range.KeyRange(key_start=key(25),
+                           key_end=key(50),
                            direction="ASC",
                            include_start=False,
                            include_end=True),
         # (50, 75]
-        key_range.KeyRange(key_start=self.key(50),
-                           key_end=self.key(75),
+        key_range.KeyRange(key_start=key(50),
+                           key_end=key(75),
                            direction="DESC",
                            include_start=False,
                            include_end=True),
         # (75, 100]
-        key_range.KeyRange(key_start=self.key(75),
-                           key_end=self.key(100),
+        key_range.KeyRange(key_start=key(75),
+                           key_end=key(100),
                            direction="ASC",
                            include_start=False,
                            include_end=True),
@@ -286,8 +376,8 @@ class DatastoreInputReaderTest(unittest.TestCase):
     TestEntity().put()
     self.assertEqual(
         [key_range.KeyRange(
-             key_start=self.key(1),
-             key_end=self.key(2),
+             key_start=key(1),
+             key_end=key(2),
              direction="ASC",
              include_start=True,
              include_end=True)
@@ -301,18 +391,18 @@ class DatastoreInputReaderTest(unittest.TestCase):
       entity.put()
       expected_entities.append(entity)
 
-    krange = key_range.KeyRange(key_start=self.key(25), key_end=self.key(50),
+    krange = key_range.KeyRange(key_start=key(25), key_end=key(50),
                                 direction="ASC",
                                 include_start=False, include_end=True)
     query_range = input_readers.DatastoreInputReader(
-        ENTITY_KIND, krange, {"batch_size": 50})
+        ENTITY_KIND, krange, 50)
 
     entities = []
 
     for entity in query_range:
       entities.append(entity)
       self.assertEquals(
-          key_range.KeyRange(key_start=entity.key(), key_end=self.key(50),
+          key_range.KeyRange(key_start=entity.key(), key_end=key(50),
                              direction="ASC",
                              include_start=False, include_end=True),
           query_range._key_range)
@@ -323,24 +413,79 @@ class DatastoreInputReaderTest(unittest.TestCase):
     actual_values = [entity.to_xml() for entity in entities]
     self.assertEquals(expected_values, actual_values)
 
-  def testKeysOnlyGenerator(self):
-    """Test DatastoreKeyInputReader."""
+
+  def testEntityGenerator(self):
+    """Test DatastoreEntityInputReader."""
+    expected_entities = []
+    for _ in range(0, 100):
+      model_instance = TestEntity()
+      model_instance.put()
+      expected_entities.append(model_instance._populate_internal_entity())
+
+    krange = key_range.KeyRange(key_start=key(25), key_end=key(50),
+                                direction="ASC",
+                                include_start=False, include_end=True)
+    query_range = input_readers.DatastoreEntityInputReader(
+        ENTITY_KIND, krange, 50)
+
+    entities = []
+    for entity in query_range:
+      entities.append(entity)
+      self.assertEquals(
+          key_range.KeyRange(key_start=entity.key(), key_end=key(50),
+                             direction="ASC",
+                             include_start=False, include_end=True),
+          query_range._key_range)
+
+    self.assertEquals(25, len(entities))
+    self.assertEquals(expected_entities[25:50], entities)
+
+  def testShardDescription(self):
+    """Tests the human-visible description of Datastore readers."""
+    TestEntity().put()
+    TestEntity().put()
+    splits = self.split(2)
+    stringified = [str(s) for s in splits]
+    self.assertEquals(
+        ["DESC[datastore_types.Key.from_path(u'TestEntity', 1, _app=u'testapp') to "
+         "datastore_types.Key.from_path(u'TestEntity', 1, _app=u'testapp')]",
+         "ASC(datastore_types.Key.from_path(u'TestEntity', 1, _app=u'testapp') to "
+         "datastore_types.Key.from_path(u'TestEntity', 2, _app=u'testapp')]"],
+        stringified)
+
+
+class DatastoreKeyInputReaderTest(unittest.TestCase):
+  """Tests for DatastoreKeyInputReader."""
+
+  def testValidate_Passes(self):
+    """Tests validation function even with invalid kind."""
+    params = {
+        "entity_kind": "InvalidKind",
+        }
+    mapper_spec = model.MapperSpec(
+        "FooHandler",
+        "mapreduce.input_readers.DatastoreKeyInputReader",
+        params, 1)
+    input_readers.DatastoreKeyInputReader.validate(mapper_spec)
+
+  def testGenerator(self):
+    """Test generator functionality."""
     expected_keys = []
     for _ in range(0, 100):
       expected_keys.append(TestEntity().put())
 
-    krange = key_range.KeyRange(key_start=self.key(25), key_end=self.key(50),
+    krange = key_range.KeyRange(key_start=key(25), key_end=key(50),
                                 direction="ASC",
                                 include_start=False, include_end=True)
     query_range = input_readers.DatastoreKeyInputReader(
-        ENTITY_KIND, krange, {"batch_size": "50"})
+        ENTITY_KIND, krange, 50)
 
     keys = []
 
-    for key in query_range:
-      keys.append(key)
+    for k in query_range:
+      keys.append(k)
       self.assertEquals(
-          key_range.KeyRange(key_start=key, key_end=self.key(50),
+          key_range.KeyRange(key_start=k, key_end=key(50),
                              direction="ASC",
                              include_start=False, include_end=True),
           query_range._key_range)
@@ -348,7 +493,7 @@ class DatastoreInputReaderTest(unittest.TestCase):
     self.assertEquals(25, len(keys))
     self.assertEquals(expected_keys[25:50], keys)
 
-  def testKeysOnlyGeneratorNoModelOtherApp(self):
+  def tesGeneratorNoModelOtherApp(self):
     """Test DatastoreKeyInputReader when raw kind is given, not a Model path."""
     OTHER_KIND = "blahblah"
     OTHER_APP = "blah"
@@ -383,44 +528,6 @@ class DatastoreInputReaderTest(unittest.TestCase):
     self.assertEquals(25, len(keys))
     self.assertEquals(expected_keys[25:50], keys)
 
-  def testEntityGenerator(self):
-    """Test DatastoreEntityInputReader."""
-    expected_entities = []
-    for _ in range(0, 100):
-      model_instance = TestEntity()
-      model_instance.put()
-      expected_entities.append(model_instance._populate_internal_entity())
-
-    krange = key_range.KeyRange(key_start=self.key(25), key_end=self.key(50),
-                                direction="ASC",
-                                include_start=False, include_end=True)
-    query_range = input_readers.DatastoreEntityInputReader(
-        ENTITY_KIND, krange, {"batch_size": "50"})
-
-    entities = []
-    for entity in query_range:
-      entities.append(entity)
-      self.assertEquals(
-          key_range.KeyRange(key_start=entity.key(), key_end=self.key(50),
-                             direction="ASC",
-                             include_start=False, include_end=True),
-          query_range._key_range)
-
-    self.assertEquals(25, len(entities))
-    self.assertEquals(expected_entities[25:50], entities)
-
-  def testShardDescription(self):
-    """Tests the human-visible description of Datastore readers."""
-    TestEntity().put()
-    TestEntity().put()
-    splits = self.split(2)
-    stringified = [str(s) for s in splits]
-    self.assertEquals(
-        ["DESC[datastore_types.Key.from_path(u'TestEntity', 1, _app=u'testapp') to "
-         "datastore_types.Key.from_path(u'TestEntity', 1, _app=u'testapp')]",
-         "ASC(datastore_types.Key.from_path(u'TestEntity', 1, _app=u'testapp') to "
-         "datastore_types.Key.from_path(u'TestEntity', 2, _app=u'testapp')]"],
-        stringified)
 
 
 class MockBlobInfo(object):
@@ -613,7 +720,7 @@ class BlobstoreLineInputReaderTest(unittest.TestCase):
         "mapper_params": {"blob_keys": ["foo"] * 1000},
         "mapper_shard_count": 2})
     self.assertRaises(input_readers.BadReaderParamsError,
-                      input_readers.BlobstoreLineInputReader.split_input,
+                      input_readers.BlobstoreLineInputReader.validate,
                       mapper_spec)
 
   def testNoKeys(self):
@@ -624,7 +731,7 @@ class BlobstoreLineInputReaderTest(unittest.TestCase):
         "mapper_params": {"blob_keys": []},
         "mapper_shard_count": 2})
     self.assertRaises(input_readers.BadReaderParamsError,
-                      input_readers.BlobstoreLineInputReader.split_input,
+                      input_readers.BlobstoreLineInputReader.validate,
                       mapper_spec)
 
 

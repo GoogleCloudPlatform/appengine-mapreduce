@@ -29,9 +29,9 @@ This module should be specified as a handler for mapreduce URLs in app.yaml:
 import wsgiref.handlers
 
 from google.appengine.ext import webapp
-from google.appengine.ext.webapp import util
 from mapreduce import handlers
 from mapreduce import status
+from google.appengine.ext.webapp import util
 
 
 STATIC_RE = r".*/([^/]*\.(?:css|js)|status|detail)$"
@@ -42,9 +42,9 @@ class RedirectHandler(webapp.RequestHandler):
 
   def get(self):
     new_path = self.request.path
-    if not new_path.endswith('/'):
-      new_path += '/'
-    new_path += 'status'
+    if not new_path.endswith("/"):
+      new_path += "/"
+    new_path += "status"
     self.redirect(new_path)
 
 
@@ -73,7 +73,7 @@ def create_application():
       # UI static files
       (STATIC_RE, status.ResourceHandler),
 
-      # Redirect non-file URLs that do not end in status to status page
+      # Redirect non-file URLs that do not end in status/detail to status page.
       (r".*", RedirectHandler),
   ],
   debug=True)
