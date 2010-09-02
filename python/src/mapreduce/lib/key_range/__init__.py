@@ -489,14 +489,19 @@ class KeyRange(object):
           isinstance(id_or_name2, basestring)):
       return KeyRange.bisect_string_range(id_or_name1, id_or_name2)
     else:
-      assert (isinstance(id_or_name1, (int, long)) and
-              isinstance(id_or_name2, basestring))
-      return unichr(0)
+      if (not isinstance(id_or_name1, (int, long)) or
+          not isinstance(id_or_name2, basestring)):
+        raise KeyRangeError("Wrong key order: %r, %r" %
+                            (id_or_name1, id_or_name2))
+      zero_ch = unichr(0)
+      if id_or_name2 == zero_ch:
+        return (id_or_name1 + 2**63 - 1) / 2
+      return zero_ch
 
   @staticmethod
   def guess_end_key(kind,
                     key_start,
-                    probe_count=10,
+                    probe_count=30,
                     split_rate=5):
     """Guess the end of a key range with a binary search of probe queries.
 
@@ -537,7 +542,7 @@ class KeyRange(object):
       elif isinstance(piece, basestring):
         full_path[index] = u"\xffff"
       else:
-        full_path[index] = 2**32
+        full_path[index] = 2**63 - 1
 
     key_end = datastore.Key.from_path(*full_path, **{"_app": app})
     split_key = key_end
@@ -551,9 +556,13 @@ class KeyRange(object):
           _app=app,
           keys_only=True).Get(1)
       if results:
-        split_rate = 1
-        key_start = split_key
-        split_key = key_end
+        if results[0].name() and not key_start.name():
+          return KeyRange.guess_end_key(
+              kind, results[0], probe_count - 1, split_rate)
+        else:
+          split_rate = 1
+          key_start = results[0]
+          split_key = key_end
       else:
         key_end = split_key
 
