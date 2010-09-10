@@ -166,7 +166,10 @@ public class MapReduceXml {
    * Some JDKs apparently don't set the TransformerFactory setting to a class
    * that actually exists, so probe a couple of possible values here.
    */
-  private static void guessAndSetTransformerFactoryProp() {
+  private synchronized static void guessAndSetTransformerFactoryProp() {
+    if (guessAttempted) {
+      return;
+    }
     guessAttempted = true;
     if (tryTransformerFactoryGuess("org.apache.xalan.processor.TransformerFactoryImpl")) {
       return;
