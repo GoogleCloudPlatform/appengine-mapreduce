@@ -17,6 +17,7 @@
 package com.google.appengine.tools.mapreduce;
 
 import com.google.appengine.api.blobstore.BlobKey;
+import com.google.appengine.api.blobstore.BlobstoreInputStream;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.io.CountingInputStream;
@@ -26,12 +27,10 @@ import org.apache.hadoop.mapreduce.InputSplit;
 import org.apache.hadoop.mapreduce.RecordReader;
 import org.apache.hadoop.mapreduce.TaskAttemptContext;
 
-import java.io.BufferedInputStream;
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.channels.Channels;
 import java.util.Iterator;
 
 /**
@@ -41,8 +40,6 @@ import java.util.Iterator;
  * @author idk@google.com (Igor Kushnirskiy)
  */
 class BlobstoreRecordReader extends RecordReader<BlobstoreRecordKey, byte[]> implements Writable {
-
-  private static final int MIN_BUFFER_SIZE = 1024 * 256;
 
   private static final byte DEFAULT_TERMINATOR = '\n';
 
@@ -69,13 +66,9 @@ class BlobstoreRecordReader extends RecordReader<BlobstoreRecordKey, byte[]> imp
   private InputStreamFactory inputStreamFactory =
       new InputStreamFactory() {
 
-        private final BlobstoreReadableByteChannelFactory readableByteChannelFactory =
-            new BlobstoreReadableByteChannelFactory();
-
         @Override
         public InputStream getInputStream(BlobKey blobKey, long offset) throws IOException {
-          return Channels.newInputStream(
-              readableByteChannelFactory.getReadableByteChannel(blobKey, offset));
+          return new BlobstoreInputStream(blobKey, offset);
         }
       };
 
@@ -120,18 +113,13 @@ class BlobstoreRecordReader extends RecordReader<BlobstoreRecordKey, byte[]> imp
 
   private CountingInputStream getInputStream(BlobstoreInputSplit split, long offset)
       throws IOException {
-    int bufferSize = (int) split.getLength();
-    bufferSize *= 1.5;
-    bufferSize = Math.max(bufferSize, MIN_BUFFER_SIZE);
-
-    return new CountingInputStream(new BufferedInputStream(inputStreamFactory.getInputStream(
-        split.getBlobKey(), split.getStartIndex() + offset), bufferSize));
+    return new CountingInputStream(
+        inputStreamFactory.getInputStream(split.getBlobKey(), split.getStartIndex() + offset));
   }
 
   @Override
   public boolean nextKeyValue() {
-    boolean hasNext = recordIterator.hasNext();
-    return hasNext;
+    return recordIterator.hasNext();
   }
 
   @Override

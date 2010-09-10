@@ -43,7 +43,6 @@ public class AllTests extends TestCase {
     suite.addTestSuite(StringSplitUtilTest.class);
     suite.addTestSuite(BlobstoreInputFormatTest.class);
     suite.addTestSuite(BlobstoreInputSplitTest.class);
-    suite.addTestSuite(BlobstoreReadableByteChannelFactoryTest.class);
     suite.addTestSuite(BlobstoreRecordReaderTest.class);
     suite.addTestSuite(InputStreamIteratorTest.class);
     suite.addTestSuite(RangeInputFormatTest.class);
