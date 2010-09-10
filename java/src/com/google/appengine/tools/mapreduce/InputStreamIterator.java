@@ -64,6 +64,10 @@ class InputStreamIterator implements Iterator<InputStreamIterator.OffsetRecordPa
     }
   }
 
+  private static enum SkipRecordResult {
+    AT_EOF, EOF_AFTER_RECORD, TERMINATOR
+  }
+
   private static final Logger log = Logger.getLogger(InputStreamIterator.class.getName());
   private static final int READ_LIMIT = 1024 * 1024;
 
@@ -83,19 +87,27 @@ class InputStreamIterator implements Iterator<InputStreamIterator.OffsetRecordPa
     this.terminator = terminator;
   }
 
-  // Returns false if the end of stream is reached and no characters have been
-  // read since the last terminator.
-  private boolean skipUntilNextRecord(InputStream stream) throws IOException {
+  // Searches for the start of the next record.
+  //
+  // Returns
+  // TERMINATOR if a terminator is reached. Otherwise,
+  // EOF_AFTER_RECORD if EOF is reached after reading some number of non-terminator characters
+  // AT_EOF if EOF is reached without any characters being read
+  private SkipRecordResult skipUntilNextRecord(InputStream stream) throws IOException {
     boolean readCharSinceTerminator = false;
     int value;
     do {
       value = stream.read();
       if (value == -1) {
-        return readCharSinceTerminator;
+        if (readCharSinceTerminator) {
+          return SkipRecordResult.EOF_AFTER_RECORD;
+        } else {
+          return SkipRecordResult.AT_EOF;
+        }
       }
       readCharSinceTerminator = true;
     } while (value != (terminator & 0xff));
-    return true;
+    return SkipRecordResult.TERMINATOR;
   }
 
   @Override
@@ -103,7 +115,7 @@ class InputStreamIterator implements Iterator<InputStreamIterator.OffsetRecordPa
     try {
       if (input.getCount() == 0 && skipFirstTerminator) {
         // find the first record start;
-        if (!skipUntilNextRecord(input)) {
+        if (skipUntilNextRecord(input) != SkipRecordResult.TERMINATOR) {
           return false;
         }
       }
@@ -116,32 +128,22 @@ class InputStreamIterator implements Iterator<InputStreamIterator.OffsetRecordPa
 
       long recordStart = input.getCount();
       input.mark(READ_LIMIT);
-      if (!skipUntilNextRecord(input)) {
+      SkipRecordResult skipValue = skipUntilNextRecord(input);
+      if (skipValue == SkipRecordResult.AT_EOF) {
         return false;
       }
       
       long recordEnd = input.getCount();
-      boolean eofReached = input.read() == -1;
       input.reset();
       int byteValueLen = (int) (recordEnd - recordStart);
-      if (!eofReached) {
-        // Skip separator
+      if (skipValue == SkipRecordResult.TERMINATOR) {
+        // Skip terminator
         byteValueLen--;
       }
       byte[] byteValue = new byte[byteValueLen];
       ByteStreams.readFully(input, byteValue);
-      if (!eofReached) {
+      if (skipValue == SkipRecordResult.TERMINATOR) {
         Preconditions.checkState(1 == input.skip(1)); // skip the terminator
-      } else if (byteValue.length > 0 
-                 && byteValue[byteValue.length - 1] == terminator) {
-        // Lop the terminator off the end if we got the sequence
-        // {record} {terminator} EOF.
-        // Unfortunately, due to our underlying interface, we don't have
-        // enough information to do this without the possibility of a copy
-        // in one of the terminator/non-terminator before EOF cases.
-        byte[] newByteValue = new byte[byteValueLen - 1];
-        System.arraycopy(byteValue, 0, newByteValue, 0, byteValueLen - 1);
-        byteValue = newByteValue;
       }
       currentValue = new OffsetRecordPair(recordStart, byteValue);
       return true;
