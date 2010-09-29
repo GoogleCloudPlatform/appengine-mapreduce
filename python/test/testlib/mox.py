@@ -902,7 +902,7 @@ class MethodSignatureChecker(object):
     # correct, this will cause extra executions of the function.
     if inspect.ismethod(self._method):
       # The extra param accounts for the bound instance.
-      if len(params) == len(self._required_args) + 1:
+      if len(params) > len(self._required_args):
         expected = getattr(self._method, 'im_class', None)
 
         # Check if the param is an instance of the expected class,
@@ -1169,7 +1169,7 @@ class MockMethod(object):
     """Move this method into group of calls which may be called multiple times.
 
     A group of repeating calls must be defined together, and must be executed in
-    full before the next expected mehtod can be called.
+    full before the next expected method can be called.
 
     Args:
       group_name: the name of the unordered group.
@@ -1245,7 +1245,10 @@ class Comparator:
     raise NotImplementedError, 'method must be implemented by a subclass.'
 
   def __eq__(self, rhs):
-    return self.equals(rhs)
+    try:
+      return self.equals(rhs)
+    except Exception:
+      return False
 
   def __ne__(self, rhs):
     return not self.equals(rhs)
@@ -1348,7 +1351,7 @@ class IsAlmost(Comparator):
 
     try:
       return round(rhs-self._float_value, self._places) == 0
-    except TypeError:
+    except Exception:
       # This is probably because either float_value or rhs is not a number.
       return False
 
@@ -1419,7 +1422,10 @@ class Regex(Comparator):
       bool
     """
 
-    return self.regex.search(rhs) is not None
+    try:
+      return self.regex.search(rhs) is not None
+    except Exception:
+      return False
 
   def __repr__(self):
     s = '<regular expression \'%s\'' % self.regex.pattern
@@ -1455,7 +1461,10 @@ class In(Comparator):
       bool
     """
 
-    return self._key in rhs
+    try:
+      return self._key in rhs
+    except Exception:
+      return False
 
   def __repr__(self):
     return '<sequence or map containing \'%s\'>' % str(self._key)
@@ -1489,7 +1498,10 @@ class Not(Comparator):
       bool
     """
 
-    return not self._predicate.equals(rhs)
+    try:
+      return not self._predicate.equals(rhs)
+    except Exception:
+      return False
 
   def __repr__(self):
     return '<not \'%s\'>' % self._predicate
