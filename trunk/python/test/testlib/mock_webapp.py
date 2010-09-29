@@ -15,6 +15,9 @@
 # limitations under the License.
 #
 
+
+
+
 """Mocks for classes defined in webapp module.
 
 Use this classes to test functionality depending on webapp framework.
@@ -81,7 +84,9 @@ class MockRequest(object):
     if allow_multiple:
       return list(self.params[argument_name])
 
+
     if isinstance(self.params[argument_name], list):
+
       return self.params[argument_name][0]
     return self.params[argument_name]
 
