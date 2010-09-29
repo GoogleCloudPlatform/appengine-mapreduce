@@ -771,7 +771,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
 
     worker_params = handlers.MapperWorkerCallbackHandler.worker_parameters(
         self.mapreduce_spec, self.shard_id, self.slice_id,
-        InputReader(ENTITY_KIND, key_range.KeyRange()))
+        InputReader(ENTITY_KIND, [key_range.KeyRange()]))
     InputReader.reset()
 
     for param_name in worker_params:
@@ -883,11 +883,11 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
     """Test schedule_slice method."""
     input_reader = input_readers.DatastoreInputReader(
         ENTITY_KIND,
-        key_range.KeyRange(key_start=self.key(75),
-                           key_end=self.key(100),
-                           direction="ASC",
-                           include_start=False,
-                           include_end=True))
+        [key_range.KeyRange(key_start=self.key(75),
+                            key_end=self.key(100),
+                            direction="ASC",
+                            include_start=False,
+                            include_end=True)])
     self.handler.schedule_slice("/mapreduce", self.mapreduce_spec,
                                 self.shard_id, 123, input_reader)
 
@@ -900,11 +900,11 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
     eta = datetime.datetime.utcnow() + datetime.timedelta(hours=1)
     input_reader = input_readers.DatastoreInputReader(
         ENTITY_KIND,
-        key_range.KeyRange(key_start=self.key(75),
-                           key_end=self.key(100),
-                           direction="ASC",
-                           include_start=False,
-                           include_end=True))
+        [key_range.KeyRange(key_start=self.key(75),
+                            key_end=self.key(100),
+                            direction="ASC",
+                            include_start=False,
+                            include_end=True)])
     self.handler.schedule_slice("/mapreduce", self.mapreduce_spec,
                                 self.shard_id, 123, input_reader,
                                 eta=eta)
@@ -918,11 +918,11 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
     countdown = 60 * 60
     input_reader = input_readers.DatastoreInputReader(
         ENTITY_KIND,
-        key_range.KeyRange(key_start=self.key(75),
-                           key_end=self.key(100),
-                           direction="ASC",
-                           include_start=False,
-                           include_end=True))
+        [key_range.KeyRange(key_start=self.key(75),
+                            key_end=self.key(100),
+                            direction="ASC",
+                            include_start=False,
+                            include_end=True)])
     self.handler.schedule_slice("/mapreduce", self.mapreduce_spec,
                                 self.shard_id, 123, input_reader,
                                 countdown=countdown)
@@ -937,11 +937,11 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
     try:
       query_range = input_readers.DatastoreInputReader(
           ENTITY_KIND,
-          key_range.KeyRange(key_start=self.key(75),
-                             key_end=self.key(100),
-                             direction="ASC",
-                             include_start=False,
-                             include_end=True))
+          [key_range.KeyRange(key_start=self.key(75),
+                              key_end=self.key(100),
+                              direction="ASC",
+                              include_start=False,
+                              include_end=True)])
       self.handler.schedule_slice("/mapreduce", self.mapreduce_spec,
                                   self.shard_id, 123, query_range)
 
@@ -955,11 +955,11 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
     """Tests when the scheduled slice already exists."""
     query_range = input_readers.DatastoreInputReader(
         ENTITY_KIND,
-        key_range.KeyRange(key_start=self.key(75),
-                           key_end=self.key(100),
-                           direction="ASC",
-                           include_start=False,
-                           include_end=True))
+        [key_range.KeyRange(key_start=self.key(75),
+                            key_end=self.key(100),
+                            direction="ASC",
+                            include_start=False,
+                            include_end=True)])
     self.handler.schedule_slice("/mapreduce", self.mapreduce_spec,
                                 self.shard_id, 123, query_range)
 
@@ -978,11 +978,11 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
 
     input_reader = input_readers.DatastoreInputReader(
         ENTITY_KIND,
-        key_range.KeyRange(key_start=self.key(75),
-                           key_end=self.key(100),
-                           direction="ASC",
-                           include_start=False,
-                           include_end=True))
+        [key_range.KeyRange(key_start=self.key(75),
+                            key_end=self.key(100),
+                            direction="ASC",
+                            include_start=False,
+                            include_end=True)])
     self.handler.schedule_slice("/mapreduce", self.mapreduce_spec,
                                 self.shard_id, 123, input_reader)
 
@@ -1003,11 +1003,11 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
 
     input_reader = input_readers.DatastoreInputReader(
         ENTITY_KIND,
-        key_range.KeyRange(key_start=self.key(75),
-                           key_end=self.key(100),
-                           direction="ASC",
-                           include_start=False,
-                           include_end=True))
+        [key_range.KeyRange(key_start=self.key(75),
+                            key_end=self.key(100),
+                             direction="ASC",
+                            include_start=False,
+                            include_end=True)])
     self.handler.schedule_slice("/mapreduce", self.mapreduce_spec,
                                 self.shard_id, 123, input_reader)
 

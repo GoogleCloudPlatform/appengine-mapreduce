@@ -26,6 +26,7 @@ import StringIO
 import zipfile
 
 from google.appengine.api import datastore
+from google.appengine.api import namespace_manager
 
 from mapreduce.lib import blobstore
 from google.appengine.ext import db
@@ -57,6 +58,7 @@ class InputReader(JsonMixin):
 
   # Mapreduce parameters.
   _APP_PARAM = "_app"
+  NAMESPACES_PARAM = "namespaces"
   MAPPER_PARAMS = "mapper_params"
 
   def __iter__(self):
@@ -142,18 +144,20 @@ class DatastoreInputReader(InputReader):
   # TODO(user): Add support for arbitrary queries. It's not possible to
   # support them without cursors since right now you can't even serialize query
   # definition.
-  def __init__(self, entity_kind, key_range_param, batch_size = _BATCH_SIZE):
+  def __init__(self, entity_kind, key_ranges, batch_size = _BATCH_SIZE):
     """Create new DatastoreInputReader object.
 
     This is internal constructor. Use split_query instead.
 
     Args:
       entity_kind: entity kind as string.
-      key_range_param: key range to process as key_range.KeyRange.
+      key_ranges: a sequence of key_range.KeyRange instances to process.
       batch_size: size of read batch as int.
     """
     self._entity_kind = entity_kind
-    self._key_range = key_range_param
+    # Reverse the KeyRanges so they can be processed in order as a stack of
+    # work items.
+    self._key_ranges = list(reversed(key_ranges))
     self._batch_size = int(batch_size)
 
   def __iter__(self):
@@ -165,31 +169,50 @@ class DatastoreInputReader(InputReader):
       next model instance.
     """
     while True:
-      query = self._key_range.make_ascending_query(
-          util.for_name(self._entity_kind))
-      results = query.fetch(limit=self._batch_size)
-
-      if not results:
+      if self._current_key_range is None:
         break
 
-      for model_instance in results:
-        key = model_instance.key()
+      while True:
+        query = self._current_key_range.make_ascending_query(
+            util.for_name(self._entity_kind))
+        results = query.fetch(limit=self._batch_size)
 
-        self._key_range.advance(key)
-        yield model_instance
+        if not results:
+          self._advance_key_range()
+          break
+
+        for model_instance in results:
+          key = model_instance.key()
+
+          self._current_key_range.advance(key)
+          yield model_instance
+
+  @property
+  def _current_key_range(self):
+    if self._key_ranges:
+      return self._key_ranges[-1]
+    else:
+      return None
+
+  def _advance_key_range(self):
+    if self._key_ranges:
+      self._key_ranges.pop()
 
   # TODO(user): use query splitting functionality when it becomes available
   # instead.
   @classmethod
-  def _split_input_from_params(cls, app, entity_kind_name,
-                               params, shard_count):
-    """Return input reader objects. Helper for split_input."""
+  def _split_input_from_namespace(cls, app, namespace, entity_kind_name,
+                                  shard_count):
+    """Return KeyRange objects. Helper for _split_input_from_params."""
 
     raw_entity_kind = util.get_short_name(entity_kind_name)
 
     # we use datastore.Query instead of ext.db.Query here, because we can't
     # erase ordering on db.Query once we set it.
-    ds_query = datastore.Query(kind=raw_entity_kind, _app=app, keys_only=True)
+    ds_query = datastore.Query(kind=raw_entity_kind,
+                               namespace=namespace,
+                               _app=app,
+                               keys_only=True)
     ds_query.Order("__key__")
     first_entity_key_list = ds_query.Get(1)
     if not first_entity_key_list:
@@ -210,7 +233,9 @@ class DatastoreInputReader(InputReader):
       last_entity_key = key_range.KeyRange.guess_end_key(raw_entity_kind,
                                                          first_entity_key)
     full_keyrange = key_range.KeyRange(
-        first_entity_key, last_entity_key, None, True, True, _app=app)
+        first_entity_key, last_entity_key, None, True, True,
+        namespace=namespace,
+        _app=app)
     key_ranges = [full_keyrange]
     number_of_half_splits = int(math.floor(math.log(shard_count, 2)))
     for _ in range(0, number_of_half_splits):
@@ -218,8 +243,29 @@ class DatastoreInputReader(InputReader):
       for r in key_ranges:
         new_ranges += r.split_range(1)
       key_ranges = new_ranges
+    return key_ranges
+
+  @classmethod
+  def _split_input_from_params(cls, app, namespaces, entity_kind_name,
+                               params, shard_count):
+    """Return input reader objects. Helper for split_input."""
+    key_ranges = []  # KeyRanges for all namespaces
+    for namespace in namespaces:
+      key_ranges.extend(
+          cls._split_input_from_namespace(app,
+                                          namespace,
+                                          entity_kind_name,
+                                          shard_count))
+
+    # Divide the KeyRanges into shard_count shards. The KeyRanges for different
+    # namespaces might be very different in size so the assignment of KeyRanges
+    # to shards is done round-robin.
+    shared_ranges = [[] for _ in range(shard_count)]
+    for i, k_range in enumerate(key_ranges):
+      shared_ranges[i % shard_count].append(k_range)
     batch_size = int(params.get(cls.BATCH_SIZE_PARAM, cls._BATCH_SIZE))
-    return [cls(entity_kind_name, r, batch_size) for r in key_ranges]
+    return [cls(entity_kind_name, ranges, batch_size)
+            for ranges in shared_ranges if ranges]
 
   @classmethod
   def validate(cls, mapper_spec):
@@ -271,6 +317,17 @@ class DatastoreInputReader(InputReader):
           raise BadReaderParamsError("Bad batch size: %s" % batch_size)
       except ValueError, e:
         raise BadReaderParamsError("Bad batch size: %s" % e)
+    if cls.NAMESPACES_PARAM in params:
+      if isinstance(params[cls.NAMESPACES_PARAM], (str, unicode)):
+        pass
+      elif isinstance(params[cls.NAMESPACES_PARAM], list):
+        for namespace in params[cls.NAMESPACES_PARAM]:
+          if not isinstance(namespace, (str, unicode)):
+            raise BadReaderParamsError(
+                "Bad namespace list: expected a list of strings")
+      else:
+        raise BadReaderParamsError(
+            "Bad namespace list: expected a list of strings")
 
   @classmethod
   def split_input(cls, mapper_spec):
@@ -299,10 +356,14 @@ class DatastoreInputReader(InputReader):
     params = mapper_spec.params
     entity_kind_name = params[cls.ENTITY_KIND_PARAM]
     shard_count = mapper_spec.shard_count
+    namespaces = params.get(cls.NAMESPACES_PARAM,
+                            [namespace_manager.get_namespace()])
+    if isinstance(namespaces, (str, unicode)):
+      namespaces = namespaces.split(",")
     app = params.get(cls._APP_PARAM)
 
     return cls._split_input_from_params(
-        app, entity_kind_name, params, shard_count)
+        app, namespaces, entity_kind_name, params, shard_count)
 
   def to_json(self):
     """Serializes all the data in this query range into json form.
@@ -310,14 +371,14 @@ class DatastoreInputReader(InputReader):
     Returns:
       all the data in json-compatible map.
     """
-    json_dict = {self.KEY_RANGE_PARAM: self._key_range.to_json(),
+    json_dict = {self.KEY_RANGE_PARAM: [k.to_json() for k in self._key_ranges],
                  self.ENTITY_KIND_PARAM: self._entity_kind,
                  self.BATCH_SIZE_PARAM: self._batch_size}
     return json_dict
 
   def __str__(self):
     """Returns the string representation of this DatastoreInputReader."""
-    return repr(self._key_range)
+    return repr(self._key_ranges)
 
   @classmethod
   def from_json(cls, json):
@@ -329,9 +390,10 @@ class DatastoreInputReader(InputReader):
     Returns:
       an instance of DatastoreInputReader with all data deserialized from json.
     """
-    query_range = cls(json[cls.ENTITY_KIND_PARAM],
-                      key_range.KeyRange.from_json(json[cls.KEY_RANGE_PARAM]),
-                      json[cls.BATCH_SIZE_PARAM])
+    query_range = cls(
+        json[cls.ENTITY_KIND_PARAM],
+        [key_range.KeyRange.from_json(k) for k in json[cls.KEY_RANGE_PARAM]],
+        json[cls.BATCH_SIZE_PARAM])
     return query_range
 
 
@@ -346,18 +408,23 @@ class DatastoreKeyInputReader(DatastoreInputReader):
     Yields:
       next entry.
     """
+    raw_entity_kind = util.get_short_name(self._entity_kind)
     while True:
-      raw_entity_kind = util.get_short_name(self._entity_kind)
-      query = self._key_range.make_ascending_datastore_query(
-          raw_entity_kind, keys_only=True)
-      results = query.Get(limit=self._batch_size)
-
-      if not results:
+      if self._current_key_range is None:
         break
 
-      for key in results:
-        self._key_range.advance(key)
-        yield key
+      while True:
+        query = self._current_key_range.make_ascending_datastore_query(
+            raw_entity_kind, keys_only=True)
+        results = query.Get(limit=self._batch_size)
+
+        if not results:
+          self._advance_key_range()
+          break
+
+        for key in results:
+          self._current_key_range.advance(key)
+          yield key
 
   @classmethod
   def validate(cls, mapper_spec):
@@ -370,37 +437,6 @@ class DatastoreKeyInputReader(DatastoreInputReader):
       BadReaderParamsError: required parameters are missing or invalid.
     """
     cls._common_validate(mapper_spec)
-
-  @classmethod
-  def split_input(cls, mapper_spec):
-    """Splits query into shards without fetching query results.
-
-    Tries as best as it can to split the whole query result set into equal
-    shards. Due to difficulty of making the perfect split, resulting shards'
-    sizes might differ significantly from each other. The actual number of
-    shards might also be less then requested (even 1), though it is never
-    greater.
-
-    Current implementation does key-lexicographic order splitting. It requires
-    query not to specify any __key__-based ordering. If an index for
-    query.order('-__key__') query is not present, an inaccurate guess at
-    sharding will be made by splitting the full key range.
-
-    Args:
-      mapper_spec: MapperSpec with params containing 'entity_kind'.
-        May also have 'batch_size' in the params to specify the number
-        of entities to process in each batch.
-
-    Returns:
-      A list of DatastoreKeyInputReader objects of length <= number_of_shards.
-    """
-    params = mapper_spec.params
-    entity_kind_name = params[cls.ENTITY_KIND_PARAM]
-    shard_count = mapper_spec.shard_count
-    app = params.get(cls._APP_PARAM)
-
-    return cls._split_input_from_params(
-        app, entity_kind_name, params, shard_count)
 
 
 class DatastoreEntityInputReader(DatastoreInputReader):
@@ -414,17 +450,23 @@ class DatastoreEntityInputReader(DatastoreInputReader):
     Yields:
       next entry.
     """
+    raw_entity_kind = util.get_short_name(self._entity_kind)
     while True:
-      raw_entity_kind = util.get_short_name(self._entity_kind)
-      query = self._key_range.make_ascending_datastore_query(raw_entity_kind)
-      results = query.Get(limit=self._batch_size)
-
-      if not results:
+      if self._current_key_range is None:
         break
 
-      for entity in results:
-        self._key_range.advance(entity.key())
-        yield entity
+      while True:
+        query = self._current_key_range.make_ascending_datastore_query(
+            raw_entity_kind)
+        results = query.Get(limit=self._batch_size)
+
+        if not results:
+          self._advance_key_range()
+          break
+
+        for entity in results:
+          self._current_key_range.advance(entity.key())
+          yield entity
 
   @classmethod
   def validate(cls, mapper_spec):
@@ -437,37 +479,6 @@ class DatastoreEntityInputReader(DatastoreInputReader):
       BadReaderParamsError: required parameters are missing or invalid.
     """
     cls._common_validate(mapper_spec)
-
-  @classmethod
-  def split_input(cls, mapper_spec):
-    """Splits query into shards without fetching query results.
-
-    Tries as best as it can to split the whole query result set into equal
-    shards. Due to difficulty of making the perfect split, resulting shards'
-    sizes might differ significantly from each other. The actual number of
-    shards might also be less then requested (even 1), though it is never
-    greater.
-
-    Current implementation does key-lexicographic order splitting. It requires
-    query not to specify any __key__-based ordering. If an index for
-    query.order('-__key__') query is not present, an inaccurate guess at
-    sharding will be made by splitting the full key range.
-
-    Args:
-      mapper_spec: MapperSpec with params containing 'entity_kind'.
-        May also have 'batch_size' in the params to specify the number
-        of entities to process in each batch.
-
-    Returns:
-      List of DatastoreEntityInputReader objects of length <= number_of_shards.
-    """
-    params = mapper_spec.params
-    entity_kind_name = params[cls.ENTITY_KIND_PARAM]
-    shard_count = mapper_spec.shard_count
-    app = params.get(cls._APP_PARAM)
-
-    return cls._split_input_from_params(
-        app, entity_kind_name, params, shard_count)
 
 
 class BlobstoreLineInputReader(InputReader):
