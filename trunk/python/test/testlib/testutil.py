@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Status page handler for mapreduce framework.
+"""Test utilities for mapreduce framework.
 """
 
 
@@ -28,6 +28,7 @@
 from google.appengine.tools import os_compat
 # pylint: enable-msg=W0611
 
+from testlib import mox
 import os
 import sys
 import unittest
@@ -37,6 +38,22 @@ from google.appengine.api import datastore_file_stub
 from google.appengine.api import queueinfo
 from google.appengine.api.memcache import memcache_stub
 from google.appengine.api.labs.taskqueue import taskqueue_stub
+
+
+class MatchesUserRPC(mox.Comparator):
+  """Mox comparator for UserRPC objects."""
+
+  def __init__(self, **kwargs):
+    self.kwargs = kwargs
+
+  def equals(self, rpc):
+    """Check to see if rpc matches arguments."""
+    if self.kwargs.get("deadline", None) != rpc.deadline:
+      return False
+    return True
+
+  def __repr__(self):
+    return "MatchesUserRPC(%s)" % self.kwargs
 
 
 class HandlerTestBase(unittest.TestCase):

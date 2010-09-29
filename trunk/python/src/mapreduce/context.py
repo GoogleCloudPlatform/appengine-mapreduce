@@ -24,7 +24,8 @@ from handlers such as counters, log messages, mutation pools.
 
 
 __all__ = ["MAX_ENTITY_COUNT", "MAX_POOL_SIZE", "Context", "MutationPool",
-           "Counters", "ItemList", "EntityList", "get", "COUNTER_MAPPER_CALLS"]
+           "Counters", "ItemList", "EntityList", "get", "COUNTER_MAPPER_CALLS",
+           "DATASTORE_DEADLINE"]
 
 from google.appengine.api import datastore
 from google.appengine.ext import db
@@ -36,6 +37,9 @@ MAX_POOL_SIZE = 900 * 1000
 
 # Maximum number of items. Pool will be flushed when reaches this amount.
 MAX_ENTITY_COUNT = 500
+
+# Deadline in seconds for mutation pool datastore operations.
+DATASTORE_DEADLINE = 15
 
 # The name of the counter which counts all mapper calls.
 COUNTER_MAPPER_CALLS = "mapper_calls"
@@ -110,13 +114,17 @@ class MutationPool(object):
       when this size is reached.
   """
 
-  def __init__(self, max_pool_size=MAX_POOL_SIZE):
+  def __init__(self,
+               max_pool_size=MAX_POOL_SIZE,
+               max_entity_count=MAX_ENTITY_COUNT):
     """Constructor.
 
     Args:
       max_pool_size: maximum pools size in bytes before flushing it to db.
+      max_entity_count: maximum number of entities before flushing it to db.
     """
     self.max_pool_size = max_pool_size
+    self.max_entity_count = max_entity_count
     self.puts = ItemList()
     self.deletes = ItemList()
 
@@ -128,7 +136,7 @@ class MutationPool(object):
     """
     actual_entity = _normalize_entity(entity)
     entity_size = len(actual_entity._ToPb().Encode())
-    if (self.puts.length >= MAX_ENTITY_COUNT or
+    if (self.puts.length >= self.max_entity_count or
         (self.puts.size + entity_size) > self.max_pool_size):
       self.__flush_puts()
     self.puts.append(actual_entity, entity_size)
@@ -142,7 +150,7 @@ class MutationPool(object):
     # This is not very nice: we're calling two protected methods here...
     key = _normalize_key(entity)
     key_size = len(key._ToPb().Encode())
-    if (self.deletes.length >= MAX_ENTITY_COUNT or
+    if (self.deletes.length >= self.max_entity_count or
         (self.deletes.size + key_size) > self.max_pool_size):
       self.__flush_deletes()
     self.deletes.append(key, key_size)
@@ -155,13 +163,23 @@ class MutationPool(object):
 
   def __flush_puts(self):
     """Flush all puts to datastore."""
-    datastore.Put(self.puts.items)
+    if self.puts.length:
+      datastore.Put(self.puts.items, rpc=self.__create_rpc())
     self.puts.clear()
 
   def __flush_deletes(self):
     """Flush all deletes to datastore."""
-    datastore.Delete(self.deletes.items)
+    if self.deletes.length:
+      datastore.Delete(self.deletes.items, rpc=self.__create_rpc())
     self.deletes.clear()
+
+  def __create_rpc(self):
+    """Creates correctly configured RPC object for datastore calls.
+
+    Returns:
+      A UserRPC instance.
+    """
+    return datastore.CreateRPC(deadline=DATASTORE_DEADLINE)
 
 
 # This doesn't do much yet. In future it will play nicely with checkpoint/error
@@ -204,24 +222,32 @@ class Context(object):
   # Current context instance
   _context_instance = None
 
-  def __init__(self, mapreduce_spec, shard_state):
+  def __init__(self, mapreduce_spec, shard_state, task_retry_count=0):
     """Constructor.
 
     Args:
       mapreduce_spec: mapreduce specification as model.MapreduceSpec.
       shard_state: shard state as model.ShardState.
     """
-    # TODO(user): Make these properties protected
     self.mapreduce_spec = mapreduce_spec
     self.shard_state = shard_state
+    self.task_retry_count = task_retry_count
 
-    # TODO(user): These properties can stay public.
-    self.mutation_pool = MutationPool()
-    self.counters = Counters(shard_state)
     if self.mapreduce_spec:
       self.mapreduce_id = self.mapreduce_spec.mapreduce_id
     else:
+      # Only in tests
       self.mapreduce_id = None
+    if self.shard_state:
+      self.shard_id = self.shard_state.get_shard_id()
+    else:
+      # Only in tests
+      self.shard_id = None
+
+    self.mutation_pool = MutationPool(
+        max_pool_size=(MAX_POOL_SIZE/(2**self.task_retry_count)),
+        max_entity_count=(MAX_ENTITY_COUNT/(2**self.task_retry_count)))
+    self.counters = Counters(shard_state)
 
     self._pools = {}
     self.register_pool("mutation_pool", self.mutation_pool)

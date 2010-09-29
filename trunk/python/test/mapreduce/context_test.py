@@ -26,6 +26,7 @@ import unittest
 from google.appengine.api import datastore
 from google.appengine.ext import db
 from mapreduce import context
+from testlib import testutil
 
 
 class TestEntity(db.Model):
@@ -74,13 +75,22 @@ class ItemListTest(unittest.TestCase):
     self.assertEquals(100, self.list.size)
 
 
-class MutationPoolTest(unittest.TestCase):
+class MutationPoolTest(testutil.HandlerTestBase):
   """Tests for context.MutationPool class."""
 
   def setUp(self):
-    self.appid = 'testapp'
-    os.environ['APPLICATION_ID'] = self.appid
+    super(MutationPoolTest, self).setUp()
     self.pool = context.MutationPool()
+
+  def record_put(self, entities):
+    datastore.Put(
+        entities,
+        rpc=testutil.MatchesUserRPC(deadline=context.DATASTORE_DEADLINE))
+
+  def record_delete(self, entities):
+    datastore.Delete(
+        entities,
+        rpc=testutil.MatchesUserRPC(deadline=context.DATASTORE_DEADLINE))
 
   def testPut(self):
     """Test put method."""
@@ -135,7 +145,7 @@ class MutationPoolTest(unittest.TestCase):
     e2 = TestEntity(tag=' ' * 1000)
 
     # Record Calls
-    datastore.Put([e1._populate_internal_entity()])
+    self.record_put([e1._populate_internal_entity()])
 
     m.ReplayAll()
     try:  # test, verify
@@ -151,18 +161,19 @@ class MutationPoolTest(unittest.TestCase):
 
   def testPutTooManyEntities(self):
     """Test putting more than allowed entity count."""
-    self.pool = context.MutationPool()
+    max_entity_count = 100
+    self.pool = context.MutationPool(max_entity_count=max_entity_count)
 
     m = mox.Mox()
     m.StubOutWithMock(datastore, 'Put', use_mock_anything=True)
 
     entities = []
-    for i in range(context.MAX_ENTITY_COUNT + 50):
+    for i in range(max_entity_count + 50):
       entities.append(TestEntity())
 
     # Record Calls
-    datastore.Put([e._populate_internal_entity()
-                   for e in entities[:context.MAX_ENTITY_COUNT]])
+    self.record_put([e._populate_internal_entity()
+                     for e in entities[:max_entity_count]])
 
     m.ReplayAll()
     try:  # test, verify
@@ -187,7 +198,7 @@ class MutationPoolTest(unittest.TestCase):
     e2 = TestEntity(key_name='x' * 500)
 
     # Record Calls
-    datastore.Delete([e1.key()])
+    self.record_delete([e1.key()])
 
     m.ReplayAll()
     try:  # test, verify
@@ -203,17 +214,18 @@ class MutationPoolTest(unittest.TestCase):
 
   def testDeleteTooManyEntities(self):
     """Test putting more than allowed entity count."""
-    self.pool = context.MutationPool()
+    max_entity_count = context.MAX_ENTITY_COUNT
+    self.pool = context.MutationPool() # default size is MAX_ENTITY_COUNT
 
     m = mox.Mox()
     m.StubOutWithMock(datastore, 'Delete', use_mock_anything=True)
 
     entities = []
-    for i in range(context.MAX_ENTITY_COUNT + 50):
+    for i in range(max_entity_count + 50):
       entities.append(TestEntity(key_name='die%d' % i))
 
     # Record Calls
-    datastore.Delete([e.key() for e in entities[:context.MAX_ENTITY_COUNT]])
+    self.record_delete([e.key() for e in entities[:max_entity_count]])
 
     m.ReplayAll()
     try:  # test, verify
@@ -239,8 +251,8 @@ class MutationPoolTest(unittest.TestCase):
     e2 = TestEntity(key_name='flushme')
 
     # Record Calls
-    datastore.Put([e1._populate_internal_entity()])
-    datastore.Delete([e2.key()])
+    self.record_put([e1._populate_internal_entity()])
+    self.record_delete([e2.key()])
 
     m.ReplayAll()
     try:  # test, verify
@@ -290,7 +302,7 @@ class CountersTest(unittest.TestCase):
     counters.flush()
 
 
-class ContextTest(unittest.TestCase):
+class ContextTest(testutil.HandlerTestBase):
   """Test for context.Context class."""
 
   def testGetSetContext(self):
@@ -322,6 +334,30 @@ class ContextTest(unittest.TestCase):
     finally:
       m.UnsetStubs()
 
+  def testMutationPoolSize(self):
+    ctx = context.Context(None, None)
+    self.assertEquals(context.MAX_ENTITY_COUNT,
+                      ctx.mutation_pool.max_entity_count)
+    self.assertEquals(context.MAX_POOL_SIZE,
+                      ctx.mutation_pool.max_pool_size)
+
+    ctx = context.Context(None, None, task_retry_count=0)
+    self.assertEquals(context.MAX_ENTITY_COUNT,
+                      ctx.mutation_pool.max_entity_count)
+    self.assertEquals(context.MAX_POOL_SIZE,
+                      ctx.mutation_pool.max_pool_size)
+
+    ctx = context.Context(None, None, task_retry_count=1)
+    self.assertEquals(context.MAX_ENTITY_COUNT / 2,
+                      ctx.mutation_pool.max_entity_count)
+    self.assertEquals(context.MAX_POOL_SIZE / 2,
+                      ctx.mutation_pool.max_pool_size)
+
+    ctx = context.Context(None, None, task_retry_count=4)
+    self.assertEquals(context.MAX_ENTITY_COUNT / 16,
+                      ctx.mutation_pool.max_entity_count)
+    self.assertEquals(context.MAX_POOL_SIZE / 16,
+                      ctx.mutation_pool.max_pool_size)
 
 if __name__ == "__main__":
   unittest.main()

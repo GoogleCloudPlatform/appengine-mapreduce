@@ -145,7 +145,8 @@ class MapperWorkerCallbackHandler(base_handler.TaskQueueHandler):
     else:
       quota_consumer = None
 
-    ctx = context.Context(spec, shard_state)
+    ctx = context.Context(spec, shard_state,
+                          task_retry_count=self.task_retry_count())
     context.Context._set(ctx)
 
     try:

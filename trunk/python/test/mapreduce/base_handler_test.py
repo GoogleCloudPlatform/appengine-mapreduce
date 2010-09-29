@@ -44,6 +44,25 @@ class BaseHandlerTest(unittest.TestCase):
     self.assertEquals("/map/reduce/base", self.handler.base_path())
 
 
+class TaskQueueHandlerTest(unittest.TestCase):
+  """Tests for TaskQueueHandler."""
+
+  def setUp(self):
+    self.handler = base_handler.TaskQueueHandler()
+    self.handler.initialize(mock_webapp.MockRequest(),
+                            mock_webapp.MockResponse())
+
+  def testPostNoTaskQueueHeader(self):
+    """Test calling post() without valid taskqueue header."""
+    self.handler.post()
+    self.assertEquals(403, self.handler.response.status)
+
+  def testTaskRetryCount(self):
+    self.assertEquals(0, self.handler.task_retry_count())
+    self.handler.request.headers["X-AppEngine-TaskRetryCount"] = 5
+    self.assertEquals(5, self.handler.task_retry_count())
+
+
 class JsonHandlerTest(unittest.TestCase):
   """Tests for JsonHandler."""
 
