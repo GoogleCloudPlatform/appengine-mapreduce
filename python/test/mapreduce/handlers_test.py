@@ -199,6 +199,23 @@ class InputReader(input_readers.DatastoreInputReader):
   def reset(cls):
     cls.yields = 0
 
+
+class MatchesContext(mox.Comparator):
+  """Mox comparator to match context instances."""
+
+  def __init__(self, **kwargs):
+    self.kwargs = kwargs
+
+  def equals(self, ctx):
+    """Check to see if ctx matches arguments."""
+    if self.kwargs.get("task_retry_count", 0) != ctx.task_retry_count:
+      return False
+    return True
+
+  def __repr__(self):
+    return "MatchesContext(%s)" % self.kwargs
+
+
 ENTITY_KIND = "__main__.TestEntity"
 MAPPER_HANDLER_SPEC = __name__ + "." + TestHandler.__name__
 
@@ -1142,6 +1159,24 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
       tasks = self.taskqueue.GetTasks("default")
       self.assertEquals(0, len(tasks))
 
+      m.VerifyAll()
+    finally:
+      m.UnsetStubs()
+
+  def testContext(self):
+    """Test proper context initialization."""
+    self.handler.request.headers["X-AppEngine-TaskRetryCount"] = 5
+    TestEntity().put()
+
+    m = mox.Mox()
+    m.StubOutWithMock(context.Context, "_set", use_mock_anything=True)
+
+    context.Context._set(MatchesContext(task_retry_count=5))
+    context.Context._set(None)
+
+    m.ReplayAll()
+    try: # test, verify
+      self.handler.post()
       m.VerifyAll()
     finally:
       m.UnsetStubs()
