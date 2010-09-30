@@ -530,6 +530,11 @@ class MapreduceState(db.Model):
   start_time = db.DateTimeProperty(auto_now_add=True)
 
   @classmethod
+  def kind(cls):
+    """Returns entity kind."""
+    return "_AE_MR_MapreduceState"
+
+  @classmethod
   def get_key_by_job_id(cls, mapreduce_id):
     """Retrieves the Key for a Job.
 
@@ -642,6 +647,11 @@ class ShardState(db.Model):
   shard_id = property(get_shard_id)
 
   @classmethod
+  def kind(cls):
+    """Returns entity kind."""
+    return "_AE_MR_ShardState"
+
+  @classmethod
   def shard_id_from_number(cls, mapreduce_id, shard_number):
     """Get shard id by mapreduce id and shard number.
 
@@ -722,6 +732,11 @@ class MapreduceControl(db.Model):
   _KEY_NAME = "command"
 
   command = db.TextProperty(choices=_COMMANDS, required=True)
+
+  @classmethod
+  def kind(cls):
+    """Returns entity kind."""
+    return "_AE_MR_MapreduceControl"
 
   @classmethod
   def get_key_by_job_id(cls, mapreduce_id):
