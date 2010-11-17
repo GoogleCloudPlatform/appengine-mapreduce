@@ -23,6 +23,7 @@ import com.google.common.primitives.Bytes;
 
 import junit.framework.TestCase;
 
+import java.io.BufferedInputStream;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -39,6 +40,22 @@ public class InputStreamIteratorTest extends TestCase {
   private final List<Long> byteContentOffsets = Lists.newArrayListWithCapacity(content.size());
   InputStream input;
 
+  // Double check that an InputStreamIterator applied to a BufferedInputStream doesn't call
+  // mark() and reset() on the underlying InputStream. Should be obvious, but doesn't hurt to test.
+  public class NonResetableByteArrayInputStream extends ByteArrayInputStream {
+    public NonResetableByteArrayInputStream(byte[] array) {
+      super(array);
+    }
+
+    public void mark(int readAheadLimit) {
+      fail("Tried to call mark() on the underlying InputStream");
+    }
+
+    public void reset() {
+      fail("Tried to call reset() on the underlying InputStream");
+    }
+  }
+
   @Override
   protected void setUp() throws Exception {
     super.setUp();
@@ -48,7 +65,7 @@ public class InputStreamIteratorTest extends TestCase {
       byteContentOffsets.add((long) byteContent.length);
       byteContent = Bytes.concat(byteContent, str.getBytes(), terminator);
     }
-    input = new ByteArrayInputStream(byteContent);
+    input = new BufferedInputStream(new NonResetableByteArrayInputStream(byteContent));
   }
 
   private List<InputStreamIterator.OffsetRecordPair> readPairs(
