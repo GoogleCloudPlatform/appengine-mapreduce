@@ -27,6 +27,7 @@ import org.apache.hadoop.mapreduce.InputSplit;
 import org.apache.hadoop.mapreduce.RecordReader;
 import org.apache.hadoop.mapreduce.TaskAttemptContext;
 
+import java.io.BufferedInputStream;
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
@@ -65,10 +66,13 @@ class BlobstoreRecordReader extends RecordReader<BlobstoreRecordKey, byte[]> imp
 
   private InputStreamFactory inputStreamFactory =
       new InputStreamFactory() {
+        // Wild ass guess of a reasonable default record size in bytes
+        private static final int DEFAULT_BUFFER_SIZE = 1000;
 
         @Override
         public InputStream getInputStream(BlobKey blobKey, long offset) throws IOException {
-          return new BlobstoreInputStream(blobKey, offset);
+          return new BufferedInputStream(
+              new BlobstoreInputStream(blobKey, offset), DEFAULT_BUFFER_SIZE);
         }
       };
 
