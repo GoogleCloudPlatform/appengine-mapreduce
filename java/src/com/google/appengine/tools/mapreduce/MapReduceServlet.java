@@ -614,7 +614,10 @@ public class MapReduceServlet extends HttpServlet {
       }
       mapper.taskCleanup(context);
     } else {
-      log.warning("No quota. Aborting!");
+      log.info("Out of mapper quota. Aborting request until quota is replenished."
+          + " Consider increasing " + AppEngineJobContext.MAPPER_INPUT_PROCESSING_RATE_KEY
+          + " (default " + AppEngineJobContext.DEFAULT_MAP_INPUT_PROCESSING_RATE
+          + ") if you would like your mapper job to complete faster.");
     }
     
     return shouldShardContinue;
