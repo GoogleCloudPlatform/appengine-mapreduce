@@ -17,7 +17,6 @@
 
 
 
-
 import unittest
 
 from mapreduce import util

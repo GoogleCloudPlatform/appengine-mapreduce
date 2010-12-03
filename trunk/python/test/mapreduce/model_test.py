@@ -17,7 +17,6 @@
 
 
 
-
 # Disable "Invalid method name"
 # pylint: disable-msg=C6409
 

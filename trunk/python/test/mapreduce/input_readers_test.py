@@ -17,7 +17,6 @@
 
 
 
-
 # Disable "Invalid method name"
 # pylint: disable-msg=C6409
 
@@ -757,7 +756,6 @@ class BlobstoreLineInputReaderTest(unittest.TestCase):
       "mapreduce.input_readers.BlobstoreLineInputReader")
 
   def testSplitInput(self):
-    
     # TODO(user): Mock out equiv
     self.mockOutBlobInfoSize(200)
     self.mox.ReplayAll()
@@ -775,7 +773,6 @@ class BlobstoreLineInputReaderTest(unittest.TestCase):
     self.mox.VerifyAll()
 
   def testSplitInputMultiKey(self):
-    
     # TODO(user): Mock out equiv
     for i in range(5):
       self.mockOutBlobInfoSize(200, "foo%d" % i)
@@ -797,7 +794,6 @@ class BlobstoreLineInputReaderTest(unittest.TestCase):
     self.mox.VerifyAll()
 
   def testSplitInputMultiSplit(self):
-    
     self.mockOutBlobInfoSize(199)
     self.mox.ReplayAll()
     mapper_spec = model.MapperSpec.from_json({
