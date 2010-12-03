@@ -158,7 +158,7 @@ public class MapReduceState {
       DatastoreService service, String cursor, int count, List<MapReduceState> states) {
     FetchOptions fetchOptions = withPrefetchSize(count).limit(count);
     if (cursor != null) {
-      fetchOptions = fetchOptions.cursor(Cursor.fromWebSafeString(cursor));
+      fetchOptions = fetchOptions.startCursor(Cursor.fromWebSafeString(cursor));
     }
     QueryResultIterator<Entity> stateEntitiesIt = service.prepare(
         new Query("MapReduceState")).asQueryResultIterator(fetchOptions);

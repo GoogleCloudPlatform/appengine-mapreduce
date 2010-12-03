@@ -21,9 +21,9 @@ import com.google.appengine.api.datastore.DatastoreService;
 import com.google.appengine.api.datastore.DatastoreServiceFactory;
 import com.google.appengine.api.datastore.EntityNotFoundException;
 import com.google.appengine.api.datastore.Key;
-import com.google.appengine.api.labs.taskqueue.Queue;
-import com.google.appengine.api.labs.taskqueue.TaskAlreadyExistsException;
-import com.google.appengine.api.labs.taskqueue.TaskOptions;
+import com.google.appengine.api.taskqueue.Queue;
+import com.google.appengine.api.taskqueue.TaskAlreadyExistsException;
+import com.google.appengine.api.taskqueue.TaskOptions;
 import com.google.appengine.api.memcache.MemcacheServiceFactory;
 import com.google.common.base.Preconditions;
 
@@ -545,7 +545,7 @@ public class MapReduceServlet extends HttpServlet {
     String taskName = ("done_callback" + jobId).replace('_', '-');
     try {
       queue.add(
-          TaskOptions.Builder.method(TaskOptions.Method.POST)
+          TaskOptions.Builder.withMethod(TaskOptions.Method.POST)
               .url(url)
               .param("job_id", jobId)
               .taskName(taskName));
@@ -844,7 +844,7 @@ public class MapReduceServlet extends HttpServlet {
     String taskName = ("controller_" + context.getJobID() + "__" + sliceNumber).replace('_', '-');
     try {
       context.getControllerQueue().add(
-          TaskOptions.Builder.method(TaskOptions.Method.POST)
+          TaskOptions.Builder.withMethod(TaskOptions.Method.POST)
               .url(getBase(req) + CONTROLLER_PATH)
               .param(AppEngineJobContext.JOB_ID_PARAMETER_NAME, context.getJobID().toString())
               .param(AppEngineJobContext.SLICE_NUMBER_PARAMETER_NAME, "" + sliceNumber)
@@ -874,7 +874,7 @@ public class MapReduceServlet extends HttpServlet {
     String taskName = ("worker_" + taskAttemptId + "__" + sliceNumber).replace('_', '-');
     try {
       context.getWorkerQueue().add(
-          TaskOptions.Builder.method(TaskOptions.Method.POST)
+          TaskOptions.Builder.withMethod(TaskOptions.Method.POST)
               .url(getBase(req) + MAPPER_WORKER_PATH)
               .param(AppEngineTaskAttemptContext.TASK_ATTEMPT_ID_PARAMETER_NAME, 
                   "" + taskAttemptId)

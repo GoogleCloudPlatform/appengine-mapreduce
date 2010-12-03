@@ -40,8 +40,8 @@ public class QuotaManagerTest extends TestCase {
   public void setUp() throws Exception {
     super.setUp();
     helper.setUp();
-    memcacheService = MemcacheServiceFactory.getMemcacheService();
-    manager = new QuotaManager(memcacheService, "bob");
+    memcacheService = MemcacheServiceFactory.getMemcacheService("bob");
+    manager = new QuotaManager(memcacheService);
   }
   
   @Override
