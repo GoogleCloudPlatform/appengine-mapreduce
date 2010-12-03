@@ -301,6 +301,7 @@ class MapreduceSpecTest(unittest.TestCase):
     self.assertEquals({"extra": "value"}, mapreduce_spec.params)
     self.assertEquals(__name__+"."+TestHooks.__name__,
                       mapreduce_spec.hooks_class_name)
+    self.assertEquals(mapreduce_spec.mapper, mapreduce_spec.get_hooks().mapper)
 
 
 class MapreduceStateTest(unittest.TestCase):

@@ -28,6 +28,14 @@ class Hooks(object):
   subclass of this class.
   """
 
+  def __init__(self, mapper):
+    """Initializes a Hooks class.
+
+    Args:
+      mapper: The mapreduce.model.MapperSpec for the current mapreduce.
+    """
+    self.mapper = mapper
+
   def enqueue_worker_task(self, task, queue_name):
     """Enqueues a worker task that is used to run the mapper.
 

@@ -62,7 +62,8 @@ PARAM_DONE_CALLBACK_QUEUE = model.MapreduceSpec.PARAM_DONE_CALLBACK_QUEUE
 class TestHooks(hooks.Hooks):
   """Test hooks class."""
 
-  def __init__(self):
+  def __init__(self, mapper):
+    super(TestHooks, self).__init__(mapper)
     TestHooks.enqueue_worker_task_calls = []
     TestHooks.enqueue_done_task_calls = []
     TestHooks.enqueue_controller_task_calls = []
