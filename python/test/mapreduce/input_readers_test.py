@@ -859,6 +859,22 @@ class BlobstoreLineInputReaderTest(unittest.TestCase):
                       input_readers.BlobstoreLineInputReader.validate,
                       mapper_spec)
 
+  def testInvalidKey(self):
+    """Tests when there a blobkeys in the input is invalid."""
+    mapper_spec = model.MapperSpec.from_json({
+        "mapper_handler_spec": "FooHandler",
+        "mapper_input_reader": self.BLOBSTORE_READER_NAME,
+        "mapper_params": {"blob_keys": ['foo', 'nosuchblob']},
+        "mapper_shard_count": 2})
+    self.mockOutBlobInfoSize(100, blob_key_str="foo")
+    blobstore.BlobKey('nosuchblob').AndReturn('nosuchblob')
+    blobstore.BlobInfo.get('nosuchblob').AndReturn(None)
+    self.mox.ReplayAll()
+    self.assertRaises(input_readers.BadReaderParamsError,
+                      input_readers.BlobstoreLineInputReader.validate,
+                      mapper_spec)
+    self.mox.VerifyAll()
+
 
 class BlobstoreZipInputReaderTest(unittest.TestCase):
   READER_NAME = (
