@@ -596,6 +596,11 @@ class BlobstoreLineInputReader(InputReader):
       raise BadReaderParamsError("Too many 'blob_keys' for mapper input")
     if not blob_keys:
       raise BadReaderParamsError("No 'blob_keys' specified for mapper input")
+    for blob_key in blob_keys:
+      blob_info = blobstore.BlobInfo.get(blobstore.BlobKey(blob_key))
+      if not blob_info:
+        raise BadReaderParamsError("Could not find blobinfo for key %s" %
+                                   blob_key)
 
   @classmethod
   def split_input(cls, mapper_spec):
@@ -740,6 +745,12 @@ class BlobstoreZipInputReader(InputReader):
     params = mapper_spec.params
     if cls.BLOB_KEY_PARAM not in params:
       raise BadReaderParamsError("Must specify 'blob_key' for mapper input")
+    blob_key = params[cls.BLOB_KEY_PARAM]
+    blob_info = blobstore.BlobInfo.get(blobstore.BlobKey(blob_key))
+    if not blob_info:
+      raise BadReaderParamsError("Could not find blobinfo for key %s" %
+                                 blob_key)
+
 
   @classmethod
   def split_input(cls, mapper_spec, _reader=blobstore.BlobReader):
@@ -857,6 +868,11 @@ class BlobstoreZipLineInputReader(InputReader):
       raise BadReaderParamsError("Too many 'blob_keys' for mapper input")
     if not blob_keys:
       raise BadReaderParamsError("No 'blob_keys' specified for mapper input")
+    for blob_key in blob_keys:
+      blob_info = blobstore.BlobInfo.get(blobstore.BlobKey(blob_key))
+      if not blob_info:
+        raise BadReaderParamsError("Could not find blobinfo for key %s" %
+                                   blob_key)
 
   @classmethod
   def split_input(cls, mapper_spec, _reader=blobstore.BlobReader):
