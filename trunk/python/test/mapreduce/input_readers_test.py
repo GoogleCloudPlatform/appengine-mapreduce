@@ -474,11 +474,17 @@ class DatastoreInputReaderTest(unittest.TestCase):
     self.assertEqual(
         [[key_range.KeyRange(
             key_start=key(1),
+            key_end=key(1),
+            direction="DESC",
+            include_start=True,
+            include_end=True)],
+         [key_range.KeyRange(
+            key_start=key(1),
             key_end=key(2),
             direction="ASC",
-            include_start=True,
+            include_start=False,
             include_end=True)]],
-        self.split(1))
+         self.split(2))
 
   def testGenerator(self):
     """Test DatastoreInputReader as generator."""
@@ -1102,10 +1108,6 @@ class BlobstoreZipLineInputReaderTest(unittest.TestCase):
 # Dummy start up time of a mapreduce.
 STARTUP_TIME_US = 1000
 
-MAPREDUCE_READER_SPEC = ('%s.%s' %
-                         (input_readers.ConsistentKeyReader.__module__,
-                          input_readers.ConsistentKeyReader.__name__))
-
 
 class MockUnappliedQuery(object):
   """Mocks unapplied query in order to mimic existence of unapplied jobs."""
@@ -1137,6 +1139,10 @@ class MockUnappliedQuery(object):
 class ConsistentKeyReaderTest(unittest.TestCase):
   """Tests for the ConsistentKeyReader."""
 
+  MAPREDUCE_READER_SPEC = ('%s.%s' %
+                           (input_readers.ConsistentKeyReader.__module__,
+                            input_readers.ConsistentKeyReader.__name__))
+
   def setUp(self):
     """Sets up the test harness."""
     unittest.TestCase.setUp(self)
@@ -1149,7 +1155,7 @@ class ConsistentKeyReaderTest(unittest.TestCase):
         'enable_quota': False}
     self.mapper_spec = model.MapperSpec.from_json({
         'mapper_handler_spec': 'FooHandler',
-        'mapper_input_reader': MAPREDUCE_READER_SPEC,
+        'mapper_input_reader': ConsistentKeyReaderTest.MAPREDUCE_READER_SPEC,
         'mapper_params': self.mapper_params,
         'mapper_shard_count': 10})
 
@@ -1164,7 +1170,6 @@ class ConsistentKeyReaderTest(unittest.TestCase):
 
     apiproxy_stub_map.apiproxy = apiproxy_stub_map.APIProxyStubMap()
     apiproxy_stub_map.apiproxy.RegisterStub('datastore_v3', self.datastore)
-    # apiproxy_stub_map.apiproxy.GetStub('datastore_v3').SetTrusted(True)
 
     self.mox = mox.Mox()
 
@@ -1251,6 +1256,77 @@ class ConsistentKeyReaderTest(unittest.TestCase):
     keys = list(self.reader)
     self.assertEquals([k1, k2], keys)
 
+
+class NamespaceInputReaderTest(unittest.TestCase):
+  """Tests for NamespaceInputReader."""
+
+  MAPREDUCE_READER_SPEC = ('%s.%s' %
+                           (input_readers.NamespaceInputReader.__module__,
+                            input_readers.NamespaceInputReader.__name__))
+
+  def setUp(self):
+    unittest.TestCase.setUp(self)
+    self.app_id = 'myapp'
+
+    self.mapper_spec = model.MapperSpec.from_json({
+        'mapper_handler_spec': 'FooHandler',
+        'mapper_input_reader': NamespaceInputReaderTest.MAPREDUCE_READER_SPEC,
+        'mapper_params': {},
+        'mapper_shard_count': 10})
+
+    os.environ['APPLICATION_ID'] = self.app_id
+
+    self.datastore = datastore_file_stub.DatastoreFileStub(
+        self.app_id, '/dev/null', '/dev/null')
+
+    apiproxy_stub_map.apiproxy = apiproxy_stub_map.APIProxyStubMap()
+    apiproxy_stub_map.apiproxy.RegisterStub('datastore_v3', self.datastore)
+
+  def testSplitInputNoData(self):
+    """Test reader with no data in datastore."""
+    readers = input_readers.NamespaceInputReader.split_input(self.mapper_spec)
+    self.assertEquals(1, len(readers))
+
+    r = readers[0]
+    self.assertEquals('__namespace__', r._entity_kind)
+    self.assertEquals(None, r._key_ranges[0].key_start)
+    self.assertEquals(None, r._key_ranges[0].key_end)
+
+    # test read
+    self.assertEquals([], list(r))
+
+  def testSplitDefaultNamespaceOnly(self):
+    """Test reader with only default namespace populated."""
+    TestEntity().put()
+    readers = input_readers.NamespaceInputReader.split_input(self.mapper_spec)
+    self.assertEquals(1, len(readers))
+
+    r = readers[0]
+    self.assertEquals('__namespace__', r._entity_kind)
+    self.assertEquals(None, r._key_ranges[0].key_start)
+    self.assertEquals(None, r._key_ranges[0].key_end)
+
+    # test read
+    self.assertEquals([''], list(r))
+
+  def testSplitNamespacesPresent(self):
+    """Test reader with multiple namespaces present."""
+    TestEntity().put()
+    for i in range(5):
+      namespace_manager.set_namespace(str(i))
+      TestEntity().put()
+    namespace_manager.set_namespace(None)
+
+    readers = input_readers.NamespaceInputReader.split_input(self.mapper_spec)
+    self.assertEquals(1, len(readers))
+
+    r = readers[0]
+    self.assertEquals('__namespace__', r._entity_kind)
+    self.assertEquals(None, r._key_ranges[0].key_start)
+    self.assertEquals(None, r._key_ranges[0].key_end)
+
+    # test read
+    self.assertEquals(['', '0', '1', '2', '3', '4'], list(r))
 
 if __name__ == "__main__":
   unittest.main()
