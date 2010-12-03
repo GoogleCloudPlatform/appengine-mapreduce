@@ -48,14 +48,13 @@ class RedirectHandler(webapp.RequestHandler):
     self.redirect(new_path)
 
 
-def create_application():
-  """Create new WSGIApplication and register all handlers.
+def create_handlers_map():
+  """Create new handlers map.
 
   Returns:
-    an instance of webapp.WSGIApplication with all mapreduce handlers
-    registered.
+    list of (regexp, handler) pairs for WSGIApplication constructor.
   """
-  return webapp.WSGIApplication([
+  return [
       # Task queue handlers.
       (r".*/worker_callback", handlers.MapperWorkerCallbackHandler),
       (r".*/controller_callback", handlers.ControllerCallbackHandler),
@@ -75,7 +74,16 @@ def create_application():
 
       # Redirect non-file URLs that do not end in status/detail to status page.
       (r".*", RedirectHandler),
-  ],
+      ]
+
+def create_application():
+  """Create new WSGIApplication and register all handlers.
+
+  Returns:
+    an instance of webapp.WSGIApplication with all mapreduce handlers
+    registered.
+  """
+  return webapp.WSGIApplication(create_handlers_map(),
   debug=True)
 
 

@@ -57,7 +57,7 @@ class ControlTest(testutil.HandlerTestBase):
 
   def get_mapreduce_spec(self, task):
     """Get mapreduce spec form kickoff task payload."""
-    payload = self.decode_task_payload(task)
+    payload = testutil.decode_task_payload(task)
     return model.MapreduceSpec.from_json_str(payload["mapreduce_spec"])
 
   def validate_map_started(self, mapreduce_id):
