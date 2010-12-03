@@ -628,7 +628,7 @@ class KickOffJobHandler(base_handler.TaskQueueHandler):
       state.put()
       return
 
-    spec.shard_count = len(input_readers)
+    spec.mapper.shard_count = len(input_readers)
 
     # Update state with actual shard count.
     state.mapreduce_spec = spec
