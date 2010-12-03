@@ -177,6 +177,10 @@ class MockResponse(object):
     if message:
       self.status_message = message
 
+  def has_error(self):
+    """Indicates whether the response was an error response."""
+    return self.status >= 400
+
   def clear(self):
     """Clears all data written to self.out."""
     self.out.seek(0)
