@@ -615,9 +615,20 @@ class KickOffJobHandler(base_handler.TaskQueueHandler):
     """Handles kick off request."""
     spec = model.MapreduceSpec.from_json_str(
         self._get_required_param("mapreduce_spec"))
+    app_id = self.request.get("app", None)
     queue_name = os.environ.get("HTTP_X_APPENGINE_QUEUENAME", "default")
     mapper_input_reader_class = spec.mapper.input_reader_class()
-    state = model.MapreduceState.get_by_job_id(spec.mapreduce_id)
+
+    # StartJobHandler might have already saved the state, but it's OK
+    # to override it because we're using the same mapreduce id.
+    state = model.MapreduceState.create_new(spec.mapreduce_id)
+    state.mapreduce_spec = spec
+    state.active = True
+    # TODO(user): Initialize UI fields correctly.
+    state.char_url = ""
+    state.sparkline_url = ""
+    if app_id:
+      state.app_id = app_id
 
     input_readers = mapper_input_reader_class.split_input(spec.mapper)
     if not input_readers:
@@ -628,9 +639,9 @@ class KickOffJobHandler(base_handler.TaskQueueHandler):
       state.put()
       return
 
+    # Update state and spec with actual shard count.
     spec.mapper.shard_count = len(input_readers)
-
-    # Update state with actual shard count.
+    state.active_shards = len(input_readers)
     state.mapreduce_spec = spec
     state.put()
 
@@ -783,7 +794,8 @@ class StartJobHandler(base_handler.PostJsonHandler):
                  eta=None,
                  countdown=None,
                  hooks_class_name=None,
-                 _app=None):
+                 _app=None,
+                 transactional=False):
     # Check that handler can be instantiated.
     mapper_spec.get_handler()
 
@@ -791,31 +803,35 @@ class StartJobHandler(base_handler.PostJsonHandler):
     mapper_input_reader_class = mapper_spec.input_reader_class()
     mapper_input_reader_class.validate(mapper_spec)
 
-    state = model.MapreduceState.create_new()
+    mapreduce_id = model.MapreduceState.new_mapreduce_id()
     mapreduce_spec = model.MapreduceSpec(
         name,
-        state.key().id_or_name(),
+        mapreduce_id,
         mapper_spec.to_json(),
         mapreduce_params,
         hooks_class_name)
-    state.mapreduce_spec = mapreduce_spec
-    state.active = True
-    state.active_shards = mapper_spec.shard_count
+
+    kickoff_params = {"mapreduce_spec": mapreduce_spec.to_json_str()}
     if _app:
-      state.app_id = _app
+      kickoff_params["app"] = _app
+    kickoff_worker_task = taskqueue.Task(
+        url=base_path + "/kickoffjob_callback",
+        params=kickoff_params,
+        eta=eta, countdown=countdown)
 
-    # TODO(user): Initialize UI fields correctly.
-    state.char_url = ""
-    state.sparkline_url = ""
+    hooks = mapreduce_spec.get_hooks()
 
-    def schedule_mapreduce(state, eta, countdown):
-      state.put()
-      kickoff_worker_task = taskqueue.Task(
-          url=base_path + "/kickoffjob_callback",
-          params={"mapreduce_spec": state.mapreduce_spec.to_json_str()},
-          eta=eta, countdown=countdown)
+    def start_mapreduce():
+      if not transactional:
+        # Save state in datastore so that UI can see it.
+        # We can't save state in foreign transaction, but conventional UI
+        # doesn't ask for transactional starts anyway.
+        state = model.MapreduceState.create_new(mapreduce_spec.mapreduce_id)
+        state.mapreduce_spec = mapreduce_spec
+        state.active = True
+        state.active_shards = mapper_spec.shard_count
+        state.put()
 
-      hooks = mapreduce_spec.get_hooks()
       if hooks is not None:
         try:
           hooks.enqueue_kickoff_task(kickoff_worker_task, queue_name)
@@ -824,14 +840,14 @@ class StartJobHandler(base_handler.PostJsonHandler):
           pass
         else:
           return
-
       kickoff_worker_task.add(queue_name, transactional=True)
 
-    # Point of no return: We're actually going to run this job!
-    db.run_in_transaction(
-        schedule_mapreduce, state, eta, countdown)
+    if transactional:
+      start_mapreduce()
+    else:
+      db.run_in_transaction(start_mapreduce)
 
-    return state.key().id_or_name()
+    return mapreduce_id
 
 
 class CleanUpJobHandler(base_handler.PostJsonHandler):

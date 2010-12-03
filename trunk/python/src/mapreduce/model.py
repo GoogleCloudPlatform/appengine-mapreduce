@@ -584,18 +584,25 @@ class MapreduceState(db.Model):
   processed = property(get_processed)
 
   @staticmethod
-  def create_new(getkeyname=_get_descending_key,
+  def create_new(mapreduce_id=None,
                  gettime=datetime.datetime.now):
     """Create a new MapreduceState.
 
     Args:
-      getkeyname: Used for testing.
+      mapreduce_id: Mapreduce id as string.
       gettime: Used for testing.
     """
-    state = MapreduceState(key_name=getkeyname(),
+    if not mapreduce_id:
+      mapreduce_id = MapreduceState.new_mapreduce_id()
+    state = MapreduceState(key_name=mapreduce_id,
                            last_poll_time=gettime())
     state.set_processed_counts([])
     return state
+
+  @staticmethod
+  def new_mapreduce_id():
+    """Generate new mapreduce id."""
+    return _get_descending_key()
 
 
 class ShardState(db.Model):
