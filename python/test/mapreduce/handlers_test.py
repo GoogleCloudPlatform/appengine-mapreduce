@@ -293,7 +293,7 @@ class MapreduceHandlerTestBase(testutil.HandlerTestBase):
       eta_sec = time.mktime(time.strptime(task["eta"], "%Y/%m/%d %H:%M:%S"))
       self.assertTrue(expected_etc_sec < eta_sec + 10)
 
-    payload = self.decode_task_payload(task)
+    payload = testutil.decode_task_payload(task)
     self.assertEquals(str(shard_id), payload["shard_id"])
     self.assertEquals(str(slice_id), payload["slice_id"])
 
@@ -370,7 +370,7 @@ class MapreduceHandlerTestBase(testutil.HandlerTestBase):
     self.assertEquals("POST", task["method"])
     self.assertEquals("/mapreduce/controller_callback", task["url"])
 
-    payload = self.decode_task_payload(task)
+    payload = testutil.decode_task_payload(task)
     mapreduce_spec = model.MapreduceSpec.from_json_str(
         payload["mapreduce_spec"])
     self.verify_mapreduce_spec(mapreduce_spec, **kwargs)
@@ -479,7 +479,7 @@ class StartJobHandlerTest(MapreduceHandlerTestBase):
 
   def get_mapreduce_spec(self, task):
     """Get mapreduce spec form kickoff task payload."""
-    payload = self.decode_task_payload(task)
+    payload = testutil.decode_task_payload(task)
     return model.MapreduceSpec.from_json_str(payload["mapreduce_spec"])
 
   def testCSRF(self):
