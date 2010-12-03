@@ -1003,25 +1003,34 @@ class BlobstoreZipLineInputReader(InputReader):
 class ConsistentKeyReader(DatastoreKeyInputReader):
   """A key reader which reads consistent data from datastore.
 
-  Datastore might have entities which were written, but their job logs not yet
-  applied. These entities would be typically impossible to obtain with queries
-  and even Get calls outside the transaction.
+  Datastore might have entities which were written, but not visible through
+  queries for some time. Typically these entities can be only read inside
+  transaction until they are 'applied'.
 
-  This reader might take significant time to start yielding some data because
-  it has to roll forward all jobs created before its start.
+  This reader reads all keys even if they are not visible. It might take
+  significant time to start yielding some data because it has to apply all
+  modifications created before its start.
   """
   START_TIME_US_PARAM = 'start_time_us'
   UNAPPLIED_LOG_FILTER = '__unapplied_log_timestamp_us__ <'
   DUMMY_KIND = 'DUMMY_KIND'
-  RANDOM_ID = 106275677020293L
-
+  DUMMY_ID = 106275677020293L
 
   def __init__(self,
                entity_kind,
                key_range_param,
                batch_size=DatastoreKeyInputReader._BATCH_SIZE,
                start_time_us=None):
-    """Constructs the basic class."""
+    """Constructor.
+
+    Args:
+      entity_kind: Kind of entity to read as string.
+      key_range_param: Key range to scan through as key_range.KeyRange.
+      batch_size: Size of single batch read (number of entities).
+      start_time_us: Start time of the reader (as given by time.time()
+        function). It will apply all unapplied jobs created before it was
+        started.
+    """
     DatastoreInputReader.__init__(
         self, entity_kind, key_range_param, batch_size)
     self.start_time_us = start_time_us
@@ -1062,7 +1071,8 @@ class ConsistentKeyReader(DatastoreKeyInputReader):
       # range.
       unapplied_query = self._current_key_range.make_ascending_datastore_query(
           kind=None, keys_only=True)
-      unapplied_query[ConsistentKeyReader.UNAPPLIED_LOG_FILTER] = self.start_time_us
+      unapplied_query[
+          ConsistentKeyReader.UNAPPLIED_LOG_FILTER] = self.start_time_us
       unapplied_jobs = unapplied_query.Get(limit=self._batch_size)
 
       if not unapplied_jobs:
@@ -1071,9 +1081,10 @@ class ConsistentKeyReader(DatastoreKeyInputReader):
       # There were some unapplied jobs. Roll them forward.
       keys_to_apply = []
       for key in unapplied_jobs:
+        # To apply the entity group we need to read something from it.
         # We use dummy kind and id because we don't actually need any data.
         path = key.to_path() + [ConsistentKeyReader.DUMMY_KIND,
-                                ConsistentKeyReader.RANDOM_ID]
+                                ConsistentKeyReader.DUMMY_ID]
         keys_to_apply.append(
             db.Key.from_path(_app=key.app(), namespace=key.namespace(), *path))
       db.get(keys_to_apply, config=datastore_rpc.Configuration(
@@ -1093,7 +1104,6 @@ class ConsistentKeyReader(DatastoreKeyInputReader):
     # The KeyRanges calculated by the base class may not include keys for
     # entities that have unapplied jobs. So use an open key range for the first
     # and last KeyRanges to ensure that they will be processed.
-    # pylint: disable-msg=W0212
     if key_ranges:
       key_ranges[0].key_start = None
       key_ranges[0].include_start = False
@@ -1112,7 +1122,7 @@ class ConsistentKeyReader(DatastoreKeyInputReader):
 
     # We always produce at least one key range because:
     # a) there might be unapplied entities
-    # b) it simplifies MR code
+    # b) it simplifies mapper code
     if not readers:
       key_ranges = [key_range.KeyRange(namespace=namespace, _app=app)
                     for namespace in namespaces]
@@ -1132,7 +1142,7 @@ class ConsistentKeyReader(DatastoreKeyInputReader):
     return readers
 
   def to_json(self):
-    """Serializes all the data in this query range into json form.
+    """Serializes all the data in this reader into json form.
 
     Returns:
       all the data in json-compatible map.
@@ -1145,13 +1155,13 @@ class ConsistentKeyReader(DatastoreKeyInputReader):
 
   @classmethod
   def from_json(cls, json):
-    """Create new DatastoreInputReader from the json, encoded by to_json.
+    """Create new ConsistentKeyReader from the json, encoded by to_json.
 
     Args:
-      json: json map representation of DatastoreInputReader.
+      json: json map representation of ConsistentKeyReader.
 
     Returns:
-      an instance of DatastoreInputReader with all data deserialized from json.
+      an instance of ConsistentKeyReader with all data deserialized from json.
     """
     query_range = cls(
         json[cls.ENTITY_KIND_PARAM],

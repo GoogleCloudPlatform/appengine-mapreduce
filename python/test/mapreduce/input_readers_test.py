@@ -1220,10 +1220,10 @@ class ConsistentKeyReaderTest(unittest.TestCase):
 
     dummy_k1 = db.Key.from_path(
         *(k1.to_path() + [input_readers.ConsistentKeyReader.DUMMY_KIND,
-                          input_readers.ConsistentKeyReader.RANDOM_ID]))
+                          input_readers.ConsistentKeyReader.DUMMY_ID]))
     dummy_k2 = db.Key.from_path(
         *(k2.to_path() + [input_readers.ConsistentKeyReader.DUMMY_KIND,
-                          input_readers.ConsistentKeyReader.RANDOM_ID]))
+                          input_readers.ConsistentKeyReader.DUMMY_ID]))
 
     # This method is used only for unapplied query construction.
     self.mox.StubOutWithMock(
