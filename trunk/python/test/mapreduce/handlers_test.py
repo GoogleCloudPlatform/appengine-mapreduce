@@ -215,6 +215,16 @@ class MatchesContext(mox.Comparator):
     return "MatchesContext(%s)" % self.kwargs
 
 
+class FixedShardSizeInputReader(input_readers.DatastoreInputReader):
+  """Test rider which trucates the list of readers to specified size."""
+  readers_size = 3
+
+  @classmethod
+  def split_input(cls, mapper_spec):
+    readers = input_readers.DatastoreInputReader.split_input(mapper_spec)
+    return readers[:cls.readers_size]
+
+
 ENTITY_KIND = "__main__.TestEntity"
 MAPPER_HANDLER_SPEC = __name__ + "." + TestHandler.__name__
 
@@ -744,6 +754,39 @@ class KickOffJobHandlerTest(MapreduceHandlerTestBase):
     state = model.MapreduceState.get_by_job_id(self.mapreduce_id)
     self.assertFalse(state.active)
     self.assertEquals(0, state.active_shards)
+
+  def testDifferentShardCount(self):
+    """Verifies the case when input reader created diffrent shard number."""
+    for _ in range(100):
+      TestEntity().put()
+    self.mapreduce_spec.mapper.input_reader_spec = (
+        __name__ + ".FixedShardSizeInputReader")
+    self.handler.request.set(
+        "mapreduce_spec",
+        self.mapreduce_spec.to_json_str())
+    self.handler.post()
+
+
+    shard_count = FixedShardSizeInputReader.readers_size
+    tasks = self.taskqueue.GetTasks("default")
+    self.assertEquals(shard_count + 1, len(tasks))
+
+    for i in xrange(shard_count):
+      shard_id = model.ShardState.shard_id_from_number(self.mapreduce_id, i)
+      task_name = handlers.MapperWorkerCallbackHandler.get_task_name(
+          shard_id, 0)
+
+      shard_task = self.find_task_by_name(tasks, task_name)
+      self.assertTrue(shard_task)
+      tasks.remove(shard_task)
+      self.verify_shard_task(shard_task, shard_id, shard_count=shard_count)
+
+      self.verify_shard_state(
+          model.ShardState.get_by_shard_id(shard_id))
+
+    # only update task should be left in tasks list
+    self.assertEquals(1, len(tasks))
+    self.verify_controller_task(tasks[0], shard_count=shard_count)
 
 
 class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
