@@ -258,19 +258,6 @@ class MapreduceHandlerTestBase(testutil.HandlerTestBase):
         return task
     return None
 
-  def decode_task_payload(self, task):
-    """Decodes POST task payload.
-
-    Args:
-      task: a task to decode its payload.
-
-    Returns:
-      parameter_name -> parameter_value dict.
-    """
-    key_values = [kv.split("=") for kv in
-                  base64.b64decode(task["body"]).split("&")]
-    return dict((key, urllib.unquote_plus(value)) for key, value in key_values)
-
   def verify_input_reader_state(self, str_state, **kwargs):
     """Check that input reader state has expected values.
 
@@ -490,6 +477,11 @@ class StartJobHandlerTest(MapreduceHandlerTestBase):
 
     self.handler.request.headers["X-Requested-With"] = "XMLHttpRequest"
 
+  def get_mapreduce_spec(self, task):
+    """Get mapreduce spec form kickoff task payload."""
+    payload = self.decode_task_payload(task)
+    return model.MapreduceSpec.from_json_str(payload["mapreduce_spec"])
+
   def testCSRF(self):
     """Tests that that handler only accepts AJAX requests."""
     del self.handler.request.headers["X-Requested-With"]
@@ -504,15 +496,9 @@ class StartJobHandlerTest(MapreduceHandlerTestBase):
     # Only kickoff task should be there.
     tasks = self.taskqueue.GetTasks("default")
     self.assertEquals(1, len(tasks))
-    params = dict(cgi.parse_qsl(base64.b64decode(tasks[0]["body"])))
-
-    mapreduce_state = model.MapreduceState.all().fetch(limit=1)[0]
-    self.verify_mapreduce_state(mapreduce_state, shard_count=8)
-    self.assertEquals(0, mapreduce_state.failed_shards)
-    self.assertEquals(0, mapreduce_state.aborted_shards)
-
-    self.assertEquals(mapreduce_state.mapreduce_spec.to_json_str(),
-                      params["mapreduce_spec"])
+    mapreduce_spec = self.get_mapreduce_spec(tasks[0])
+    self.assertTrue(mapreduce_spec)
+    self.assertEquals(MAPPER_HANDLER_SPEC, mapreduce_spec.mapper.handler_spec)
 
   def testSmokeOtherApp(self):
     """Verifies main execution path of starting scan over several entities."""
@@ -526,14 +512,8 @@ class StartJobHandlerTest(MapreduceHandlerTestBase):
     self.assertEquals(1, len(tasks))
     params = dict(cgi.parse_qsl(base64.b64decode(tasks[0]["body"])))
 
-    mapreduce_state = model.MapreduceState.all().fetch(limit=1)[0]
-    self.assertEquals("otherapp", mapreduce_state.app_id)
-    self.verify_mapreduce_state(mapreduce_state, shard_count=8)
-    self.assertEquals(0, mapreduce_state.failed_shards)
-    self.assertEquals(0, mapreduce_state.aborted_shards)
-
-    self.assertEquals(mapreduce_state.mapreduce_spec.to_json_str(),
-                      params["mapreduce_spec"])
+    self.assertEquals("otherapp", params["app"])
+    self.assertTrue(self.get_mapreduce_spec(tasks[0]))
 
   def testRequiredParams(self):
     """Tests that required parameters are enforced."""
@@ -569,7 +549,12 @@ class StartJobHandlerTest(MapreduceHandlerTestBase):
     self.handler.request.set("mapper_params_validator",
                              __name__ + ".test_param_validator_success")
     self.handler.post()
-    params = model.MapreduceState.all().get().mapreduce_spec.mapper.params
+
+    tasks = self.taskqueue.GetTasks("default")
+    self.assertEquals(1, len(tasks))
+    mapreduce_spec = self.get_mapreduce_spec(tasks[0])
+    params = mapreduce_spec.mapper.params
+
     self.assertEquals(["red", "blue"], params["one"])
     self.assertEquals("green", params["two"])
 
@@ -589,7 +574,10 @@ class StartJobHandlerTest(MapreduceHandlerTestBase):
     self.handler.request.set("params_validator",
                              __name__ + ".test_param_validator_success")
     self.handler.post()
-    params = model.MapreduceState.all().get().mapreduce_spec.params
+
+    kickoff_task = self.taskqueue.GetTasks("default")[0]
+    mapreduce_spec = self.get_mapreduce_spec(kickoff_task)
+    params = mapreduce_spec.params
     self.assertEquals(["red", "blue"], params["one"])
     self.assertEquals("green", params["two"])
 
@@ -626,31 +614,39 @@ class StartJobHandlerTest(MapreduceHandlerTestBase):
     TestEntity().put()
     self.handler.request.set("mapper_params.queue_name", "crazy-queue")
     self.handler.post()
+
+    tasks = self.taskqueue.GetTasks("crazy-queue")
+    self.assertEquals(1, len(tasks))
+    mapreduce_spec = self.get_mapreduce_spec(tasks[0])
     self.assertEquals(
         "crazy-queue",
-        model.MapreduceState.all().get()
-            .mapreduce_spec.mapper.params["queue_name"])
+        mapreduce_spec.mapper.params["queue_name"])
     self.assertEquals(0, len(self.taskqueue.GetTasks("default")))
-    self.assertEquals(1, len(self.taskqueue.GetTasks("crazy-queue")))
 
   def testProcessingRate(self):
     """Tests that the optional processing rate parameter is used."""
     TestEntity().put()
     self.handler.request.set("mapper_params.processing_rate", "1234")
     self.handler.post()
+
+    tasks = self.taskqueue.GetTasks("default")
+    self.assertEquals(1, len(tasks))
+    mapreduce_spec = self.get_mapreduce_spec(tasks[0])
+
     self.assertEquals(
         1234,
-        model.MapreduceState.all().get()
-            .mapreduce_spec.mapper.params["processing_rate"])
+        mapreduce_spec.mapper.params["processing_rate"])
 
   def testShardCount(self):
     """Tests that the optional shard count parameter is used."""
     TestEntity().put()
     self.handler.request.set("mapper_params.shard_count", "9")
     self.handler.post()
-    state = model.MapreduceState.all().get()
-    self.assertEquals(9, state.mapreduce_spec.mapper.shard_count)
-    self.assertEquals(9, state.active_shards)
+
+    tasks = self.taskqueue.GetTasks("default")
+    self.assertEquals(1, len(tasks))
+    mapreduce_spec = self.get_mapreduce_spec(tasks[0])
+    self.assertEquals(9, mapreduce_spec.mapper.shard_count)
 
 
 class KickOffJobHandlerTest(MapreduceHandlerTestBase):
@@ -686,6 +682,10 @@ class KickOffJobHandlerTest(MapreduceHandlerTestBase):
       TestEntity().put()
     self.handler.post()
     shard_count = 8
+
+    state = model.MapreduceState.all()[0]
+    self.assertTrue(state)
+    self.assertTrue(state.active)
 
     tasks = self.taskqueue.GetTasks("default")
     self.assertEquals(shard_count + 1, len(tasks))
@@ -767,7 +767,6 @@ class KickOffJobHandlerTest(MapreduceHandlerTestBase):
         self.mapreduce_spec.to_json_str())
     self.handler.post()
 
-
     shard_count = FixedShardSizeInputReader.readers_size
     tasks = self.taskqueue.GetTasks("default")
     self.assertEquals(shard_count + 1, len(tasks))
@@ -788,6 +787,16 @@ class KickOffJobHandlerTest(MapreduceHandlerTestBase):
     # only update task should be left in tasks list
     self.assertEquals(1, len(tasks))
     self.verify_controller_task(tasks[0], shard_count=shard_count)
+
+  def testAppParam(self):
+    """Tests that app parameter is correctly passed in the state."""
+    self.handler.request.set("app", "otherapp")
+
+    self.handler.post()
+
+    state = model.MapreduceState.all()[0]
+    self.assertTrue(state)
+    self.assertEquals("otherapp", state.app_id)
 
 
 class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):

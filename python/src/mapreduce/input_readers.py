@@ -28,7 +28,11 @@ import zipfile
 
 from google.appengine.api import datastore
 from google.appengine.api import namespace_manager
-from google.appengine.datastore import datastore_rpc
+# TODO(user): Remove this hack once 1.4.0 is live in production.
+try:
+  from google.appengine.datastore import datastore_rpc
+except ImportError:
+  datastore_rpc = None
 from mapreduce.lib import blobstore
 from google.appengine.ext import db
 from mapreduce.lib import key_range
@@ -1067,7 +1071,9 @@ class ConsistentKeyReader(DatastoreKeyInputReader):
       if self._current_key_range is None:
         break
 
-      self._apply_jobs()
+      # TODO(user): Remove this hack once 1.4.0 is live in production.
+      if datastore_rpc:
+        self._apply_jobs()
 
       while True:  # Iterates over each key in the current key range.
         # Fetches the next batch of the result keys.

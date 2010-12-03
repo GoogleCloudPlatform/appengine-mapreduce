@@ -55,13 +55,14 @@ class ControlTest(testutil.HandlerTestBase):
     testutil.HandlerTestBase.setUp(self)
     TestHooks.enqueue_kickoff_task_calls = []
 
+  def get_mapreduce_spec(self, task):
+    """Get mapreduce spec form kickoff task payload."""
+    payload = self.decode_task_payload(task)
+    return model.MapreduceSpec.from_json_str(payload["mapreduce_spec"])
+
   def validate_map_started(self, mapreduce_id):
     """Tests that the map has been started."""
     self.assertTrue(mapreduce_id)
-    mapreduce_state = model.MapreduceState.all().fetch(limit=1)[0]
-    self.assertTrue(mapreduce_state)
-    self.assertEquals(mapreduce_id, mapreduce_state.key().id_or_name())
-    self.assertEquals({"foo": "bar"}, mapreduce_state.mapreduce_spec.params)
 
     # Note: only a kickoff job is pending at this stage, shards come later.
     tasks = self.taskqueue.GetTasks(self.QUEUE_NAME)
@@ -69,6 +70,12 @@ class ControlTest(testutil.HandlerTestBase):
     # Checks that tasks are scheduled into the future.
     task = tasks[0]
     self.assertEquals("/mapreduce_base_path/kickoffjob_callback", task["url"])
+
+    mapreduce_spec =self.get_mapreduce_spec(task)
+    self.assertTrue(mapreduce_spec)
+    self.assertEquals(mapreduce_id, mapreduce_spec.mapreduce_id)
+    self.assertEquals({"foo": "bar"}, mapreduce_spec.params)
+
     return task["eta"]
 
   def testStartMap(self):
@@ -175,14 +182,6 @@ class ControlTest(testutil.HandlerTestBase):
         hooks_class_name=__name__+"."+TestHooks.__name__)
 
     self.assertTrue(mapreduce_id)
-    mapreduce_state = model.MapreduceState.all().fetch(limit=1)[0]
-    self.assertTrue(mapreduce_state)
-    self.assertEquals(mapreduce_id, mapreduce_state.key().id_or_name())
-    self.assertTrue(isinstance(mapreduce_state.mapreduce_spec.get_hooks(),
-                               TestHooks))
-    tasks = self.taskqueue.GetTasks("crazy-queue")
-    self.assertEquals(0, len(tasks))
-    self.assertEquals(1, len(TestHooks.enqueue_kickoff_task_calls))
     task, queue_name = TestHooks.enqueue_kickoff_task_calls[0]
     self.assertEquals("/mapreduce_base_path/kickoffjob_callback", task.url)
     self.assertEquals("crazy-queue", queue_name)
@@ -212,14 +211,7 @@ class ControlTest(testutil.HandlerTestBase):
         queue_name="crazy-queue",
         hooks_class_name=hooks.__name__+"."+hooks.Hooks.__name__)
 
-    self.assertTrue(mapreduce_id)
-    mapreduce_state = model.MapreduceState.all().fetch(limit=1)[0]
-    self.assertTrue(mapreduce_state)
-    self.assertEquals(mapreduce_id, mapreduce_state.key().id_or_name())
-    self.assertTrue(isinstance(mapreduce_state.mapreduce_spec.get_hooks(),
-                               hooks.Hooks))
-    tasks = self.taskqueue.GetTasks("crazy-queue")
-    self.assertEquals(1, len(tasks))
+    self.validate_map_started(mapreduce_id)
 
 
 if __name__ == "__main__":

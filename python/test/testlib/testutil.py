@@ -28,10 +28,12 @@
 from google.appengine.tools import os_compat
 # pylint: enable-msg=W0611
 
+import base64
 from testlib import mox
 import os
 import sys
 import unittest
+import urllib
 
 from google.appengine.api import apiproxy_stub_map
 from google.appengine.api import datastore_file_stub
@@ -84,6 +86,19 @@ class HandlerTestBase(unittest.TestCase):
     apiproxy_stub_map.apiproxy.RegisterStub("taskqueue", self.taskqueue)
     apiproxy_stub_map.apiproxy.RegisterStub("memcache", self.memcache)
     apiproxy_stub_map.apiproxy.RegisterStub("datastore_v3", self.datastore)
+
+  def decode_task_payload(self, task):
+    """Decodes POST task payload.
+
+    Args:
+      task: a task to decode its payload.
+
+    Returns:
+      parameter_name -> parameter_value dict.
+    """
+    key_values = [kv.split("=") for kv in
+                  base64.b64decode(task["body"]).split("&")]
+    return dict((key, urllib.unquote_plus(value)) for key, value in key_values)
 
   def assertTaskStarted(self, queue="default"):
     tasks = self.taskqueue.GetTasks(queue)

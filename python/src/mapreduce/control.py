@@ -41,7 +41,8 @@ def start_map(name,
               eta=None,
               countdown=None,
               hooks_class_name=None,
-              _app=None):
+              _app=None,
+              transactional=False):
   """Start a new, mapper-only mapreduce.
 
   Args:
@@ -62,6 +63,8 @@ def start_map(name,
     countdown: Time in seconds into the future that this MR should execute.
         Defaults to zero.
     hooks_class_name: fully qualified name of a hooks.Hooks subclass.
+    transactional: Specifies if job should be started as a part of already
+      opened transaction.
 
   Returns:
     mapreduce id as string.
@@ -78,5 +81,5 @@ def start_map(name,
       eta=eta,
       countdown=countdown,
       hooks_class_name=hooks_class_name,
-      _app=_app)
-
+      _app=_app,
+      transactional=transactional)
