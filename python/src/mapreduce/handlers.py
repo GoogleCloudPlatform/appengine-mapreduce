@@ -830,6 +830,8 @@ class StartJobHandler(base_handler.PostJsonHandler):
         state.mapreduce_spec = mapreduce_spec
         state.active = True
         state.active_shards = mapper_spec.shard_count
+        if _app:
+          state.app_id = _app
         state.put()
 
       if hooks is not None:
