@@ -25,10 +25,11 @@
 from google.appengine.tools import os_compat  # pylint: disable-msg=W0611
 
 import cStringIO
+from testlib import mox
 import os
+import time
 import unittest
 import zipfile
-from testlib import mox
 
 from google.appengine.api import apiproxy_stub_map
 from google.appengine.api import datastore
@@ -97,7 +98,6 @@ class DatastoreInputReaderTest(unittest.TestCase):
 
     apiproxy_stub_map.apiproxy = apiproxy_stub_map.APIProxyStubMap()
     apiproxy_stub_map.apiproxy.RegisterStub("datastore_v3", self.datastore)
-
 
   def split(self, shard_count, namespaces=['']):
     """Generate TestEntity split.
@@ -1097,6 +1097,160 @@ class BlobstoreZipLineInputReaderTest(unittest.TestCase):
                       json)
     reader2 = input_readers.BlobstoreZipLineInputReader.from_json(json)
     self.assertEqual(str(reader), str(reader2))
+
+
+# Dummy start up time of a mapreduce.
+STARTUP_TIME_US = 1000
+
+MAPREDUCE_READER_SPEC = ('%s.%s' %
+                         (input_readers.ConsistentKeyReader.__module__,
+                          input_readers.ConsistentKeyReader.__name__))
+
+
+class MockUnappliedQuery(object):
+  """Mocks unapplied query in order to mimic existence of unapplied jobs."""
+
+  def __init__(self, results):
+    """Constructs unapplied query with given results."""
+    self.results = results
+    self.has_r_filter = False
+
+  def __setitem__(self, qfilter, value):
+    """Sets a query filter."""
+    if qfilter == '__key__ <=':
+      pass
+    elif (qfilter == '__unapplied_log_timestamp_us__ <' and
+          value == STARTUP_TIME_US):
+      self.has_unapplied_filter = True
+    else:
+      raise Exception('Unexpected filter %s %s' % (qfilter, value))
+
+  def Get(self, limit):
+    """Fetches query results."""
+    if not self.has_unapplied_filter:
+      raise Exception('Unapplied filter hasn\'t been set')
+    if limit != input_readers.ConsistentKeyReader._BATCH_SIZE:
+      raise Exception('Unexpected limit %s' % limit)
+    return self.results
+
+
+class ConsistentKeyReaderTest(unittest.TestCase):
+  """Tests for the ConsistentKeyReader."""
+
+  def setUp(self):
+    """Sets up the test harness."""
+    unittest.TestCase.setUp(self)
+    self.app_id = 'myapp'
+    self.kind_id = 'somekind'
+
+    self.mapper_params = {
+        'entity_kind': self.kind_id,
+        'start_time_us': STARTUP_TIME_US,
+        'enable_quota': False}
+    self.mapper_spec = model.MapperSpec.from_json({
+        'mapper_handler_spec': 'FooHandler',
+        'mapper_input_reader': MAPREDUCE_READER_SPEC,
+        'mapper_params': self.mapper_params,
+        'mapper_shard_count': 10})
+
+    self.reader = input_readers.ConsistentKeyReader(
+        self.kind_id,
+        [key_range.KeyRange()],
+        start_time_us=STARTUP_TIME_US)
+    os.environ['APPLICATION_ID'] = self.app_id
+
+    self.datastore = datastore_file_stub.DatastoreFileStub(
+        self.app_id, '/dev/null', '/dev/null')
+
+    apiproxy_stub_map.apiproxy = apiproxy_stub_map.APIProxyStubMap()
+    apiproxy_stub_map.apiproxy.RegisterStub('datastore_v3', self.datastore)
+    # apiproxy_stub_map.apiproxy.GetStub('datastore_v3').SetTrusted(True)
+
+    self.mox = mox.Mox()
+
+  def tearDown(self):
+    """Verifies mox expectations."""
+    try:
+      self.mox.VerifyAll()
+    finally:
+      self.mox.UnsetStubs()
+
+  def testSplitInputNoData(self):
+    """Splits empty input among several shards."""
+    readers = input_readers.ConsistentKeyReader.split_input(self.mapper_spec)
+    self.assertEquals(1, len(readers))
+
+    r = readers[0]
+    self.assertEquals(self.kind_id, r._entity_kind)
+    self.assertEquals(STARTUP_TIME_US, r.start_time_us)
+    self.assertEquals(None, r._key_ranges[0].key_start)
+    self.assertEquals(None, r._key_ranges[0].key_end)
+
+  def testSplitInput(self):
+    """Splits empty input among several shards."""
+    datastore.Put(datastore.Entity(self.kind_id))
+    readers = input_readers.ConsistentKeyReader.split_input(self.mapper_spec)
+    self.assertEquals(8, len(readers))
+
+    for r in readers:
+      self.assertEquals(self.kind_id, r._entity_kind)
+      self.assertEquals(STARTUP_TIME_US, r.start_time_us)
+
+    # The end ranges should be half openned.
+    self.assertEquals(None, readers[0]._key_ranges[0].key_start)
+    self.assertEquals(None, readers[-1]._key_ranges[0].key_end)
+
+  def testReaderGeneratorSimple(self):
+    """Tests reader generator when there are no unapplied jobs."""
+    k1 = datastore.Put(datastore.Entity(self.kind_id))
+    k2 = datastore.Put(datastore.Entity(self.kind_id))
+
+    keys = list(self.reader)
+    self.assertEquals([k1, k2], keys)
+
+  def testReaderGeneratorSimpleWithEmptyDatastore(self):
+    """Tests reader generator when there are no unapplied jobs or entities."""
+    keys = list(self.reader)
+    self.assertEquals([], keys)
+
+  def testReaderGeneratorUnappliedJobs(self):
+    """Tests reader generator when there are some unapplied jobs."""
+    k1 = datastore.Put(datastore.Entity(self.kind_id))
+    k2 = datastore.Put(datastore.Entity(self.kind_id))
+
+    dummy_k1 = db.Key.from_path(
+        *(k1.to_path() + [input_readers.ConsistentKeyReader.DUMMY_KIND,
+                          input_readers.ConsistentKeyReader.RANDOM_ID]))
+    dummy_k2 = db.Key.from_path(
+        *(k2.to_path() + [input_readers.ConsistentKeyReader.DUMMY_KIND,
+                          input_readers.ConsistentKeyReader.RANDOM_ID]))
+
+    # This method is used only for unapplied query construction.
+    self.mox.StubOutWithMock(
+        key_range.KeyRange, 'make_ascending_datastore_query')
+    self.mox.StubOutWithMock(db, 'get')
+
+    datastore_query = datastore.Query(self.kind_id, keys_only=True)
+    empty_query = datastore.Query('nosuchkind')
+
+    # Applying jobs first.
+    key_range.KeyRange.make_ascending_datastore_query(
+        kind=None, keys_only=True).AndReturn(MockUnappliedQuery([k1, k2]))
+    db.get([dummy_k1, dummy_k2], config=mox.IgnoreArg())
+    key_range.KeyRange.make_ascending_datastore_query(
+        kind=None, keys_only=True).AndReturn(MockUnappliedQuery([]))
+
+    # Got all keys no unapplied jobs.
+    key_range.KeyRange.make_ascending_datastore_query(
+        kind=self.kind_id, keys_only=True).AndReturn(datastore_query)
+    key_range.KeyRange.make_ascending_datastore_query(
+        kind=self.kind_id, keys_only=True).AndReturn(empty_query)
+
+    self.mox.ReplayAll()
+
+    keys = list(self.reader)
+    self.assertEquals([k1, k2], keys)
+
 
 if __name__ == "__main__":
   unittest.main()

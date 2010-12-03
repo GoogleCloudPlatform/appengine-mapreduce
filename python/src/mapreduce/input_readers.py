@@ -23,11 +23,12 @@
 import logging
 import math
 import StringIO
+import time
 import zipfile
 
 from google.appengine.api import datastore
 from google.appengine.api import namespace_manager
-
+from google.appengine.datastore import datastore_rpc
 from mapreduce.lib import blobstore
 from google.appengine.ext import db
 from mapreduce.lib import key_range
@@ -998,3 +999,163 @@ class BlobstoreZipLineInputReader(InputReader):
         self._blob_key, self._start_file_index, self._end_file_index,
         self._next_offset())
 
+
+class ConsistentKeyReader(DatastoreKeyInputReader):
+  """A key reader which reads consistent data from datastore.
+
+  Datastore might have entities which were written, but their job logs not yet
+  applied. These entities would be typically impossible to obtain with queries
+  and even Get calls outside the transaction.
+
+  This reader might take significant time to start yielding some data because
+  it has to roll forward all jobs created before its start.
+  """
+  START_TIME_US_PARAM = 'start_time_us'
+  UNAPPLIED_LOG_FILTER = '__unapplied_log_timestamp_us__ <'
+  DUMMY_KIND = 'DUMMY_KIND'
+  RANDOM_ID = 106275677020293L
+
+
+  def __init__(self,
+               entity_kind,
+               key_range_param,
+               batch_size=DatastoreKeyInputReader._BATCH_SIZE,
+               start_time_us=None):
+    """Constructs the basic class."""
+    DatastoreInputReader.__init__(
+        self, entity_kind, key_range_param, batch_size)
+    self.start_time_us = start_time_us
+
+  def __iter__(self):
+    """Iterates over the keys in the given KeyRanges.
+
+    Yields:
+      A db.Key instance for each key in the given key range, starting with
+      keys for unapplied jobs.
+    """
+    while True:  # Iterates over each key range.
+      if self._current_key_range is None:
+        break
+
+      self._apply_jobs()
+
+      while True:  # Iterates over each key in the current key range.
+        # Fetches the next batch of the result keys.
+        query = self._current_key_range.make_ascending_datastore_query(
+            kind=self._entity_kind, keys_only=True)
+        keys = query.Get(limit=self._batch_size)
+
+        # No results, this shard is complete.
+        if not keys:
+          self._advance_key_range()
+          break
+
+        # All good, now we can feed the mapper.
+        for key in keys:
+          self._current_key_range.advance(key)
+          yield key
+
+  def _apply_jobs(self):
+    """Apply all jobs in current key range."""
+    while True:
+      # Creates an unapplied query and fetches unapplied jobs in the result
+      # range.
+      unapplied_query = self._current_key_range.make_ascending_datastore_query(
+          kind=None, keys_only=True)
+      unapplied_query[ConsistentKeyReader.UNAPPLIED_LOG_FILTER] = self.start_time_us
+      unapplied_jobs = unapplied_query.Get(limit=self._batch_size)
+
+      if not unapplied_jobs:
+        return
+
+      # There were some unapplied jobs. Roll them forward.
+      keys_to_apply = []
+      for key in unapplied_jobs:
+        # We use dummy kind and id because we don't actually need any data.
+        path = key.to_path() + [ConsistentKeyReader.DUMMY_KIND,
+                                ConsistentKeyReader.RANDOM_ID]
+        keys_to_apply.append(
+            db.Key.from_path(_app=key.app(), namespace=key.namespace(), *path))
+      db.get(keys_to_apply, config=datastore_rpc.Configuration(
+          deadline=10,
+          read_policy=datastore_rpc.Configuration.APPLY_ALL_JOBS_CONSISTENCY))
+
+
+  @classmethod
+  def _split_input_from_namespace(cls,
+                                  app,
+                                  namespace,
+                                  entity_kind_name,
+                                  shard_count):
+    key_ranges = super(ConsistentKeyReader, cls)._split_input_from_namespace(
+        app, namespace, entity_kind_name, shard_count)
+
+    # The KeyRanges calculated by the base class may not include keys for
+    # entities that have unapplied jobs. So use an open key range for the first
+    # and last KeyRanges to ensure that they will be processed.
+    # pylint: disable-msg=W0212
+    if key_ranges:
+      key_ranges[0].key_start = None
+      key_ranges[0].include_start = False
+      key_ranges[-1].key_end = None
+      key_ranges[-1].include_end = False
+    return key_ranges
+
+  @classmethod
+  def _split_input_from_params(cls, app, namespaces, entity_kind_name,
+                               params, shard_count):
+    readers = super(ConsistentKeyReader, cls)._split_input_from_params(app,
+                                                          namespaces,
+                                                          entity_kind_name,
+                                                          params,
+                                                          shard_count)
+
+    # We always produce at least one key range because:
+    # a) there might be unapplied entities
+    # b) it simplifies MR code
+    if not readers:
+      key_ranges = [key_range.KeyRange(namespace=namespace, _app=app)
+                    for namespace in namespaces]
+      readers = [cls(entity_kind_name, key_ranges)]
+
+    return readers
+
+  @classmethod
+  def split_input(cls, mapper_spec):
+    """Splits input into key ranges."""
+    readers = super(ConsistentKeyReader, cls).split_input(mapper_spec)
+
+    start_time_us = mapper_spec.params.get(
+        cls.START_TIME_US_PARAM, long(time.time() * 1e6))
+    for reader in readers:
+      reader.start_time_us = start_time_us
+    return readers
+
+  def to_json(self):
+    """Serializes all the data in this query range into json form.
+
+    Returns:
+      all the data in json-compatible map.
+    """
+    json_dict = {self.KEY_RANGE_PARAM: [k.to_json() for k in self._key_ranges],
+                 self.ENTITY_KIND_PARAM: self._entity_kind,
+                 self.BATCH_SIZE_PARAM: self._batch_size,
+                 self.START_TIME_US_PARAM: self.start_time_us}
+    return json_dict
+
+  @classmethod
+  def from_json(cls, json):
+    """Create new DatastoreInputReader from the json, encoded by to_json.
+
+    Args:
+      json: json map representation of DatastoreInputReader.
+
+    Returns:
+      an instance of DatastoreInputReader with all data deserialized from json.
+    """
+    query_range = cls(
+        json[cls.ENTITY_KIND_PARAM],
+        [key_range.KeyRange.from_json(k) for k in json[cls.KEY_RANGE_PARAM]],
+        json[cls.BATCH_SIZE_PARAM],
+        json[cls.START_TIME_US_PARAM])
+    return query_range
