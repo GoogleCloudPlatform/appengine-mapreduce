@@ -346,8 +346,12 @@ class DatastoreInputReader(InputReader):
 
     Args:
       mapper_spec: MapperSpec with params containing 'entity_kind'.
-        May also have 'batch_size' in the params to specify the number
-        of entities to process in each batch.
+        May have 'namespaces' in the params as either a list of namespace
+        strings or a comma-seperated list of namespaces. If specified then the
+        input reader will only yield entities in the given namespaces. If
+        'namespaces' is not given then the current namespace will be used. May
+        also have 'batch_size' in the params to specify the number of entities
+        to process in each batch.
 
     Returns:
       A list of InputReader objects of length <= number_of_shards. These
