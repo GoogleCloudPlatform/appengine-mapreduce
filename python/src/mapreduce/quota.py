@@ -76,7 +76,7 @@ class QuotaManager(object):
     if new_quota >= _OFFSET:
       return amount
 
-    if consume_some and _OFFSET - new_quota < amount:
+    if consume_some and new_quota is not None and _OFFSET - new_quota < amount:
       # we still can consume some
       self.put(bucket, _OFFSET - new_quota)
       return amount - (_OFFSET - new_quota)
