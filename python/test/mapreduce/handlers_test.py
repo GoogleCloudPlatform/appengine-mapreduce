@@ -17,7 +17,6 @@
 
 
 
-
 # Disable "Invalid method name"
 # pylint: disable-msg=C6409
 
@@ -40,8 +39,8 @@ import unittest
 from google.appengine.api import apiproxy_stub_map
 from google.appengine.api import datastore_file_stub
 from google.appengine.api import memcache
-from google.appengine.api.labs.taskqueue import taskqueue_stub
 from google.appengine.api.memcache import memcache_stub
+from google.appengine.api.labs.taskqueue import taskqueue_stub
 from google.appengine.ext import db
 from mapreduce.lib import key_range
 from mapreduce import context
