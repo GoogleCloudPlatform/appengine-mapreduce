@@ -41,14 +41,16 @@ class QuotaManager {
    * @param memcacheService the memcache service to use for storing quota
    */
   public QuotaManager(MemcacheService memcacheService) {
-    this(memcacheService, null);
+    this.memcacheService = memcacheService;
   }
   
   /**
-   * 
+   *
    * @param memcacheService the memcache service to use for storing quota
    * @param namespace the memcache namespace to use for storing quota
+   * @deprecated Use single argument constructor with a namespaced {@link MemcacheService}
    */
+  @Deprecated
   public QuotaManager(MemcacheService memcacheService, String namespace) {
     this.memcacheService = memcacheService;
     

@@ -19,6 +19,7 @@ package com.google.appengine.tools.mapreduce;
 import com.google.appengine.api.datastore.DatastoreServiceFactory;
 import com.google.appengine.api.datastore.DatastoreService;
 import com.google.appengine.api.datastore.Entity;
+import com.google.appengine.api.datastore.FetchOptions;
 import com.google.appengine.api.datastore.Query;
 import com.google.appengine.tools.development.testing.LocalDatastoreServiceTestConfig;
 import com.google.appengine.tools.development.testing.LocalServiceTestHelper;
@@ -94,10 +95,10 @@ public class AppEngineMapperTest extends TestCase {
     mapper.setup(context);
     mapper.taskSetup(context);
     mapper.map(NullWritable.get(), NullWritable.get(), context);
-    assertEquals(0, datastoreService.prepare(new Query("foo")).countEntities());
+    assertEquals(0, datastoreService.prepare(new Query("foo")).countEntities(FetchOptions.Builder.withDefaults()));
     mapper.taskCleanup(context);
     mapper.cleanup(context);
-    assertEquals(1, datastoreService.prepare(new Query("foo")).countEntities());
+    assertEquals(1, datastoreService.prepare(new Query("foo")).countEntities(FetchOptions.Builder.withDefaults()));
   }
 
   public void testMutationPool() throws Exception {
@@ -107,13 +108,13 @@ public class AppEngineMapperTest extends TestCase {
     for (int i = 0; i < DatastoreMutationPool.DEFAULT_COUNT_LIMIT - 1; i++) {
       mapper.map(NullWritable.get(), NullWritable.get(), context);
     }
-    assertEquals(0, datastoreService.prepare(new Query("foo")).countEntities());
+    assertEquals(0, datastoreService.prepare(new Query("foo")).countEntities(FetchOptions.Builder.withDefaults()));
     mapper.map(NullWritable.get(), NullWritable.get(), context);
     assertEquals(DatastoreMutationPool.DEFAULT_COUNT_LIMIT,
-                 datastoreService.prepare(new Query("foo")).countEntities());
+                 datastoreService.prepare(new Query("foo")).countEntities(FetchOptions.Builder.withDefaults()));
     mapper.taskCleanup(context);
     mapper.cleanup(context);
     assertEquals(DatastoreMutationPool.DEFAULT_COUNT_LIMIT,
-                 datastoreService.prepare(new Query("foo")).countEntities());
+                 datastoreService.prepare(new Query("foo")).countEntities(FetchOptions.Builder.withDefaults()));
   }
 }
