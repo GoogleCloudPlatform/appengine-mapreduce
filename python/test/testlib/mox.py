@@ -1621,7 +1621,7 @@ class SameElementsAs(Comparator):
     return expected == actual
 
   def __repr__(self):
-    return '<sequence with same elements as \'%s\'>' % self._expected_seq
+    return '<sequence with same elements as \'%s\'>' % self._expected_list
 
 
 class And(Comparator):
