@@ -32,6 +32,7 @@ from google.appengine.datastore import datastore_rpc
 from mapreduce.lib import blobstore
 from google.appengine.ext import db
 from mapreduce.lib import key_range
+from google.appengine.ext.db import metadata
 from mapreduce import util
 from mapreduce.model import JsonMixin
 
@@ -208,6 +209,10 @@ class DatastoreInputReader(InputReader):
 
     raw_entity_kind = util.get_short_name(entity_kind_name)
 
+    if shard_count == 1:
+      # With one shard we don't need to calculate any splitpoints at all.
+      return [key_range.KeyRange(namespace=namespace, _app=app)]
+
     # we use datastore.Query instead of ext.db.Query here, because we can't
     # erase ordering on db.Query once we set it.
     ds_query = datastore.Query(kind=raw_entity_kind,
@@ -217,7 +222,7 @@ class DatastoreInputReader(InputReader):
     ds_query.Order("__key__")
     first_entity_key_list = ds_query.Get(1)
     if not first_entity_key_list:
-      logging.warning("Could not retrieve an entity of type %s." %
+      logging.warning("Could not retrieve an entity of type %s.",
                       raw_entity_kind)
       return []
     first_entity_key = first_entity_key_list[0]
@@ -1169,3 +1174,49 @@ class ConsistentKeyReader(DatastoreKeyInputReader):
         json[cls.BATCH_SIZE_PARAM],
         json[cls.START_TIME_US_PARAM])
     return query_range
+
+
+# TODO(user): This reader always produces only one shard, because
+# namespace entities use the mix of ids/names, and KeyRange-based splitting
+# doesn't work satisfactory in this case.
+# It's possible to implement specific splitting functionality for the reader
+# instead of reusing generic one. Meanwhile 1 shard is enough for our
+# applications.
+class NamespaceInputReader(DatastoreKeyInputReader):
+  """An input reader to iterate over namespaces.
+
+  This reader yields namespace names as string.
+  It will always produce only one shard.
+  """
+
+  @classmethod
+  def validate(cls, mapper_spec):
+    """Validates mapper spec.
+
+    Args:
+      mapper_spec: The MapperSpec for this InputReader.
+
+    Raises:
+      BadReaderParamsError: required parameters are missing or invalid.
+    """
+    mapper_spec.params[cls.ENTITY_KIND_PARAM] = metadata.Namespace.kind()
+    mapper_spec.shard_count = 1
+    cls._common_validate(mapper_spec)
+
+  @classmethod
+  def split_input(cls, mapper_spec):
+    """Returns a list of input readers for the input spec.
+
+    Args:
+      mapper_spec: The MapperSpec for this InputReader.
+
+    Returns:
+      A list of InputReaders.
+    """
+    mapper_spec.params[cls.ENTITY_KIND_PARAM] = metadata.Namespace.kind()
+    mapper_spec.shard_count = 1
+    return super(DatastoreKeyInputReader, cls).split_input(mapper_spec)
+
+  def __iter__(self):
+    for key in DatastoreKeyInputReader.__iter__(self):
+      yield metadata.Namespace.key_to_namespace(key)
