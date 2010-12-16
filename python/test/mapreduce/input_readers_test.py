@@ -347,40 +347,29 @@ class DatastoreInputReaderTest(unittest.TestCase):
 
   def testSplitNoData(self):
     """Empty split should be produced if there's no data in database."""
-    self.assertEquals([], self.split(10))
+    self.assertEquals(
+        [[key_range.KeyRange(key_start=None,
+                             key_end=None,
+                             direction='ASC',
+                             include_start=True,
+                             include_end=True)]],
+         self.split(10))
 
   def testSplitNotEnoughData(self):
     """Splits should not intersect, if there's not enough data for each."""
     TestEntity().put()
     TestEntity().put()
     self.assertEquals([
-        # [1, 1]
-        [key_range.KeyRange(key_start=key(1),
-                            key_end=key(1),
-                            direction="DESC",
-                            include_start=True,
-                            include_end=True,
-                            namespace='')],
-        # (1, 1)
-        [key_range.KeyRange(key_start=key(1),
-                            key_end=key(1),
-                            direction="ASC",
-                            include_start=False,
-                            include_end=False,
-                            namespace='')],
-        # (1, 1)
-        [key_range.KeyRange(key_start=key(1),
-                            key_end=key(1),
-                            direction="DESC",
-                            include_start=False,
-                            include_end=False,
-                            namespace='')],
-        # (1, 2]
-        [key_range.KeyRange(key_start=key(1),
+        [key_range.KeyRange(key_start=None,
                             key_end=key(2),
                             direction="ASC",
                             include_start=False,
-                            include_end=True,
+                            include_end=False)],
+        [key_range.KeyRange(key_start=key(2),
+                            key_end=None,
+                            direction="ASC",
+                            include_start=True,
+                            include_end=False,
                             namespace='')],
         ],
         self.split(4))
@@ -403,88 +392,68 @@ class DatastoreInputReaderTest(unittest.TestCase):
 
     self.assertEquals(
         [
-            key_range.KeyRange(key_start=key(101, namespace='google'),
-                               key_end=key(110, namespace='google'),
-                               direction="DESC",
-                               include_start=True,
-                               include_end=True,
+            key_range.KeyRange(key_start=None,
+                               key_end=key(103, namespace='google'),
+                               direction="ASC",
+                               include_start=False,
+                               include_end=False,
                                namespace='google'),
-            key_range.KeyRange(key_start=key(1),
-                               key_end=key(25),
-                               direction="DESC",
-                               include_start=True,
-                               include_end=True),
+            key_range.KeyRange(key_start=None,
+                               key_end=key(2),
+                               direction="ASC",
+                               include_start=False,
+                               include_end=False),
         ],
         reader1_key_ranges)
 
     self.assertEquals(
         [
-            key_range.KeyRange(key_start=key(110, namespace='google'),
-                               key_end=key(120, namespace='google'),
+            key_range.KeyRange(key_start=key(103, namespace='google'),
+                               key_end=key(115, namespace='google'),
                                direction="ASC",
-                               include_start=False,
-                               include_end=True,
+                               include_start=True,
+                               include_end=False,
                                namespace='google'),
-            key_range.KeyRange(key_start=key(25),
-                               key_end=key(50),
+            key_range.KeyRange(key_start=key(2),
+                               key_end=key(32),
                                direction="ASC",
-                               include_start=False,
-                               include_end=True),
+                               include_start=True,
+                               include_end=False),
         ],
         reader2_key_ranges)
 
     self.assertEquals(
         [
-            key_range.KeyRange(key_start=key(120, namespace='google'),
-                               key_end=key(130, namespace='google'),
-                               direction="DESC",
-                               include_start=False,
-                               include_end=True,
+            key_range.KeyRange(key_start=key(115, namespace='google'),
+                               key_end=key(123, namespace='google'),
+                               direction="ASC",
+                               include_start=True,
+                               include_end=False,
                                namespace='google'),
-            key_range.KeyRange(key_start=key(50),
-                               key_end=key(75),
-                               direction="DESC",
-                               include_start=False,
-                               include_end=True),
+            key_range.KeyRange(key_start=key(32),
+                               key_end=key(59),
+                               direction="ASC",
+                               include_start=True,
+                               include_end=False),
         ],
         reader3_key_ranges)
 
     self.assertEquals(
         [
-            key_range.KeyRange(key_start=key(130, namespace='google'),
-                               key_end=key(140, namespace='google'),
+            key_range.KeyRange(key_start=key(123, namespace='google'),
+                               key_end=None,
                                direction="ASC",
-                               include_start=False,
-                               include_end=True,
+                               include_start=True,
+                               include_end=False,
                                namespace='google'),
-            key_range.KeyRange(key_start=key(75),
-                               key_end=key(100),
+            key_range.KeyRange(key_start=key(59),
+                               key_end=None,
                                direction="ASC",
-                               include_start=False,
-                               include_end=True),
+                               include_start=True,
+                               include_end=False),
         ],
         reader4_key_ranges)
 
-
-  def testSplitGuessEnd(self):
-    """Tests doing query splits when there is no descending index."""
-    self.resetDatastore(require_indexes=True)
-    TestEntity().put()
-    TestEntity().put()
-    self.assertEqual(
-        [[key_range.KeyRange(
-            key_start=key(1),
-            key_end=key(1),
-            direction="DESC",
-            include_start=True,
-            include_end=True)],
-         [key_range.KeyRange(
-            key_start=key(1),
-            key_end=key(2),
-            direction="ASC",
-            include_start=False,
-            include_end=True)]],
-         self.split(2))
 
   def testGenerator(self):
     """Test DatastoreInputReader as generator."""
@@ -571,10 +540,12 @@ class DatastoreInputReaderTest(unittest.TestCase):
     splits = self.split(2)
     stringified = [str(s[0]) for s in splits]
     self.assertEquals(
-        ["DESC[datastore_types.Key.from_path(u'TestEntity', 1, _app=u'testapp') to "
-         "datastore_types.Key.from_path(u'TestEntity', 1, _app=u'testapp')]",
-         "ASC(datastore_types.Key.from_path(u'TestEntity', 1, _app=u'testapp') to "
-         "datastore_types.Key.from_path(u'TestEntity', 2, _app=u'testapp')]"],
+        ["ASC(None to "
+         "datastore_types.Key.from_path(u'TestEntity', 2, _app=u'testapp')"
+         ")",
+         "ASC["
+         "datastore_types.Key.from_path(u'TestEntity', 2, _app=u'testapp')"
+         " to None)"],
         stringified)
 
 class DatastoreKeyInputReaderTest(unittest.TestCase):
@@ -1208,10 +1179,11 @@ class ConsistentKeyReaderTest(unittest.TestCase):
     self.assertEquals(None, r._key_ranges[0].key_end)
 
   def testSplitInput(self):
-    """Splits empty input among several shards."""
-    datastore.Put(datastore.Entity(self.kind_id))
+    """Splits input among several shards."""
+    for _ in range(100):
+      datastore.Put(datastore.Entity(self.kind_id))
     readers = input_readers.ConsistentKeyReader.split_input(self.mapper_spec)
-    self.assertEquals(8, len(readers))
+    self.assertEquals(10, len(readers))
 
     for r in readers:
       self.assertEquals(self.kind_id, r._entity_kind)

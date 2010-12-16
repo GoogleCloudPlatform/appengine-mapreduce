@@ -435,7 +435,8 @@ class GetJobDetailTest(testutil.HandlerTestBase):
     """Sets up the test harness."""
     testutil.HandlerTestBase.setUp(self)
 
-    TestKind().put()
+    for _ in range(100):
+      TestKind().put()
     self.start = handlers.StartJobHandler()
     self.start.initialize(mock_webapp.MockRequest(),
                           mock_webapp.MockResponse())

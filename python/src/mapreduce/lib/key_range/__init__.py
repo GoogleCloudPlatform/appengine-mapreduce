@@ -107,7 +107,7 @@ class KeyRange(object):
     if self.include_end:
       right_side = "]"
     else:
-      right_side = "("
+      right_side = ")"
     return "%s%s%r to %r%s" % (self.direction, left_side, self.key_start,
                                self.key_end, right_side)
 

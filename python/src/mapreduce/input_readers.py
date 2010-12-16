@@ -141,6 +141,9 @@ class DatastoreInputReader(InputReader):
   # Maximum number of shards we'll create.
   _MAX_SHARD_COUNT = 256
 
+  # __scatter__ oversampling factor
+  _OVERSAMPLING_FACTOR = 32
+
   # Mapreduce parameters.
   ENTITY_KIND_PARAM = "entity_kind"
   KEYS_ONLY_PARAM = "keys_only"
@@ -223,36 +226,47 @@ class DatastoreInputReader(InputReader):
                                namespace=namespace,
                                _app=app,
                                keys_only=True)
-    ds_query.Order("__key__")
-    first_entity_key_list = ds_query.Get(1)
-    if not first_entity_key_list:
-      logging.warning("Could not retrieve an entity of type %s.",
-                      raw_entity_kind)
-      return []
-    first_entity_key = first_entity_key_list[0]
-    ds_query.Order(("__key__", datastore.Query.DESCENDING))
-    try:
-      last_entity_key, = ds_query.Get(1)
-    except db.NeedIndexError, e:
-      # TODO(user): Show this error in the worker log, not the app logs.
-      logging.warning("Cannot create accurate approximation of keyspace, "
-                      "guessing instead. Please address this problem: %s", e)
-      # TODO(user): Use a key-end hint from the user input parameters
-      # in this case, in the event the user has a good way of figuring out
-      # the range of the keyspace.
-      last_entity_key = key_range.KeyRange.guess_end_key(raw_entity_kind,
-                                                         first_entity_key)
-    full_keyrange = key_range.KeyRange(
-        first_entity_key, last_entity_key, None, True, True,
-        namespace=namespace,
-        _app=app)
-    key_ranges = [full_keyrange]
-    number_of_half_splits = int(math.floor(math.log(shard_count, 2)))
-    for _ in range(0, number_of_half_splits):
-      new_ranges = []
-      for r in key_ranges:
-        new_ranges += r.split_range(1)
-      key_ranges = new_ranges
+    ds_query.Order("__scatter__")
+    random_keys = ds_query.Get(shard_count * cls._OVERSAMPLING_FACTOR)
+    if not random_keys:
+      # This might mean that there are no entities with scatter property
+      # or there are no entities at all.
+      return [key_range.KeyRange(namespace=namespace, _app=app)]
+    random_keys.sort()
+    # pick shard_count - 1 points to generate shard_count splits
+    split_points_count = shard_count - 1
+    if len(random_keys) > split_points_count:
+      # downsample
+      random_keys = [random_keys[len(random_keys)*i/split_points_count]
+                     for i in range(split_points_count)]
+
+    key_ranges = []
+
+    key_ranges.append(key_range.KeyRange(
+        key_start=None,
+        key_end=random_keys[0],
+        direction=key_range.KeyRange.ASC,
+        include_start=False,
+        include_end=False,
+        namespace=namespace))
+
+    for i in range(0, len(random_keys) - 1):
+      key_ranges.append(key_range.KeyRange(
+          key_start=random_keys[i],
+          key_end=random_keys[i+1],
+          direction=key_range.KeyRange.ASC,
+          include_start=True,
+          include_end=False,
+          namespace=namespace))
+
+    key_ranges.append(key_range.KeyRange(
+        key_start=random_keys[-1],
+        key_end=None,
+        direction=key_range.KeyRange.ASC,
+        include_start=True,
+        include_end=False,
+        namespace=namespace))
+
     return key_ranges
 
   @classmethod
