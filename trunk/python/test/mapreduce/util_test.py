@@ -55,6 +55,13 @@ def test_handler_yield(entity):
   yield 2
 
 
+class MockMapreduceSpec:
+  """Mock MapreduceSpec class."""
+
+  def __init__(self):
+    self.params = {}
+
+
 class ForNameTest(unittest.TestCase):
   """Test util.for_name function."""
 
@@ -153,6 +160,27 @@ class ParseBoolTest(unittest.TestCase):
     self.assertEquals(False, util.parse_bool(0))
     self.assertEquals(True, util.parse_bool("on"))
     self.assertEquals(False, util.parse_bool("off"))
+
+
+class CreateConfigTest(unittest.TestCase):
+  """Test create_datastore_write_config function."""
+
+  def setUp(self):
+    super(CreateConfigTest, self).setUp()
+    self.spec = MockMapreduceSpec()
+
+  def testDefaultConfig(self):
+    config = util.create_datastore_write_config(self.spec)
+    self.assertTrue(config)
+    self.assertFalse(config.force_writes)
+
+  def testForceWrites(self):
+    self.spec.params["force_writes"] = "True"
+    config = util.create_datastore_write_config(self.spec)
+    self.assertTrue(config)
+    self.assertTrue(config.force_writes)
+
+
 
 if __name__ == "__main__":
   unittest.main()

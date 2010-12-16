@@ -131,7 +131,7 @@ class MapperWorkerCallbackHandler(base_handler.TaskQueueHandler):
                    shard_state.shard_number, shard_state.mapreduce_id)
       shard_state.active = False
       shard_state.result_status = model.ShardState.RESULT_ABORTED
-      shard_state.put()
+      shard_state.put(config=util.create_datastore_write_config(spec))
       model.MapreduceControl.abort(spec.mapreduce_id)
       return
 
@@ -451,11 +451,13 @@ class ControllerCallbackHandler(base_handler.TaskQueueHandler):
     poll_time = state.last_poll_time
     state.last_poll_time = datetime.datetime.utcfromtimestamp(self._time())
 
+    config = util.create_datastore_write_config(spec)
+
     if not state.active:
       # This is the last execution.
       # Enqueue done_callback if needed.
       def put_state(state):
-        state.put()
+        state.put(config=config)
         done_callback = spec.params.get(
             model.MapreduceSpec.PARAM_DONE_CALLBACK)
         if done_callback:
@@ -474,7 +476,7 @@ class ControllerCallbackHandler(base_handler.TaskQueueHandler):
       db.run_in_transaction(put_state, state)
       return
     else:
-      state.put()
+      state.put(config=config)
 
     processing_rate = int(spec.mapper.params.get(
         "processing_rate") or model._DEFAULT_PROCESSING_RATE_PER_SEC)
@@ -636,14 +638,14 @@ class KickOffJobHandler(base_handler.TaskQueueHandler):
       logging.warning("Found no mapper input data to process.")
       state.active = False
       state.active_shards = 0
-      state.put()
+      state.put(config=util.create_datastore_write_config(spec))
       return
 
     # Update state and spec with actual shard count.
     spec.mapper.shard_count = len(input_readers)
     state.active_shards = len(input_readers)
     state.mapreduce_spec = spec
-    state.put()
+    state.put(config=util.create_datastore_write_config(spec))
 
     KickOffJobHandler._schedule_shards(
         spec, input_readers, queue_name, self.base_path())
@@ -693,8 +695,9 @@ class KickOffJobHandler(base_handler.TaskQueueHandler):
                               if shard is not None)
 
     # Puts only non-existing shards.
-    db.put(shard for shard in shard_states
-           if shard.key() not in existing_shard_keys)
+    db.put((shard for shard in shard_states
+            if shard.key() not in existing_shard_keys),
+           config=util.create_datastore_write_config(spec))
 
     for shard_number, input_reader in enumerate(input_readers):
       shard_id = model.ShardState.shard_id_from_number(
@@ -820,6 +823,7 @@ class StartJobHandler(base_handler.PostJsonHandler):
         eta=eta, countdown=countdown)
 
     hooks = mapreduce_spec.get_hooks()
+    config = util.create_datastore_write_config(mapreduce_spec)
 
     def start_mapreduce():
       if not transactional:
@@ -832,7 +836,7 @@ class StartJobHandler(base_handler.PostJsonHandler):
         state.active_shards = mapper_spec.shard_count
         if _app:
           state.app_id = _app
-        state.put()
+        state.put(config=config)
 
       if hooks is not None:
         try:

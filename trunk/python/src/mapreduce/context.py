@@ -29,6 +29,7 @@ __all__ = ["MAX_ENTITY_COUNT", "MAX_POOL_SIZE", "Context", "MutationPool",
 
 from google.appengine.api import datastore
 from google.appengine.ext import db
+from mapreduce import util
 
 # Maximum pool size in bytes. Pool will be flushed when reaches this amount.
 # We use 950,000 bytes which is slightly less than maximum allowed RPC size of
@@ -258,7 +259,8 @@ class Context(object):
     for pool in self._pools.values():
       pool.flush()
     if self.shard_state:
-      self.shard_state.put()
+      self.shard_state.put(
+          config=util.create_datastore_write_config(self.mapreduce_spec))
 
   # TODO(user): Add convenience method for mapper params.
 
