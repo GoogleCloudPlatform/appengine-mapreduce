@@ -33,6 +33,8 @@ import org.apache.hadoop.mapreduce.TaskAttemptContext;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
@@ -82,14 +84,22 @@ public class DatastoreInputFormat extends InputFormat<Key, Entity> {
     return path;
   }
 
+  // TODO(frew): Move to using Entity.SCATTER_RESERVED_PROPERTY when
+  // 1.4.2 comes out.
+  public static final String SCATTER_RESERVED_PROPERTY = "__scatter__";
+
+  // For each shard requested, we request SCATTER_OVERSAMPLE_FACTOR keys
+  // with the scatter property, then sort and pick every
+  // SCATTER_OVERSAMPLE_FACTORth of the returned properties.
+  public static final int SCATTER_OVERSAMPLE_FACTOR = 32;
+
   /**
    * Generates a set of InputSplits partitioning a particular entity kind in
    * the datastore. The context's configuration must define a value for the
    * {@value #ENTITY_KIND_KEY} attribute, which will be the entity kind
-   * parititioned. The partitioning happens lexicographically by key name
-   * or numerically by id, as appropriate.
+   * partitioned, as well as a value for {@value #SHARD_COUNT_KEY} attribute,
+   * which will be the maximum number of shards to split into.
    */
-  @Override
   public List<InputSplit> getSplits(JobContext context) throws IOException {
     String entityKind = context.getConfiguration().get(ENTITY_KIND_KEY);
     if (entityKind == null) {
@@ -98,100 +108,45 @@ public class DatastoreInputFormat extends InputFormat<Key, Entity> {
     log.info("Getting input splits for: " + entityKind);
     
     DatastoreService datastoreService = DatastoreServiceFactory.getDatastoreService();
-
-    // For now we're just going to do the dumb thing and split lexicographically
-    // by key.
-    
     Key startKey = getStartKey(entityKind, datastoreService);
     if (startKey == null) {
       return new ArrayList<InputSplit>();
     }
-    Key endKey = getEndKey(entityKind, datastoreService);
-    
-    if (startKey.equals(endKey)) {
-      return Arrays.asList((InputSplit) new DatastoreInputSplit(startKey, null));
-    }
-    
-    List<Key> startPath = getPath(startKey);
-    List<Key> endPath = getPath(endKey);
-    int minPathLength = Math.min(startPath.size(), endPath.size());
-    Iterator<Key> startPathIt = startPath.iterator();
-    Iterator<Key> endPathIt = endPath.iterator();
-    
-    boolean foundDiff = false;
-    
-    // The key with the longest path such that commonAncestor is a
-    // parent of both startKey and endKey.
-    Key commonAncestor = null;
-    
-    // In practice only one pair of (startName, endName) and (startId, endId)
-    // will be used.
-    String startName = null;
-    String endName = null;
-    
-    long startId = -1;
-    long endId = -1;
-    
-    // Walk down the key paths until we find the first name or ID
-    // in which the keys differ.
-    for (int i = 0; i < minPathLength; i++) {
-      Key currentStartKey = startPathIt.next();
-      Key currentEndKey = endPathIt.next();
-      if (!currentStartKey.equals(currentEndKey)) {
-        foundDiff = true;
-        commonAncestor = currentStartKey.getParent();
-        startName = currentStartKey.getName();
-        startId = currentStartKey.getId();
-        endName = currentEndKey.getName();
-        endId = currentEndKey.getId();
-      }
-    }
-    
-    if (!foundDiff) {
-      // TODO(frew): This is the case where one entity is the parent of the
-      // other. Figure out what to do.
-      return Arrays.asList((InputSplit) new DatastoreInputSplit(startKey, null));
-    }
-    
-    List<Key> splitKeys;
+
     int shardCount = context.getConfiguration().getInt(SHARD_COUNT_KEY, DEFAULT_SHARD_COUNT);
-
-    // If we have names for our keys, split on those.
-    if (startName != null && endName != null) {
-      splitKeys = getSplitKeysFromNames(
-          startName, endName, shardCount, commonAncestor, entityKind);
-    } else {
-      // Otherwise, use ids.
-      splitKeys = getSplitKeysFromIds(startId, endId, shardCount, commonAncestor, entityKind);
+    int desiredScatterResultCount = shardCount * SCATTER_OVERSAMPLE_FACTOR;
+    // NB(frew): If scatter doesn't exist (as in the 1.4.0 dev_appserver)
+    // then we'll just end up with one split. This seems reasonable.
+    Query scatter = new Query(entityKind)
+        .addSort(SCATTER_RESERVED_PROPERTY)
+        .setKeysOnly();
+    List<Entity> scatterList = datastoreService.prepare(scatter).asList(
+        withLimit(desiredScatterResultCount));
+    Collections.sort(scatterList, new Comparator<Entity>() {
+      public int compare(Entity e1, Entity e2) {
+        return e1.getKey().compareTo(e2.getKey());
+      }
+    });
+        
+    List<Key> splitKeys = new ArrayList(shardCount);
+    // Possibly use a lower oversampling factor if there aren't enough scatter
+    // property-containing entities to fill out the list.
+    int usedOversampleFactor = Math.max(1, scatterList.size() / shardCount);
+    log.info("Requested " + desiredScatterResultCount + " scatter entities. Got "
+        + scatterList.size() + " so using oversample factor " + usedOversampleFactor);
+    // We expect the points to be uniformly randomly distributed. So we
+    // act like the first point is the start key (which we alread know) and
+    // omit it. This converges on correct as the number of samples goes
+    // to infinity.
+    for (int i = 1; i < shardCount; i++) {
+      // This can happen if we don't have as many scatter properties as we want.
+      if (i * usedOversampleFactor >= scatterList.size()) {
+        break;
+      }
+      splitKeys.add(scatterList.get(i * usedOversampleFactor).getKey());
     }
-
+    
     return getSplitsFromSplitPoints(startKey, splitKeys);
-  }
-
-  /**
-   * Get uniformly distributed keys when the entities use name-based keys.
-   */
-  private static List<Key> getSplitKeysFromNames(
-      String startName, String endName, int shardCount, Key commonAncestor, String entityKind) {
-    List<String> splitNames = StringSplitUtil.splitStrings(startName, endName, shardCount - 1);
-    List<Key> splitKeys = new ArrayList<Key>(splitNames.size());
-    for (String name : splitNames) {
-      splitKeys.add(KeyFactory.createKey(commonAncestor, entityKind, name));
-    }
-    return splitKeys;
-  }
-
-  /**
-   * Get uniformly distributed keys when the entities use ID-based keys.
-   */
-  private static List<Key> getSplitKeysFromIds(
-      long startId, long endId, int shardCount, Key commonAncestor, String entityKind) {
-    List<Key> splitKeys = new ArrayList<Key>(shardCount - 1);
-    for (int j = 1; j < shardCount; j++) {
-      long id = startId + j * (endId - startId) / shardCount;
-      splitKeys.add(KeyFactory.createKey(commonAncestor, entityKind, id));
-    }
-    return splitKeys;
   }
 
   /**
@@ -215,25 +170,6 @@ public class DatastoreInputFormat extends InputFormat<Key, Entity> {
     splits.add(new DatastoreInputSplit(lastKey, null));
 
     return splits;
-  }
-
-  private static Key getEndKey(String entityKind, DatastoreService datastoreService) 
-      throws IOException {
-    Query descending = new Query(entityKind)
-        .addSort(Entity.KEY_RESERVED_PROPERTY, Query.SortDirection.DESCENDING)
-        .setKeysOnly();
-    try {
-      Iterator<Entity> descendingIt 
-          = datastoreService.prepare(descending).asIterator(withLimit(1));
-      if (!descendingIt.hasNext()) {
-        return null;
-      }
-      return descendingIt.next().getKey();
-    } catch (DatastoreNeedIndexException needIndexException) {
-      // TODO(frew): Implement the Python guestimation routine to deal with
-      // this case.
-      throw new IOException("Couldn't find descending index on " + Entity.KEY_RESERVED_PROPERTY);
-    }
   }
 
   private static Key getStartKey(String entityKind, DatastoreService datastoreService) 

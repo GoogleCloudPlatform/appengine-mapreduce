@@ -146,10 +146,11 @@ public class DatastoreInputFormatTest extends TestCase {
       putEntityWithName(ENTITY_KIND_NAME, "" + (char) (i));
     }
 
-    List<InputSplit> splits = getEntityKindSplitsFromCount(2);
-
-    assertStartAndEndKeyNames(splits.get(0), ENTITY_KIND_NAME, "a", "b");
-    assertStartAndEndKeyNames(splits.get(1), ENTITY_KIND_NAME, "b", null);
+    // TODO(frew): This test is only testing the single shard fallback
+    // until the 1.4.2 release. At that point it should break and the expected
+    // shards will need to be readjusted.
+    List<InputSplit> splits = getEntityKindSplitsFromCount(1);
+    assertStartAndEndKeyNames(splits.get(0), ENTITY_KIND_NAME, "a", null);
   }
   
   /**
@@ -166,9 +167,10 @@ public class DatastoreInputFormatTest extends TestCase {
 
     List<Key> keys = ds.put(entities);
 
-    int shardCount = 2;
-    List<InputSplit> splits = getEntityKindSplitsFromCount(shardCount);
-    assertStartAndEndKeys(splits.get(0), keys.get(0), keys.get(1));
-    assertStartAndEndKeys(splits.get(1), keys.get(1), null);
+    // TODO(frew): This test is only testing the single shard fallback
+    // until the 1.4.2 release. At that point it should break and the expected
+    // shards will need to be readjusted.
+    List<InputSplit> splits = getEntityKindSplitsFromCount(1);
+    assertStartAndEndKeys(splits.get(0), keys.get(0), null);
   }
 }
