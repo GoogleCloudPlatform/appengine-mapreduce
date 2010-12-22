@@ -25,6 +25,8 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.mapreduce.JobContext;
 import org.apache.hadoop.mapreduce.JobID;
 
+import java.util.UUID;
+
 import javax.servlet.http.HttpServletRequest;
 
 /**
@@ -166,7 +168,7 @@ public class AppEngineJobContext extends JobContext {
    *
    * There's a whole idiom for how JobID is constructed.
    * See
-   * <a href="http://hadoop.apache.org/common/docs/r0.20.0/api/org/apache/hadoop/mapreduce/TaskAttemptID.html"
+   * <a href="http://hadoop.apache.org/common/docs/r0.20.0/api/org/apache/hadoop/mapreduce/TaskAttemptID.html">
    * TaskAttemptID</a> and the linked classes for details.
    * 
    * In the interest of making everyone happy, we pretend like we're the world's 
@@ -174,7 +176,8 @@ public class AppEngineJobContext extends JobContext {
    * side, every job is job #1!
    */
   protected static JobID generateNewJobID() {
-    return new JobID("" + System.currentTimeMillis(), 1);
+    return new JobID(
+        ("" + System.currentTimeMillis() + "_" + UUID.randomUUID()).replace("-", ""), 1);
   }
 
 
