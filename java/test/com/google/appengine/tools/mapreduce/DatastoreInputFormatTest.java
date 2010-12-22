@@ -101,8 +101,6 @@ public class DatastoreInputFormatTest extends TestCase {
     DatastoreInputFormat inputFormat = new DatastoreInputFormat();
     Configuration conf = new Configuration();
     conf.set(DatastoreInputFormat.ENTITY_KIND_KEY, ENTITY_KIND_NAME);
-    // 2 shards, so first shard has [entities[0], entities[1]) and second has 
-    // [entities[1],...)
     conf.set(DatastoreInputFormat.SHARD_COUNT_KEY, "" + shardCount);
 
     JobContext context = new JobContext(conf, new JobID("Foo", 1));
@@ -114,6 +112,18 @@ public class DatastoreInputFormatTest extends TestCase {
     return splits;
   }
   
+  public void testGetSplitWithNoData() throws Exception {
+    DatastoreInputFormat inputFormat = new DatastoreInputFormat();
+    Configuration conf = new Configuration();
+    conf.set(DatastoreInputFormat.ENTITY_KIND_KEY, ENTITY_KIND_NAME);
+    conf.set(DatastoreInputFormat.SHARD_COUNT_KEY, "1");
+
+    JobContext context = new JobContext(conf, new JobID("Foo", 1));
+
+    List<InputSplit> splits = inputFormat.getSplits(context);
+    assertEquals(0, splits.size());
+  }
+
   /**
    * Ensures that if the datastore has a single entity, then a split is 
    * generated for that entity.

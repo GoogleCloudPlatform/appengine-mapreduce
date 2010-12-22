@@ -103,6 +103,9 @@ public class DatastoreInputFormat extends InputFormat<Key, Entity> {
     // by key.
     
     Key startKey = getStartKey(entityKind, datastoreService);
+    if (startKey == null) {
+      return new ArrayList<InputSplit>();
+    }
     Key endKey = getEndKey(entityKind, datastoreService);
     
     if (startKey.equals(endKey)) {
@@ -223,7 +226,7 @@ public class DatastoreInputFormat extends InputFormat<Key, Entity> {
       Iterator<Entity> descendingIt 
           = datastoreService.prepare(descending).asIterator(withLimit(1));
       if (!descendingIt.hasNext()) {
-        throw new IOException("No entities in the datastore query to split.");
+        return null;
       }
       return descendingIt.next().getKey();
     } catch (DatastoreNeedIndexException needIndexException) {
@@ -241,7 +244,7 @@ public class DatastoreInputFormat extends InputFormat<Key, Entity> {
     Iterator<Entity> ascendingIt 
         = datastoreService.prepare(ascending).asIterator(withLimit(1));
     if (!ascendingIt.hasNext()) {
-      throw new IOException("No entities in the datastore query to split.");
+      return null;
     }
     return ascendingIt.next().getKey();
   }
