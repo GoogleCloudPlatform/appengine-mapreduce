@@ -177,7 +177,7 @@ public class AppEngineJobContext extends JobContext {
    */
   protected static JobID generateNewJobID() {
     return new JobID(
-        ("" + System.currentTimeMillis() + "_" + UUID.randomUUID()).replace("-", ""), 1);
+        ("" + System.currentTimeMillis() + UUID.randomUUID()).replace("-", ""), 1);
   }
 
 
