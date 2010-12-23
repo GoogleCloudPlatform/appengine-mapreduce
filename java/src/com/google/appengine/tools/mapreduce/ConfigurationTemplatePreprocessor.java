@@ -76,14 +76,14 @@ import javax.xml.transform.stream.StreamResult;
  * <p>returns the string:
  * 
  * <pre>
- * <property>
- *   <name>username</name>
- *   <value>Bob</value>
- * </property>
- * <property>
- *   <name>basedir</name>
- *   <value>/user/${username}</value>
- * </property>
+ * &lt;property&gt;
+ *   &lt;name&gt;username&lt;/name&gt;
+ *   &lt;value&gt;Bob&lt;/value&gt;
+ * &lt;/property&gt;
+ * &lt;property&gt;
+ *   &lt;name&gt;basedir&lt;/name&gt;
+ *   &lt;value&gt;/user/${username}&lt;/value&gt;
+ * &lt;/property&gt;
  * </pre>
  * 
  * <p>Hadoop's {@link org.apache.hadoop.conf.Configuration} class will then
@@ -100,7 +100,7 @@ import javax.xml.transform.stream.StreamResult;
  * <p> returns the {@code Map} corresponding to:
  * 
  * <pre>
- * {"username" => "Username to analyze"}
+ * {"username" =&gt; "Username to analyze"}
  * </pre>
  * 
  * <p>You can also specify that the child text of a templated value should be
@@ -108,19 +108,19 @@ import javax.xml.transform.stream.StreamResult;
  * attribute. For instance, if no parameters are given, then:
  * 
  * <pre>
- * <property>
- *   <name human="Username to analyze">username</name>
- *   <value template="optional">Bob</value>
- * </property>
+ * &lt;property&gt;
+ *   &lt;name human="Username to analyze"&gt;username&lt;/name&gt;
+ *   &lt;value template="optional"&gt;Bob&lt;/value&gt;
+ * &lt;/property&gt;
  * </pre>
  * 
  * <p>evaluates to simply:
  * 
  * <pre>
- * <property>
- *   <name>username</name>
- *   <value>Bob</value>
- * </property>
+ * &lt;property&gt;
+ *   &lt;name&gt;username&lt;/name&gt;
+ *   &lt;value&gt;Bob&lt;/value&gt;
+ * &lt;/property&gt;
  * </pre>
  * 
  * @author frew@google.com (Fred Wulff)
