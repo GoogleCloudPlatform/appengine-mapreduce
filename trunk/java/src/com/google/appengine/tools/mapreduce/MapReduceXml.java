@@ -29,9 +29,8 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UnsupportedEncodingException;
-import java.net.URISyntaxException;
 import java.net.URL;
-import java.security.AccessControlException;
+import java.net.URLDecoder;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
@@ -76,33 +75,28 @@ public class MapReduceXml {
     try {
       // Gets the location of the containing JAR
       URL codeSourceUrl = MapReduceXml.class.getProtectionDomain().getCodeSource().getLocation();
-      path = codeSourceUrl.toURI().getPath();
-    } catch (URISyntaxException e) {
+      path = URLDecoder.decode(codeSourceUrl.getPath(), "UTF-8");
+    } catch (UnsupportedEncodingException e) {
       throw new FileNotFoundException("Couldn't find mapreduce.xml");
     }
+
     File currentDirectory = new File(path);
-    if (!currentDirectory.isDirectory()) {
-      currentDirectory = currentDirectory.getParentFile();
-    }
-    
+
     // Walk up the tree, looking for a WEB-INF/mapreduce.xml . We only expect
     // this file to exist in the root dir, but I can't figure out a good way
     // to find the root dir.
-    try {
-      while (currentDirectory != null) {
-        File mapReduceFile = new File(currentDirectory.getPath() + File.separator + "WEB-INF" 
-            + File.separator + "mapreduce.xml");
-        if (mapReduceFile.exists()) {
-          return new FileInputStream(mapReduceFile);
-        }
-        currentDirectory = currentDirectory.getParentFile();
+    while (currentDirectory != null) {
+      File mapReduceFile = new File(currentDirectory.getPath() + File.separator
+          + "mapreduce.xml");
+      if (mapReduceFile.exists()) {
+        return new FileInputStream(mapReduceFile);
       }
-      throw new FileNotFoundException("Couldn't find mapreduce.xml");
-    } catch (AccessControlException e) {
-      throw new FileNotFoundException("Couldn't find mapreduce.xml (permission error)");
+      currentDirectory = currentDirectory.getParentFile();
     }
+
+    throw new FileNotFoundException("Couldn't find mapreduce.xml");
   }
-  
+
   /**
    * Factory method for creating a MapReduceXml from the WEB-INF/mapreduce.xml file.
    */
