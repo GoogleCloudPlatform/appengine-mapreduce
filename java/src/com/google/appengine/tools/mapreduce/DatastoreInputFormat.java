@@ -69,21 +69,6 @@ public class DatastoreInputFormat extends InputFormat<Key, Entity> {
    */
   public static final int DEFAULT_SHARD_COUNT = 4;
 
-  /**
-   * Returns a list of keys, starting at the root (exclusive) and ending at
-   * the leaf node (inclusive), where each key's entity is the child of the
-   * prior key's entity.
-   */
-  public static List<Key> getPath(Key leaf) {
-    Key currentKey = leaf;
-    LinkedList<Key> path = new LinkedList<Key>();
-    do {
-      path.addFirst(leaf);
-      currentKey = currentKey.getParent();
-    }  while (currentKey != null);
-    return path;
-  }
-
   // TODO(frew): Move to using Entity.SCATTER_RESERVED_PROPERTY when
   // 1.4.2 comes out.
   public static final String SCATTER_RESERVED_PROPERTY = "__scatter__";
