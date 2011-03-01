@@ -117,4 +117,31 @@ public class AppEngineMapperTest extends TestCase {
     assertEquals(DatastoreMutationPool.DEFAULT_COUNT_LIMIT,
                  datastoreService.prepare(new Query("foo")).countEntities(FetchOptions.Builder.withDefaults()));
   }
+
+  public void testMutationPoolFlushParameters() throws Exception {
+    mapper.shouldOutputEntity(true);
+    mapper.setup(context);
+    mapper.taskSetup(context);
+    context.setMutationPoolFlushParameters(10, 100000);
+    for (int i = 0; i < 10 - 1; i++) {
+      mapper.map(NullWritable.get(), NullWritable.get(), context);
+    }
+    assertEquals(0, datastoreService.prepare(new Query("foo")).countEntities(FetchOptions.Builder.withDefaults()));
+    mapper.map(NullWritable.get(), NullWritable.get(), context);
+    assertEquals(10,
+                 datastoreService.prepare(new Query("foo")).countEntities(FetchOptions.Builder.withDefaults()));
+    mapper.taskCleanup(context);
+    mapper.cleanup(context);
+    assertEquals(10,
+                 datastoreService.prepare(new Query("foo")).countEntities(FetchOptions.Builder.withDefaults()));
+  }
+
+  public void testMutationPoolFlushParametersIllegalState() throws Exception {
+    context.getMutationPool(); 
+    try {
+      context.setMutationPoolFlushParameters(10, 5);
+      fail("Should have thrown IllegalStateException");
+    } catch (IllegalStateException expected) {
+    }
+  }
 }
