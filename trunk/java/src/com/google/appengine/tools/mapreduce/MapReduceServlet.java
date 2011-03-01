@@ -317,8 +317,10 @@ public class MapReduceServlet extends HttpServlet {
       }
     }
     try {
-      response.getWriter().print(retValue.toString());
+      retValue.write(response.getWriter());
       response.getWriter().flush();
+    } catch (JSONException e) {
+        throw new RuntimeException("Couldn't write command response", e);
     } catch (IOException e) {
       throw new RuntimeException("Couldn't write command response", e);
     }
