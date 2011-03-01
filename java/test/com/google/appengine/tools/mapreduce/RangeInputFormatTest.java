@@ -96,5 +96,10 @@ public class RangeInputFormatTest extends TestCase {
     } catch(InvalidConfigurationException expected) {
       // Expected
     }
+    
+    //Tests that longs are processed correctly and not just ints
+    setStartEndCount(Integer.MAX_VALUE + 4L, Integer.MAX_VALUE + 8L, 2);
+    assertSplits(new long[]{(long)Integer.MAX_VALUE + 4L, (long)Integer.MAX_VALUE + 6L, (long)Integer.MAX_VALUE + 8L});
+
   }
 }

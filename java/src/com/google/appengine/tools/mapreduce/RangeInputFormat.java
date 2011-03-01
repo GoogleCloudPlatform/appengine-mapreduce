@@ -71,8 +71,8 @@ public class RangeInputFormat extends InputFormat<Long, NullWritable> {
     return new RangeRecordReader();
   }
 
-  private int getNonNegativeInt(Configuration conf, String key) throws IOException {
-    int retVal = conf.getInt(key, -1);
+  private long getNonNegativeLong(Configuration conf, String key) throws IOException {
+    long retVal = conf.getLong(key, -1L);
     if (retVal < 0) {
       throw new InvalidConfigurationException("Invalid or nonexistent value for " + key);
     }
@@ -84,8 +84,8 @@ public class RangeInputFormat extends InputFormat<Long, NullWritable> {
       InterruptedException {
     Configuration conf = context.getConfiguration();
     long shardCount = conf.getInt(SHARD_COUNT_KEY, DEFAULT_SHARD_COUNT);
-    long rangeStart = getNonNegativeInt(conf, RANGE_START_KEY);
-    long rangeEnd = getNonNegativeInt(conf, RANGE_END_KEY);
+    long rangeStart = getNonNegativeLong(conf, RANGE_START_KEY);
+    long rangeEnd = getNonNegativeLong(conf, RANGE_END_KEY);
     if (rangeStart >= rangeEnd) {
       throw new InvalidConfigurationException(
           "Invalid range. Start: " + rangeStart + " >= end: " + rangeEnd);
