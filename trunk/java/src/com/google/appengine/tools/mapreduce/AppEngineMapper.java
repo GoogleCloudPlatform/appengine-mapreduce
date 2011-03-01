@@ -60,6 +60,8 @@ public abstract class AppEngineMapper<KEYIN,VALUEIN,KEYOUT,VALUEOUT>
    */
   public class AppEngineContext extends Mapper<KEYIN,VALUEIN,KEYOUT,VALUEOUT>.Context {
     private DatastoreMutationPool mutationPool;
+    private int datastoreMutationPoolCountLimit = DatastoreMutationPool.DEFAULT_COUNT_LIMIT;
+    private int datastoreMutationPoolSizeLimit = DatastoreMutationPool.DEFAULT_SIZE_LIMIT;
 
     public AppEngineContext(Configuration conf,
                             TaskAttemptID taskid,
@@ -71,9 +73,31 @@ public abstract class AppEngineMapper<KEYIN,VALUEIN,KEYOUT,VALUEOUT>
       super(conf, taskid, reader, writer, committer, reporter, split);
     }
 
+    /**
+     * Sets the number of mutations and the accumulated size of the mutations
+     * before the mutation pool is flushed. May only be called before the first
+     * call to {@link #getMutationPool()}. 
+     *
+     * @param countLimit the number of mutations to collect before the mutation
+     * pool is flushed
+     * @param sizeLimit the accumulated size of mutations (in bytes) to collect
+     * before the mutation pool is flushed
+     * @throws IllegalStateException if {@link #getMutationPool()} has already
+     * been called
+     */
+    public void setMutationPoolFlushParameters(int countLimit, int sizeLimit) {
+      if (mutationPool != null) {
+        throw new IllegalStateException("setMutationPoolFlushParameters() may only "
+            + "be called before any calls to getMutationPool()");
+      }
+      datastoreMutationPoolCountLimit = countLimit;
+      datastoreMutationPoolSizeLimit = sizeLimit;
+    }
+
     public DatastoreMutationPool getMutationPool() {
       if (mutationPool == null) {
-        mutationPool = new DatastoreMutationPool(DatastoreServiceFactory.getDatastoreService());
+        mutationPool = new DatastoreMutationPool(DatastoreServiceFactory.getDatastoreService(),
+            datastoreMutationPoolCountLimit, datastoreMutationPoolSizeLimit);
       }
       return mutationPool;
     }
