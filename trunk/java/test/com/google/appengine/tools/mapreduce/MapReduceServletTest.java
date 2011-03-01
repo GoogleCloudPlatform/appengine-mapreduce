@@ -918,9 +918,16 @@ public class MapReduceServletTest extends TestCase {
       .anyTimes();
     HttpServletResponse response = createMock(HttpServletResponse.class);
     PrintWriter responseWriter = createMock(PrintWriter.class);
-    responseWriter.print("{\"error_class\":\"java.lang.RuntimeException\","
-        + "\"error_message\":\"Full stack trace is available in the server logs. "
-        + "Message: blargh\"}");
+    responseWriter.write('{');
+    responseWriter.write("\"error_class\"");
+    responseWriter.write(':');
+    responseWriter.write("\"java.lang.RuntimeException\"");
+    responseWriter.write(',');
+    responseWriter.write("\"error_message\"");
+    responseWriter.write(':');
+    responseWriter.write("\"Full stack trace is available in the server logs. "
+        + "Message: blargh\"");
+    responseWriter.write('}');
     responseWriter.flush();
     // This method can't actually throw this exception, but that's not
     // important to the test.
