@@ -21,9 +21,12 @@
 __all__ = ['Put', 'Delete']
 
 
+from mapreduce.operation import base
+
+
 # TODO(user): handler function annotation which requests to
 # use db calls directly without batching them/doing async db calls.
-class Put(object):
+class Put(base.Operation):
   """Put entity into datastore via mutation_pool.
 
   See mapreduce.context.MutationPool.
@@ -46,7 +49,7 @@ class Put(object):
     context.mutation_pool.put(self.entity)
 
 
-class Delete(object):
+class Delete(base.Operation):
   """Delete entity from datastore via mutation_pool.
 
   See mapreduce.context.MutationPool.

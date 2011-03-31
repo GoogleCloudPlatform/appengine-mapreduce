@@ -47,7 +47,7 @@ function getResponseDataJson(error, data) {
     error = 'Could not parse response JSON data.';
   }
   if (error) {
-    setButter('Error -- ' + error, true);
+    setButter(error, true);
     return null;
   }
   return response;
@@ -314,8 +314,10 @@ function initJobOverview(jobs, cursor) {
 
 //////// Launching jobs.
 
+// TODO(user): new job parameters shouldn't be hidden by default.
 var FIXED_JOB_PARAMS = [
-    'name', 'mapper_input_reader', 'mapper_handler', 'mapper_params_validator'
+    'name', 'mapper_input_reader', 'mapper_handler', 'mapper_params_validator',
+    'mapper_output_writer'
 ];
 
 var EDITABLE_JOB_PARAMS = ['shard_count', 'processing_rate', 'queue_name'];

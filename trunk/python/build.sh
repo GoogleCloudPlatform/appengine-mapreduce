@@ -24,7 +24,7 @@ test () {
 
   export PYTHONPATH="\
 $APPENGINE_LIB:\
-$APPENGINE_LIB/lib/django:\
+$APPENGINE_LIB/lib/django_1_2:\
 $APPENGINE_LIB/lib/fancy_urllib:\
 $APPENGINE_LIB/lib/webob:\
 $APPENGINE_LIB/lib/yaml/lib:\

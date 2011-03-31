@@ -28,6 +28,7 @@ import unittest
 
 from google.appengine.api import yaml_errors
 from google.appengine.ext import db
+from mapreduce import errors
 from mapreduce import handlers
 from mapreduce import status
 from testlib import testutil
@@ -99,7 +100,7 @@ class MapreduceYamlTest(unittest.TestCase):
 
   def testParseEmptyFile(self):
     """Parsing empty mapreduce.yaml file."""
-    self.assertRaises(status.BadYamlError,
+    self.assertRaises(errors.BadYamlError,
                       status.parse_mapreduce_yaml,
                       "")
 
@@ -142,15 +143,34 @@ class MapreduceYamlTest(unittest.TestCase):
     self.assertEquals("Handler2", mr_yaml.mapreduce[1].mapper.handler)
     self.assertEquals("Reader2", mr_yaml.mapreduce[1].mapper.input_reader)
 
+  def testParseOutputWriter(self):
+    """Parsing a single document in mapreduce.yaml with output writer."""
+    mr_yaml = status.parse_mapreduce_yaml(
+        "mapreduce:\n"
+        "- name: Mapreduce1\n"
+        "  mapper:\n"
+        "    handler: Handler1\n"
+        "    input_reader: Reader1\n"
+        "    output_writer: Writer1\n"
+        )
+
+    self.assertTrue(mr_yaml)
+    self.assertEquals(1, len(mr_yaml.mapreduce))
+
+    self.assertEquals("Mapreduce1", mr_yaml.mapreduce[0].name)
+    self.assertEquals("Handler1", mr_yaml.mapreduce[0].mapper.handler)
+    self.assertEquals("Reader1", mr_yaml.mapreduce[0].mapper.input_reader)
+    self.assertEquals("Writer1", mr_yaml.mapreduce[0].mapper.output_writer)
+
   def testParseMissingRequiredAttrs(self):
     """Test parsing with missing required attributes."""
-    self.assertRaises(status.BadYamlError,
+    self.assertRaises(errors.BadYamlError,
                       status.parse_mapreduce_yaml,
                       "mapreduce:\n"
                       "- name: Mapreduce1\n"
                       "  mapper:\n"
                       "    handler: Handler1\n")
-    self.assertRaises(status.BadYamlError,
+    self.assertRaises(errors.BadYamlError,
                       status.parse_mapreduce_yaml,
                       "mapreduce:\n"
                       "- name: Mapreduce1\n"
@@ -159,7 +179,7 @@ class MapreduceYamlTest(unittest.TestCase):
 
   def testBadValues(self):
     """Tests when some yaml values are of the wrong type."""
-    self.assertRaises(status.BadYamlError,
+    self.assertRaises(errors.BadYamlError,
                       status.parse_mapreduce_yaml,
                       "mapreduce:\n"
                       "- name: Mapreduce1\n"
@@ -171,7 +191,7 @@ class MapreduceYamlTest(unittest.TestCase):
 
   def testMultipleDocuments(self):
     """Tests when multiple documents are present."""
-    self.assertRaises(status.BadYamlError,
+    self.assertRaises(errors.BadYamlError,
                       status.parse_mapreduce_yaml,
                       "mapreduce:\n"
                       "- name: Mapreduce1\n"
@@ -182,7 +202,7 @@ class MapreduceYamlTest(unittest.TestCase):
 
   def testOverlappingNames(self):
     """Tests when there are jobs with the same name."""
-    self.assertRaises(status.BadYamlError,
+    self.assertRaises(errors.BadYamlError,
                       status.parse_mapreduce_yaml,
                       "mapreduce:\n"
                       "- name: Mapreduce1\n"
@@ -230,6 +250,27 @@ class MapreduceYamlTest(unittest.TestCase):
             'mapper_handler': 'Handler2',
             'name': 'Mapreduce2'
           }
+        ], all_configs)
+
+  def testToDictOutputWriter(self):
+    """Tests encoding the MR document with output writer as JSON."""
+    mr_yaml = status.parse_mapreduce_yaml(
+        "mapreduce:\n"
+        "- name: Mapreduce1\n"
+        "  mapper:\n"
+        "    handler: Handler1\n"
+        "    input_reader: Reader1\n"
+        "    output_writer: Writer1\n"
+        )
+    all_configs = status.MapReduceYaml.to_dict(mr_yaml)
+    self.assertEquals(
+        [
+          {
+            'name': 'Mapreduce1',
+            'mapper_handler': 'Handler1',
+            'mapper_input_reader': 'Reader1',
+            'mapper_output_writer': 'Writer1',
+          },
         ], all_configs)
 
 

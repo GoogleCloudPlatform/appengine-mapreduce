@@ -27,7 +27,8 @@ serialized to/from json and passed around with other means.
 
 
 __all__ = ["JsonMixin", "JsonProperty", "MapreduceState", "MapperSpec",
-           "MapreduceControl", "MapreduceSpec", "ShardState", "CountersMap"]
+           "MapreduceControl", "MapreduceSpec", "ShardState", "CountersMap",
+           "TransientShardState"]
 
 import copy
 import datetime
@@ -69,7 +70,12 @@ class JsonMixin(object):
     Returns:
       json representation as string.
     """
-    return simplejson.dumps(self.to_json(), sort_keys=True)
+    json = self.to_json()
+    try:
+      return simplejson.dumps(json, sort_keys=True)
+    except:
+      logging.exception("Could not serialize JSON: %r", json)
+      raise
 
   @classmethod
   def from_json_str(cls, json_str):
@@ -118,7 +124,9 @@ class JsonProperty(db.UnindexedProperty):
     value = super(JsonProperty, self).get_value_for_datastore(model_instance)
     if not value:
       return None
-    json_value = value.to_json()
+    json_value = value
+    if not isinstance(value, dict):
+      json_value = value.to_json()
     if not json_value:
       return None
     return datastore_types.Text(simplejson.dumps(
@@ -136,7 +144,10 @@ class JsonProperty(db.UnindexedProperty):
 
     if value is None:
       return None
-    return self.data_type.from_json(simplejson.loads(value))
+    json = simplejson.loads(value)
+    if self.data_type == dict:
+      return json
+    return self.data_type.from_json(json)
 
   def validate(self, value):
     """Validate value.
@@ -322,7 +333,12 @@ class MapperSpec(JsonMixin):
       and method called.
   """
 
-  def __init__(self, handler_spec, input_reader_spec, params, shard_count):
+  def __init__(self,
+               handler_spec,
+               input_reader_spec,
+               params,
+               shard_count,
+               output_writer_spec=None):
     """Creates a new MapperSpec.
 
     Args:
@@ -337,11 +353,13 @@ class MapperSpec(JsonMixin):
       shard_count: number of shards to process in parallel.
       handler: cached instance of mapper handler as callable.
       input_reader_spec: The class name of the input reader to use.
+      output_writer_spec: The class name of the output writer to use.
       params: Dictionary of additional parameters for the mapper.
     """
     self.handler_spec = handler_spec
     self.__handler = None
     self.input_reader_spec = input_reader_spec
+    self.output_writer_spec = output_writer_spec
     self.shard_count = shard_count
     self.params = params
 
@@ -374,14 +392,25 @@ class MapperSpec(JsonMixin):
     """
     return util.for_name(self.input_reader_spec)
 
+  def output_writer_class(self):
+    """Get output writer class.
+
+    Returns:
+      output writer class object.
+    """
+    return self.output_writer_spec and util.for_name(self.output_writer_spec)
+
   def to_json(self):
     """Serializes this MapperSpec into a json-izable object."""
-    return {
+    result = {
         "mapper_handler_spec": self.handler_spec,
         "mapper_input_reader": self.input_reader_spec,
         "mapper_params": self.params,
         "mapper_shard_count": self.shard_count,
     }
+    if self.output_writer_spec:
+      result["mapper_output_writer"] = self.output_writer_spec
+    return result
 
   def __str__(self):
     return "MapperSpec(%s, %s, %s, %s)" % (
@@ -394,7 +423,9 @@ class MapperSpec(JsonMixin):
     return cls(json["mapper_handler_spec"],
                json["mapper_input_reader"],
                json["mapper_params"],
-               json["mapper_shard_count"])
+               json["mapper_shard_count"],
+               json.get("mapper_output_writer")
+               )
 
 
 class MapreduceSpec(JsonMixin):
@@ -450,7 +481,7 @@ class MapreduceSpec(JsonMixin):
       if not issubclass(hooks_class, hooks.Hooks):
         raise ValueError(
             "hooks_class_name must refer to a hooks.Hooks subclass")
-      self.__hooks = hooks_class(self.mapper)
+      self.__hooks = hooks_class(self)
 
     return self.__hooks
 
@@ -505,6 +536,7 @@ class MapreduceState(db.Model):
     result_status: If not None, the final status of the job.
     active_shards: How many shards are still processing.
     start_time: When the job started.
+    writer_state: Json property to be used by writer to store its state.
   """
 
   RESULT_SUCCESS = "success"
@@ -519,6 +551,7 @@ class MapreduceState(db.Model):
   last_poll_time = db.DateTimeProperty(required=True)
   counters_map = JsonProperty(CountersMap, default=CountersMap(), indexed=False)
   app_id = db.StringProperty(required=False, indexed=True)
+  writer_state = JsonProperty(dict, indexed=False)
 
   # For UI purposes only.
   chart_url = db.TextProperty(default="")
@@ -603,6 +636,66 @@ class MapreduceState(db.Model):
   def new_mapreduce_id():
     """Generate new mapreduce id."""
     return _get_descending_key()
+
+
+class TransientShardState(object):
+  """Shard's state kept in task payload.
+
+  TransientShardState holds a port of all shard processing state, which is not
+  saved in datastore, but rather is passed in task payload.
+  """
+
+  def __init__(self,
+               base_path,
+               mapreduce_spec,
+               shard_id,
+               slice_id,
+               input_reader,
+               output_writer=None):
+    self.base_path = base_path
+    self.mapreduce_spec = mapreduce_spec
+    self.shard_id = shard_id
+    self.slice_id = slice_id
+    self.input_reader = input_reader
+    self.output_writer = output_writer
+
+  def to_dict(self):
+    """Convert state to dictionary to save in task payload."""
+    result = {"mapreduce_spec": self.mapreduce_spec.to_json_str(),
+              "shard_id": self.shard_id,
+              "slice_id": str(self.slice_id),
+              "input_reader_state": self.input_reader.to_json_str()}
+    if self.output_writer:
+      result["output_writer_state"] = self.output_writer.to_json_str()
+    return result
+
+  @classmethod
+  def from_request(cls, request):
+    """Create new TransientShardState from webapp request."""
+    mapreduce_spec = MapreduceSpec.from_json_str(request.get("mapreduce_spec"))
+    mapper_spec = mapreduce_spec.mapper
+    input_reader_spec_dict = simplejson.loads(request.get("input_reader_state"))
+    input_reader = mapper_spec.input_reader_class().from_json(
+        input_reader_spec_dict)
+
+    output_writer = None
+    if mapper_spec.output_writer_class():
+      output_writer = mapper_spec.output_writer_class().from_json(
+          simplejson.loads(request.get("output_writer_state", "{}")))
+      assert isinstance(output_writer, mapper_spec.output_writer_class()), (
+          "%s.from_json returned an instance of wrong class: %s" % (
+              mapper_spec.output_writer_class(),
+              output_writer.__class__))
+
+    request_path = request.path
+    base_path = request_path[:request_path.rfind("/")]
+
+    return cls(base_path,
+               mapreduce_spec,
+               str(request.get("shard_id")),
+               int(request.get("slice_id")),
+               input_reader,
+               output_writer=output_writer)
 
 
 class ShardState(db.Model):

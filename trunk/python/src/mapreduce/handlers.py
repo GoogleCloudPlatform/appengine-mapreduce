@@ -30,11 +30,12 @@ from mapreduce.lib import simplejson
 import time
 
 from google.appengine.api import memcache
-from google.appengine.api.labs import taskqueue
+from google.appengine.api import taskqueue
 from google.appengine.ext import db
 from mapreduce import base_handler
 from mapreduce import context
 from mapreduce import model
+from mapreduce import operation
 from mapreduce import quota
 from mapreduce import util
 
@@ -106,14 +107,10 @@ class MapperWorkerCallbackHandler(base_handler.TaskQueueHandler):
 
   def handle(self):
     """Handle request."""
-    spec = model.MapreduceSpec.from_json_str(
-        self.request.get("mapreduce_spec"))
+    tstate = model.TransientShardState.from_request(self.request)
+    spec = tstate.mapreduce_spec
     self._start_time = self._time()
-    shard_id = self.shard_id()
-
-    # TODO(user): Make this prettier
-    logging.debug("post: shard=%s slice=%s headers=%s",
-                  shard_id, self.slice_id(), self.request.headers)
+    shard_id = tstate.shard_id
 
     shard_state, control = db.get([
         model.ShardState.get_key_by_shard_id(shard_id),
@@ -129,13 +126,15 @@ class MapperWorkerCallbackHandler(base_handler.TaskQueueHandler):
     if control and control.command == model.MapreduceControl.ABORT:
       logging.info("Abort command received by shard %d of job '%s'",
                    shard_state.shard_number, shard_state.mapreduce_id)
+      if tstate.output_writer:
+        tstate.output_writer.finalize(None, shard_state.shard_number)
       shard_state.active = False
       shard_state.result_status = model.ShardState.RESULT_ABORTED
       shard_state.put(config=util.create_datastore_write_config(spec))
       model.MapreduceControl.abort(spec.mapreduce_id)
       return
 
-    input_reader = self.input_reader(spec.mapper)
+    input_reader = tstate.input_reader
 
     if spec.mapper.params.get("enable_quota", True):
       quota_consumer = quota.QuotaConsumer(
@@ -165,7 +164,7 @@ class MapperWorkerCallbackHandler(base_handler.TaskQueueHandler):
             else:
               shard_state.last_work_item = repr(entity)[:100]
 
-            scan_aborted = not self.process_entity(entity, ctx)
+            scan_aborted = not self.process_entity(entity, ctx, tstate)
 
             # Check if we've got enough quota for the next entity.
             if (quota_consumer and not scan_aborted and
@@ -187,6 +186,11 @@ class MapperWorkerCallbackHandler(base_handler.TaskQueueHandler):
           shard_state.active = False
           shard_state.result_status = model.ShardState.RESULT_SUCCESS
 
+      if not shard_state.active:
+        # shard is going to stop. Finalize output writer if any.
+        if tstate.output_writer:
+          tstate.output_writer.finalize(ctx, shard_state.shard_number)
+
       # TODO(user): Mike said we don't want this happen in case of
       # exception while scanning. Figure out when it's appropriate to skip.
       ctx.flush()
@@ -198,9 +202,9 @@ class MapperWorkerCallbackHandler(base_handler.TaskQueueHandler):
     # Rescheduling work should always be the last statement. It shouldn't happen
     # if there were any exceptions in code before it.
     if shard_state.active:
-      self.reschedule(spec, input_reader)
+      self.reschedule(tstate)
 
-  def process_entity(self, entity, ctx):
+  def process_entity(self, entity, ctx, transient_shard_state):
     """Process a single entity.
 
     Call mapper handler on the entity.
@@ -217,18 +221,15 @@ class MapperWorkerCallbackHandler(base_handler.TaskQueueHandler):
     handler = ctx.mapreduce_spec.mapper.handler
     if util.is_generator_function(handler):
       for result in handler(entity):
-        if callable(result):
+        if isinstance(result, operation.Operation):
           result(ctx)
         else:
-          try:
-            if len(result) == 2:
-              logging.error("Collectors not implemented yet")
-            else:
-              logging.error("Got bad output tuple of length %d", len(result))
-          except TypeError:
+          output_writer = transient_shard_state.output_writer
+          if not output_writer:
             logging.error(
-                "Handler yielded type %s, expected a callable or a tuple",
-                result.__class__.__name__)
+                "Handler yielded %s, but no output writer is set.", result)
+          else:
+            output_writer.write(result, ctx)
     else:
       handler(entity)
 
@@ -238,105 +239,41 @@ class MapperWorkerCallbackHandler(base_handler.TaskQueueHandler):
       return False
     return True
 
-  def shard_id(self):
-    """Get shard unique identifier of this task from request.
-
-    Returns:
-      shard identifier as string.
-    """
-    return str(self.request.get("shard_id"))
-
-  def slice_id(self):
-    """Get slice unique identifier of this task from request.
-
-    Returns:
-      slice identifier as int.
-    """
-    return int(self.request.get("slice_id"))
-
-  def input_reader(self, mapper_spec):
-    """Get the reader from mapper_spec initialized with the request's state.
-
-    Args:
-      mapper_spec: a mapper spec containing the immutable mapper state.
-
-    Returns:
-      An initialized InputReader.
-    """
-    input_reader_spec_dict = simplejson.loads(
-        self.request.get("input_reader_state"))
-    return mapper_spec.input_reader_class().from_json(
-        input_reader_spec_dict)
-
-  @staticmethod
-  def worker_parameters(mapreduce_spec,
-                        shard_id,
-                        slice_id,
-                        input_reader):
-    """Fill in mapper worker task parameters.
-
-    Returned parameters map is to be used as task payload, and it contains
-    all the data, required by mapper worker to perform its function.
-
-    Args:
-      mapreduce_spec: specification of the mapreduce.
-      shard_id: id of the shard (part of the whole dataset).
-      slice_id: id of the slice (part of the shard).
-      input_reader: InputReader containing the remaining inputs for this
-        shard.
-
-    Returns:
-      string->string map of parameters to be used as task payload.
-    """
-    return {"mapreduce_spec": mapreduce_spec.to_json_str(),
-            "shard_id": shard_id,
-            "slice_id": str(slice_id),
-            "input_reader_state": input_reader.to_json_str()}
-
   @staticmethod
   def get_task_name(shard_id, slice_id):
     """Compute single worker task name.
 
     Args:
-      shard_id: id of the shard (part of the whole dataset) as string.
-      slice_id: id of the slice (part of the shard) as int.
+      transient_shard_state: An instance of TransientShardState.
 
     Returns:
       task name which should be used to process specified shard/slice.
     """
     # Prefix the task name with something unique to this framework's
     # namespace so we don't conflict with user tasks on the queue.
-    return "appengine-mrshard-%s-%s" % (shard_id, slice_id)
+    return "appengine-mrshard-%s-%s" % (
+        shard_id, slice_id)
 
-  def reschedule(self, mapreduce_spec, input_reader):
+  def reschedule(self, transient_shard_state):
     """Reschedule worker task to continue scanning work.
 
     Args:
-      mapreduce_spec: mapreduce specification.
-      input_reader: remaining input reader to process.
+      transient_shard_state: an instance of TransientShardState.
     """
-    MapperWorkerCallbackHandler.schedule_slice(
-        self.base_path(), mapreduce_spec, self.shard_id(),
-        self.slice_id() + 1, input_reader)
+    transient_shard_state.slice_id += 1
+    MapperWorkerCallbackHandler._schedule_slice(
+        transient_shard_state)
 
   @classmethod
-  def schedule_slice(cls,
-                     base_path,
-                     mapreduce_spec,
-                     shard_id,
-                     slice_id,
-                     input_reader,
-                     queue_name=None,
-                     eta=None,
-                     countdown=None):
+  def _schedule_slice(cls,
+                      transient_shard_state,
+                      queue_name=None,
+                      eta=None,
+                      countdown=None):
     """Schedule slice scanning by adding it to the task queue.
 
     Args:
-      base_path: base_path of mapreduce request handlers as string.
-      mapreduce_spec: mapreduce specification as MapreduceSpec.
-      shard_id: current shard id as string.
-      slice_id: slice id as int.
-      input_reader: remaining InputReader for given shard.
+      transient_shard_state: An instance of TransientShardState.
       queue_name: Optional queue to run on; uses the current queue of
         execution or the default queue if unspecified.
       eta: Absolute time when the MR should execute. May not be specified
@@ -345,14 +282,17 @@ class MapperWorkerCallbackHandler(base_handler.TaskQueueHandler):
       countdown: Time in seconds into the future that this MR should execute.
         Defaults to zero.
     """
-    task_params = MapperWorkerCallbackHandler.worker_parameters(
-        mapreduce_spec, shard_id, slice_id, input_reader)
-    task_name = MapperWorkerCallbackHandler.get_task_name(shard_id, slice_id)
-    queue_name = os.environ.get("HTTP_X_APPENGINE_QUEUENAME",
-                                queue_name or "default")
+    base_path = transient_shard_state.base_path
+    mapreduce_spec = transient_shard_state.mapreduce_spec
+
+    task_name = MapperWorkerCallbackHandler.get_task_name(
+        transient_shard_state.shard_id,
+        transient_shard_state.slice_id)
+    queue_name = queue_name or os.environ.get("HTTP_X_APPENGINE_QUEUENAME",
+                                              "default")
 
     worker_task = taskqueue.Task(url=base_path + "/worker_callback",
-                                 params=task_params,
+                                 params=transient_shard_state.to_dict(),
                                  name=task_name,
                                  eta=eta,
                                  countdown=countdown)
@@ -366,7 +306,10 @@ class MapperWorkerCallbackHandler(base_handler.TaskQueueHandler):
       except (taskqueue.TombstonedTaskError,
               taskqueue.TaskAlreadyExistsError), e:
         logging.warning("Task %r with params %r already exists. %s: %s",
-                        task_name, task_params, e.__class__, e)
+                        task_name,
+                        transient_shard_state.to_dict(),
+                        e.__class__,
+                        e)
 
 
 class ControllerCallbackHandler(base_handler.TaskQueueHandler):
@@ -456,6 +399,8 @@ class ControllerCallbackHandler(base_handler.TaskQueueHandler):
     if not state.active:
       # This is the last execution.
       # Enqueue done_callback if needed.
+      if spec.mapper.output_writer_class():
+        spec.mapper.output_writer_class().finalize_job(state)
       def put_state(state):
         state.put(config=config)
         done_callback = spec.params.get(
@@ -542,8 +487,7 @@ class ControllerCallbackHandler(base_handler.TaskQueueHandler):
     """Compute single controller task name.
 
     Args:
-      mapreduce_spec: specification of the mapreduce.
-      serial_id: id of the invocation as int.
+      transient_shard_state: an instance of TransientShardState.
 
     Returns:
       task name which should be used to process specified shard/slice.
@@ -645,10 +589,24 @@ class KickOffJobHandler(base_handler.TaskQueueHandler):
     spec.mapper.shard_count = len(input_readers)
     state.active_shards = len(input_readers)
     state.mapreduce_spec = spec
+
+    output_writer_class = spec.mapper.output_writer_class()
+    if output_writer_class:
+      output_writer_class.init_job(state)
+
+    output_writers = []
+    if output_writer_class:
+      for shard_number in range(len(input_readers)):
+        writer = output_writer_class.create(state, shard_number)
+        assert isinstance(writer, output_writer_class)
+        output_writers.append(writer)
+    else:
+      output_writers = [None for ir in input_readers]
+
     state.put(config=util.create_datastore_write_config(spec))
 
     KickOffJobHandler._schedule_shards(
-        spec, input_readers, queue_name, self.base_path())
+        spec, input_readers, output_writers, queue_name, self.base_path())
 
     ControllerCallbackHandler.reschedule(
         self.base_path(), spec, queue_name=queue_name, serial_id=0)
@@ -671,7 +629,12 @@ class KickOffJobHandler(base_handler.TaskQueueHandler):
     return value
 
   @classmethod
-  def _schedule_shards(cls, spec, input_readers, queue_name, base_path):
+  def _schedule_shards(cls,
+                       spec,
+                       input_readers,
+                       output_writers,
+                       queue_name,
+                       base_path):
     """Prepares shard states and schedules their execution.
 
     Args:
@@ -680,14 +643,15 @@ class KickOffJobHandler(base_handler.TaskQueueHandler):
       queue_name: The queue to run this job on.
       base_path: The base url path of mapreduce callbacks.
     """
+    assert len(input_readers) == len(output_writers)
     # Note: it's safe to re-attempt this handler because:
     # - shard state has deterministic and unique key.
-    # - schedule_slice will fall back gracefully if a task already exists.
+    # - _schedule_slice will fall back gracefully if a task already exists.
     shard_states = []
     for shard_number, input_reader in enumerate(input_readers):
-      shard = model.ShardState.create_new(spec.mapreduce_id, shard_number)
-      shard.shard_description = str(input_reader)
-      shard_states.append(shard)
+      shard_state = model.ShardState.create_new(spec.mapreduce_id, shard_number)
+      shard_state.shard_description = str(input_reader)
+      shard_states.append(shard_state)
 
     # Retrievs already existing shards.
     existing_shard_states = db.get(shard.key() for shard in shard_states)
@@ -699,11 +663,15 @@ class KickOffJobHandler(base_handler.TaskQueueHandler):
             if shard.key() not in existing_shard_keys),
            config=util.create_datastore_write_config(spec))
 
-    for shard_number, input_reader in enumerate(input_readers):
+    for shard_number, (input_reader, output_writer) in enumerate(
+        zip(input_readers, output_writers)):
       shard_id = model.ShardState.shard_id_from_number(
           spec.mapreduce_id, shard_number)
-      MapperWorkerCallbackHandler.schedule_slice(
-          base_path, spec, shard_id, 0, input_reader, queue_name=queue_name)
+      MapperWorkerCallbackHandler._schedule_slice(
+          model.TransientShardState(
+              base_path, spec, shard_id, 0, input_reader,
+              output_writer=output_writer),
+          queue_name=queue_name)
 
 
 class StartJobHandler(base_handler.PostJsonHandler):
@@ -715,6 +683,7 @@ class StartJobHandler(base_handler.PostJsonHandler):
     mapreduce_name = self._get_required_param("name")
     mapper_input_reader_spec = self._get_required_param("mapper_input_reader")
     mapper_handler_spec = self._get_required_param("mapper_handler")
+    mapper_output_writer_spec = self.request.get("mapper_output_writer")
     mapper_params = self._get_params(
         "mapper_params_validator", "mapper_params.")
     params = self._get_params(
@@ -731,7 +700,8 @@ class StartJobHandler(base_handler.PostJsonHandler):
         mapper_handler_spec,
         mapper_input_reader_spec,
         mapper_params,
-        int(mapper_params.get("shard_count", model._DEFAULT_SHARD_COUNT)))
+        int(mapper_params.get("shard_count", model._DEFAULT_SHARD_COUNT)),
+        output_writer_spec=mapper_output_writer_spec)
 
     mapreduce_id = type(self)._start_map(
         mapreduce_name,
@@ -805,6 +775,10 @@ class StartJobHandler(base_handler.PostJsonHandler):
     # Check that reader can be instantiated and is configured correctly
     mapper_input_reader_class = mapper_spec.input_reader_class()
     mapper_input_reader_class.validate(mapper_spec)
+
+    mapper_output_writer_class = mapper_spec.output_writer_class()
+    if mapper_output_writer_class:
+      mapper_output_writer_class.validate(mapper_spec)
 
     mapreduce_id = model.MapreduceState.new_mapreduce_id()
     mapreduce_spec = model.MapreduceSpec(

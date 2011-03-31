@@ -14,33 +14,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Counters-related operations."""
+"""Base operation class."""
 
 
 
-__all__ = ['Increment']
+__all__ = ['Operation']
 
 
-from mapreduce.operation import base
+class Operation(object):
+  """Base class for all mapper operations.
 
+  All operations should implement __call__(self, ctx) function, which will be
+  called upon operation yield.
+  """
 
-class Increment(base.Operation):
-  """Increment counter operation."""
-
-  def __init__(self, counter_name, delta=1):
-    """Constructor.
-
-    Args:
-      counter_name: name of the counter as string
-      delta: increment delta as int.
-    """
-    self.counter_name = counter_name
-    self.delta = delta
-
-  def __call__(self, context):
-    """Execute operation.
-
-    Args:
-      context: mapreduce context as context.Context.
-    """
-    context.counters.increment(self.counter_name, self.delta)
+  def __call__(self, ctx):
+    raise NotImplementedError("__call__() not implemented in %s" %
+                              self.__class__)

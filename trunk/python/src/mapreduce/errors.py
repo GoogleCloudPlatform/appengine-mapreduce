@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2007 Google Inc.
+# Copyright 2011 Google Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,11 +13,23 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-#
+
+"""Map Reduce framework errors."""
 
 
 
 
-"""Blobstore API module."""
+class Error(Exception):
+  """Base-class for exceptions in this module."""
 
-from blobstore import *
+
+class BadYamlError(Error):
+  """Raised when the mapreduce.yaml file is invalid."""
+
+
+class MissingYamlError(BadYamlError):
+  """Raised when the mapreduce.yaml file could not be found."""
+
+
+class MultipleDocumentsInMrYaml(BadYamlError):
+  """There's more than one document in mapreduce.yaml file."""

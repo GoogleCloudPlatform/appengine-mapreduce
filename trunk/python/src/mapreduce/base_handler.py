@@ -24,6 +24,7 @@ import logging
 from mapreduce.lib import simplejson
 
 from google.appengine.ext import webapp
+from mapreduce import errors
 
 
 class Error(Exception):
@@ -105,6 +106,11 @@ class JsonHandler(BaseHandler):
     self.json_response.clear()
     try:
       self.handle()
+    except errors.MissingYamlError:
+      logging.debug("Could not find 'mapreduce.yaml' file.")
+      self.json_response.clear()
+      self.json_response["error_class"] = "Notice"
+      self.json_response["error_message"] = "Could not find 'mapreduce.yaml'"
     except Exception, e:
       logging.exception("Error in JsonHandler, returning exception.")
       # TODO(user): Include full traceback here for the end-user.
