@@ -163,11 +163,16 @@ class TestReader(object):
   pass
 
 
+class TestWriter(object):
+  pass
+
+
 class MapperSpecTest(unittest.TestCase):
   """Tests model.MapperSpec."""
 
   TEST_HANDLER = __name__ + "." + TestHandler.__name__
   TEST_READER = __name__ + "." + TestReader.__name__
+  TEST_WRITER = __name__ + "." + TestWriter.__name__
 
   def setUp(self):
     self.default_json = {
@@ -185,6 +190,16 @@ class MapperSpecTest(unittest.TestCase):
     self.assertEquals(self.default_json,
                       mapper_spec.to_json())
 
+    mapper_spec = model.MapperSpec(
+        self.TEST_HANDLER,
+        self.TEST_READER,
+        {"entity_kind": ENTITY_KIND},
+        8,
+        output_writer_spec=self.TEST_WRITER)
+    d = dict(self.default_json)
+    d["mapper_output_writer"] = self.TEST_WRITER
+    self.assertEquals(d, mapper_spec.to_json())
+
   def testFromJson(self):
     ms = model.MapperSpec.from_json(self.default_json)
     self.assertEquals(self.TEST_READER, ms.input_reader_spec)
@@ -195,6 +210,13 @@ class MapperSpecTest(unittest.TestCase):
     self.assertTrue(isinstance(ms.get_handler(), TestHandler))
     self.assertTrue(isinstance(ms.handler, TestHandler))
     self.assertEquals(8, ms.shard_count)
+
+    d = dict(self.default_json)
+    d["mapper_output_writer"] = self.TEST_WRITER
+    ms = model.MapperSpec.from_json(d)
+    self.assertEquals(self.TEST_WRITER, ms.output_writer_spec)
+    self.assertEquals(TestWriter, ms.output_writer_class())
+
 
   def specForHandler(self, handler_spec):
     self.default_json["mapper_handler_spec"] = handler_spec
@@ -301,7 +323,7 @@ class MapreduceSpecTest(unittest.TestCase):
     self.assertEquals({"extra": "value"}, mapreduce_spec.params)
     self.assertEquals(__name__+"."+TestHooks.__name__,
                       mapreduce_spec.hooks_class_name)
-    self.assertEquals(mapreduce_spec.mapper, mapreduce_spec.get_hooks().mapper)
+    self.assertEquals(mapreduce_spec, mapreduce_spec.get_hooks().mapreduce_spec)
 
 
 class MapreduceStateTest(unittest.TestCase):

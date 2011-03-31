@@ -20,6 +20,8 @@
 import unittest
 
 from mapreduce import base_handler
+from mapreduce import errors
+from mapreduce import status
 from testlib import mock_webapp
 
 
@@ -62,6 +64,23 @@ class TaskQueueHandlerTest(unittest.TestCase):
     self.assertEquals(5, self.handler.task_retry_count())
 
 
+class JsonErrorHandler(base_handler.JsonHandler):
+  """JsonHandler that raises an error when invoked."""
+
+  def __init__(self, error):
+    """Constructor.
+
+    Args:
+      error The error to raise when handle() is called.
+    """
+    self.error = error
+    self.json_response = {}
+
+  def handle(self):
+    """Raise an error."""
+    raise self.error
+
+
 class JsonHandlerTest(unittest.TestCase):
   """Tests for JsonHandler."""
 
@@ -84,6 +103,32 @@ class JsonHandlerTest(unittest.TestCase):
 
     self.handler.request.path = "/map/reduce/base/command/start"
     self.assertEquals("/map/reduce/base", self.handler.base_path())
+
+  def testMissingYamlError(self):
+    """Test that this error sets the expected response fields."""
+    handler = JsonErrorHandler(errors.MissingYamlError)
+    request = mock_webapp.MockRequest()
+    response = mock_webapp.MockResponse()
+    request.headers["X-Requested-With"] = "XMLHttpRequest"
+    handler.initialize(request, response)
+
+    handler._handle_wrapper()
+    self.assertEquals("Notice", handler.json_response["error_class"])
+    self.assertEquals("Could not find 'mapreduce.yaml'",
+                      handler.json_response["error_message"])
+
+  def testError(self):
+    """Test that an error sets the expected response fields."""
+    handler = JsonErrorHandler(Exception('bill hicks'))
+    request = mock_webapp.MockRequest()
+    response = mock_webapp.MockResponse()
+    request.headers["X-Requested-With"] = "XMLHttpRequest"
+    handler.initialize(request, response)
+
+    handler._handle_wrapper()
+    self.assertEquals("Exception", handler.json_response["error_class"])
+    self.assertEquals("bill hicks",
+                      handler.json_response["error_message"])
 
 
 if __name__ == '__main__':

@@ -158,6 +158,7 @@ class MockResponse(object):
     out: A StringIO instance.
     status: HTTP status code.
     message: HTTP status message.
+    headers: A dict of HTTP response headers.
   """
 
   def __init__(self):

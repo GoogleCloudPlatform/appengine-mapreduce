@@ -77,6 +77,8 @@ def for_name(fq_name, recursive=False):
       raise ImportError("Could not find '%s' on path '%s'" % (
                         short_name, module_name))
   except ImportError, e:
+    logging.debug("Could not import %s from %s. Will try recursively.",
+                  short_name, module_name, exc_info=True)
     # module_name is not actually a module. Try for_name for it to figure
     # out what's this.
     try:

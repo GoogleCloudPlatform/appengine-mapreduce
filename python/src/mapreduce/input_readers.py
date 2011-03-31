@@ -18,27 +18,34 @@
 
 
 
+__all__ = ["Error", "BadReaderParamsError", "InputReader",
+           "AbstractDatastoreInputReader", "BlobstoreLineInputReader",
+           "BlobstoreZipInputReader", "BlobstoreZipLineInputReader",
+           "ConsistentKeyReader", "DatastoreEntityInputReader",
+           "DatastoreInputReader", "DatastoreKeyInputReader",
+           "NamespaceInputReader" ]
+
 # pylint: disable-msg=C6409
 
-import logging
-import math
+import copy
 import StringIO
 import time
 import zipfile
 
 from google.appengine.api import datastore
-from google.appengine.api import namespace_manager
+from google.appengine.datastore import datastore_query
 # TODO(user): Remove this hack once 1.4.0 is live in production.
 try:
   from google.appengine.datastore import datastore_rpc
 except ImportError:
   datastore_rpc = None
-from mapreduce.lib import blobstore
+from google.appengine.ext import blobstore
 from google.appengine.ext import db
 from mapreduce.lib import key_range
 from google.appengine.ext.db import metadata
+from mapreduce import model
+from mapreduce import namespace_range
 from mapreduce import util
-from mapreduce.model import JsonMixin
 
 
 class Error(Exception):
@@ -49,7 +56,7 @@ class BadReaderParamsError(Error):
   """The input parameters to a reader were invalid."""
 
 
-class InputReader(JsonMixin):
+class InputReader(model.JsonMixin):
   """Abstract base class for input readers.
 
   InputReaders have the following properties:
@@ -64,8 +71,8 @@ class InputReader(JsonMixin):
 
   # Mapreduce parameters.
   _APP_PARAM = "_app"
-  NAMESPACES_PARAM = "namespaces"
-  MAPPER_PARAMS = "mapper_params"
+  NAMESPACE_PARAM = "namespace"
+  NAMESPACES_PARAM = "namespaces"  # Obsolete.
 
   def __iter__(self):
     return self
@@ -76,7 +83,7 @@ class InputReader(JsonMixin):
     Returns:
       The next input from this input reader.
     """
-    raise NotImplementedError("next() not implemented in %s" % cls)
+    raise NotImplementedError("next() not implemented in %s" % self.__class__)
 
   @classmethod
   def from_json(cls, input_shard_state):
@@ -96,7 +103,8 @@ class InputReader(JsonMixin):
     Returns:
       A json-izable version of the remaining InputReader.
     """
-    raise NotImplementedError("to_json() not implemented in %s" % cls)
+    raise NotImplementedError("to_json() not implemented in %s" %
+                              self.__class__)
 
   @classmethod
   def split_input(cls, mapper_spec):
@@ -123,16 +131,14 @@ class InputReader(JsonMixin):
     raise NotImplementedError("validate() not implemented in %s" % cls)
 
 
-# TODO(user): Use cursor API as soon as we have it available.
-class DatastoreInputReader(InputReader):
-  """Represents a range in query results.
+# TODO(user): This should probably be renamed something like
+# "DatastoreInputReader" and DatastoreInputReader should be called
+# "DatastoreModelReader".
+class AbstractDatastoreInputReader(InputReader):
+  """Abstract base class for classes that iterate over datastore entities.
 
-  DatastoreInputReader yields model instances from the entities in a given key
-  range. Iterating over DatastoreInputReader changes its range past consumed
-  entries.
-
-  The class shouldn't be instantiated directly. Use the split_input class method
-  instead.
+  Concrete subclasses must implement _iter_key_range(self, k_range). See the
+  docstring for that method for details.
   """
 
   # Number of entities to fetch at once while doing scanning.
@@ -144,68 +150,151 @@ class DatastoreInputReader(InputReader):
   # __scatter__ oversampling factor
   _OVERSAMPLING_FACTOR = 32
 
+  # The maximum number of namespaces that will be sharded by datastore key
+  # before switching to a strategy where sharding is done lexographically by
+  # namespace.
+  MAX_NAMESPACES_FOR_KEY_SHARD = 10
+
   # Mapreduce parameters.
   ENTITY_KIND_PARAM = "entity_kind"
   KEYS_ONLY_PARAM = "keys_only"
   BATCH_SIZE_PARAM = "batch_size"
   KEY_RANGE_PARAM = "key_range"
+  NAMESPACE_RANGE_PARAM = "namespace_range"
+  CURRENT_KEY_RANGE_PARAM = "current_key_range"
 
   # TODO(user): Add support for arbitrary queries. It's not possible to
   # support them without cursors since right now you can't even serialize query
   # definition.
-  def __init__(self, entity_kind, key_ranges, batch_size = _BATCH_SIZE):
-    """Create new DatastoreInputReader object.
+  def __init__(self,
+               entity_kind,
+               key_ranges=None,
+               ns_range=None,
+               batch_size=_BATCH_SIZE,
+               current_key_range=None):
+    """Create new AbstractDatastoreInputReader object.
 
-    This is internal constructor. Use split_query instead.
+    This is internal constructor. Use split_query in a concrete class instead.
 
     Args:
       entity_kind: entity kind as string.
-      key_ranges: a sequence of key_range.KeyRange instances to process.
+      key_ranges: a sequence of key_range.KeyRange instances to process. Only
+          one of key_ranges or ns_range can be non-None.
+      ns_range: a namespace_range.NamespaceRange to process. Only one of
+          key_ranges or ns_range can be non-None.
       batch_size: size of read batch as int.
+      current_key_range: the current key_range.KeyRange being processed.
     """
+    assert key_ranges is not None or ns_range is not None, (
+        "must specify one of 'key_ranges' or 'ns_range'")
+    assert key_ranges is None or ns_range is None, (
+        "can't specify both 'key_ranges ' and 'ns_range'")
+
     self._entity_kind = entity_kind
     # Reverse the KeyRanges so they can be processed in order as a stack of
     # work items.
-    self._key_ranges = list(reversed(key_ranges))
+    self._key_ranges = key_ranges and list(reversed(key_ranges))
+
+    self._ns_range = ns_range
     self._batch_size = int(batch_size)
+    self._current_key_range = current_key_range
 
   def __iter__(self):
-    """Create a generator for model instances for entities.
+    """Iterates over the given KeyRanges or NamespaceRange.
 
-    Iterating through entities moves query range past the consumed entities.
+    This method iterates over the given KeyRanges or NamespaceRange and sets
+    the self._current_key_range to the KeyRange currently being processed. It
+    then delegates to the _iter_key_range method to yield that actual
+    results.
 
     Yields:
-      next model instance.
+      Forwards the objects yielded by the subclasses concrete _iter_key_range()
+      method. The caller must consume the result yielded because self.to_json()
+      will not include it.
     """
+    if self._key_ranges is not None:
+      for o in self._iter_key_ranges():
+        yield o
+    elif self._ns_range is not None:
+      for o in self._iter_ns_range():
+        yield o
+    else:
+      assert False, "self._key_ranges and self._ns_range are both None"
+
+  def _iter_key_ranges(self):
+    """Iterates over self._key_ranges, delegating to self._iter_key_range()."""
     while True:
       if self._current_key_range is None:
-        break
-
-      while True:
-        query = self._current_key_range.make_ascending_query(
-            util.for_name(self._entity_kind))
-        results = query.fetch(limit=self._batch_size)
-
-        if not results:
-          self._advance_key_range()
+        if self._key_ranges:
+          self._current_key_range = self._key_ranges.pop()
+        else:
           break
 
-        for model_instance in results:
-          key = model_instance.key()
+      for key, o in self._iter_key_range(
+          copy.deepcopy(self._current_key_range)):
+        # The caller must consume yielded values so advancing the KeyRange
+        # before yielding is safe.
+        self._current_key_range.advance(key)
+        yield o
+      self._current_key_range = None
 
-          self._current_key_range.advance(key)
-          yield model_instance
+  def _iter_ns_range(self):
+    """Iterates over self._ns_range, delegating to self._iter_key_range()."""
+    while True:
+      if self._current_key_range is None:
+        query = self._ns_range.make_datastore_query()
+        namespace_result = query.Get(1)
+        if not namespace_result:
+          break
 
-  @property
-  def _current_key_range(self):
-    if self._key_ranges:
-      return self._key_ranges[-1]
+        namespace = namespace_result[0].name() or ""
+        self._current_key_range = key_range.KeyRange(
+            namespace=namespace, _app=self._ns_range.app)
+
+      for key, o in self._iter_key_range(
+          copy.deepcopy(self._current_key_range)):
+        # The caller must consume yielded values so advancing the KeyRange
+        # before yielding is safe.
+        self._current_key_range.advance(key)
+        yield o
+
+      if (self._ns_range.is_single_namespace or
+          self._current_key_range.namespace == self._ns_range.namespace_end):
+        break
+      self._ns_range = self._ns_range.with_start_after(
+          self._current_key_range.namespace)
+      self._current_key_range = None
+
+  def _iter_key_range(self, k_range):
+    """Yields a db.Key and the value that should be yielded by self.__iter__().
+
+    Args:
+      k_range: The key_range.KeyRange to iterate over.
+
+    Yields:
+      A 2-tuple containing the last db.Key processed and the value that should
+      be yielded by __iter__. The returned db.Key will be used to determine the
+      InputReader's current position in self._current_key_range.
+    """
+    raise NotImplementedError("_iter_key_range() not implemented in %s" %
+                              self.__class__)
+
+  def __str__(self):
+    """Returns the string representation of this InputReader."""
+    if self._ns_range is None:
+      return repr(self._key_ranges)
     else:
-      return None
+      return repr(self._ns_range)
 
-  def _advance_key_range(self):
-    if self._key_ranges:
-      self._key_ranges.pop()
+  @classmethod
+  def _choose_split_points(cls, random_keys, shard_count):
+    """Returns the best split points given a random set of db.Keys."""
+    if len(random_keys) < shard_count:
+      return sorted(random_keys)
+
+    index_stride = len(random_keys) / float(shard_count)
+    return [sorted(random_keys)[int(round(index_stride * i))]
+            for i in range(1, shard_count)]
 
   # TODO(user): use query splitting functionality when it becomes available
   # instead.
@@ -232,13 +321,8 @@ class DatastoreInputReader(InputReader):
       # This might mean that there are no entities with scatter property
       # or there are no entities at all.
       return [key_range.KeyRange(namespace=namespace, _app=app)]
-    random_keys.sort()
-    # pick shard_count - 1 points to generate shard_count splits
-    split_points_count = shard_count - 1
-    if len(random_keys) > split_points_count:
-      # downsample
-      random_keys = [random_keys[len(random_keys)*i/split_points_count]
-                     for i in range(split_points_count)]
+    else:
+      random_keys = cls._choose_split_points(random_keys, shard_count)
 
     key_ranges = []
 
@@ -248,7 +332,8 @@ class DatastoreInputReader(InputReader):
         direction=key_range.KeyRange.ASC,
         include_start=False,
         include_end=False,
-        namespace=namespace))
+        namespace=namespace,
+        _app=app))
 
     for i in range(0, len(random_keys) - 1):
       key_ranges.append(key_range.KeyRange(
@@ -257,7 +342,8 @@ class DatastoreInputReader(InputReader):
           direction=key_range.KeyRange.ASC,
           include_start=True,
           include_end=False,
-          namespace=namespace))
+          namespace=namespace,
+          _app=app))
 
     key_ranges.append(key_range.KeyRange(
         key_start=random_keys[-1],
@@ -265,7 +351,8 @@ class DatastoreInputReader(InputReader):
         direction=key_range.KeyRange.ASC,
         include_start=True,
         include_end=False,
-        namespace=namespace))
+        namespace=namespace,
+        _app=app))
 
     return key_ranges
 
@@ -288,42 +375,17 @@ class DatastoreInputReader(InputReader):
     for i, k_range in enumerate(key_ranges):
       shared_ranges[i % shard_count].append(k_range)
     batch_size = int(params.get(cls.BATCH_SIZE_PARAM, cls._BATCH_SIZE))
-    return [cls(entity_kind_name, ranges, batch_size)
-            for ranges in shared_ranges if ranges]
+    return [cls(entity_kind_name,
+                key_ranges=key_ranges,
+                ns_range=None,
+                batch_size=batch_size)
+            for key_ranges in shared_ranges if key_ranges]
 
   @classmethod
   def validate(cls, mapper_spec):
     """Validates mapper spec and all mapper parameters.
 
     Args:
-      mapper_spec: The MapperSpec for this InputReader.
-
-    Raises:
-      BadReaderParamsError: required parameters are missing or invalid.
-    """
-    cls._common_validate(mapper_spec)
-    params = mapper_spec.params
-    keys_only = util.parse_bool(params.get(cls.KEYS_ONLY_PARAM, False))
-    if keys_only:
-      raise BadReaderParamsError("The keys_only parameter is obsolete. "
-                                 "Use DatastoreKeyInputReader instead.")
-
-    entity_kind_name = params[cls.ENTITY_KIND_PARAM]
-    # Fail fast if Model cannot be located.
-    try:
-      util.for_name(entity_kind_name)
-    except ImportError, e:
-      raise BadReaderParamsError("Bad entity kind: %s" % e)
-
-  @classmethod
-  def _common_validate(cls, mapper_spec):
-    """Validates mapper spec and all mapper parameters.
-
-    Common portion of validate method shared between DatastoreInputReader,
-    DatastoreKeyInputReader, and DatastoreEntityInputReader.
-
-    Args:
-      cls: The class argument from the calling class method.
       mapper_spec: The MapperSpec for this InputReader.
 
     Raises:
@@ -341,17 +403,13 @@ class DatastoreInputReader(InputReader):
           raise BadReaderParamsError("Bad batch size: %s" % batch_size)
       except ValueError, e:
         raise BadReaderParamsError("Bad batch size: %s" % e)
-    if cls.NAMESPACES_PARAM in params:
-      if isinstance(params[cls.NAMESPACES_PARAM], (str, unicode)):
-        pass
-      elif isinstance(params[cls.NAMESPACES_PARAM], list):
-        for namespace in params[cls.NAMESPACES_PARAM]:
-          if not isinstance(namespace, (str, unicode)):
-            raise BadReaderParamsError(
-                "Bad namespace list: expected a list of strings")
-      else:
+    if cls.NAMESPACE_PARAM in params:
+      if not isinstance(params[cls.NAMESPACE_PARAM],
+                        (str, unicode, type(None))):
         raise BadReaderParamsError(
-            "Bad namespace list: expected a list of strings")
+            "Expected a single namespace string")
+    if cls.NAMESPACES_PARAM in params:
+      raise BadReaderParamsError("Multiple namespaces are no longer supported")
 
   @classmethod
   def split_input(cls, mapper_spec):
@@ -363,32 +421,56 @@ class DatastoreInputReader(InputReader):
     shards might also be less then requested (even 1), though it is never
     greater.
 
-    Current implementation does key-lexicographic order splitting. It requires
-    query not to specify any __key__-based ordering. If an index for
-    query.order('-__key__') query is not present, an inaccurate guess at
-    sharding will be made by splitting the full key range.
-
     Args:
       mapper_spec: MapperSpec with params containing 'entity_kind'.
-        May have 'namespaces' in the params as either a list of namespace
-        strings or a comma-seperated list of namespaces. If specified then the
-        input reader will only yield entities in the given namespaces. If
-        'namespaces' is not given then the current namespace will be used. May
-        also have 'batch_size' in the params to specify the number of entities
-        to process in each batch.
+        May have 'namespace' in the params as a string containing a single
+        namespace. If specified then the input reader will only yield values
+        in the given namespace. If 'namespace' is not given then values from
+        all namespaces will be yielded. May also have 'batch_size' in the params
+        to specify the number of entities to process in each batch.
 
     Returns:
-      A list of InputReader objects of length <= number_of_shards. These
-      may be DatastoreInputReader or DatastoreKeyInputReader objects.
+      A list of InputReader objects of length <= number_of_shards.
     """
     params = mapper_spec.params
     entity_kind_name = params[cls.ENTITY_KIND_PARAM]
+    batch_size = int(params.get(cls.BATCH_SIZE_PARAM, cls._BATCH_SIZE))
     shard_count = mapper_spec.shard_count
-    namespaces = params.get(cls.NAMESPACES_PARAM,
-                            [namespace_manager.get_namespace()])
-    if isinstance(namespaces, (str, unicode)):
-      namespaces = namespaces.split(",")
+    namespace = params.get(cls.NAMESPACE_PARAM)
     app = params.get(cls._APP_PARAM)
+
+    if namespace is None:
+      # It is difficult to efficiently shard large numbers of namespaces because
+      # there can be an arbitrary number of them. So the strategy is:
+      # 1. if there are a small number of namespaces in the datastore then
+      #    generate one KeyRange per namespace per shard and assign each shard a
+      #    KeyRange for every namespace. This should lead to nearly perfect
+      #    sharding.
+      # 2. if there are a large number of namespaces in the datastore then
+      #    generate one NamespaceRange per worker. This can lead to very bad
+      #    sharding because namespaces can contain very different numbers of
+      #    entities and each NamespaceRange may contain very different numbers
+      #    of namespaces.
+      namespace_query = datastore.Query("__namespace__",
+                                        keys_only=True,
+                                        _app=app)
+      namespace_keys = namespace_query.Get(
+          limit=cls.MAX_NAMESPACES_FOR_KEY_SHARD+1)
+
+      if len(namespace_keys) > cls.MAX_NAMESPACES_FOR_KEY_SHARD:
+        ns_ranges = namespace_range.NamespaceRange.split(n=shard_count,
+                                                         contiguous=True,
+                                                         _app=app)
+        return [cls(entity_kind_name,
+                    key_ranges=None,
+                    ns_range=ns_range,
+                    batch_size=batch_size)
+                for ns_range in ns_ranges]
+      else:
+        namespaces = [namespace_key.name() or ""
+                      for namespace_key in namespace_keys]
+    else:
+      namespaces = [namespace]
 
     return cls._split_input_from_params(
         app, namespaces, entity_kind_name, params, shard_count)
@@ -399,14 +481,27 @@ class DatastoreInputReader(InputReader):
     Returns:
       all the data in json-compatible map.
     """
-    json_dict = {self.KEY_RANGE_PARAM: [k.to_json() for k in self._key_ranges],
+    if self._key_ranges is None:
+      key_ranges_json = None
+    else:
+      key_ranges_json = [k.to_json() for k in self._key_ranges]
+
+    if self._ns_range is None:
+      namespace_range_json = None
+    else:
+      namespace_range_json = self._ns_range.to_json_object()
+
+    if self._current_key_range is None:
+      current_key_range_json = None
+    else:
+      current_key_range_json = self._current_key_range.to_json()
+
+    json_dict = {self.KEY_RANGE_PARAM: key_ranges_json,
+                 self.NAMESPACE_RANGE_PARAM: namespace_range_json,
+                 self.CURRENT_KEY_RANGE_PARAM: current_key_range_json,
                  self.ENTITY_KIND_PARAM: self._entity_kind,
                  self.BATCH_SIZE_PARAM: self._batch_size}
     return json_dict
-
-  def __str__(self):
-    """Returns the string representation of this DatastoreInputReader."""
-    return repr(self._key_ranges)
 
   @classmethod
   def from_json(cls, json):
@@ -418,95 +513,107 @@ class DatastoreInputReader(InputReader):
     Returns:
       an instance of DatastoreInputReader with all data deserialized from json.
     """
-    query_range = cls(
+    if json[cls.KEY_RANGE_PARAM] is None:
+      key_ranges = None
+    else:
+      key_ranges = [key_range.KeyRange.from_json(k)
+                    for k in json[cls.KEY_RANGE_PARAM]]
+
+    if json[cls.NAMESPACE_RANGE_PARAM] is None:
+      ns_range = None
+    else:
+      ns_range = namespace_range.NamespaceRange.from_json_object(
+          json[cls.NAMESPACE_RANGE_PARAM])
+
+    if json[cls.CURRENT_KEY_RANGE_PARAM] is None:
+      current_key_range = None
+    else:
+      current_key_range = key_range.KeyRange.from_json(
+          json[cls.CURRENT_KEY_RANGE_PARAM])
+
+    return cls(
         json[cls.ENTITY_KIND_PARAM],
-        [key_range.KeyRange.from_json(k) for k in json[cls.KEY_RANGE_PARAM]],
-        json[cls.BATCH_SIZE_PARAM])
-    return query_range
+        key_ranges,
+        ns_range,
+        json[cls.BATCH_SIZE_PARAM],
+        current_key_range)
 
 
-class DatastoreKeyInputReader(DatastoreInputReader):
+class DatastoreInputReader(AbstractDatastoreInputReader):
+  """Represents a range in query results.
+
+  DatastoreInputReader yields model instances from the entities in a given key
+  range. Iterating over DatastoreInputReader changes its range past consumed
+  entries.
+
+  The class shouldn't be instantiated directly. Use the split_input class method
+  instead.
+  """
+
+  def _iter_key_range(self, k_range):
+    cursor = None
+    while True:
+      query = k_range.make_ascending_query(
+          util.for_name(self._entity_kind))
+      if cursor:
+        query.with_cursor(cursor)
+
+      results = query.fetch(limit=self._batch_size)
+      if not results:
+        break
+
+      for model_instance in results:
+        key = model_instance.key()
+        yield key, model_instance
+      cursor = query.cursor()
+
+  @classmethod
+  def validate(cls, mapper_spec):
+    """Validates mapper spec and all mapper parameters.
+
+    Args:
+      mapper_spec: The MapperSpec for this InputReader.
+
+    Raises:
+      BadReaderParamsError: required parameters are missing or invalid.
+    """
+    super(DatastoreInputReader, cls).validate(mapper_spec)
+    params = mapper_spec.params
+    keys_only = util.parse_bool(params.get(cls.KEYS_ONLY_PARAM, False))
+    if keys_only:
+      raise BadReaderParamsError("The keys_only parameter is obsolete. "
+                                 "Use DatastoreKeyInputReader instead.")
+
+    entity_kind_name = params[cls.ENTITY_KIND_PARAM]
+    # Fail fast if Model cannot be located.
+    try:
+      util.for_name(entity_kind_name)
+    except ImportError, e:
+      raise BadReaderParamsError("Bad entity kind: %s" % e)
+
+
+class DatastoreKeyInputReader(AbstractDatastoreInputReader):
   """An input reader which takes a Kind and yields Keys for that kind."""
 
-  def __iter__(self):
-    """Create a generator for keys in the range.
-
-    Iterating through entries moves query range past the consumed entries.
-
-    Yields:
-      next entry.
-    """
+  def _iter_key_range(self, k_range):
     raw_entity_kind = util.get_short_name(self._entity_kind)
-    while True:
-      if self._current_key_range is None:
-        break
-
-      while True:
-        query = self._current_key_range.make_ascending_datastore_query(
-            raw_entity_kind, keys_only=True)
-        results = query.Get(limit=self._batch_size)
-
-        if not results:
-          self._advance_key_range()
-          break
-
-        for key in results:
-          self._current_key_range.advance(key)
-          yield key
-
-  @classmethod
-  def validate(cls, mapper_spec):
-    """Validates mapper spec and all mapper parameters.
-
-    Args:
-      mapper_spec: The MapperSpec for this InputReader.
-
-    Raises:
-      BadReaderParamsError: required parameters are missing or invalid.
-    """
-    cls._common_validate(mapper_spec)
+    query = k_range.make_ascending_datastore_query(
+        raw_entity_kind, keys_only=True)
+    for key in query.Run(
+        config=datastore_query.QueryOptions(batch_size=self._batch_size)):
+      yield key, key
 
 
-class DatastoreEntityInputReader(DatastoreInputReader):
+class DatastoreEntityInputReader(AbstractDatastoreInputReader):
   """An input reader which yields low level datastore entities for a kind."""
 
-  def __iter__(self):
-    """Create a generator for low level entities in the range.
-
-    Iterating through entries moves query range past the consumed entries.
-
-    Yields:
-      next entry.
-    """
+  def _iter_key_range(self, k_range):
     raw_entity_kind = util.get_short_name(self._entity_kind)
-    while True:
-      if self._current_key_range is None:
-        break
-
-      while True:
-        query = self._current_key_range.make_ascending_datastore_query(
-            raw_entity_kind)
-        results = query.Get(limit=self._batch_size)
-
-        if not results:
-          self._advance_key_range()
-          break
-
-        for entity in results:
-          self._current_key_range.advance(entity.key())
-          yield entity
-
-  @classmethod
-  def validate(cls, mapper_spec):
-    """Validates mapper spec and all mapper parameters.
-
-    Args:
-      mapper_spec: The MapperSpec for this InputReader.
-
-    Raises:
-      BadReaderParamsError: required parameters are missing or invalid.
-    """
-    cls._common_validate(mapper_spec)
+    query = k_range.make_ascending_datastore_query(
+        raw_entity_kind)
+    for entity in query.Run(
+        config=datastore_query.QueryOptions(batch_size=self._batch_size)):
+      yield entity.key(), entity
 
 
 class BlobstoreLineInputReader(InputReader):
@@ -1050,88 +1157,75 @@ class ConsistentKeyReader(DatastoreKeyInputReader):
   significant time to start yielding some data because it has to apply all
   modifications created before its start.
   """
-  START_TIME_US_PARAM = 'start_time_us'
-  UNAPPLIED_LOG_FILTER = '__unapplied_log_timestamp_us__ <'
-  DUMMY_KIND = 'DUMMY_KIND'
+  START_TIME_US_PARAM = "start_time_us"
+  UNAPPLIED_LOG_FILTER = "__unapplied_log_timestamp_us__ <"
+  DUMMY_KIND = "DUMMY_KIND"
   DUMMY_ID = 106275677020293L
 
-  def __init__(self,
-               entity_kind,
-               key_range_param,
-               batch_size=DatastoreKeyInputReader._BATCH_SIZE,
-               start_time_us=None):
-    """Constructor.
+  def _get_unapplied_jobs_accross_namespaces(self,
+                                             namespace_start,
+                                             namespace_end,
+                                             app):
+    filters = {"__key__ >=": db.Key.from_path("__namespace__",
+                                              namespace_start or 1,
+                                              _app=app),
+               "__key__ <=": db.Key.from_path("__namespace__",
+                                              namespace_end or 1,
+                                              _app=app),
+               self.UNAPPLIED_LOG_FILTER: self.start_time_us}
+    unapplied_query = datastore.Query(filters=filters, keys_only=True, _app=app)
+    return unapplied_query.Get(limit=self._batch_size)
 
-    Args:
-      entity_kind: Kind of entity to read as string.
-      key_range_param: Key range to scan through as key_range.KeyRange.
-      batch_size: Size of single batch read (number of entities).
-      start_time_us: Start time of the reader (as given by time.time()
-        function). It will apply all unapplied jobs created before it was
-        started.
-    """
-    DatastoreInputReader.__init__(
-        self, entity_kind, key_range_param, batch_size)
-    self.start_time_us = start_time_us
-
-  def __iter__(self):
-    """Iterates over the keys in the given KeyRanges.
-
-    Yields:
-      A db.Key instance for each key in the given key range, starting with
-      keys for unapplied jobs.
-    """
-    while True:  # Iterates over each key range.
-      if self._current_key_range is None:
-        break
-
-      # TODO(user): Remove this hack once 1.4.0 is live in production.
-      if datastore_rpc:
-        self._apply_jobs()
-
-      while True:  # Iterates over each key in the current key range.
-        # Fetches the next batch of the result keys.
-        query = self._current_key_range.make_ascending_datastore_query(
-            kind=self._entity_kind, keys_only=True)
-        keys = query.Get(limit=self._batch_size)
-
-        # No results, this shard is complete.
-        if not keys:
-          self._advance_key_range()
-          break
-
-        # All good, now we can feed the mapper.
-        for key in keys:
-          self._current_key_range.advance(key)
-          yield key
-
-  def _apply_jobs(self):
-    """Apply all jobs in current key range."""
+  def _iter_ns_range(self):
     while True:
-      # Creates an unapplied query and fetches unapplied jobs in the result
-      # range.
-      unapplied_query = self._current_key_range.make_ascending_datastore_query(
-          kind=None, keys_only=True)
-      unapplied_query[
-          ConsistentKeyReader.UNAPPLIED_LOG_FILTER] = self.start_time_us
-      unapplied_jobs = unapplied_query.Get(limit=self._batch_size)
+      unapplied_jobs = self._get_unapplied_jobs_accross_namespaces(
+          self._ns_range.namespace_start,
+          self._ns_range.namespace_end,
+          self._ns_range.app)
 
       if not unapplied_jobs:
-        return
+        break
 
-      # There were some unapplied jobs. Roll them forward.
-      keys_to_apply = []
-      for key in unapplied_jobs:
-        # To apply the entity group we need to read something from it.
-        # We use dummy kind and id because we don't actually need any data.
-        path = key.to_path() + [ConsistentKeyReader.DUMMY_KIND,
-                                ConsistentKeyReader.DUMMY_ID]
-        keys_to_apply.append(
-            db.Key.from_path(_app=key.app(), namespace=key.namespace(), *path))
-      db.get(keys_to_apply, config=datastore_rpc.Configuration(
-          deadline=10,
-          read_policy=datastore_rpc.Configuration.APPLY_ALL_JOBS_CONSISTENCY))
+      self._apply_jobs(unapplied_jobs)
 
+    for o in super(ConsistentKeyReader, self)._iter_ns_range():
+      yield o
+
+  def _iter_key_range(self, k_range):
+    assert hasattr(self, "start_time_us"), "start_time_us property was not set"
+    if self._ns_range is None:
+      # _iter_ns_range will have already have dealt with unapplied jobs so only
+      # handle the case where it would not have been called.
+      while True:
+        # Creates an unapplied query and fetches unapplied jobs in the result
+        # range. self.split() ensures that the generated KeyRanges cover the
+        # entire possible key range.
+        unapplied_query = k_range.make_ascending_datastore_query(
+            kind=None, keys_only=True)
+        unapplied_query[
+            ConsistentKeyReader.UNAPPLIED_LOG_FILTER] = self.start_time_us
+        unapplied_jobs = unapplied_query.Get(limit=self._batch_size)
+        if not unapplied_jobs:
+          break
+        self._apply_jobs(unapplied_jobs)
+
+    for o in super(ConsistentKeyReader, self)._iter_key_range(k_range):
+      yield o
+
+  def _apply_jobs(self, unapplied_jobs):
+    """Apply all jobs implied by the given keys."""
+    # There were some unapplied jobs. Roll them forward.
+    keys_to_apply = []
+    for key in unapplied_jobs:
+      # To apply the entity group we need to read something from it.
+      # We use dummy kind and id because we don't actually need any data.
+      path = key.to_path() + [ConsistentKeyReader.DUMMY_KIND,
+                              ConsistentKeyReader.DUMMY_ID]
+      keys_to_apply.append(
+          db.Key.from_path(_app=key.app(), namespace=key.namespace(), *path))
+    db.get(keys_to_apply, config=datastore_rpc.Configuration(
+        deadline=10,
+        read_policy=datastore_rpc.Configuration.APPLY_ALL_JOBS_CONSISTENCY))
 
   @classmethod
   def _split_input_from_namespace(cls,
@@ -1155,19 +1249,20 @@ class ConsistentKeyReader(DatastoreKeyInputReader):
   @classmethod
   def _split_input_from_params(cls, app, namespaces, entity_kind_name,
                                params, shard_count):
-    readers = super(ConsistentKeyReader, cls)._split_input_from_params(app,
-                                                          namespaces,
-                                                          entity_kind_name,
-                                                          params,
-                                                          shard_count)
-
-    # We always produce at least one key range because:
+    readers = super(ConsistentKeyReader, cls)._split_input_from_params(
+        app,
+        namespaces,
+        entity_kind_name,
+        params,
+        shard_count)
+    # We always produce at least one namespace range because:
     # a) there might be unapplied entities
     # b) it simplifies mapper code
     if not readers:
-      key_ranges = [key_range.KeyRange(namespace=namespace, _app=app)
-                    for namespace in namespaces]
-      readers = [cls(entity_kind_name, key_ranges)]
+      readers = [cls(entity_kind_name,
+                     key_ranges=None,
+                     ns_range=namespace_range.NamespaceRange(),
+                     batch_size=shard_count)]
 
     return readers
 
@@ -1188,10 +1283,8 @@ class ConsistentKeyReader(DatastoreKeyInputReader):
     Returns:
       all the data in json-compatible map.
     """
-    json_dict = {self.KEY_RANGE_PARAM: [k.to_json() for k in self._key_ranges],
-                 self.ENTITY_KIND_PARAM: self._entity_kind,
-                 self.BATCH_SIZE_PARAM: self._batch_size,
-                 self.START_TIME_US_PARAM: self.start_time_us}
+    json_dict = super(DatastoreKeyInputReader, self).to_json()
+    json_dict[self.START_TIME_US_PARAM] = self.start_time_us
     return json_dict
 
   @classmethod
@@ -1204,12 +1297,9 @@ class ConsistentKeyReader(DatastoreKeyInputReader):
     Returns:
       an instance of ConsistentKeyReader with all data deserialized from json.
     """
-    query_range = cls(
-        json[cls.ENTITY_KIND_PARAM],
-        [key_range.KeyRange.from_json(k) for k in json[cls.KEY_RANGE_PARAM]],
-        json[cls.BATCH_SIZE_PARAM],
-        json[cls.START_TIME_US_PARAM])
-    return query_range
+    reader = super(ConsistentKeyReader, cls).from_json(json)
+    reader.start_time_us = json[cls.START_TIME_US_PARAM]
+    return reader
 
 
 # TODO(user): This reader always produces only one shard, because
@@ -1218,12 +1308,44 @@ class ConsistentKeyReader(DatastoreKeyInputReader):
 # It's possible to implement specific splitting functionality for the reader
 # instead of reusing generic one. Meanwhile 1 shard is enough for our
 # applications.
-class NamespaceInputReader(DatastoreKeyInputReader):
+class NamespaceInputReader(InputReader):
   """An input reader to iterate over namespaces.
 
   This reader yields namespace names as string.
   It will always produce only one shard.
   """
+
+  NAMESPACE_RANGE_PARAM = "namespace_range"
+  BATCH_SIZE_PARAM = "batch_size"
+  _BATCH_SIZE = 10
+
+  def __init__(self, ns_range, batch_size = _BATCH_SIZE):
+    self.ns_range = ns_range
+    self._batch_size = batch_size
+
+  def to_json(self):
+    """Serializes all the data in this query range into json form.
+
+    Returns:
+      all the data in json-compatible map.
+    """
+    return {self.NAMESPACE_RANGE_PARAM: self.ns_range.to_json_object(),
+            self.BATCH_SIZE_PARAM: self._batch_size}
+
+  @classmethod
+  def from_json(cls, json):
+    """Create new DatastoreInputReader from the json, encoded by to_json.
+
+    Args:
+      json: json map representation of DatastoreInputReader.
+
+    Returns:
+      an instance of DatastoreInputReader with all data deserialized from json.
+    """
+    return cls(
+        namespace_range.NamespaceRange.from_json_object(
+            json[cls.NAMESPACE_RANGE_PARAM]),
+        json[cls.BATCH_SIZE_PARAM])
 
   @classmethod
   def validate(cls, mapper_spec):
@@ -1235,9 +1357,17 @@ class NamespaceInputReader(DatastoreKeyInputReader):
     Raises:
       BadReaderParamsError: required parameters are missing or invalid.
     """
-    mapper_spec.params[cls.ENTITY_KIND_PARAM] = metadata.Namespace.kind()
-    mapper_spec.shard_count = 1
-    cls._common_validate(mapper_spec)
+    if mapper_spec.input_reader_class() != cls:
+      raise BadReaderParamsError("Input reader class mismatch")
+    params = mapper_spec.params
+
+    if cls.BATCH_SIZE_PARAM in params:
+      try:
+        batch_size = int(params[cls.BATCH_SIZE_PARAM])
+        if batch_size < 1:
+          raise BadReaderParamsError("Bad batch size: %s" % batch_size)
+      except ValueError, e:
+        raise BadReaderParamsError("Bad batch size: %s" % e)
 
   @classmethod
   def split_input(cls, mapper_spec):
@@ -1249,10 +1379,24 @@ class NamespaceInputReader(DatastoreKeyInputReader):
     Returns:
       A list of InputReaders.
     """
-    mapper_spec.params[cls.ENTITY_KIND_PARAM] = metadata.Namespace.kind()
-    mapper_spec.shard_count = 1
-    return super(DatastoreKeyInputReader, cls).split_input(mapper_spec)
+    batch_size = int(mapper_spec.params.get(cls.BATCH_SIZE_PARAM,
+                                            cls._BATCH_SIZE))
+    shard_count = mapper_spec.shard_count
+    namespace_ranges = namespace_range.NamespaceRange.split(shard_count,
+                                                            contiguous=True)
+    return [NamespaceInputReader(ns_range, batch_size)
+            for ns_range in namespace_ranges]
 
   def __iter__(self):
-    for key in DatastoreKeyInputReader.__iter__(self):
-      yield metadata.Namespace.key_to_namespace(key)
+    while True:
+      keys = self.ns_range.make_datastore_query().Get(limit=self._batch_size)
+      if not keys:
+        break
+
+      for key in keys:
+        namespace = metadata.Namespace.key_to_namespace(key)
+        self.ns_range = self.ns_range.with_start_after(namespace)
+        yield namespace
+
+  def __str__(self):
+    return repr(self.ns_range)
