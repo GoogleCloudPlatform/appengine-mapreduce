@@ -331,6 +331,7 @@ class ShardState {
       shardObject.put("active", getStatus() == ShardState.Status.ACTIVE);
       shardObject.put("shard_description", getStatusString());
       shardObject.put("updated_timestamp_ms", getUpdateTimestamp());
+      shardObject.put("result_status", "" + getStatus());
     } catch (JSONException e) {
       throw new RuntimeException("Hard coded string is null", e);
     }

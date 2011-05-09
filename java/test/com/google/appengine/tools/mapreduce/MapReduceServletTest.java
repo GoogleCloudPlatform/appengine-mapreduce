@@ -748,14 +748,16 @@ public class MapReduceServletTest extends TestCase {
         + "   'active':true,"
         + "   'active_shards':0,"
         + "   'updated_timestamp_ms':0,"
-        + "   'start_timestamp_ms':0},"
+        + "   'start_timestamp_ms':0,"
+        + "   'result_status': 'ACTIVE'},"
         + "  {'mapreduce_id':'job_1_0001',"
         + "   'shards':0,"
         + "   'name':''," 
         + "   'active':true," 
         + "   'active_shards':0,"
         + "   'updated_timestamp_ms':1,"
-        + "   'start_timestamp_ms':0}],"
+        + "   'start_timestamp_ms':0,"
+        + "   'result_status': 'ACTIVE'}],"
         + " 'cursor':'E9oBQWo8agR0ZXN0cjQLEhIKABoOTWFwUmVkdWNlU3RhdGUMCxIOTWFwUmVkdWNlU3RhdGUiCmpvY"
         +            "l8xXzAwMDEMggEA4AEAFA'"
         + "}", retObject);
@@ -770,14 +772,16 @@ public class MapReduceServletTest extends TestCase {
         + "          'active':true,"
         + "          'active_shards':0,"
         + "          'updated_timestamp_ms':2,"
-        + "          'start_timestamp_ms':0},"
+        + "          'start_timestamp_ms':0,"
+        + "          'result_status': 'ACTIVE'},"
         + "         {'mapreduce_id':'job_3_0003',"
         + "          'shards':0,"
         + "          'name':'',"
         + "          'active':true,"
         + "          'active_shards':0,"
         + "          'updated_timestamp_ms':3,"
-        + "          'start_timestamp_ms':0}],"
+        + "          'start_timestamp_ms':0,"
+        + "          'result_status': 'ACTIVE'}],"
         + " 'cursor':'E9oBQWo8agR0ZXN0cjQLEhIKABoOTWFwUmVkdWNlU3RhdGUMCxIOTWFwUmVkdWNlU3RhdGUiCmpvY"
         +            "l8zXzAwMDMMggEA4AEAFA'}"
         , retObject);
@@ -833,7 +837,8 @@ public class MapReduceServletTest extends TestCase {
         + " 'configuration':'<?xml version=\\'1.0\\' encoding=\\'UTF-8\\' standalone=\\'no\\'?>"
         +                   "<configuration><\\/configuration>',"
         + " 'counters':{},"
-        + " 'start_timestamp_ms':12}", result);
+        + " 'start_timestamp_ms':12,"
+        + " 'result_status': 'ACTIVE'}", result);
   }
   
   // Tests that a populated job (with a couple of shards) generates a reasonable
@@ -878,10 +883,12 @@ public class MapReduceServletTest extends TestCase {
         + " 'shards':[{'shard_description':'Daddy!',"
         + "            'active':false,"
         + "            'updated_timestamp_ms':45,"
+        + "            'result_status': 'DONE',"
         + "            'shard_number':1},"
         + "           {'shard_description':'',"
         + "            'active':true,"
         + "            'updated_timestamp_ms':77,"
+        + "            'result_status': 'ACTIVE',"
         + "            'shard_number':2}],"
         + " 'mapper_spec':{'mapper_params':{}},"
         + " 'name':'Namey',"
@@ -891,7 +898,8 @@ public class MapReduceServletTest extends TestCase {
         + " 'configuration':'<?xml version=\\'1.0\\' encoding=\\'UTF-8\\' standalone=\\'no\\'?>"
         +                   "<configuration><\\/configuration>',"
         + " 'counters':{},"
-        + " 'start_timestamp_ms':12}", result);
+        + " 'start_timestamp_ms':12,"
+        + " 'result_status': 'ACTIVE'}", result);
   }
   
   public void testCleanupJob() throws Exception {
