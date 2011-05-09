@@ -401,6 +401,7 @@ public class MapReduceState {
       jobObject.put("active", getStatus() == MapReduceState.Status.ACTIVE);
       jobObject.put("updated_timestamp_ms", getLastPollTime());
       jobObject.put("start_timestamp_ms", getStartTime());
+      jobObject.put("result_status", "" + getStatus());
       
       if (detailed) {
         jobObject.put("counters", toJson(getCounters()));
