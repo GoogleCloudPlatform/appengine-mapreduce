@@ -31,6 +31,7 @@ import java.io.InputStream;
 import java.io.UnsupportedEncodingException;
 import java.net.URL;
 import java.net.URLDecoder;
+import java.security.AccessControlException;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
@@ -81,6 +82,9 @@ public class MapReduceXml {
     }
 
     File currentDirectory = new File(path);
+    // If we're encountering errors on the way up and can't find the file, we'd
+    // like to propagate the error upwards.
+    Throwable lastError = null;
 
     // Walk up the tree, looking for a WEB-INF/mapreduce.xml . We only expect
     // this file to exist in the root dir, but I can't figure out a good way
@@ -88,10 +92,24 @@ public class MapReduceXml {
     while (currentDirectory != null) {
       File mapReduceFile = new File(currentDirectory.getPath() + File.separator
           + "mapreduce.xml");
-      if (mapReduceFile.exists()) {
-        return new FileInputStream(mapReduceFile);
+      try {
+        if (mapReduceFile.exists()) {
+          return new FileInputStream(mapReduceFile);
+        }
+      // We'll add exceptions as they're encountered. We don't want to catch
+      // (for instance) DeadlineExceededException.
+      } catch (AccessControlException e) {
+        lastError = e;
       }
       currentDirectory = currentDirectory.getParentFile();
+    }
+
+    if (lastError != null) {
+      // This would be nicer if FileNotFoundException took a throwable to wrap or if I had been
+      // smarter and declared this method to throw IOException. C'est la vie.
+      throw new FileNotFoundException(
+          "Couldn't find mapreduce.xml. Additionally, encountered " + lastError.toString()
+          + " during processing.");
     }
 
     throw new FileNotFoundException("Couldn't find mapreduce.xml");
