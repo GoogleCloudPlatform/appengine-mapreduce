@@ -18,7 +18,7 @@ package com.google.appengine.tools.mapreduce;
 
 import junit.framework.TestCase;
 
-import static org.easymock.classextension.EasyMock.*;
+import static org.easymock.EasyMock.*;
 
 /**
  * Tests the {@link QuotaConsumer} class.

@@ -25,8 +25,8 @@ import org.apache.hadoop.mapreduce.InputSplit;
 import org.apache.hadoop.mapreduce.JobContext;
 import org.apache.hadoop.mapreduce.RecordReader;
 import org.apache.hadoop.mapreduce.TaskAttemptContext;
-import org.easymock.classextension.EasyMock;
-import org.easymock.classextension.IMocksControl;
+import org.easymock.EasyMock;
+import org.easymock.IMocksControl;
 
 import java.util.Arrays;
 import java.util.List;
