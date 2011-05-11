@@ -495,7 +495,7 @@ function refreshJobDetail(jobId, detail) {
 
     $('<li>')
       .append($('<span class="param-key">').text(getNiceParamKey(key)))
-      .append($('<span class="param-value">').text(value))
+      .append($('<span class="param-value">').text("" + value))
       .appendTo(jobParams);
   });
 
@@ -506,7 +506,7 @@ function refreshJobDetail(jobId, detail) {
       var value = detail.mapper_spec.mapper_params[key];
       $('<li>')
         .append($('<span class="user-param-key"">').text(key))
-        .append($('<span class="param-value">').html(value))
+        .append($('<span class="param-value">').html("" + value))
         .appendTo(jobParams);
     });
   }

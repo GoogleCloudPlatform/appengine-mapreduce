@@ -151,12 +151,10 @@ class GetDescendingKeyTest(unittest.TestCase):
   def testBasic(self):
     """Basic test of the function."""
     now = 1234567890
-    random = 78
     self.assertEquals(
-        "159453012940078",
+        "1594530129400FFFFFFFF",
         model._get_descending_key(
-            gettime=lambda: now,
-            getrandint=lambda x, y: random))
+            gettime=lambda: now))
 
 
 class TestReader(object):

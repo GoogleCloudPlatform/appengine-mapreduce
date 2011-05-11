@@ -52,6 +52,7 @@ class MockRequest(object):
     self.url = ''
     self.path_qs = ''
     self.update_properties()
+    self.environ = {}
 
   def get_path(self):
     return self._path
@@ -61,6 +62,20 @@ class MockRequest(object):
     self.update_properties()
 
   path = property(get_path, set_path)
+
+  def set_url(self, url):
+    """Set full URL for the request.
+
+    Parses the URL and sets path, scheme, host and parameters correctly.
+    """
+    o = urlparse.urlparse(url)
+    self.path = o.path
+    self.scheme = o.scheme or self.scheme
+    self.host = o.netloc or self.host
+
+    for (name, value) in urlparse.parse_qs(o.query).items():
+      assert len(value) == 1
+      self.set(name, value[0])
 
   def get(self, argument_name, default_value='', allow_multiple=False):
     """Looks up the value of a query parameter.
@@ -105,6 +120,32 @@ class MockRequest(object):
       else:
         return [self.params[argument_name]]
     return []
+
+  def get_range(self, name, min_value=None, max_value=None, default=0):
+    """Parses the given int argument, limiting it to the given range.
+
+    Args:
+      name: the name of the argument
+      min_value: the minimum int value of the argument (if any)
+      max_value: the maximum int value of the argument (if any)
+      default: the default value of the argument if it is not given
+
+    Returns:
+      An int within the given range for the argument
+    """
+    value = self.get(name, default)
+    if value is None:
+      return value
+    try:
+      value = int(value)
+    except ValueError:
+      value = default
+    if value is not None:
+      if max_value is not None:
+        value = min(value, max_value)
+      if min_value is not None:
+        value = max(value, min_value)
+    return value
 
   def set(self, argument_name, value):
     """Sets the value of a query parameter.

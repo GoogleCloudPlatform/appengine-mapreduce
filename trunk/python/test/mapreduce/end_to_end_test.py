@@ -11,10 +11,14 @@ import random
 import string
 import unittest
 
+from mapreduce.lib import files
+from mapreduce.lib.files import records
 from google.appengine.ext import db
 from mapreduce import control
+from mapreduce import model
 from mapreduce import output_writers
 from testlib import testutil
+from mapreduce import util
 
 
 class TestEntity(db.Model):
@@ -25,10 +29,10 @@ class TestHandler(object):
   """Test handler which stores all processed entities keys.
 
   Properties:
-    processed_keys: all keys of processed entities.
+    processed_entites: all processed entities.
   """
 
-  processed_keys = []
+  processed_entites = []
 
   def __call__(self, entity):
     """Main handler process function.
@@ -36,12 +40,12 @@ class TestHandler(object):
     Args:
       entity: entity to process.
     """
-    TestHandler.processed_keys.append(str(entity.key()))
+    TestHandler.processed_entites.append(entity)
 
   @staticmethod
   def reset():
-    """Clear processed_keys & reset delay to 0."""
-    TestHandler.processed_keys = []
+    """Clear processed_entites & reset delay to 0."""
+    TestHandler.processed_entites = []
 
 
 def test_handler_yield_key(entity):
@@ -67,7 +71,7 @@ class TestOutputWriter(output_writers.OutputWriter):
 
   @classmethod
   def init_job(cls, mapreduce_state):
-    random_str = ''.join(
+    random_str = "".join(
         random.choice(string.ascii_uppercase + string.digits)
         for _ in range(64))
     mapreduce_state.mapreduce_spec.params["writer_filename"] = random_str
@@ -100,6 +104,7 @@ class EndToEndTest(testutil.HandlerTestBase):
 
   def setUp(self):
     testutil.HandlerTestBase.setUp(self)
+    TestHandler.reset()
     TestOutputWriter.reset()
 
   def testLotsOfEntities(self):
@@ -119,7 +124,8 @@ class EndToEndTest(testutil.HandlerTestBase):
         base_path="/mapreduce_base_path")
 
     testutil.execute_until_empty(self.taskqueue)
-    self.assertEquals(entity_count, len(TestHandler.processed_keys))
+    self.assertEquals(entity_count, len(TestHandler.processed_entites))
+    self.assertEquals([], model.ShardState.all().fetch(100))
 
   def testOutputWriter(self):
     """End-to-end test with output writer."""
@@ -144,6 +150,60 @@ class EndToEndTest(testutil.HandlerTestBase):
     self.assertEquals(entity_count,
                       len(TestOutputWriter.file_contents.values()[0]))
 
+  def testRecordsReader(self):
+    """End-to-end test for records reader."""
+    input_file = files.blobstore.create()
+    input_data = [str(i) for i in range(100)]
 
-if __name__ == '__main__':
+    with files.open(input_file, "a") as f:
+      with records.RecordsWriter(f) as w:
+        for record in input_data:
+          w.write(record)
+    files.finalize(input_file)
+    input_file = files.blobstore.get_file_name(
+        files.blobstore.get_blob_key(input_file))
+
+    mapreduce_id = control.start_map(
+        "test_map",
+        __name__ + ".TestHandler",
+        "mapreduce.input_readers.RecordsReader",
+        {
+            "file": input_file
+        },
+        shard_count=4,
+        base_path="/mapreduce_base_path")
+
+    testutil.execute_until_empty(self.taskqueue)
+    self.assertEquals(100, len(TestHandler.processed_entites))
+
+  def testHugeTaskPayloadTest(self):
+    """Test map job with huge parameter values."""
+    input_file = files.blobstore.create()
+    input_data = [str(i) for i in range(100)]
+
+    with files.open(input_file, "a") as f:
+      with records.RecordsWriter(f) as w:
+        for record in input_data:
+          w.write(record)
+    files.finalize(input_file)
+    input_file = files.blobstore.get_file_name(
+        files.blobstore.get_blob_key(input_file))
+
+    mapreduce_id = control.start_map(
+        "test_map",
+        __name__ + ".TestHandler",
+        "mapreduce.input_readers.RecordsReader",
+        {
+            "file": input_file,
+            "huge_parameter": "0" * 200000, # 200K
+        },
+        shard_count=4,
+        base_path="/mapreduce_base_path")
+
+    testutil.execute_until_empty(self.taskqueue)
+    self.assertEquals(100, len(TestHandler.processed_entites))
+    self.assertEquals([], util._HugeTaskPayload.all().fetch(100))
+
+
+if __name__ == "__main__":
   unittest.main()

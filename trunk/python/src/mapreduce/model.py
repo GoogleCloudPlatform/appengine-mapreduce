@@ -34,7 +34,7 @@ import copy
 import datetime
 import logging
 import math
-import random
+import os
 from mapreduce.lib import simplejson
 import time
 import types
@@ -49,7 +49,8 @@ from mapreduce.lib.graphy.backends import google_chart_api
 
 
 # Default rate of processed entities per second.
-_DEFAULT_PROCESSING_RATE_PER_SEC = 100
+# Make this high, because too many people are confused when mapper is too slow.
+_DEFAULT_PROCESSING_RATE_PER_SEC = 1000000
 
 # Default number of shards to have.
 _DEFAULT_SHARD_COUNT = 8
@@ -198,7 +199,7 @@ class JsonProperty(db.UnindexedProperty):
 _FUTURE_TIME = 2**34
 
 
-def _get_descending_key(gettime=time.time, getrandint=random.randint):
+def _get_descending_key(gettime=time.time):
   """Returns a key name lexically ordered by time descending.
 
   This lets us have a key name for use with Datastore entities which returns
@@ -207,14 +208,13 @@ def _get_descending_key(gettime=time.time, getrandint=random.randint):
 
   Args:
     gettime: Used for testing.
-    getrandint: Used for testing.
 
   Returns:
     A string with a time descending key.
   """
   now_descending = int((_FUTURE_TIME - gettime()) * 100)
-  tie_breaker = getrandint(0, 100)
-  return "%d%d" % (now_descending, tie_breaker)
+  return "%d%s" % (now_descending,
+                   os.environ.get("REQUEST_ID_HASH", "FFFFFFFF"))
 
 
 class CountersMap(JsonMixin):
@@ -577,7 +577,7 @@ class MapreduceState(db.Model):
     Returns:
       Datastore Key that can be used to fetch the MapreduceState.
     """
-    return db.Key.from_path(cls.kind(), mapreduce_id)
+    return db.Key.from_path(cls.kind(), str(mapreduce_id))
 
   @classmethod
   def get_by_job_id(cls, mapreduce_id):

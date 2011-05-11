@@ -1,0 +1,17 @@
+#butter {
+  position: absolute;
+  min-width: 300px;
+  background-color: #C5D7EF;
+  text-align: left;
+  padding: 5px;
+  border-left: 1px solid #3366CC;
+  border-right: 1px solid #3366CC;
+  border-bottom: 1px solid #3366CC;
+}
+
+#butter a:visited,
+#butter a:active,
+#butter a:link,
+#butter a:hover {
+  color: #3366CC;
+}

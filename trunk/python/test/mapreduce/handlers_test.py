@@ -580,9 +580,8 @@ class StartJobHandlerTest(MapreduceHandlerTestBase):
     # Only kickoff task should be there.
     tasks = self.taskqueue.GetTasks("default")
     self.assertEquals(1, len(tasks))
-    params = dict(cgi.parse_qsl(base64.b64decode(tasks[0]["body"])))
-
-    self.assertEquals("otherapp", params["app"])
+    payload = testutil.decode_task_payload(tasks[0]) 
+    self.assertEquals("otherapp", payload["app"])
     self.assertTrue(self.get_mapreduce_spec(tasks[0]))
 
   def testRequiredParams(self):
@@ -1082,6 +1081,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
                             include_start=False,
                             include_end=True)])
     self.handler._schedule_slice(
+        self.shard_state,
         model.TransientShardState(
             "/mapreduce", self.mapreduce_spec,
             self.shard_id, 123, input_reader))
@@ -1101,6 +1101,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
                             include_start=False,
                             include_end=True)])
     self.handler._schedule_slice(
+        self.shard_state,
         model.TransientShardState(
             "/mapreduce", self.mapreduce_spec,
             self.shard_id, 123, input_reader),
@@ -1121,6 +1122,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
                             include_start=False,
                             include_end=True)])
     self.handler._schedule_slice(
+        self.shard_state,
         model.TransientShardState(
             "/mapreduce", self.mapreduce_spec,
             self.shard_id, 123, input_reader),
@@ -1142,6 +1144,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
                               include_start=False,
                               include_end=True)])
       self.handler._schedule_slice(
+          self.shard_state,
           model.TransientShardState(
               "/mapreduce", self.mapreduce_spec,
               self.shard_id, 123, query_range))
@@ -1154,10 +1157,10 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
 
   def testScheduleSlice_TombstoneErrors(self):
     """Tests when the scheduled slice already exists."""
-    self.handler._schedule_slice(self.transient_state)
+    self.handler._schedule_slice(self.shard_state, self.transient_state)
 
     # This catches the exception.
-    self.handler._schedule_slice(self.transient_state)
+    self.handler._schedule_slice(self.shard_state, self.transient_state)
 
     # The task won't re-enqueue because it has the same name.
     tasks = self.taskqueue.GetTasks("default")
@@ -1168,7 +1171,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
     hooks_class_name = __name__ + '.' + TestHooks.__name__
     self.init(hooks_class_name=hooks_class_name)
 
-    self.handler._schedule_slice(self.transient_state)
+    self.handler._schedule_slice(self.shard_state, self.transient_state)
 
     self.assertEquals(0, len(self.taskqueue.GetTasks("default")))
     self.assertEquals(1, len(TestHooks.enqueue_worker_task_calls))
@@ -1193,6 +1196,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
                             include_start=False,
                             include_end=True)])
     self.handler._schedule_slice(
+        self.shard_state,
         model.TransientShardState(
             "/mapreduce", self.mapreduce_spec,
             self.shard_id, 123, input_reader))
@@ -1498,7 +1502,9 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
             self.mapreduce_id)).command)
 
     tasks = self.taskqueue.GetTasks("default")
-    self.assertEquals(0, len(tasks))
+    # Finalize task should be spawned.
+    self.assertEquals(1, len(tasks))
+    self.assertEquals("/mapreduce/finalizejob_callback", tasks[0]["url"])
 
     # Done Callback task should be spawned
     self.verify_done_task()
@@ -1523,7 +1529,9 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
     self.assertEquals(0, mapreduce_state.aborted_shards)
 
     tasks = self.taskqueue.GetTasks("default")
-    self.assertEquals(0, len(tasks))
+    # Finalize task should be spawned.
+    self.assertEquals(1, len(tasks))
+    self.assertEquals("/mapreduce/finalizejob_callback", tasks[0]["url"])
 
     # Done Callback task should be spawned
     self.verify_done_task()
@@ -1614,7 +1622,9 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
     self.assertEquals(0, mapreduce_state.aborted_shards)
 
     tasks = self.taskqueue.GetTasks("default")
-    self.assertEquals(0, len(tasks))
+    # Finalize task should be spawned.
+    self.assertEquals(1, len(tasks))
+    self.assertEquals("/mapreduce/finalizejob_callback", tasks[0]["url"])
 
     # Done Callback task should be spawned
     self.verify_done_task()
@@ -1677,7 +1687,9 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
     self.assertEquals(1, mapreduce_state.aborted_shards)
 
     tasks = self.taskqueue.GetTasks("default")
-    self.assertEquals(0, len(tasks))
+    # Finalize task should be spawned.
+    self.assertEquals(1, len(tasks))
+    self.assertEquals("/mapreduce/finalizejob_callback", tasks[0]["url"])
 
     # Done Callback task should be spawned
     self.verify_done_task()
@@ -1720,7 +1732,7 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
     # 1 second passed. ceil(33.3) = 34 quotas should be refilled.
     # (100 entities/sec = 33.3 entities/shard/sec in our case).
     for shard_state in shard_states:
-      self.assertEquals(34, self.quota_manager.get(shard_state.shard_id))
+      self.assertEquals(333334, self.quota_manager.get(shard_state.shard_id))
 
   def testQuotaIsSplitOnlyBetweenActiveShards(self):
     """Test that quota is split only between active shards."""
@@ -1742,7 +1754,7 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
     self.handler.post()
 
     for shard_state in active_shard_states:
-      self.assertEquals(50, self.quota_manager.get(shard_state.shard_id))
+      self.assertEquals(500000, self.quota_manager.get(shard_state.shard_id))
 
   def testScheduleQueueName(self):
     """Tests that the calling queue name is preserved on schedule calls."""

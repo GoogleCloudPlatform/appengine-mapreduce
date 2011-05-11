@@ -18,12 +18,23 @@
 
 
 
-__all__ = ["Error", "BadReaderParamsError", "InputReader",
-           "AbstractDatastoreInputReader", "BlobstoreLineInputReader",
-           "BlobstoreZipInputReader", "BlobstoreZipLineInputReader",
-           "ConsistentKeyReader", "DatastoreEntityInputReader",
-           "DatastoreInputReader", "DatastoreKeyInputReader",
-           "NamespaceInputReader" ]
+__all__ = [
+    "AbstractDatastoreInputReader",
+    "BadReaderParamsError",
+    "BlobstoreLineInputReader",
+    "BlobstoreZipInputReader",
+    "BlobstoreZipLineInputReader",
+    "COUNTER_IO_READ_BYTES",
+    "COUNTER_IO_READ_MSEC",
+    "ConsistentKeyReader",
+    "DatastoreEntityInputReader",
+    "DatastoreInputReader",
+    "DatastoreKeyInputReader",
+    "Error",
+    "InputReader",
+    "NamespaceInputReader",
+    "RecordsReader",
+    ]
 
 # pylint: disable-msg=C6409
 
@@ -33,27 +44,32 @@ import time
 import zipfile
 
 from google.appengine.api import datastore
+from mapreduce.lib import files
+from mapreduce.lib.files import records
 from google.appengine.datastore import datastore_query
-# TODO(user): Remove this hack once 1.4.0 is live in production.
-try:
-  from google.appengine.datastore import datastore_rpc
-except ImportError:
-  datastore_rpc = None
+from google.appengine.datastore import datastore_rpc
 from google.appengine.ext import blobstore
 from google.appengine.ext import db
 from mapreduce.lib import key_range
 from google.appengine.ext.db import metadata
+from mapreduce import context
+from mapreduce import errors
 from mapreduce import model
 from mapreduce import namespace_range
+from mapreduce import operation
 from mapreduce import util
 
 
-class Error(Exception):
-  """Base-class for exceptions in this module."""
+# Classes moved to errors module. Copied here for compatibility.
+Error = errors.Error
+BadReaderParamsError = errors.BadReaderParamsError
 
 
-class BadReaderParamsError(Error):
-  """The input parameters to a reader were invalid."""
+# Counter name for number of bytes read.
+COUNTER_IO_READ_BYTES = "io-read-bytes"
+
+# Counter name for milliseconds spent reading data.
+COUNTER_IO_READ_MSEC = "io-read-msec"
 
 
 class InputReader(model.JsonMixin):
@@ -68,6 +84,11 @@ class InputReader(model.JsonMixin):
    * They are cast to string for a user-readable description; it may be
      valuable to implement __str__.
   """
+
+  # When expand_parameters is False, then value yielded by reader is passed
+  # to handler as is. If it's true, then *value is passed, expanding arguments
+  # and letting handler be a multi-parameter function.
+  expand_parameters = False
 
   # Mapreduce parameters.
   _APP_PARAM = "_app"
@@ -824,7 +845,26 @@ class BlobstoreZipInputReader(InputReader):
       raise StopIteration()
     entry = self._entries.pop()
     self._start_index += 1
-    return (entry, lambda: self._zip.read(entry.filename))
+    return (entry, lambda: self._read(entry))
+
+  def _read(self, entry):
+    """Read entry content.
+
+    Args:
+      entry: zip file entry as zipfile.ZipInfo.
+    Returns:
+      Entry content as string.
+    """
+    start_time = time.time()
+    content = self._zip.read(entry.filename)
+
+    ctx = context.get()
+    if ctx:
+      operation.counters.Increment(COUNTER_IO_READ_BYTES, len(content))(ctx)
+      operation.counters.Increment(
+          COUNTER_IO_READ_MSEC, int((time.time() - start_time) * 1000))(ctx)
+
+    return content
 
   @classmethod
   def from_json(cls, json):
@@ -1400,3 +1440,123 @@ class NamespaceInputReader(InputReader):
 
   def __str__(self):
     return repr(self.ns_range)
+
+
+# TODO(user): extend this to allow reading multiple file lists in multiple
+# shards at the same time.
+class RecordsReader(InputReader):
+  """Reader to read a list of Files API file in records format.
+
+  All files are read in a single shard consequently.
+  """
+
+  FILE_PARAM = "file"
+  FILES_PARAM = "files"
+
+  def __init__(self, filenames, position):
+    """Constructor.
+
+    Args:
+      filenames: list of filenames.
+      position: file position to start reading from as int.
+    """
+    self._filenames = filenames
+    if self._filenames:
+      self._reader = records.RecordsReader(
+          files.BufferedFile(self._filenames[0]))
+      self._reader.seek(position)
+    else:
+      self._reader = None
+
+  def __iter__(self):
+    """Iterate over records in file.
+
+    Yields records as strings.
+    """
+    ctx = context.get()
+
+    while self._reader:
+      try:
+        start_time = time.time()
+        record = self._reader.read()
+        if ctx:
+          operation.counters.Increment(
+              COUNTER_IO_READ_MSEC, int((time.time() - start_time) * 1000))(ctx)
+          operation.counters.Increment(COUNTER_IO_READ_BYTES, len(record))(ctx)
+        yield record
+      except EOFError:
+        self._filenames.pop(0)
+        if not self._filenames:
+          self._reader = None
+        else:
+          self._reader = records.RecordsReader(
+              files.BufferedFile(self._filenames[0]))
+
+  @classmethod
+  def from_json(cls, json):
+    """Creates an instance of the InputReader for the given input shard state.
+
+    Args:
+      json: The InputReader state as a dict-like object.
+
+    Returns:
+      An instance of the InputReader configured using the values of json.
+    """
+    return cls(json["filenames"], json["position"])
+
+  def to_json(self):
+    """Returns an input shard state for the remaining inputs.
+
+    Returns:
+      A json-izable version of the remaining InputReader.
+    """
+    result = {
+        "filenames": self._filenames,
+        "position": 0,
+        }
+    if self._reader:
+      result["position"] = self._reader.tell()
+    return result
+
+  @classmethod
+  def split_input(cls, mapper_spec):
+    """Returns a list of input readers for the input spec.
+
+    Args:
+      mapper_spec: The MapperSpec for this InputReader.
+
+    Returns:
+      A list of InputReaders.
+    """
+    params = mapper_spec.params
+
+    if cls.FILES_PARAM in params:
+      filenames = params[cls.FILES_PARAM]
+      if isinstance(filenames, basestring):
+        filenames = filenames.split(",")
+    else:
+      filenames = [params[cls.FILE_PARAM]]
+
+    return [RecordsReader(filenames, 0)]
+
+  @classmethod
+  def validate(cls, mapper_spec):
+    """Validates mapper spec and all mapper parameters.
+
+    Args:
+      mapper_spec: The MapperSpec for this InputReader.
+
+    Raises:
+      BadReaderParamsError: required parameters are missing or invalid.
+    """
+    if mapper_spec.input_reader_class() != cls:
+      raise errors.BadReaderParamsError("Input reader class mismatch")
+    params = mapper_spec.params
+    if (cls.FILES_PARAM not in params and
+        cls.FILE_PARAM not in params):
+      raise BadReaderParamsError(
+          "Must specify '%s' or '%s' parameter for mapper input" %
+          (cls.FILES_PARAM, cls.FILE_PARAM))
+
+  def __str__(self):
+    return "%s:%s" % (self._filenames, self._reader.tell())

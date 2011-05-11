@@ -23,6 +23,7 @@
 import logging
 from mapreduce.lib import simplejson
 
+from mapreduce.lib import pipeline
 from google.appengine.ext import webapp
 from mapreduce import errors
 
@@ -57,7 +58,12 @@ class TaskQueueHandler(BaseHandler):
       self.response.set_status(
           403, message="Task queue handler received non-task queue request")
       return
+    self._setup()
     self.handle()
+
+  def _setup(self):
+    """Called before handle method to set up handler."""
+    pass
 
   def handle(self):
     """To be implemented by subclasses."""
@@ -145,3 +151,20 @@ class GetJsonHandler(JsonHandler):
 
   def get(self):
     self._handle_wrapper()
+
+
+# This path will be changed by build process when this is a part of SDK.
+_DEFAULT_BASE_PATH = "/mapreduce"
+_DEFAULT_PIPELINE_BASE_PATH = _DEFAULT_BASE_PATH + "/pipeline"
+
+
+class PipelineBase(pipeline.Pipeline):
+  """Base class for all pipelines within mapreduce framework.
+
+  Rewrites base path to use pipeline library bundled with mapreduce.
+  """
+
+  def start(self, **kwargs):
+    if "base_path" not in kwargs:
+      kwargs["base_path"] = _DEFAULT_PIPELINE_BASE_PATH
+    return pipeline.Pipeline.start(self, **kwargs)

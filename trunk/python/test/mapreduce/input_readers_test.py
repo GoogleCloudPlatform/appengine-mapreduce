@@ -35,14 +35,18 @@ import zipfile
 from google.appengine.api import apiproxy_stub_map
 from google.appengine.api import datastore
 from google.appengine.api import datastore_file_stub
+from mapreduce.lib import files
+from mapreduce.lib.files import records
 from google.appengine.api import namespace_manager
 from google.appengine.ext import blobstore
 from google.appengine.ext import db
 from mapreduce.lib import key_range
 from google.appengine.ext.blobstore import blobstore as blobstore_internal
+from mapreduce import errors
 from mapreduce import input_readers
 from mapreduce import model
 from mapreduce import namespace_range
+from testlib import testutil
 
 
 class TestJsonType(object):
@@ -765,7 +769,7 @@ class BlobstoreLineInputReaderTest(unittest.TestCase):
     self.appid = "testapp"
     os.environ["APPLICATION_ID"] = self.appid
     self.mox = mox.Mox()
-    self.original_fetch_data = blobstore.fetch_data
+    self.original_fetch_data = blobstore_internal.fetch_data
 
     self.mox.StubOutWithMock(blobstore, "BlobKey", use_mock_anything=True)
     self.mox.StubOutWithMock(blobstore.BlobInfo, "get", use_mock_anything=True)
@@ -773,7 +777,7 @@ class BlobstoreLineInputReaderTest(unittest.TestCase):
   def tearDown(self):
     self.mox.UnsetStubs()
     self.mox.ResetAll()
-    blobstore.fetch_data = self.original_fetch_data
+    blobstore_internal.fetch_data = self.original_fetch_data
 
   def initMockedBlobstoreLineReader(self,
                                     initial_position,
@@ -1533,6 +1537,101 @@ class NamespaceInputReaderTest(unittest.TestCase):
     self.assertEquals(
         reader._batch_size,
         input_readers.NamespaceInputReader.from_json(json)._batch_size)
+
+
+class RecordsReaderTest(testutil.HandlerTestBase):
+  """Tests for RecordsReader."""
+
+  def setUp(self):
+    testutil.HandlerTestBase.setUp(self)
+    self.mapper_spec = model.MapperSpec(
+        "test_handler",
+        input_readers.__name__ + ".RecordsReader",
+        {"file": "testfile"},
+        10)
+
+  def testValidatePass(self):
+    """Test validation passes."""
+    input_readers.RecordsReader.validate(self.mapper_spec)
+
+  def testValidateInvalidReaderClass(self):
+    """Test invalid reader class name."""
+    self.mapper_spec.input_reader_spec = __name__ + ".RecordsReaderTest"
+    self.assertRaises(errors.BadReaderParamsError,
+                      input_readers.RecordsReader.validate,
+                      self.mapper_spec)
+
+  def testValidateNoFileParam(self):
+    """Test validate without file param."""
+    self.mapper_spec.params = {}
+    self.assertRaises(errors.BadReaderParamsError,
+                      input_readers.RecordsReader.validate,
+                      self.mapper_spec)
+
+  def testSplitInput(self):
+    """Test split input implementation."""
+    readers = input_readers.RecordsReader.split_input(self.mapper_spec)
+    self.assertEquals(1, len(readers))
+    self.assertEquals({"filenames": ["testfile"], "position": 0},
+                      readers[0].to_json())
+
+  def testToJsonFromJson(self):
+    """Test to/from json implementations."""
+    reader = input_readers.RecordsReader.from_json(
+        {"filenames": ["test"], "position": 200})
+    self.assertEquals({"filenames": ["test"], "position": 200},
+                      reader.to_json())
+
+  def testIter(self):
+    """Test __iter__ implementation."""
+    # Prepare the file.
+    input_file = files.blobstore.create()
+    input_data = [str(i) for i in range(100)]
+
+    with files.open(input_file, "a") as f:
+      with records.RecordsWriter(f) as w:
+        for record in input_data:
+          w.write(record)
+    files.finalize(input_file)
+    input_file = files.blobstore.get_file_name(
+        files.blobstore.get_blob_key(input_file))
+
+    # Test reader.
+    reader = input_readers.RecordsReader([input_file], 0)
+    self.assertEquals(input_data, list(reader))
+
+    # Move offset past EOF.
+    reader = input_readers.RecordsReader([input_file], 10000000)
+    self.assertEquals([], list(reader))
+
+  def testIterMultipleFiles(self):
+    """Test __iter__ implementation over multiple files."""
+    # Prepare the file.
+    input_file1 = files.blobstore.create()
+    input_file2 = files.blobstore.create()
+    input_data1 = [str(i) for i in range(100)]
+    input_data2 = [str(i * i) for i in range(100)]
+
+    with files.open(input_file1, "a") as f:
+      with records.RecordsWriter(f) as w:
+        for record in input_data1:
+          w.write(record)
+
+    with files.open(input_file2, "a") as f:
+      with records.RecordsWriter(f) as w:
+        for record in input_data2:
+          w.write(record)
+
+    files.finalize(input_file1)
+    files.finalize(input_file2)
+    input_file1 = files.blobstore.get_file_name(
+        files.blobstore.get_blob_key(input_file1))
+    input_file2 = files.blobstore.get_file_name(
+        files.blobstore.get_blob_key(input_file2))
+
+    # Test reader.
+    reader = input_readers.RecordsReader([input_file1, input_file2], 0)
+    self.assertEquals(input_data1 + input_data2, list(reader))
 
 
 if __name__ == "__main__":
