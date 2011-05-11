@@ -18,6 +18,15 @@
 
 
 
+__all__ = [
+    "BadParamsError",
+    "BadReaderParamsError",
+    "BadWriterParamsError",
+    "BadYamlError",
+    "Error",
+    "MissingYamlError",
+    "MultipleDocumentsInMrYaml",
+    ]
 
 class Error(Exception):
   """Base-class for exceptions in this module."""
@@ -33,3 +42,15 @@ class MissingYamlError(BadYamlError):
 
 class MultipleDocumentsInMrYaml(BadYamlError):
   """There's more than one document in mapreduce.yaml file."""
+
+
+class BadParamsError(Error):
+  """One of the mapper parameters is invalid."""
+
+
+class BadReaderParamsError(BadParamsError):
+  """The input parameters to a reader were invalid."""
+
+
+class BadWriterParamsError(BadParamsError):
+  """The input parameters to a reader were invalid."""

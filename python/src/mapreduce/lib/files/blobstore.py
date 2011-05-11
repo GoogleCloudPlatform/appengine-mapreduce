@@ -68,6 +68,14 @@ def create(mime_type='application/octet-stream',
   return files._create(_BLOBSTORE_FILESYSTEM, params=params)
 
 
+
+_BLOB_FILE_INDEX_KIND = '__BlobFileIndex__'
+
+
+
+_BLOB_KEY_PROPERTY_NAME = 'blob_key'
+
+
 def get_blob_key(create_file_name):
   """Get a blob key for finalized blobstore file.
 
@@ -88,7 +96,7 @@ def get_blob_key(create_file_name):
   if not isinstance(create_file_name, basestring):
     raise files.InvalidArgumentError('Expected string for file name')
   if not create_file_name.startswith(_BLOBSTORE_DIRECTORY):
-    raise file.InvalidFileNameError(
+    raise files.InvalidFileNameError(
         'Filename %s passed to get_blob_key doesn\'t have prefix %s' %
         (create_file_name, _BLOBSTORE_DIRECTORY))
   ticket = create_file_name[len(_BLOBSTORE_DIRECTORY):]
@@ -96,13 +104,38 @@ def get_blob_key(create_file_name):
   if not ticket.startswith(_CREATION_HANDLE_PREFIX):
 
     return blobstore.BlobKey(ticket)
-  query = datastore.Query(blobstore.BLOB_INFO_KIND,
-                          {'creation_handle =': ticket},
-                          keys_only=True)
-  results = query.Get(1)
-  if not results:
-    return None
-  return blobstore.BlobKey(results[0].name())
+
+
+  blob_file_index = datastore.Get([datastore.Key.from_path(
+      _BLOB_FILE_INDEX_KIND,
+      ticket)])[0]
+  if blob_file_index:
+    blob_key_str = blob_file_index[_BLOB_KEY_PROPERTY_NAME]
+
+
+
+
+
+
+
+    results = datastore.Get([datastore.Key.from_path(
+        blobstore.BLOB_INFO_KIND, blob_key_str)])
+    if results[0] is None:
+      return None
+  else:
+
+
+
+
+    query = datastore.Query(blobstore.BLOB_INFO_KIND,
+                            {'creation_handle =': ticket},
+                            keys_only=True,
+                            namespace='')
+    results = query.Get(1)
+    if not results:
+      return None
+    blob_key_str = results[0].name()
+  return blobstore.BlobKey(blob_key_str)
 
 
 def get_file_name(blob_key):
@@ -119,3 +152,19 @@ def get_file_name(blob_key):
   if not isinstance(blob_key, (blobstore.BlobKey, basestring)):
     raise files.InvalidArgumentError('Expected string or blobstore.BlobKey')
   return '%s%s' % (_BLOBSTORE_DIRECTORY, blob_key)
+
+
+def _delete(filename):
+  """Permanently delete a file.
+
+  Args:
+    filename: finalized file name as string.
+  """
+
+  blob_key = get_blob_key(filename)
+  if blob_key is None:
+    return
+  blob_info = blobstore.BlobInfo.get(blob_key)
+  if blob_info is None:
+    return
+  blob_info.delete()

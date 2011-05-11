@@ -9,30 +9,19 @@
 import os
 from testlib import mox
 import unittest
-import shutil
-import tempfile
 
 from google.appengine.api import apiproxy_stub_map
-from google.appengine.api.blobstore import blobstore_stub
-from google.appengine.api.blobstore import file_blob_storage
 from mapreduce.lib import files
-from google.appengine.api.files import file_service_stub
 from mapreduce.lib.files import testutil as files_testutil
-from google.appengine.ext import db
-from mapreduce import control
+from mapreduce.lib.files import records
 from mapreduce import errors
 from mapreduce import model
 from mapreduce import output_writers
 from testlib import testutil
 
 
-class TestEntity(db.Model):
-  """Test entity class."""
-
-
-def test_handler_yield_key_str(entity):
-  """Test handler which yields entity key."""
-  yield str(entity.key()) + "\n"
+BLOBSTORE_WRITER_NAME = (output_writers.__name__ + "." +
+                         output_writers.BlobstoreOutputWriter.__name__)
 
 
 class FilePoolTest(unittest.TestCase):
@@ -44,7 +33,7 @@ class FilePoolTest(unittest.TestCase):
     apiproxy_stub_map.apiproxy.RegisterStub(
         "file", self.file_service)
 
-    self.pool = output_writers._FilePool(max_size_chars=10)
+    self.pool = output_writers._FilePool(flush_size_chars=10)
 
   def testAppendAndFlush(self):
     self.pool.append("foo", "a")
@@ -63,7 +52,7 @@ class FilePoolTest(unittest.TestCase):
 
   def testAppendTooMuchData(self):
     """Test appending too much data."""
-    self.assertRaises(errors.Error, self.pool.append, "foo", "a"*25)
+    self.assertRaises(errors.Error, self.pool.append, "foo", "a"*1024*1024*2)
 
   def testAppendMultipleFiles(self):
     self.pool.append("foo", "a")
@@ -78,57 +67,104 @@ class FilePoolTest(unittest.TestCase):
     self.assertEquals("bb", self.file_service.get_content("bar"))
 
 
-class BlobstoreOutputWriterEndToEndTest(testutil.HandlerTestBase):
-  """End-to-end tests for BlobstoreOutputWriter.
-
-  BlobstoreOutputWriter isn't complex enough yet to do extensive
-  unit tests. Do end-to-end tests just to check that it works.
-  """
+class RecordsPoolTest(unittest.TestCase):
+  """Tests for RecordsPool."""
 
   def setUp(self):
-    testutil.HandlerTestBase.setUp(self)
-
-    self.blob_storage_directory = tempfile.mkdtemp()
-    blob_storage = file_blob_storage.FileBlobStorage(
-        self.blob_storage_directory, self.appid)
-    self.blobstore_stub = blobstore_stub.BlobstoreServiceStub(blob_storage)
-    apiproxy_stub_map.apiproxy.RegisterStub("blobstore", self.blobstore_stub)
+    self.file_service = files_testutil.TestFileServiceStub()
+    apiproxy_stub_map.apiproxy = apiproxy_stub_map.APIProxyStubMap()
     apiproxy_stub_map.apiproxy.RegisterStub(
-        "file", file_service_stub.FileServiceStub(blob_storage))
+        "file", self.file_service)
 
-  def tearDown(self):
-    shutil.rmtree(self.blob_storage_directory)
-    testutil.HandlerTestBase.tearDown(self);
+    self.pool = output_writers.RecordsPool("tempfile", flush_size_chars=30)
 
-  def testSmoke(self):
-    entity_count = 1000
+  def testAppendAndFlush(self):
+    self.pool.append("a")
+    self.assertEquals("", self.file_service.get_content("tempfile"))
+    self.pool.append("b")
+    self.assertEquals("", self.file_service.get_content("tempfile"))
+    self.pool.flush()
+    self.assertEquals(
+        ["a", "b"],
+        list(records.RecordsReader(files.open("tempfile", "r"))))
 
-    for i in range(entity_count):
-      TestEntity().put()
 
-    mapreduce_id = control.start_map(
-        "test_map",
-        __name__ + ".test_handler_yield_key_str",
+class BlobstoreOutputWriterTest(testutil.HandlerTestBase):
+
+  def create_mapper_spec(self,
+                         output_writer_spec=BLOBSTORE_WRITER_NAME,
+                         params=None):
+    params = params or {}
+    mapper_spec = model.MapperSpec(
+        "FooHandler",
         "mapreduce.input_readers.DatastoreInputReader",
-        {
-            "entity_kind": __name__ + "." + TestEntity.__name__,
-        },
-        shard_count=4,
-        base_path="/mapreduce_base_path",
-        output_writer_spec=
-            output_writers.__name__ + "." +
-            output_writers.BlobstoreOutputWriter.__name__)
+        params,
+        10,
+        output_writer_spec=output_writer_spec)
+    return mapper_spec
 
-    testutil.execute_until_empty(self.taskqueue)
+  def create_mapreduce_state(self, params=None):
+    mapreduce_spec = model.MapreduceSpec(
+        "mapreduce0",
+        "mapreduce0",
+        self.create_mapper_spec(params=params).to_json())
+    mapreduce_state = model.MapreduceState.create_new("mapreduce0")
+    mapreduce_state.mapreduce_spec = mapreduce_spec
+    return mapreduce_state
 
-    mapreduce_state = model.MapreduceState.get_by_job_id(mapreduce_id)
-    blob_name = mapreduce_state.writer_state["filename"]
-    self.assertTrue(blob_name.startswith("/blobstore/"))
-    self.assertFalse(blob_name.startswith("/blobstore/c_"))
+  def testValidate_Passes(self):
+    output_writers.BlobstoreOutputWriter.validate(self.create_mapper_spec())
 
-    with files.open(blob_name, "r") as f:
-      data = f.read(10000000)
-      self.assertEquals(1000, len(data.strip().split("\n")))
+  def testValidate_WriterNotSet(self):
+    self.assertRaises(
+        errors.BadWriterParamsError,
+        output_writers.BlobstoreOutputWriter.validate,
+        self.create_mapper_spec(output_writer_spec=None))
+
+  def testValidate_ShardingNone(self):
+    output_writers.BlobstoreOutputWriter.validate(
+        self.create_mapper_spec(params={"output_sharding": "NONE"}))
+
+  def testValidate_ShardingInput(self):
+    output_writers.BlobstoreOutputWriter.validate(
+        self.create_mapper_spec(params={"output_sharding": "input"}))
+
+  def testValidate_ShardingIncorrect(self):
+    self.assertRaises(
+        errors.BadWriterParamsError,
+        output_writers.BlobstoreOutputWriter.validate,
+        self.create_mapper_spec(params={"output_sharding": "foo"}))
+
+  def testInitJob_NoSharding(self):
+    mapreduce_state = self.create_mapreduce_state()
+    output_writers.BlobstoreOutputWriter.init_job(mapreduce_state)
+    self.assertTrue(mapreduce_state.writer_state)
+    filenames = output_writers.BlobstoreOutputWriter.get_filenames(
+        mapreduce_state)
+    self.assertEqual(1, len(filenames))
+    self.assertTrue(
+        filenames[0].startswith("/blobstore/writable:"))
+
+  def testInitJob_ShardingNone(self):
+    mapreduce_state = self.create_mapreduce_state(
+        params={"output_sharding": "none"})
+    output_writers.BlobstoreOutputWriter.init_job(mapreduce_state)
+    self.assertTrue(mapreduce_state.writer_state)
+    filenames = output_writers.BlobstoreOutputWriter.get_filenames(
+        mapreduce_state)
+    self.assertEqual(1, len(filenames))
+    self.assertTrue(filenames[0].startswith("/blobstore/writable:"))
+
+  def testInitJob_ShardingInput(self):
+    mapreduce_state = self.create_mapreduce_state(
+        params={"output_sharding": "input"})
+    output_writers.BlobstoreOutputWriter.init_job(mapreduce_state)
+    self.assertTrue(mapreduce_state.writer_state)
+    filenames = output_writers.BlobstoreOutputWriter.get_filenames(
+        mapreduce_state)
+    self.assertEqual(10, len(filenames))
+    for filename in filenames:
+      self.assertTrue(filename.startswith("/blobstore/writable:"))
 
 
 if __name__ == "__main__":

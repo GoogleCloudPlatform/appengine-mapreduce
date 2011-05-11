@@ -1,0 +1,192 @@
+/* Major page sections. */
+html, body {
+  padding: 0;
+  margin: 0;
+  width: 100%;
+  overflow: hidden;
+  font-family: helvetica, sans-serif;
+  font-size: 14px;
+}
+#sidebar {
+  top: 0;
+  left: 0;
+  position: absolute;
+  width: 30%;
+  height: 100%;
+  overflow: auto;
+  padding: 0;
+  border-right: 1px solid grey;
+  margin: 0;
+}
+#content {
+  border: 0;
+  margin: 0 0 0 30%;
+  padding: 0 0 0 1px; /* must match border+padding on #sidebar */
+}
+#detail {
+  padding: 10px;
+  overflow-y: auto;
+}
+#control {
+  padding: 0;
+  margin: 0;
+  top: 0;
+  right: 0;
+  height: 25px;
+  width: 100%;
+  border-bottom: 1px solid grey;
+}
+#control-table {
+  height: 100%;
+  float: right;
+}
+.control-cell {
+  text-align: center;
+  vertical-align: middle;
+  padding: 0 4px;
+}
+#status-console {
+  border-top: 1px solid grey;
+  border-right: 0;
+  border-bottom: 0;
+  border-left: 0;
+  padding: 0;
+  margin: 0;
+}
+
+/* shared styling of pipeline info divs */
+.status-message {
+  font-family: monospace;
+}
+abbr {
+  cursor: help;
+  border: 0;
+}
+.status-links > a {
+  margin-right: 5px;
+}
+.status-title {
+  text-transform: capitalize;
+}
+
+/* detail-specific styling */
+.status-param,
+.retry-param {
+  padding-left: 1em;
+  font-size: 0.85em;
+}
+.slot-detail,
+.status-param-value {
+  padding-left: 1em;
+  max-width: 400px;
+  word-wrap: break-word;
+}
+.status-param-detail {
+  padding-left: 2em;
+}
+.run-after-pipeline-id,
+.child-pipeline-id,
+.child-link,
+.run-after-link {
+  display: block;
+  padding-left: 1em;
+  font-size: 0.85em;
+}
+#detail .status-box {
+  font-size: 1em;
+}
+#detail .outputs-container,
+#detail .param-container,
+#detail .child-container,
+#detail .run-after-container,
+#detail .status-retry-params {
+  margin-top: 1em;
+}
+#detail .status-param-value,
+#detail .slot-value {
+  font-family: monospace;
+}
+
+/* sidebar */
+#sidebar .status-title {
+}
+#sidebar .status-message {
+  max-width: 200px;
+  word-wrap: break-word;
+}
+#sidebar .status-time {
+}
+#sidebar .status-runtime {
+}
+#sidebar .status-links {
+}
+#sidebar .status-box {
+  font-size: 0.85em;
+  padding: 1px 3px;
+  min-width: 200px;
+  border-left: 1px solid #BFBFBF;
+  border-right: 1px solid #BFBFBF;
+}
+#sidebar .status-waiting {
+  background-color: #D3D3D3;
+  border-top: 1px solid #bfbfbf;
+  border-bottom: 1px solid #959595;
+}
+#sidebar .status-run,
+#sidebar .status-finalizing {
+  background-color: #fff;
+  border-top: 1px solid #bfbfbf;
+  border-bottom: 1px solid #959595;
+}
+#sidebar .status-done {
+  background-color: #90EE90;
+  border-top: 1px solid #C5EBC5;
+  border-bottom: 1px solid #75BF75;
+}
+#sidebar .status-aborted {
+  background-color: #FFC0CB;
+  border-top: 1px solid #FFDBE1;
+  border-bottom: 1px solid #FFADBB;
+}
+#sidebar .status-retry {
+  background-color: khaki;
+}
+.treeview li {
+  padding: 0 0 0 16px;
+}
+.disclosure {
+  text-decoration: underline;
+  color: blue;
+  padding-top: 0.5em;
+  padding-left: 3px;
+  display: block;
+}
+#sidebar .selected-link:before {
+  content: '*';
+  vertical-align: middle;
+  margin-right: 2px;
+}
+.status-links a:active,
+.status-links a:link,
+.status-links a:visited {
+  text-decoration: none;
+  color: blue;
+  font-weight: bold;
+}
+.disclosure:hover,
+.status-links a:hover,
+.detail-link a:hover {
+  text-decoration: underline;
+}
+#sidebar .detail-link {
+}
+.detail-link a {
+  font-size: 1.2em;
+  font-weight: bold;
+  text-decoration: none;
+}
+.detail-link a:active,
+.detail-link a:link,
+.detail-link a:visited {
+  color: black;
+}

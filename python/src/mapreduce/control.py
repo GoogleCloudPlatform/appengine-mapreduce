@@ -23,12 +23,12 @@ __all__ = ["start_map"]
 # pylint: disable-msg=C6409
 
 
+from mapreduce import base_handler
 from mapreduce import handlers
 from mapreduce import model
 
 
 _DEFAULT_SHARD_COUNT = 8
-_DEFAULT_BASE_PATH = "/mapreduce"
 
 
 def start_map(name,
@@ -38,7 +38,7 @@ def start_map(name,
               shard_count=_DEFAULT_SHARD_COUNT,
               output_writer_spec=None,
               mapreduce_parameters=None,
-              base_path=_DEFAULT_BASE_PATH,
+              base_path=base_handler._DEFAULT_BASE_PATH,
               queue_name="default",
               eta=None,
               countdown=None,
@@ -71,6 +71,8 @@ def start_map(name,
   Returns:
     mapreduce id as string.
   """
+  if not shard_count:
+    shard_count = _DEFAULT_SHARD_COUNT
   mapper_spec = model.MapperSpec(handler_spec,
                                  reader_spec,
                                  mapper_parameters,
@@ -88,3 +90,4 @@ def start_map(name,
       hooks_class_name=hooks_class_name,
       _app=_app,
       transactional=transactional)
+

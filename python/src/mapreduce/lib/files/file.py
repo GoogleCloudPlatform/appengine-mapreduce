@@ -48,10 +48,15 @@ __all__ = [
            'ORDERED_KEY_VALUE',
            'RAW',
 
+           'delete',
            'finalize',
            'open',
+
+           'BufferedFile',
            ]
 
+import logging
+import gc
 import os
 
 from google.appengine.api import apiproxy_stub_map
@@ -507,7 +512,8 @@ def open(filename, mode='r', content_type=RAW, exclusive_lock=False):
   if not filename:
     raise InvalidArgumentError('Filename is empty')
   if not isinstance(filename, basestring):
-    raise InvalidArgumentError('Filename should be a string')
+    raise InvalidArgumentError('Filename should be a string but is %s (%s)' %
+                               (filename.__class__, filename))
   if content_type != RAW and content_type != ORDERED_KEY_VALUE:
     raise InvalidArgumentError('Invalid content type')
 
@@ -532,8 +538,12 @@ def finalize(filename, content_type=RAW):
   if content_type != RAW and content_type != ORDERED_KEY_VALUE:
     raise InvalidArgumentError('Invalid content type')
 
-  f = open(filename, 'a', exclusive_lock=True, content_type=content_type)
-  f.close(finalize=True)
+  try:
+    f = open(filename, 'a', exclusive_lock=True, content_type=content_type)
+    f.close(finalize=True)
+  except FinalizationError:
+
+    pass
 
 
 def _create(filesystem, content_type=RAW, filename=None, params=None):
@@ -575,3 +585,95 @@ def _create(filesystem, content_type=RAW, filename=None, params=None):
 
   _make_call('Create', request, response)
   return response.filename()
+
+
+def delete(filename):
+  """Permanently delete a file.
+
+  Args:
+    filename: finalized file name as string.
+  """
+  from mapreduce.lib.files import blobstore as files_blobstore
+
+  if not isinstance(filename, basestring):
+    raise InvalidArgumentError('Filename should be a string, but is %s(%r)' %
+                               (filename.__class__.__name__, filename))
+  if filename.startswith(files_blobstore._BLOBSTORE_DIRECTORY):
+    files_blobstore._delete(filename)
+  else:
+    raise InvalidFileNameError( 'Unsupported file name: %s' % filename)
+
+
+class BufferedFile(object):
+  """BufferedFile is a file-like object reading underlying file in chunks."""
+
+  _BUFFER_SIZE = 512 * 1024
+
+  def __init__(self, filename, buffer_size=_BUFFER_SIZE):
+    """Constructor.
+
+    Args:
+      filename: the name of the file to read as string.
+      buffer_size: buffer read size to use as int.
+    """
+    self._filename = filename
+    self._position = 0
+    self._buffer = ''
+    self._buffer_pos = 0
+    self._buffer_size = buffer_size
+
+  def tell(self):
+    """Return file's current position."""
+    return self._position
+
+  def read(self, size):
+    """Read data from RAW file.
+
+    Args:
+      size: Number of bytes to read as integer. Actual number of bytes
+        read is always equal to size unless end if file was reached.
+
+    Returns:
+      A string with data read.
+    """
+    while len(self._buffer) - self._buffer_pos < size:
+      self._buffer = self._buffer[self._buffer_pos:]
+      self._buffer_pos = 0
+      with open(self._filename, 'r') as f:
+        f.seek(self._position + len(self._buffer))
+        data = f.read(self._buffer_size)
+        if not data:
+          break
+        self._buffer += data
+      gc.collect()
+
+    if len(self._buffer) - self._buffer_pos < size:
+      result = self._buffer[self._buffer_pos:]
+      self._buffer = ''
+      self._buffer_pos = 0
+      self._position += len(result)
+      return result
+    else:
+      result = self._buffer[self._buffer_pos:self._buffer_pos + size]
+      self._buffer_pos += size
+      self._position += size
+      return result
+
+  def seek(self, offset, whence=os.SEEK_SET):
+    """Set the file's current position.
+
+    Args:
+      offset: seek offset as number.
+      whence: seek mode. Supported modes are os.SEEK_SET (absolute seek),
+        and os.SEEK_CUR (seek relative to the current position).
+    """
+    if whence == os.SEEK_SET:
+      self._position = offset
+      self._buffer = ''
+      self._buffer_pos = 0
+    elif whence == os.SEEK_CUR:
+      self._position += offset
+      self._buffer = ''
+      self._buffer_pos = 0
+    else:
+      raise InvalidArgumentError('Whence mode %d is not supported', whence)
