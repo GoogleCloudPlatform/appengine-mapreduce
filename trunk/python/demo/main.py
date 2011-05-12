@@ -33,9 +33,6 @@ from mapreduce import operation as op
 from mapreduce import shuffler
 
 
-BLOB_KEY="AMIfv97lCf3MiRAwdYtZbIzd4EKGfzP8ns63qHcvnSZg9fSxFNoiEPpufZESxHllm3lxx0-DQHEVA5qKEw5bKt6J9IPngigyhQepUuMli8-zWADWhsCRjzA-dIenu7p31B6gGupP7OpDqLqFSUUZDr07B5gJdRfPWw"
-
-
 class IndexHandler(webapp.RequestHandler):
   def get(self):
     self.response.out.write(
@@ -258,8 +255,6 @@ APP = webapp.WSGIApplication(
 
 def main():
   util.run_wsgi_app(APP)
-
-
 
 
 if __name__ == '__main__':
