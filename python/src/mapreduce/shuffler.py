@@ -16,7 +16,7 @@ import time
 
 from mapreduce.lib import pipeline
 from mapreduce.lib import files
-from google.appengine.api.files import file_service_pb
+from mapreduce.lib.files import file_service_pb
 from mapreduce.lib.files import records
 from google.appengine.ext import db
 from mapreduce import base_handler
