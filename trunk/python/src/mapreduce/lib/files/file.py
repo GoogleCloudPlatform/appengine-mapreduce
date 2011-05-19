@@ -60,7 +60,7 @@ import gc
 import os
 
 from google.appengine.api import apiproxy_stub_map
-from google.appengine.api.files import file_service_pb
+from mapreduce.lib.files import file_service_pb
 from google.appengine.runtime import apiproxy_errors
 
 
