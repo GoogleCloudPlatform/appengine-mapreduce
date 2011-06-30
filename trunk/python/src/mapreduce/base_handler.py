@@ -23,7 +23,10 @@
 import logging
 from mapreduce.lib import simplejson
 
-from mapreduce.lib import pipeline
+try:
+  from mapreduce.lib import pipeline
+except ImportError:
+  pipeline = None
 from google.appengine.ext import webapp
 from mapreduce import errors
 
@@ -158,13 +161,16 @@ _DEFAULT_BASE_PATH = "/mapreduce"
 _DEFAULT_PIPELINE_BASE_PATH = _DEFAULT_BASE_PATH + "/pipeline"
 
 
-class PipelineBase(pipeline.Pipeline):
-  """Base class for all pipelines within mapreduce framework.
+if pipeline:
+  class PipelineBase(pipeline.Pipeline):
+    """Base class for all pipelines within mapreduce framework.
 
-  Rewrites base path to use pipeline library bundled with mapreduce.
-  """
+    Rewrites base path to use pipeline library bundled with mapreduce.
+    """
 
-  def start(self, **kwargs):
-    if "base_path" not in kwargs:
-      kwargs["base_path"] = _DEFAULT_PIPELINE_BASE_PATH
-    return pipeline.Pipeline.start(self, **kwargs)
+    def start(self, **kwargs):
+      if "base_path" not in kwargs:
+        kwargs["base_path"] = _DEFAULT_PIPELINE_BASE_PATH
+      return pipeline.Pipeline.start(self, **kwargs)
+else:
+  PipelineBase = None
