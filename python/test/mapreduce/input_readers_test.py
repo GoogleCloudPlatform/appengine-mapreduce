@@ -33,6 +33,8 @@ import unittest
 import zipfile
 
 from google.appengine.api import apiproxy_stub_map
+from google.appengine.api.blobstore import blobstore_stub
+from google.appengine.api.blobstore import dict_blob_storage
 from google.appengine.api import datastore
 from google.appengine.api import datastore_file_stub
 from mapreduce.lib import files
@@ -757,6 +759,126 @@ class DatastoreKeyInputReaderTest(unittest.TestCase):
     self.assertEquals(expected_keys[25:50], keys)
 
 
+BLOBSTORE_READER_NAME = (
+    "mapreduce.input_readers.BlobstoreLineInputReader")
+
+
+class BlobstoreLineInputReaderBlobstoreStubTest(unittest.TestCase):
+  """Test the BlobstoreLineInputReader using the blobstore_stub.
+
+  This test uses the blobstore stub to store the test data, vs the other
+  test which uses mox and the like to simulate the blobstore having data.
+  """
+
+  def setUp(self):
+    unittest.TestCase.setUp(self)
+
+    self.appid = "testapp"
+    os.environ["APPLICATION_ID"] = self.appid
+
+    self.blob_storage = dict_blob_storage.DictBlobStorage()
+    self.blobstore = blobstore_stub.BlobstoreServiceStub(self.blob_storage)
+    # Blobstore uses datastore for BlobInfo.
+    self.datastore = datastore_file_stub.DatastoreFileStub(
+        self.appid, "/dev/null", "/dev/null", require_indexes=False)
+
+    apiproxy_stub_map.apiproxy = apiproxy_stub_map.APIProxyStubMap()
+    apiproxy_stub_map.apiproxy.RegisterStub("blobstore", self.blobstore)
+    apiproxy_stub_map.apiproxy.RegisterStub("datastore_v3", self.datastore)
+
+  def BlobInfoGet(self, blob_key):
+    """Mock out BlobInfo.get instead of the datastore."""
+    data = self.blob_storage.OpenBlob(blob_key)
+    return MockBlobInfo(data.len)
+
+  def CheckAllDataRead(self, data, blob_readers):
+    """Check that we can read all the data with several blob readers."""
+    expected_results = data.split("\n")
+    if not expected_results[-1]:
+      expected_results.pop(-1)
+    actual_results = []
+    for reader in blob_readers:
+      while True:
+        try:
+          unused_offset, line = reader.next()
+          actual_results.append(line)
+        except StopIteration:
+          break
+    self.assertSequenceEqual(expected_results, actual_results)
+
+  def EndToEndTest(self, data, shard_count):
+    """Create a blobstorelineinputreader and run it through its paces."""
+
+    blob_key = "myblob_%d" % shard_count
+    self.blobstore.CreateBlob(blob_key, data)
+    mapper_spec = model.MapperSpec.from_json({
+        "mapper_handler_spec": "FooHandler",
+        "mapper_input_reader": BLOBSTORE_READER_NAME,
+        "mapper_params": {"blob_keys": [blob_key]},
+        "mapper_shard_count": shard_count})
+    blob_readers = input_readers.BlobstoreLineInputReader.split_input(
+        mapper_spec)
+
+    # Check that the shards cover the entire data range.
+    # Another useful test would be to verify the exact splits generated or
+    # the evenness of them.
+    self.assertEqual(shard_count, len(blob_readers))
+    previous_position = 0
+    for reader in blob_readers:
+      reader_info = reader.to_json()
+      self.assertEqual(blob_key, reader_info["blob_key"])
+      self.assertEqual(previous_position, reader_info["initial_position"])
+      previous_position = reader_info["end_position"]
+    self.assertEqual(len(data), previous_position)
+
+    # See if we can read all the data with this split configuration.
+    self.CheckAllDataRead(data, blob_readers)
+
+  def TestAllSplits(self, data):
+    """Test every split point by creating 2 splits, 0-m and m-n."""
+    blob_key = "blob_key"
+    self.blobstore.CreateBlob(blob_key, data)
+    data_len = len(data)
+    cls = input_readers.BlobstoreLineInputReader
+    for i in range(data_len):
+      chunks = []
+      chunks.append(cls.from_json({
+          cls.BLOB_KEY_PARAM: blob_key,
+          cls.INITIAL_POSITION_PARAM: 0,
+          cls.END_POSITION_PARAM: i+1}))
+      chunks.append(cls.from_json({
+          cls.BLOB_KEY_PARAM: blob_key,
+          cls.INITIAL_POSITION_PARAM: i+1,
+          cls.END_POSITION_PARAM: data_len}))
+      self.CheckAllDataRead(data, chunks)
+
+  def testEndToEnd(self):
+    """End to end test of some data--split and read.."""
+    # This particular pattern once caused bugs with 8 shards.
+    data = "20-questions\r\n20q\r\na\r\n"
+    self.EndToEndTest(data, 8)
+    self.EndToEndTest(data, 1)
+    self.EndToEndTest(data, 16)
+    self.EndToEndTest(data, 7)
+
+  def testEndToEndNoData(self):
+    """End to end test of some data--split and read.."""
+    data = ""
+    self.EndToEndTest(data, 8)
+
+  def testEverySplit(self):
+    """Test some data with every possible split point."""
+    self.TestAllSplits("20-questions\r\n20q\r\na\r\n")
+    self.TestAllSplits("a\nbb\nccc\ndddd\n")
+    self.TestAllSplits("aaaa\nbbb\ncc\nd\n")
+
+  def testEverySplitNoTrailingNewLine(self):
+    """Test some data with every possible split point."""
+    self.TestAllSplits("20-questions\r\n20q\r\na")
+    self.TestAllSplits("a\nbb\nccc\ndddd")
+    self.TestAllSplits("aaaa\nbbb\ncc\nd")
+
+
 class MockBlobInfo(object):
   def __init__(self, size):
     self.size = size
@@ -769,15 +891,11 @@ class BlobstoreLineInputReaderTest(unittest.TestCase):
     self.appid = "testapp"
     os.environ["APPLICATION_ID"] = self.appid
     self.mox = mox.Mox()
-    self.original_fetch_data = blobstore_internal.fetch_data
-
-    self.mox.StubOutWithMock(blobstore, "BlobKey", use_mock_anything=True)
-    self.mox.StubOutWithMock(blobstore.BlobInfo, "get", use_mock_anything=True)
+    self.mock_out_blob_info_size_called = False
 
   def tearDown(self):
     self.mox.UnsetStubs()
     self.mox.ResetAll()
-    blobstore_internal.fetch_data = self.original_fetch_data
 
   def initMockedBlobstoreLineReader(self,
                                     initial_position,
@@ -792,7 +910,7 @@ class BlobstoreLineInputReaderTest(unittest.TestCase):
 
     def fetch_data(blob_key, start, end):
       return data[start:end + 1]
-    blobstore_internal.fetch_data = fetch_data
+    self.mox.stubs.Set(blobstore_internal, "fetch_data", fetch_data)
 
     r = input_readers.BlobstoreLineInputReader(blob_key_str,
                                                initial_position,
@@ -853,12 +971,15 @@ class BlobstoreLineInputReaderTest(unittest.TestCase):
     self.assertDone(blob_reader)
 
   def mockOutBlobInfoSize(self, size, blob_key_str="foo"):
+    if not self.mock_out_blob_info_size_called:
+      self.mock_out_blob_info_size_called = True
+      self.mox.StubOutWithMock(blobstore, "BlobKey", use_mock_anything=True)
+      self.mox.StubOutWithMock(blobstore.BlobInfo, "get",
+                               use_mock_anything=True)
+
     blob_key = "bar" + blob_key_str
     blobstore.BlobKey(blob_key_str).AndReturn(blob_key)
     blobstore.BlobInfo.get(blob_key).AndReturn(MockBlobInfo(size))
-
-  BLOBSTORE_READER_NAME = (
-      "mapreduce.input_readers.BlobstoreLineInputReader")
 
   def testSplitInput(self):
     # TODO(user): Mock out equiv
@@ -866,7 +987,7 @@ class BlobstoreLineInputReaderTest(unittest.TestCase):
     self.mox.ReplayAll()
     mapper_spec = model.MapperSpec.from_json({
         "mapper_handler_spec": "FooHandler",
-        "mapper_input_reader": self.BLOBSTORE_READER_NAME,
+        "mapper_input_reader": BLOBSTORE_READER_NAME,
         "mapper_params": {"blob_keys": ["foo"]},
         "mapper_shard_count": 1})
     blob_readers = input_readers.BlobstoreLineInputReader.split_input(
@@ -884,7 +1005,7 @@ class BlobstoreLineInputReaderTest(unittest.TestCase):
     self.mox.ReplayAll()
     mapper_spec = model.MapperSpec.from_json({
         "mapper_handler_spec": "FooHandler",
-        "mapper_input_reader": self.BLOBSTORE_READER_NAME,
+        "mapper_input_reader": BLOBSTORE_READER_NAME,
         "mapper_params": {"blob_keys": ["foo%d" % i for i in range(5)]},
         "mapper_shard_count": 2})
     blob_readers = input_readers.BlobstoreLineInputReader.split_input(
@@ -903,7 +1024,7 @@ class BlobstoreLineInputReaderTest(unittest.TestCase):
     self.mox.ReplayAll()
     mapper_spec = model.MapperSpec.from_json({
         "mapper_handler_spec": "FooHandler",
-        "mapper_input_reader": self.BLOBSTORE_READER_NAME,
+        "mapper_input_reader": BLOBSTORE_READER_NAME,
         "mapper_params": {"blob_keys": ["foo"]},
         "mapper_shard_count": 2})
     blob_readers = input_readers.BlobstoreLineInputReader.split_input(
@@ -924,7 +1045,7 @@ class BlobstoreLineInputReaderTest(unittest.TestCase):
     self.mox.ReplayAll()
     mapper_spec = model.MapperSpec.from_json({
         "mapper_handler_spec": "FooHandler",
-        "mapper_input_reader": self.BLOBSTORE_READER_NAME,
+        "mapper_input_reader": BLOBSTORE_READER_NAME,
         "mapper_params": {"blob_keys": ["foo"]},
         "mapper_shard_count": 2})
     blob_readers = input_readers.BlobstoreLineInputReader.split_input(
@@ -940,7 +1061,7 @@ class BlobstoreLineInputReaderTest(unittest.TestCase):
     """Tests when there are too many blobkeys present as input."""
     mapper_spec = model.MapperSpec.from_json({
         "mapper_handler_spec": "FooHandler",
-        "mapper_input_reader": self.BLOBSTORE_READER_NAME,
+        "mapper_input_reader": BLOBSTORE_READER_NAME,
         "mapper_params": {"blob_keys": ["foo"] * 1000},
         "mapper_shard_count": 2})
     self.assertRaises(input_readers.BadReaderParamsError,
@@ -951,7 +1072,7 @@ class BlobstoreLineInputReaderTest(unittest.TestCase):
     """Tests when there are no blobkeys present as input."""
     mapper_spec = model.MapperSpec.from_json({
         "mapper_handler_spec": "FooHandler",
-        "mapper_input_reader": self.BLOBSTORE_READER_NAME,
+        "mapper_input_reader": BLOBSTORE_READER_NAME,
         "mapper_params": {"blob_keys": []},
         "mapper_shard_count": 2})
     self.assertRaises(input_readers.BadReaderParamsError,
@@ -962,7 +1083,7 @@ class BlobstoreLineInputReaderTest(unittest.TestCase):
     """Tests when there a blobkeys in the input is invalid."""
     mapper_spec = model.MapperSpec.from_json({
         "mapper_handler_spec": "FooHandler",
-        "mapper_input_reader": self.BLOBSTORE_READER_NAME,
+        "mapper_input_reader": BLOBSTORE_READER_NAME,
         "mapper_params": {"blob_keys": ["foo", "nosuchblob"]},
         "mapper_shard_count": 2})
     self.mockOutBlobInfoSize(100, blob_key_str="foo")
