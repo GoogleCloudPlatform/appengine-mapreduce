@@ -29,12 +29,12 @@ class ShuffleEnums(ProtocolBuffer.ProtocolMessage):
 
   CSV_INPUT    =    0
   SSTABLE_KEY_VALUE_PROTO_INPUT =    1
-  RECORD_INPUT =    2
+  RECORDS_KEY_VALUE_PROTO_INPUT =    2
 
   _InputFormat_NAMES = {
     0: "CSV_INPUT",
     1: "SSTABLE_KEY_VALUE_PROTO_INPUT",
-    2: "RECORD_INPUT",
+    2: "RECORDS_KEY_VALUE_PROTO_INPUT",
   }
 
   def InputFormat_Name(cls, x): return cls._InputFormat_NAMES.get(x, "")
@@ -44,12 +44,12 @@ class ShuffleEnums(ProtocolBuffer.ProtocolMessage):
 
   CSV_OUTPUT   =    0
   SSTABLE_MULTI_VALUE_PROTO_OUTPUT =    1
-  RECORD_OUTPUT =    2
+  RECORDS_KEY_MULTI_VALUE_PROTO_OUTPUT =    2
 
   _OutputFormat_NAMES = {
     0: "CSV_OUTPUT",
     1: "SSTABLE_MULTI_VALUE_PROTO_OUTPUT",
-    2: "RECORD_OUTPUT",
+    2: "RECORDS_KEY_MULTI_VALUE_PROTO_OUTPUT",
   }
 
   def OutputFormat_Name(cls, x): return cls._OutputFormat_NAMES.get(x, "")
