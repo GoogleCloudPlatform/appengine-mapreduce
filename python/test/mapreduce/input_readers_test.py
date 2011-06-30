@@ -659,10 +659,10 @@ class DatastoreInputReaderTest(unittest.TestCase):
     stringified = [str(s[0]) for s in splits]
     self.assertEquals(
         ["ASC(None to "
-         "datastore_types.Key.from_path(u'TestEntity', 2, _app=u'testapp')"
+         "datastore_types.Key.from_path(u'TestEntity', 2L, _app=u'testapp')"
          ")",
          "ASC["
-         "datastore_types.Key.from_path(u'TestEntity', 2, _app=u'testapp')"
+         "datastore_types.Key.from_path(u'TestEntity', 2L, _app=u'testapp')"
          " to None)"],
         stringified)
 
