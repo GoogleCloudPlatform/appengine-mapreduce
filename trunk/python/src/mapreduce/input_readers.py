@@ -687,7 +687,7 @@ class BlobstoreLineInputReader(InputReader):
       self._read_before_start = False
     start_position = self._blob_reader.tell()
 
-    if start_position >= self._end_position:
+    if start_position > self._end_position:
       raise StopIteration()
 
     line = self._blob_reader.readline()
