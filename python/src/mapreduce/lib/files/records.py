@@ -84,7 +84,7 @@ C will be stored as a FULL record in the fourth block.
 import struct
 
 import google
-from crc32c import crc32c
+from mapreduce.lib.files import crc32c
 
 
 
