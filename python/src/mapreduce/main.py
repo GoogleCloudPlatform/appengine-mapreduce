@@ -28,11 +28,15 @@ This module should be specified as a handler for mapreduce URLs in app.yaml:
 
 import wsgiref.handlers
 
-from mapreduce.lib import pipeline
 from google.appengine.ext import webapp
 from mapreduce import handlers
 from mapreduce import status
 from google.appengine.ext.webapp import util
+
+try:
+  from mapreduce.lib import pipeline
+except ImportError:
+  pipeline = None
 
 
 STATIC_RE = r".*/([^/]*\.(?:css|js)|status|detail)$"
@@ -55,7 +59,12 @@ def create_handlers_map():
   Returns:
     list of (regexp, handler) pairs for WSGIApplication constructor.
   """
-  return pipeline.create_handlers_map(prefix=".*/pipeline") + [
+  pipeline_handlers_map = []
+
+  if pipeline:
+    pipeline_handlers_map = pipeline.create_handlers_map(prefix=".*/pipeline")
+
+  return pipeline_handlers_map + [
       # Task queue handlers.
       (r".*/worker_callback", handlers.MapperWorkerCallbackHandler),
       (r".*/controller_callback", handlers.ControllerCallbackHandler),
