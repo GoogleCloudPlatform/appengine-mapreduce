@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2010 Google Inc.
+# Copyright 2011 Google Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,53 +14,162 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""."""
+""" This is a sample application that tests the MapReduce API.
 
+It does so by allowing users to upload a zip file containing plaintext files
+and perform some kind of analysis upon it. Currently three types of MapReduce
+jobs can be run over user-supplied input data: a WordCount MR that reports the
+number of occurrences of each word, an Index MR that reports which file(s) each
+word in the input corpus comes from, and a Phrase MR that finds statistically
+improbably phrases for a given input file (this requires many input files in the
+zip file to attain higher accuracies)."""
 
+__author__ = """aizatsky@google.com (Mike Aizatsky), cbunch@google.com (Chris
+Bunch)"""
 
+import datetime
 import logging
 import re
+import urllib
 
 from google.appengine.ext import blobstore
 from google.appengine.ext import db
 from google.appengine.ext import webapp
+
 from google.appengine.ext.webapp import blobstore_handlers
 from google.appengine.ext.webapp import util
+from google.appengine.ext.webapp import template
+
+from mapreduce.lib import files
 from google.appengine.api import taskqueue
+from google.appengine.api import users
+
 from mapreduce import base_handler
 from mapreduce import mapreduce_pipeline
 from mapreduce import operation as op
 from mapreduce import shuffler
 
 
+class FileMetadata(db.Model):
+  """A helper class that will hold metadata for the user's blobs.
+
+  Specifially, we want to keep track of who uploaded it, where they uploaded it
+  from (right now they can only upload from their computer, but in the future
+  urlfetch would be nice to add), and links to the results of their MR jobs. To
+  enable our querying to scan over our input data, we store keys in the form
+  'user/date/blob_key', where 'user' is the given user's e-mail address, 'date'
+  is the date and time that they uploaded the item on, and 'blob_key'
+  indicates the location in the Blobstore that the item can be found at. '/'
+  is not the actual separator between these values - we use '..' since it is
+  an illegal set of characters for an e-mail address to contain.
+  """
+
+  __SEP = ".."
+  __NEXT = "./"
+
+  owner = db.UserProperty()
+  filename = db.StringProperty()
+  uploadedOn = db.DateTimeProperty()
+  source = db.StringProperty()
+  blobkey = db.StringProperty()
+  wordcount_link = db.StringProperty()
+  index_link = db.StringProperty()
+  phrases_link = db.StringProperty()
+
+  @staticmethod
+  def getFirstKeyForUser(username):
+    """Helper function that returns the first possible key a user could own.
+
+    This is useful for table scanning, in conjunction with getLastKeyForUser.
+
+    Args:
+      username: The given user's e-mail address.
+    Returns:
+      The internal key representing the earliest possible key that a user could
+      own (although the value of this key is not able to be used for actual
+      user data).
+    """
+
+    return db.Key.from_path("FileMetadata", username + FileMetadata.__SEP)
+
+  @staticmethod
+  def getLastKeyForUser(username):
+    """Helper function that returns the last possible key a user could own.
+
+    This is useful for table scanning, in conjunction with getFirstKeyForUser.
+
+    Args:
+      username: The given user's e-mail address.
+    Returns:
+      The internal key representing the last possible key that a user could
+      own (although the value of this key is not able to be used for actual
+      user data).
+    """
+
+    return db.Key.from_path("FileMetadata", username + FileMetadata.__NEXT)
+
+  @staticmethod
+  def getKeyName(username, date, blob_key):
+    """Returns the internal key for a particular item in the database.
+
+    Our items are stored with keys of the form 'user/date/blob_key' ('/' is
+    not the real separator, but __SEP is).
+
+    Args:
+      username: The given user's e-mail address.
+      date: A datetime object representing the date and time that an input
+        file was uploaded to this app.
+      blob_key: The blob key corresponding to the location of the input file
+        in the Blobstore.
+    Returns:
+      The internal key for the item specified by (username, date, blob_key).
+    """
+
+    sep = FileMetadata.__SEP
+    return str(username + sep + str(date) + sep + blob_key)
+
+
 class IndexHandler(webapp.RequestHandler):
+  """The main page that users will interact with, which presents users with
+  the ability to upload new data or run MapReduce jobs on their existing data.
+  """
+
   def get(self):
-    self.response.out.write(
-        """<form action="/" method="post">
-           Blob Key: <input type="text" name="blobkey"></br>
-           <input type="submit" name="word_count" value="Word Count">
-           <input type="submit" name="index" value="Index">
-           <input type="submit" name="phrases" value="Phrases">
-           </form>
-           <br/>
-           <a href="/upload">Upload Blob</a><br/>
-           <form action="/download" method="get">
-           <input type="text" name="blobkey">
-           <input type="submit" value="Download Blob">
-           </form>
-        """)
+    user = users.get_current_user()
+    username = user.nickname()
+
+    first = FileMetadata.getFirstKeyForUser(username)
+    last = FileMetadata.getLastKeyForUser(username)
+
+    q = FileMetadata.all()
+    q.filter("__key__ >", first)
+    q.filter("__key__ < ", last)
+    results = q.fetch(10)
+
+    items = [result for result in results]
+    length = len(items)
+
+    upload_url = blobstore.create_upload_url("/upload")
+
+    self.response.out.write(template.render("templates/index.html",
+                                            {"username" : username,
+                                             "items" : items,
+                                             "length" : length,
+                                             "upload_url" : upload_url}))
 
   def post(self):
-    blob_key = self.request.get("blobkey").strip()
+    filekey = self.request.get("filekey")
+    blob_key = self.request.get("blobkey")
 
     if self.request.get("word_count"):
-      pipeline = WordCountPipeline(blob_key)
+      pipeline = WordCountPipeline(filekey, blob_key)
     elif self.request.get("index"):
-      pipeline = IndexPipeline(blob_key)
+      pipeline = IndexPipeline(filekey, blob_key)
     else:
-      pipeline = PhrasesPipeline(blob_key)
+      pipeline = PhrasesPipeline(filekey, blob_key)
+
     pipeline.start()
-    self.redirect(pipeline.base_path + '/status?root=' + pipeline.pipeline_id)
+    self.redirect(pipeline.base_path + "/status?root=" + pipeline.pipeline_id)
 
 
 def split_into_sentences(s):
@@ -142,7 +251,6 @@ def phrases_reduce(key, values):
     if count > threshold:
       yield "%s:%s\n" % (words, filename)
 
-
 class WordCountPipeline(base_handler.PipelineBase):
   """A pipeline to run Word count demo.
 
@@ -151,20 +259,22 @@ class WordCountPipeline(base_handler.PipelineBase):
       text files inside.
   """
 
-  def run(self, blobkey):
-    yield mapreduce_pipeline.MapreducePipeline(
+  def run(self, filekey, blobkey):
+    logging.debug("filename is %s" % filekey)
+    output = yield mapreduce_pipeline.MapreducePipeline(
         "word_count",
         "main.word_count_map",
         "main.word_count_reduce",
         "mapreduce.input_readers.BlobstoreZipInputReader",
         "mapreduce.output_writers.BlobstoreOutputWriter",
         mapper_params={
-            'blob_key': blobkey,
+            "blob_key": blobkey,
         },
         reducer_params={
-            'mime_type': 'text/plain',
+            "mime_type": "text/plain",
         },
         shards=16)
+    yield StoreOutput("WordCount", filekey, output)
 
 
 class IndexPipeline(base_handler.PipelineBase):
@@ -176,21 +286,21 @@ class IndexPipeline(base_handler.PipelineBase):
   """
 
 
-  def run(self, blobkey):
-    yield mapreduce_pipeline.MapreducePipeline(
+  def run(self, filekey, blobkey):
+    output = yield mapreduce_pipeline.MapreducePipeline(
         "index",
         "main.index_map",
         "main.index_reduce",
         "mapreduce.input_readers.BlobstoreZipInputReader",
         "mapreduce.output_writers.BlobstoreOutputWriter",
         mapper_params={
-            'blob_key': blobkey,
+            "blob_key": blobkey,
         },
         reducer_params={
-            'mime_type': 'text/plain',
+            "mime_type": "text/plain",
         },
         shards=16)
-
+    yield StoreOutput("Index", filekey, output)
 
 
 class PhrasesPipeline(base_handler.PipelineBase):
@@ -201,47 +311,80 @@ class PhrasesPipeline(base_handler.PipelineBase):
       text files inside.
   """
 
-  def run(self, blobkey):
-    yield mapreduce_pipeline.MapreducePipeline(
+  def run(self, filekey, blobkey):
+    output = yield mapreduce_pipeline.MapreducePipeline(
         "phrases",
         "main.phrases_map",
         "main.phrases_reduce",
         "mapreduce.input_readers.BlobstoreZipInputReader",
         "mapreduce.output_writers.BlobstoreOutputWriter",
         mapper_params={
-            'blob_key': blobkey,
+            "blob_key": blobkey,
         },
         reducer_params={
-            'mime_type': 'text/plain',
+            "mime_type": "text/plain",
         },
         shards=16)
+    yield StoreOutput("Phrases", filekey, output)
 
+
+class StoreOutput(base_handler.PipelineBase):
+  """A pipeline to store the result of the MapReduce job in the database.
+
+  Args:
+    mr_type: the type of mapreduce job run (e.g., WordCount, Index)
+    encoded_key: the DB key corresponding to the metadata of this job
+    output: the blobstore location where the output of the job is stored
+  """
+
+  def run(self, mr_type, encoded_key, output):
+    logging.debug("output is %s" % str(output))
+    key = db.Key(encoded=encoded_key)
+    m = FileMetadata.get(key)
+
+    if mr_type == "WordCount":
+      m.wordcount_link = output[0]
+    elif mr_type == "Index":
+      m.index_link = output[0]
+    elif mr_type == "Phrases":
+      m.phrases_link = output[0]
+
+    m.put()
 
 class UploadHandler(blobstore_handlers.BlobstoreUploadHandler):
   """Handler to upload data to blobstore."""
 
-  def get(self):
-    upload_url = blobstore.create_upload_url('/upload')
-    self.response.out.write('<html><body>')
-    self.response.out.write(
-        '<form action="%s" method="POST" enctype="multipart/form-data">' % 
-        upload_url)
-    self.response.out.write(
-        "Upload File: <input type='file' name='file'><br>"
-        "<input type='submit' name='submit' value='Upload'>"
-        "</form></body></html>")
-
   def post(self):
-    upload_files = self.get_uploads('file')
-    blob_info = upload_files[0]
-    self.redirect('/')
+    source = "uploaded by user"
+    upload_files = self.get_uploads("file")
+    blob_key = upload_files[0].key()
+    name = self.request.get("name")
+
+    user = users.get_current_user()
+
+    username = user.nickname()
+    date = datetime.datetime.now()
+    str_blob_key = str(blob_key)
+    key = FileMetadata.getKeyName(username, date, str_blob_key)
+
+    m = FileMetadata(key_name = key)
+    m.owner = user
+    m.filename = name
+    m.uploadedOn = date
+    m.source = source
+    m.blobkey = str_blob_key
+    m.put()
+
+    self.redirect("/")
 
 
 class DownloadHandler(blobstore_handlers.BlobstoreDownloadHandler):
   """Handler to download blob by blobkey."""
 
-  def get(self):
-    blob_info = blobstore.BlobInfo.get(self.request.get("blobkey").strip())
+  def get(self, key):
+    key = str(urllib.unquote(key)).strip()
+    logging.debug("key is %s" % key)
+    blob_info = blobstore.BlobInfo.get(key)
     self.send_blob(blob_info)
 
 
@@ -249,7 +392,7 @@ APP = webapp.WSGIApplication(
     [
         ('/', IndexHandler),
         ('/upload', UploadHandler),
-        ('/download', DownloadHandler),
+        (r'/blobstore/(.*)', DownloadHandler),
     ],
     debug=True)
 
