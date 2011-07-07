@@ -243,7 +243,7 @@ class Mox(object):
     self._mock_objects = []
     self.stubs = stubout.StubOutForTesting()
 
-  def CreateMock(self, class_to_mock, attrs={}):
+  def CreateMock(self, class_to_mock, attrs=None):
     """Create a new mock object.
 
     Args:
@@ -255,6 +255,8 @@ class Mox(object):
     Returns:
       MockObject that can be used as the class_to_mock would be.
     """
+    if attrs is None:
+      attrs = {}
     new_mock = MockObject(class_to_mock, attrs=attrs)
     self._mock_objects.append(new_mock)
     return new_mock
@@ -446,6 +448,8 @@ class MockAnything:
     Returns:
       A new MockMethod aware of MockAnything's state (record or replay).
     """
+    if method_name == '__dir__':
+        return self.__class__.__dir__.__get__(self, self.__class__)
 
     return self._CreateMockMethod(method_name)
 
@@ -519,7 +523,7 @@ class MockAnything:
 class MockObject(MockAnything, object):
   """A mock object that simulates the public/protected interface of a class."""
 
-  def __init__(self, class_to_mock, attrs={}):
+  def __init__(self, class_to_mock, attrs=None):
     """Initialize a mock object.
 
     This determines the methods and properties of the class and stores them.
@@ -534,6 +538,8 @@ class MockObject(MockAnything, object):
       PrivateAttributeError: if a supplied attribute is not public.
       ValueError: if an attribute would mask an existing method.
     """
+    if attrs is None:
+      attrs = {}
 
     # This is used to hack around the mixin/inheritance of MockAnything, which
     # is not a proper object (it can be anything. :-)
@@ -907,7 +913,17 @@ class MethodSignatureChecker(object):
 
         # Check if the param is an instance of the expected class,
         # or check equality (useful for checking Comparators).
-        if isinstance(params[0], expected) or params[0] == expected:
+
+        # This is a hack to work around the fact that the first
+        # parameter can be a Comparator, and the comparison may raise
+        # an exception during this comparison, which is OK.
+        try:
+          param_equality = (params[0] == expected)
+        except:
+          param_equality = False;
+
+
+        if isinstance(params[0], expected) or param_equality:
           params = params[1:]
         # If the IsA() comparator is being used, we need to check the
         # inverse of the usual case - that the given instance is a subclass
@@ -1245,10 +1261,7 @@ class Comparator:
     raise NotImplementedError, 'method must be implemented by a subclass.'
 
   def __eq__(self, rhs):
-    try:
-      return self.equals(rhs)
-    except Exception:
-      return False
+    return self.equals(rhs)
 
   def __ne__(self, rhs):
     return not self.equals(rhs)
@@ -1758,6 +1771,61 @@ class IgnoreArg(Comparator):
 
   def __repr__(self):
     return '<IgnoreArg>'
+
+
+class Value(Comparator):
+  """Compares argument against a remembered value.
+
+  To be used in conjunction with Remember comparator.  See Remember()
+  for example.
+  """
+
+  def __init__(self):
+    self._value = None
+    self._has_value = False
+
+  def store_value(self, rhs):
+    self._value = rhs
+    self._has_value = True
+
+  def equals(self, rhs):
+    if not self._has_value:
+      return False
+    else:
+      return rhs == self._value
+
+  def __repr__(self):
+    if self._has_value:
+      return "<Value %r>" % self._value
+    else:
+      return "<Value>"
+
+
+class Remember(Comparator):
+  """Remembers the argument to a value store.
+
+  To be used in conjunction with Value comparator.
+
+  Example:
+  # Remember the argument for one method call.
+  users_list = Value()
+  mock_dao.ProcessUsers(Remember(users_list))
+
+  # Check argument against remembered value.
+  mock_dao.ReportUsers(users_list)
+  """
+
+  def __init__(self, value_store):
+    if not isinstance(value_store, Value):
+      raise TypeError("value_store is not an instance of the Value class")
+    self._value_store = value_store
+
+  def equals(self, rhs):
+    self._value_store.store_value(rhs)
+    return True
+
+  def __repr__(self):
+    return "<Remember %d>" % id(self._value_store)
 
 
 class MethodGroup(object):
