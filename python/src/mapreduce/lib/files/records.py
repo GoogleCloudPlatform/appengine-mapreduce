@@ -32,7 +32,7 @@ exception is that the tail of the file may contain a partial block.
 Each block consists of a sequence of records:
    block := record* trailer?
    record :=
-      checksum: uint32  // crc32c of type and data[]
+      checksum: uint32  // masked crc32c of type and data[]
       length: uint16
       type: uint8       // One of FULL, FIRST, MIDDLE, LAST
       data: uint8[length]
@@ -162,6 +162,31 @@ class FileReader(object):
     raise NotImplementedError()
 
 
+_CRC_MASK_DELTA = 0xa282ead8
+
+def _mask_crc(crc):
+  """Mask crc.
+
+  Args:
+    crc: integer crc.
+  Returns:
+    masked integer crc.
+  """
+  return (((crc >> 15) | (crc << 17)) + _CRC_MASK_DELTA) & 0xFFFFFFFFL
+
+
+def _unmask_crc(masked_crc):
+  """Unmask crc.
+
+  Args:
+    masked_crc: masked integer crc.
+  Retruns:
+    orignal crc.
+  """
+  rot = (masked_crc - _CRC_MASK_DELTA) & 0xFFFFFFFFL
+  return ((rot >> 17) | (rot << 15)) & 0xFFFFFFFFL
+
+
 class RecordsWriter(object):
   """A writer for records format.
 
@@ -173,7 +198,7 @@ class RecordsWriter(object):
   RecordsWriter will pad last block with 0 when exiting with statement scope.
   """
 
-  def __init__(self, writer):
+  def __init__(self, writer, _pad_last_block=True):
     """Constructor.
 
     Args:
@@ -182,6 +207,7 @@ class RecordsWriter(object):
     self.__writer = writer
     self.__position = 0
     self.__entered = False
+    self.__pad_last_block = _pad_last_block
 
   def __write_record(self, record_type, data):
     """Write single physical record."""
@@ -191,7 +217,8 @@ class RecordsWriter(object):
     crc = crc32c.crc_update(crc, data)
     crc = crc32c.crc_finalize(crc)
 
-    self.__writer.write(struct.pack(HEADER_FORMAT, crc, length, record_type))
+    self.__writer.write(
+        struct.pack(HEADER_FORMAT, _mask_crc(crc), length, record_type))
     self.__writer.write(data)
     self.__position += HEADER_LENGTH + length
 
@@ -236,9 +263,10 @@ class RecordsWriter(object):
     self.close()
 
   def close(self):
-    pad_length = BLOCK_SIZE - self.__position % BLOCK_SIZE
-    if pad_length and pad_length != BLOCK_SIZE:
-      self.__writer.write('\x00' * pad_length)
+    if self.__pad_last_block:
+      pad_length = BLOCK_SIZE - self.__position % BLOCK_SIZE
+      if pad_length and pad_length != BLOCK_SIZE:
+        self.__writer.write('\x00' * pad_length)
 
 
 class RecordsReader(object):
@@ -265,7 +293,8 @@ class RecordsReader(object):
       raise EOFError('Read %s bytes instead of %s' %
                      (len(header), HEADER_LENGTH))
 
-    (crc, length, record_type) = struct.unpack(HEADER_FORMAT, header)
+    (masked_crc, length, record_type) = struct.unpack(HEADER_FORMAT, header)
+    crc = _unmask_crc(masked_crc)
 
     if length + HEADER_LENGTH > block_remaining:
 

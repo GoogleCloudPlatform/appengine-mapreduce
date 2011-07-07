@@ -2,7 +2,7 @@
 #
 # Copyright 2009 Google Inc. All Rights Reserved.
 
-"""Implementation of CRC-32C checksumming.
+"""Implementation of CRC-32C checksumming as in rfc3720 section B.4.
 
 See http://en.wikipedia.org/wiki/Cyclic_redundancy_check for details on CRC-32C.
 
@@ -86,7 +86,9 @@ CRC_TABLE = (
 
 
 # initial CRC value
-CRC_INIT = 0xffffffffL
+CRC_INIT = 0
+
+_MASK = 0xFFFFFFFFL
 
 
 def crc_update(crc, data):
@@ -105,10 +107,11 @@ def crc_update(crc, data):
   else:
     buf = data
 
+  crc = crc ^ _MASK
   for b in buf:
     table_index = (crc ^ b) & 0xff
-    crc = (CRC_TABLE[table_index] ^ (crc >> 8)) & 0xffffffffL
-  return crc & 0xffffffffL
+    crc = (CRC_TABLE[table_index] ^ (crc >> 8)) & _MASK
+  return crc ^ _MASK
 
 
 def crc_finalize(crc):
@@ -122,7 +125,7 @@ def crc_finalize(crc):
   Returns:
     finalized 32-bit checksum as long
   """
-  return crc ^ 0xffffffffL
+  return crc & _MASK
 
 
 def crc(data):
