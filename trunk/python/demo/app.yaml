@@ -1,12 +1,22 @@
-application: mapreduce-demo
+application: mapreduce-made-easy
 version: 1
 runtime: python
 api_version: 1
 
 handlers:
+- url: /favicon.ico
+  static_dir: static/images
+
+- url: /mapreduce/pipeline/images
+  static_dir: mapreduce/lib/pipeline/ui/images
+
+- url: /static/js/custom.js
+  static_files: static/js/custom.js
+  upload: static/js/custom.js
+
 - url: /mapreduce(/.*)?
   script: mapreduce/main.py
-  login: admin
 
 - url: .*
   script: main.py
+  login: required
