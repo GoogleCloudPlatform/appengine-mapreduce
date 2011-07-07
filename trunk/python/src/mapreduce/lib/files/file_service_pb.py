@@ -50,7 +50,6 @@ class FileServiceErrors(ProtocolBuffer.ProtocolMessage):
   READ_ONLY    =  103
   EXCLUSIVE_LOCK_FAILED =  104
   SEQUENCE_KEY_OUT_OF_ORDER =  300
-  WRONG_KEY_ORDER =  400
   OUT_OF_BOUNDS =  500
   GLOBS_NOT_SUPPORTED =  600
   FILE_NAME_NOT_SPECIFIED =  701
@@ -84,7 +83,6 @@ class FileServiceErrors(ProtocolBuffer.ProtocolMessage):
     103: "READ_ONLY",
     104: "EXCLUSIVE_LOCK_FAILED",
     300: "SEQUENCE_KEY_OUT_OF_ORDER",
-    400: "WRONG_KEY_ORDER",
     500: "OUT_OF_BOUNDS",
     600: "GLOBS_NOT_SUPPORTED",
     701: "FILE_NAME_NOT_SPECIFIED",
@@ -449,12 +447,12 @@ class FileContentType(ProtocolBuffer.ProtocolMessage):
 
 
   RAW          =    0
-  ORDERED_KEY_VALUE =    2
+  DEPRECATED_1 =    2
   INVALID_TYPE =  127
 
   _ContentType_NAMES = {
     0: "RAW",
-    2: "ORDERED_KEY_VALUE",
+    2: "DEPRECATED_1",
     127: "INVALID_TYPE",
   }
 
@@ -2364,247 +2362,6 @@ class AppendResponse(ProtocolBuffer.ProtocolMessage):
 
   _STYLE = """"""
   _STYLE_CONTENT_TYPE = """"""
-class AppendKeyValueRequest(ProtocolBuffer.ProtocolMessage):
-  has_filename_ = 0
-  filename_ = ""
-  has_key_ = 0
-  key_ = ""
-  has_value_ = 0
-  value_ = ""
-
-  def __init__(self, contents=None):
-    if contents is not None: self.MergeFromString(contents)
-
-  def filename(self): return self.filename_
-
-  def set_filename(self, x):
-    self.has_filename_ = 1
-    self.filename_ = x
-
-  def clear_filename(self):
-    if self.has_filename_:
-      self.has_filename_ = 0
-      self.filename_ = ""
-
-  def has_filename(self): return self.has_filename_
-
-  def key(self): return self.key_
-
-  def set_key(self, x):
-    self.has_key_ = 1
-    self.key_ = x
-
-  def clear_key(self):
-    if self.has_key_:
-      self.has_key_ = 0
-      self.key_ = ""
-
-  def has_key(self): return self.has_key_
-
-  def value(self): return self.value_
-
-  def set_value(self, x):
-    self.has_value_ = 1
-    self.value_ = x
-
-  def clear_value(self):
-    if self.has_value_:
-      self.has_value_ = 0
-      self.value_ = ""
-
-  def has_value(self): return self.has_value_
-
-
-  def MergeFrom(self, x):
-    assert x is not self
-    if (x.has_filename()): self.set_filename(x.filename())
-    if (x.has_key()): self.set_key(x.key())
-    if (x.has_value()): self.set_value(x.value())
-
-  def Equals(self, x):
-    if x is self: return 1
-    if self.has_filename_ != x.has_filename_: return 0
-    if self.has_filename_ and self.filename_ != x.filename_: return 0
-    if self.has_key_ != x.has_key_: return 0
-    if self.has_key_ and self.key_ != x.key_: return 0
-    if self.has_value_ != x.has_value_: return 0
-    if self.has_value_ and self.value_ != x.value_: return 0
-    return 1
-
-  def IsInitialized(self, debug_strs=None):
-    initialized = 1
-    if (not self.has_filename_):
-      initialized = 0
-      if debug_strs is not None:
-        debug_strs.append('Required field: filename not set.')
-    if (not self.has_key_):
-      initialized = 0
-      if debug_strs is not None:
-        debug_strs.append('Required field: key not set.')
-    if (not self.has_value_):
-      initialized = 0
-      if debug_strs is not None:
-        debug_strs.append('Required field: value not set.')
-    return initialized
-
-  def ByteSize(self):
-    n = 0
-    n += self.lengthString(len(self.filename_))
-    n += self.lengthString(len(self.key_))
-    n += self.lengthString(len(self.value_))
-    return n + 3
-
-  def ByteSizePartial(self):
-    n = 0
-    if (self.has_filename_):
-      n += 1
-      n += self.lengthString(len(self.filename_))
-    if (self.has_key_):
-      n += 1
-      n += self.lengthString(len(self.key_))
-    if (self.has_value_):
-      n += 1
-      n += self.lengthString(len(self.value_))
-    return n
-
-  def Clear(self):
-    self.clear_filename()
-    self.clear_key()
-    self.clear_value()
-
-  def OutputUnchecked(self, out):
-    out.putVarInt32(10)
-    out.putPrefixedString(self.filename_)
-    out.putVarInt32(18)
-    out.putPrefixedString(self.key_)
-    out.putVarInt32(26)
-    out.putPrefixedString(self.value_)
-
-  def OutputPartial(self, out):
-    if (self.has_filename_):
-      out.putVarInt32(10)
-      out.putPrefixedString(self.filename_)
-    if (self.has_key_):
-      out.putVarInt32(18)
-      out.putPrefixedString(self.key_)
-    if (self.has_value_):
-      out.putVarInt32(26)
-      out.putPrefixedString(self.value_)
-
-  def TryMerge(self, d):
-    while d.avail() > 0:
-      tt = d.getVarInt32()
-      if tt == 10:
-        self.set_filename(d.getPrefixedString())
-        continue
-      if tt == 18:
-        self.set_key(d.getPrefixedString())
-        continue
-      if tt == 26:
-        self.set_value(d.getPrefixedString())
-        continue
-
-
-      if (tt == 0): raise ProtocolBuffer.ProtocolBufferDecodeError
-      d.skipData(tt)
-
-
-  def __str__(self, prefix="", printElemNumber=0):
-    res=""
-    if self.has_filename_: res+=prefix+("filename: %s\n" % self.DebugFormatString(self.filename_))
-    if self.has_key_: res+=prefix+("key: %s\n" % self.DebugFormatString(self.key_))
-    if self.has_value_: res+=prefix+("value: %s\n" % self.DebugFormatString(self.value_))
-    return res
-
-
-  def _BuildTagLookupTable(sparse, maxtag, default=None):
-    return tuple([sparse.get(i, default) for i in xrange(0, 1+maxtag)])
-
-  kfilename = 1
-  kkey = 2
-  kvalue = 3
-
-  _TEXT = _BuildTagLookupTable({
-    0: "ErrorCode",
-    1: "filename",
-    2: "key",
-    3: "value",
-  }, 3)
-
-  _TYPES = _BuildTagLookupTable({
-    0: ProtocolBuffer.Encoder.NUMERIC,
-    1: ProtocolBuffer.Encoder.STRING,
-    2: ProtocolBuffer.Encoder.STRING,
-    3: ProtocolBuffer.Encoder.STRING,
-  }, 3, ProtocolBuffer.Encoder.MAX_TYPE)
-
-
-  _STYLE = """"""
-  _STYLE_CONTENT_TYPE = """"""
-class AppendKeyValueResponse(ProtocolBuffer.ProtocolMessage):
-
-  def __init__(self, contents=None):
-    pass
-    if contents is not None: self.MergeFromString(contents)
-
-
-  def MergeFrom(self, x):
-    assert x is not self
-
-  def Equals(self, x):
-    if x is self: return 1
-    return 1
-
-  def IsInitialized(self, debug_strs=None):
-    initialized = 1
-    return initialized
-
-  def ByteSize(self):
-    n = 0
-    return n
-
-  def ByteSizePartial(self):
-    n = 0
-    return n
-
-  def Clear(self):
-    pass
-
-  def OutputUnchecked(self, out):
-    pass
-
-  def OutputPartial(self, out):
-    pass
-
-  def TryMerge(self, d):
-    while d.avail() > 0:
-      tt = d.getVarInt32()
-
-
-      if (tt == 0): raise ProtocolBuffer.ProtocolBufferDecodeError
-      d.skipData(tt)
-
-
-  def __str__(self, prefix="", printElemNumber=0):
-    res=""
-    return res
-
-
-  def _BuildTagLookupTable(sparse, maxtag, default=None):
-    return tuple([sparse.get(i, default) for i in xrange(0, 1+maxtag)])
-
-
-  _TEXT = _BuildTagLookupTable({
-    0: "ErrorCode",
-  }, 0)
-
-  _TYPES = _BuildTagLookupTable({
-    0: ProtocolBuffer.Encoder.NUMERIC,
-  }, 0, ProtocolBuffer.Encoder.MAX_TYPE)
-
-
-  _STYLE = """"""
-  _STYLE_CONTENT_TYPE = """"""
 class DeleteRequest(ProtocolBuffer.ProtocolMessage):
   has_filename_ = 0
   filename_ = ""
@@ -4109,4 +3866,4 @@ class GetShuffleStatusResponse(ProtocolBuffer.ProtocolMessage):
   _STYLE = """"""
   _STYLE_CONTENT_TYPE = """"""
 
-__all__ = ['FileServiceErrors','KeyValue','KeyValues','FileContentType','CreateRequest_Parameter','CreateRequest','CreateResponse','OpenRequest','OpenResponse','CloseRequest','CloseResponse','FileStat','StatRequest','StatResponse','AppendRequest','AppendResponse','AppendKeyValueRequest','AppendKeyValueResponse','DeleteRequest','DeleteResponse','ReadRequest','ReadResponse','ReadKeyValueRequest','ReadKeyValueResponse_KeyValue','ReadKeyValueResponse','ShuffleRequest','ShuffleResponse','GetShuffleStatusRequest','GetShuffleStatusResponse']
+__all__ = ['FileServiceErrors','KeyValue','KeyValues','FileContentType','CreateRequest_Parameter','CreateRequest','CreateResponse','OpenRequest','OpenResponse','CloseRequest','CloseResponse','FileStat','StatRequest','StatResponse','AppendRequest','AppendResponse','DeleteRequest','DeleteResponse','ReadRequest','ReadResponse','ReadKeyValueRequest','ReadKeyValueResponse_KeyValue','ReadKeyValueResponse','ShuffleRequest','ShuffleResponse','GetShuffleStatusRequest','GetShuffleStatusResponse']
