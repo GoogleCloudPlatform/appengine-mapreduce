@@ -34,7 +34,6 @@ import java.util.List;
 /**
  * Unit test for {@code BlobstoreInputFormat}.
  *
- * @author idk@google.com (Igor Kushnirskiy)
  */
 public class BlobstoreInputFormatTest extends TestCase {
 

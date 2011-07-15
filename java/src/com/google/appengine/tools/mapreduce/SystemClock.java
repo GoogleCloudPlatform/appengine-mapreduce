@@ -18,10 +18,9 @@ package com.google.appengine.tools.mapreduce;
 
 /**
  * Clock that uses System.
- * 
+ *
  * Package visible because it's a utility class for mapreduce.
- * 
- * @author frew@google.com (Fred Wulff)
+ *
  *
  */
 class SystemClock implements Clock {

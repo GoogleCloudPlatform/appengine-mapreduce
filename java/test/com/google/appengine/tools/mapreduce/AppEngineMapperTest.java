@@ -33,7 +33,6 @@ import junit.framework.TestCase;
 /**
  * Tests the {@link AppEngineMapper} class.
  *
- * @author frew@google.com (Fred Wulff)
  */
 public class AppEngineMapperTest extends TestCase {
   private static class TestMapper
@@ -137,7 +136,7 @@ public class AppEngineMapperTest extends TestCase {
   }
 
   public void testMutationPoolFlushParametersIllegalState() throws Exception {
-    context.getMutationPool(); 
+    context.getMutationPool();
     try {
       context.setMutationPoolFlushParameters(10, 5);
       fail("Should have thrown IllegalStateException");

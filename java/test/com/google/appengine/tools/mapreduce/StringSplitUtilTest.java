@@ -23,8 +23,7 @@ import java.util.List;
 
 /**
  * Tests the {@link StringSplitUtil} class.
- * 
- * @author frew@google.com (Fred Wulff)
+ *
  *
  */
 public class StringSplitUtilTest extends TestCase {
@@ -36,14 +35,14 @@ public class StringSplitUtilTest extends TestCase {
                  StringSplitUtil.findMidpoint("a" + (char) 127, "b"));
     assertEquals("a" + (char) (127 / 2), StringSplitUtil.findMidpoint("a", "b"));
     assertEquals("a" + (char) ('b' / 2), StringSplitUtil.findMidpoint("a", "ab"));
-    
+
     // findMidpoint should expand the start string with null characters
     assertEquals("a" + (char) 1, StringSplitUtil.findMidpoint("a", "a" + (char) 2));
-    
+
     // findMidpoint should expand the end string with 127's
-    assertEquals("a" + (char) (127 / 2), 
+    assertEquals("a" + (char) (127 / 2),
         StringSplitUtil.findMidpoint("a\0", "a"));
-    
+
     assertEquals("a" + (char) ((127 + 'b') / 2), StringSplitUtil.findMidpoint("ab", "b"));
   }
 

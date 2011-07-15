@@ -27,14 +27,13 @@ import junit.framework.TestCase;
 
 /**
  * Tests {@link RangeInputFormat}.
- * 
- * @author frew@google.com (Fred Wulff)
+ *
  *
  */
 public class RangeInputFormatTest extends TestCase {
   private RangeInputFormat format;
   private Configuration conf;
-  
+
   public void setUp() throws Exception {
     format = new RangeInputFormat();
     conf = new Configuration(false);
@@ -47,7 +46,7 @@ public class RangeInputFormatTest extends TestCase {
     JobContext context = new JobContext(conf, new JobID("Foo", 1));
     return format.getSplits(context);
   }
-  
+
   private void assertSplits(long[] dividerArray) throws Exception {
     List<InputSplit> splits = getSplitsForConfiguration();
     assertEquals(dividerArray.length, splits.size() + 1);
@@ -58,29 +57,29 @@ public class RangeInputFormatTest extends TestCase {
       assertEquals(dividerArray[i], rangeSplit.getSplitEnd());
     }
   }
-  
+
   private void setStartEndCount(long start, long end, long count) {
     conf.setLong(RangeInputFormat.RANGE_START_KEY, start);
     conf.setLong(RangeInputFormat.RANGE_END_KEY, end);
     conf.setLong(RangeInputFormat.SHARD_COUNT_KEY, count);
   }
-  
+
   public void testGetSplits() throws Exception {
     setStartEndCount(0, 4, 2);
     assertSplits(new long[]{0, 2, 4});
-    
+
     setStartEndCount(0, 3, 2);
     assertSplits(new long[]{0, 2, 3});
-    
+
     setStartEndCount(0, 5, 5);
     assertSplits(new long[]{0, 1, 2, 3, 4, 5});
-    
+
     setStartEndCount(0, 5, 10);
     assertSplits(new long[]{0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5});
-    
+
     setStartEndCount(0, 1, 3);
     assertSplits(new long[]{0, 0, 1, 1});
-    
+
     setStartEndCount(-1, 0, 1);
     try {
       getSplitsForConfiguration();
@@ -88,7 +87,7 @@ public class RangeInputFormatTest extends TestCase {
     } catch(InvalidConfigurationException expected) {
       // Expected
     }
-    
+
     setStartEndCount(5, 5, 1);
     try {
       getSplitsForConfiguration();
@@ -96,7 +95,7 @@ public class RangeInputFormatTest extends TestCase {
     } catch(InvalidConfigurationException expected) {
       // Expected
     }
-    
+
     //Tests that longs are processed correctly and not just ints
     setStartEndCount(Integer.MAX_VALUE + 4L, Integer.MAX_VALUE + 8L, 2);
     assertSplits(new long[]{(long)Integer.MAX_VALUE + 4L, (long)Integer.MAX_VALUE + 6L, (long)Integer.MAX_VALUE + 8L});

@@ -27,17 +27,16 @@ import java.io.UnsupportedEncodingException;
 
 /**
  * Internal util class for serializing/deserializing Writables.
- * 
- * @author frew@google.com (Fred Wulff)
+ *
  *
  */
 class Writables {
-  private Writables() { 
+  private Writables() {
   }
-  
+
   /**
    * Initializes the writable via readFields using the data encoded in s.
-   * 
+   *
    * @param s string containing the fields to initialize w
    * @param w writable to be initialized
    */
@@ -47,12 +46,12 @@ class Writables {
     } catch (UnsupportedEncodingException e) {
       throw new RuntimeException("Your JDK doesn't support UTF8. Interesting.", e);
     }
-    
+
   }
-  
+
   /**
    * Initializes the writable via readFields using the data encoded in b.
-   * 
+   *
    * @param b byte array containing the fields to initialize w with
    * @param w writable to be initialized
    */
@@ -64,10 +63,10 @@ class Writables {
           "Got an impossible IOException from a ByteArrayInputStream.", ioe);
     }
   }
-  
+
   /**
    * Returns the encoded version of a writable as a String.
-   * 
+   *
    * @param w writable to encode
    * @return the encoded String version of the Writable
    */
@@ -78,7 +77,7 @@ class Writables {
       throw new RuntimeException("Your JDK doesn't support UTF8. Interesting.", uee);
     }
   }
-  
+
   public static byte[] createByteArrayFromWritable(Writable w) {
     try {
       ByteArrayOutputStream baos = new ByteArrayOutputStream();

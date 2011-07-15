@@ -19,8 +19,7 @@ package com.google.appengine.tools.mapreduce;
 /**
  * A {@code RuntimeException} thrown to indicate that a property with a
  * template value doesn't have a matching parameter.
- * 
- * @author frew@google.com (Fred Wulff)
+ *
  */
 public class MissingTemplateParameterException extends RuntimeException {
   public MissingTemplateParameterException(String reason) {

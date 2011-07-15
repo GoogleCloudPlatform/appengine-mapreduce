@@ -41,7 +41,7 @@ import java.util.List;
  * <ul>
  *   <li>{@code BlobstoreInputFormat.BLOB_KEYS} with the string value of the blob key to map over
  *   </li>
- *   <li>{@code BlobstoreInputFormat.SHARD_COUNT} with positive integer value of the number of 
+ *   <li>{@code BlobstoreInputFormat.SHARD_COUNT} with positive integer value of the number of
  *       shards to use.
  *   </li>
  * </ul>
@@ -51,12 +51,11 @@ import java.util.List;
  *    [{@code Byte.MIN_VALUE}, {@code Byte.MAX_VALUE}] range. The default value is {@code '\n'}.
  *   </li>
  * </ul>
- * @author idk@google.com (Igor Kushnirskiy)
  */
-// TODO(idk): add support for splitting on an arbitrary byte sequence.
+// TODO(user): add support for splitting on an arbitrary byte sequence.
 public final class BlobstoreInputFormat extends InputFormat<BlobstoreRecordKey, byte[]> {
 
-  // TODO(idk): add support for mapping over multiple blobs.
+  // TODO(user): add support for mapping over multiple blobs.
   public static final String BLOB_KEYS =
       "mapreduce.mapper.inputformat.blobstoreinputformat.blobkeys";
 
@@ -103,9 +102,9 @@ public final class BlobstoreInputFormat extends InputFormat<BlobstoreRecordKey, 
 
     long splitLength = blobSize / shardCount;
     /*
-     * Currently a single shard gets assigned a single split. 
+     * Currently a single shard gets assigned a single split.
      * shardCount is only a hint for a number of splits we create.
-     * If a shard workload is to small we want to reduce a number of shards. 
+     * If a shard workload is to small we want to reduce a number of shards.
      */
     if (splitLength == 0) {
       splitLength = 1;

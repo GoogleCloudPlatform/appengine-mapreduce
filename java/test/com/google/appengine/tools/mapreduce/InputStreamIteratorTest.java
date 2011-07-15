@@ -32,7 +32,6 @@ import java.util.List;
 /**
  * Unit test for {@code InputStreamIterator}.
  *
- * @author idk@google.com (Igor Kushnirskiy)
  */
 public class InputStreamIteratorTest extends TestCase {
   private final List<String> content =

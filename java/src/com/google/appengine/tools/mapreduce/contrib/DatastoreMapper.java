@@ -1,5 +1,5 @@
 /*
- * Copyright 2010 Google Inc.
+ * Copyright 2011 Google Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,21 +13,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package com.google.appengine.tools.mapreduce.contrib;
 
-package com.google.appengine.tools.mapreduce;
+import com.google.appengine.api.datastore.Entity;
+import com.google.appengine.api.datastore.Key;
+import com.google.appengine.tools.mapreduce.AppEngineMapper;
+
+import org.apache.hadoop.io.NullWritable;
 
 /**
- * Exception thrown if the Configuration specified in the start handler
- * is invalid.
- *
+ * A base class for mappers which operate on datastore entities.
  *
  */
-public class InvalidConfigurationException extends RuntimeException {
-  public InvalidConfigurationException(String s) {
-    super(s);
-  }
-
-  public InvalidConfigurationException(String s, Exception e) {
-    super(s, e);
-  }
+public abstract class DatastoreMapper
+    extends AppEngineMapper<Key, Entity, NullWritable, NullWritable> {
 }

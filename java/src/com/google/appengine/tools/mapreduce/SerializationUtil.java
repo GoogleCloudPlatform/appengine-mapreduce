@@ -28,19 +28,18 @@ import java.io.UnsupportedEncodingException;
 import java.util.logging.Logger;
 
 /**
- * Utility methods for serializing and deserializing with an arbitrary 
+ * Utility methods for serializing and deserializing with an arbitrary
  * serializer registered with {@link SerializationFactory}.
- * 
- * @author frew@google.com (Your Name Here)
+ *
  */
 public class SerializationUtil {
   private static final Logger log = Logger.getLogger(SerializationUtil.class.getName());
-  
-  private SerializationUtil() {  
+
+  private SerializationUtil() {
   }
-  
+
   @SuppressWarnings("unchecked")
-  private static ByteArrayOutputStream serializeToByteArrayOutputStream(Configuration conf, 
+  private static ByteArrayOutputStream serializeToByteArrayOutputStream(Configuration conf,
       Object toSerialize) {
     SerializationFactory serializationFactory = new SerializationFactory(conf);
     Serializer serializer = serializationFactory.getSerializer(toSerialize.getClass());
@@ -54,17 +53,17 @@ public class SerializationUtil {
           "Got an IOException from a ByteArrayOutputStream. This should never happen.", ioe);
     }
   }
-  
+
   public static byte[] serializeToByteArray(Configuration conf, Object toSerialize) {
     return serializeToByteArrayOutputStream(conf, toSerialize).toByteArray();
   }
-  
+
   /**
-   * Serialize an object to a string. This differs from 
+   * Serialize an object to a string. This differs from
    * {@link Writables#createStringFromWritable(org.apache.hadoop.io.Writable)}
    * because it uses {@code conf}'s serialization preferences to support arbitrary
    * serialization mechanisms using {@link SerializationFactory}.
-   * 
+   *
    * @param conf a Configuration containing any serialization preferences
    * @param toSerialize the object to serialize
    * @return the serialized string
@@ -79,16 +78,16 @@ public class SerializationUtil {
   }
 
   /**
-   * Deserialize an object from a byte array. This uses {@code conf}'s 
-   * serialization preferences to support arbitrary serialization mechanisms 
+   * Deserialize an object from a byte array. This uses {@code conf}'s
+   * serialization preferences to support arbitrary serialization mechanisms
    * using {@link SerializationFactory}.
    *
    * @param conf the configuration to use for serialization preferences
    * @param expectedClass a type token to set the return type
    * @param className the name of the class to deserialize to
    * @param toDeserialize the serialized object as a byte array
-   * @param initialState an object with initial state. Some deserializers may 
-   * throw this away. You can pass {@code null} to signify that there is no 
+   * @param initialState an object with initial state. Some deserializers may
+   * throw this away. You can pass {@code null} to signify that there is no
    * initial state.
    */
   @SuppressWarnings("unchecked")
@@ -99,11 +98,11 @@ public class SerializationUtil {
     try {
       Class<?> deserializationClass = conf.getClassByName(className);
       if (!expectedClass.isAssignableFrom(deserializationClass)) {
-        throw new ClassCastException("Attempted to deserialize a " 
+        throw new ClassCastException("Attempted to deserialize a "
             + deserializationClass.getCanonicalName() + " but expected a "
             + expectedClass.getCanonicalName());
       }
-      Deserializer<T> deserializer = 
+      Deserializer<T> deserializer =
         serializationFactory.getDeserializer(
             (Class <T>) deserializationClass);
       ByteArrayInputStream inputStream = new ByteArrayInputStream(toDeserialize);
@@ -120,19 +119,19 @@ public class SerializationUtil {
           "Got an IOException from a ByteArrayInputStream. This should never happen.", e);
     }
   }
-  
+
   /**
    * Deserialize an object from a string. This differs from
    * {@link Writables#initializeWritableFromString(String, org.apache.hadoop.io.Writable)
-   * because it uses {@code conf}'s serialization preferences to support 
+   * because it uses {@code conf}'s serialization preferences to support
    * arbitrary serialization mechanisms using {@link SerializationFactory}.
    *
    * @param conf the configuration to use for serialization preferences
    * @param expectedClass a type token to set the return type
    * @param className the name of the class to deserialize to
    * @param toDeserialize the serialized object as a string
-   * @param initialState an object with initial state. Some deserializers may 
-   * throw this away. You can pass {@code null} to signify that there is no 
+   * @param initialState an object with initial state. Some deserializers may
+   * throw this away. You can pass {@code null} to signify that there is no
    * initial state.
    */
   @SuppressWarnings("unchecked")

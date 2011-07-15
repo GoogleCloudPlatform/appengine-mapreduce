@@ -25,11 +25,10 @@ import java.io.IOException;
 import junit.framework.TestCase;
 
 /**
- * Tests both RangeRecordReader and RangeInputSplit (since the latter is light 
+ * Tests both RangeRecordReader and RangeInputSplit (since the latter is light
  * on logic).
- * 
- * @author frew@google.com (Fred Wulff)
- * 
+ *
+ *
  */
 public class RangeRecordReaderTest extends TestCase {
   protected void setUp() throws Exception {
@@ -39,11 +38,11 @@ public class RangeRecordReaderTest extends TestCase {
   protected void tearDown() throws Exception {
     super.tearDown();
   }
-  
+
   /**
-   * Serializes the {@link RangeRecordReader} and then deserializes and 
+   * Serializes the {@link RangeRecordReader} and then deserializes and
    * returns it.
-   * 
+   *
    * @param split the split to use in deserialization
    * @param reader the reader to be serialized
    * @return the reconstituted reader
@@ -54,27 +53,27 @@ public class RangeRecordReaderTest extends TestCase {
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     DataOutputStream dos = new DataOutputStream(baos);
     reader.write(dos);
-    
+
     reader = new RangeRecordReader();
     reader.initialize(split, null);
     DataInputStream dis = new DataInputStream(new ByteArrayInputStream(baos.toByteArray()));
     reader.readFields(dis);
     return reader;
   }
-  
+
   public void testSerializeSplit() throws Exception {
     RangeInputSplit oldSplit = new RangeInputSplit(1, 5);
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     DataOutputStream dos = new DataOutputStream(baos);
     oldSplit.write(dos);
-    
+
     RangeInputSplit newSplit = new RangeInputSplit();
     DataInputStream dis = new DataInputStream(new ByteArrayInputStream(baos.toByteArray()));
     newSplit.readFields(dis);
     assertEquals(1, newSplit.getSplitStart());
     assertEquals(5, newSplit.getSplitEnd());
   }
-  
+
   public void testSerializeReader() throws Exception {
     RangeInputSplit split = new RangeInputSplit(1, 3);
     RangeRecordReader reader = new RangeRecordReader();
@@ -93,9 +92,9 @@ public class RangeRecordReaderTest extends TestCase {
     assertFalse(reader.nextKeyValue());
     assertNull(reader.getCurrentKey());
     reader = serializeDeserializeReader(split, reader);
-    assertNull(reader.getCurrentKey()); 
+    assertNull(reader.getCurrentKey());
   }
-  
+
   public void testEmptyReader() throws Exception {
     RangeInputSplit split = new RangeInputSplit(1, 1);
     RangeRecordReader reader = new RangeRecordReader();

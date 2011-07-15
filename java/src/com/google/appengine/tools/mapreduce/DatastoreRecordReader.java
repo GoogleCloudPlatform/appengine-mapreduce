@@ -41,11 +41,10 @@ import static com.google.appengine.api.datastore.FetchOptions.Builder.withChunkS
  * DatastoreReader is a RecordReader for the AppEngine Datastore.
  * It's AppEngine compatible by way of implementing Writable.
  *
- * @author frew@google.com (Fred Wulff)
  */
 public class DatastoreRecordReader extends RecordReader<Key, Entity> implements Writable {
   private static final Logger log = Logger.getLogger(DatastoreRecordReader.class.getName());
-  
+
   // The split that this reader iterates over.
   private DatastoreInputSplit split;
 
@@ -66,30 +65,30 @@ public class DatastoreRecordReader extends RecordReader<Key, Entity> implements 
   /**
    * Completely meaningless. Implemented as part of RecordReader.
    */
-  // TODO(frew): Make meaningful: return some measure of
+  // TODO(user): Make meaningful: return some measure of
   // (currentKey - startKey) / (endKey - startKey)
   @Override
   public float getProgress() {
     return 0;
   }
-  
+
   private void createIterator() {
     Preconditions.checkState(iterator == null);
-    
-    Query q = new Query(split.getEntityKind());    
+
+    Query q = new Query(split.getEntityKind());
     if (currentKey == null) {
-      q.addFilter(Entity.KEY_RESERVED_PROPERTY, FilterOperator.GREATER_THAN_OR_EQUAL, 
+      q.addFilter(Entity.KEY_RESERVED_PROPERTY, FilterOperator.GREATER_THAN_OR_EQUAL,
           split.getStartKey());
     } else {
       q.addFilter(Entity.KEY_RESERVED_PROPERTY, FilterOperator.GREATER_THAN, currentKey);
     }
-    
+
     if (split.getEndKey() != null) {
       q.addFilter(Entity.KEY_RESERVED_PROPERTY, FilterOperator.LESS_THAN, split.getEndKey());
     }
-    
+
     q.addSort(Entity.KEY_RESERVED_PROPERTY);
-    
+
     DatastoreService dsService = DatastoreServiceFactory.getDatastoreService();
     iterator = dsService.prepare(q).asQueryResultIterator(withChunkSize(split.getBatchSize()));
   }

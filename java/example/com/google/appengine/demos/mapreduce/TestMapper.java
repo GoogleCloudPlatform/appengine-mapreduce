@@ -22,14 +22,11 @@ import com.google.appengine.tools.mapreduce.AppEngineMapper;
 
 import org.apache.hadoop.io.NullWritable;
 
-import java.io.ByteArrayInputStream;
-import java.io.IOException;
 import java.util.logging.Logger;
 
 /**
  * A sample AppEngine mapper.
  *
- * @author frew@google.com (Fred Wulff)
  */
 public class TestMapper extends AppEngineMapper<Key, Entity, NullWritable, NullWritable> {
   private static final Logger log = Logger.getLogger(TestMapper.class.getName());

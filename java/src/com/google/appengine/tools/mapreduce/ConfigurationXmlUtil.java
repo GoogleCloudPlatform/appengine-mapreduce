@@ -26,19 +26,18 @@ import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 
 /**
- * Utility class for converting between a Configuration and its XML 
+ * Utility class for converting between a Configuration and its XML
  * representation.
- * 
- * @author frew@google.com (Fred Wulff)
+ *
  *
  */
 public class ConfigurationXmlUtil {
-  private ConfigurationXmlUtil() {  
+  private ConfigurationXmlUtil() {
   }
-  
+
   /**
    * Reconstitutes a Configuration from an XML string.
-   * 
+   *
    * @param serializedConf an XML document in Hadoop configuration format
    * @return the Configuration corresponding to the XML
    */
@@ -58,10 +57,10 @@ public class ConfigurationXmlUtil {
       throw new RuntimeException("JDK doesn't understand UTF8", e);
     }
   }
-  
+
   /**
    * Serializes a configuration to its corresponding XML document as a string.
-   * 
+   *
    * @param conf the configuration to encode
    * @return the configuration as an XML document
    */

@@ -25,22 +25,21 @@ import java.util.logging.Logger;
 
 /**
  * A Hadoop StatusReporter that saves reported data to a {@link ShardState}.
- * 
- * @author frew@google.com (Fred Wulff)
+ *
  */
 class DatastorePersistingStatusReporter extends StatusReporter {
   private static final Logger log = Logger.getLogger(
       DatastorePersistingStatusReporter.class.getName());
-  
+
   // Persists state to here.
   private final ShardState shardState;
-  
+
   // Working set of Counters.
   private final Counters counters;
-  
+
   // Status message to report.
   private String status;
-  
+
   /**
    * Initialize the reporter with the given shard state.
    */
@@ -49,7 +48,7 @@ class DatastorePersistingStatusReporter extends StatusReporter {
     counters = shardState.getCounters();
     status = shardState.getStatusString();
   }
-  
+
   @Override
   public Counter getCounter(Enum<?> name) {
     return counters.findCounter(name);
@@ -60,7 +59,7 @@ class DatastorePersistingStatusReporter extends StatusReporter {
     return counters.findCounter(group, name);
   }
 
-  // I can't seem to find anybody who quite knows what the purpose of this 
+  // I can't seem to find anybody who quite knows what the purpose of this
   // method is.
   @Override
   public void progress() {

@@ -30,7 +30,6 @@ import java.util.List;
  * Stub input split. Contains the info for generating a predetermined series
  * of records.
  * 
- * @author frew@google.com (Fred Wulff)
  */
 public class StubInputSplit extends InputSplit implements Writable {
   private int id;

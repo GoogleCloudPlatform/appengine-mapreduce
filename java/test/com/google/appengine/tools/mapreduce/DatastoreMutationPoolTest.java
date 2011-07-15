@@ -30,15 +30,14 @@ import junit.framework.TestCase;
 
 /**
  * Tests the {@link DatastoreMutationPool} class.
- * 
- * @author frew@google.com (Fred Wulff)
+ *
  */
 public class DatastoreMutationPoolTest extends TestCase {
   private final LocalServiceTestHelper helper =
     new LocalServiceTestHelper(new LocalDatastoreServiceTestConfig());
-  
+
   private DatastoreService ds;
-  
+
   @Override
   public void setUp() throws Exception {
     super.setUp();
@@ -46,15 +45,15 @@ public class DatastoreMutationPoolTest extends TestCase {
     ds = DatastoreServiceFactory.getDatastoreService();
     entities = new Entity[]{new Entity("Foo"), new Entity("Foo"), new Entity("Foo")};
   }
-  
+
   @Override
   public void tearDown() throws Exception {
     helper.tearDown();
     super.tearDown();
   }
-  
+
   private Entity[] entities;
-  
+
   /**
    * Attempts to add and then remove three entities, asserting that the
    * mutation pool is flushed when the nth entity is added.
@@ -130,8 +129,8 @@ public class DatastoreMutationPoolTest extends TestCase {
       }
     }
   }
-  
-  
+
+
   public void testCountFlush() {
     DatastoreMutationPool pool = new DatastoreMutationPool(ds, 2, 1 << 18);
     // Check last put so we can isolate problems with manual flush() from problems with
@@ -148,17 +147,17 @@ public class DatastoreMutationPoolTest extends TestCase {
     checkFlushOnNthPutOutOfThree(pool, 2, 0);
     checkFlushOnNthDeleteOutOfThree(pool, 2, 0);
   }
-  
+
   public void testSizeFlush() {
-    DatastoreMutationPool putPool = new DatastoreMutationPool(ds, 1000, 
+    DatastoreMutationPool putPool = new DatastoreMutationPool(ds, 1000,
         EntityTranslator.convertToPb(entities[0]).getSerializedSize() + 1);
     checkFlushOnNthPutOutOfThree(putPool, 1, -1);
     putPool.flush();
-    DatastoreMutationPool deletePool = new DatastoreMutationPool(ds, 1000, 
+    DatastoreMutationPool deletePool = new DatastoreMutationPool(ds, 1000,
         KeyFactory.keyToString(entities[0].getKey()).length() + 1);
     checkFlushOnNthDeleteOutOfThree(deletePool, 1, -1);
   }
-  
+
   public void testManualFlush() {
     DatastoreMutationPool pool = new DatastoreMutationPool(ds, 1000, 1000);
     pool.put(entities[0]);
@@ -168,10 +167,10 @@ public class DatastoreMutationPoolTest extends TestCase {
     } catch (EntityNotFoundException e) {
       fail("Put wasn't flushed when expected.");
     }
-    
+
     pool.delete(entities[0].getKey());
     pool.flush();
-    
+
     try {
       ds.get(entities[0].getKey());
       fail("Delete wasn't flushed when expected.");

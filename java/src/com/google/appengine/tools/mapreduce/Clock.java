@@ -17,11 +17,10 @@
 package com.google.appengine.tools.mapreduce;
 
 /**
- * Simple mockable clock. 
- * 
+ * Simple mockable clock.
+ *
  * Package visible because it's a utility class for MapReduce.
- * 
- * @author frew@google.com (Fred Wulff)
+ *
  */
 interface Clock {
   /**

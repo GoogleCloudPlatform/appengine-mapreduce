@@ -47,13 +47,13 @@ import javax.xml.transform.stream.StreamResult;
 /**
  * This object preprocesses a Configuration template, filling in template values
  * (those for which the {@code value} XML tag has a {@code template}
- *  XML attribute) using a provided map of names to values. 
- * 
+ *  XML attribute) using a provided map of names to values.
+ *
  * <p>Additionally, when given the template XML, the object can generate a map
  * between map name and user visible name for ease of presentation.
- * 
+ *
  * <p>As a concrete example, suppose we have the the following XML string:
- * 
+ *
  * <pre>
  * <property>
  *   <name human="Username to analyze">username</name>
@@ -64,17 +64,17 @@ import javax.xml.transform.stream.StreamResult;
  *   <value>/user/${username}</value>
  * </property>
  * </pre>
- * 
+ *
  * <p>If we have that XML string stored in xmlString, then calling
- * 
+ *
  * <pre>
  * Map<String, String> parameters = new Map<String, String>();
  * parameters.put("username", "Bob");
  * new ConfigurationTemplatePreprocessor(xmlString).preprocess(parameters);
  * </pre>
- * 
+ *
  * <p>returns the string:
- * 
+ *
  * <pre>
  * &lt;property&gt;
  *   &lt;name&gt;username&lt;/name&gt;
@@ -85,61 +85,60 @@ import javax.xml.transform.stream.StreamResult;
  *   &lt;value&gt;/user/${username}&lt;/value&gt;
  * &lt;/property&gt;
  * </pre>
- * 
+ *
  * <p>Hadoop's {@link org.apache.hadoop.conf.Configuration} class will then
  * populate the {@code basedir} property with the value {@code /user/Bob} as
  * usual.
- * 
- * <p>You can also enumerate the map from name to user visible name. For 
+ *
+ * <p>You can also enumerate the map from name to user visible name. For
  * instance, given the same starting XML document
- * 
+ *
  * <pre>
  * new ConfigurationTemplatePreprocessor(xmlString).getHumanNameMap();
  * </pre>
- * 
+ *
  * <p> returns the {@code Map} corresponding to:
- * 
+ *
  * <pre>
  * {"username" =&gt; "Username to analyze"}
  * </pre>
- * 
+ *
  * <p>You can also specify that the child text of a templated value should be
  * used as the default if no value is given by the template="optional"
  * attribute. For instance, if no parameters are given, then:
- * 
+ *
  * <pre>
  * &lt;property&gt;
  *   &lt;name human="Username to analyze"&gt;username&lt;/name&gt;
  *   &lt;value template="optional"&gt;Bob&lt;/value&gt;
  * &lt;/property&gt;
  * </pre>
- * 
+ *
  * <p>evaluates to simply:
- * 
+ *
  * <pre>
  * &lt;property&gt;
  *   &lt;name&gt;username&lt;/name&gt;
  *   &lt;value&gt;Bob&lt;/value&gt;
  * &lt;/property&gt;
  * </pre>
- * 
- * @author frew@google.com (Fred Wulff)
+ *
  */
 public class ConfigurationTemplatePreprocessor {
   private Document doc;
-  
+
   /**
-   * DDO for the information needed to render the form element for a  single 
+   * DDO for the information needed to render the form element for a  single
    * template property.
    */
   public static class TemplateEntryMetadata {
     private String name;
     private String humanName;
     private String defaultValue;
-    
+
     /**
-     * 
-     * @param humanName Human readable name or the 
+     *
+     * @param humanName Human readable name or the
      * @param defaultValue
      */
     public TemplateEntryMetadata(String name, String humanName, String defaultValue) {
@@ -147,11 +146,11 @@ public class ConfigurationTemplatePreprocessor {
       this.humanName = humanName;
       this.defaultValue = defaultValue;
     }
-    
+
     public String getName() {
       return name;
     }
-    
+
     public String getHumanName() {
       if (humanName == null) {
         return name;
@@ -162,7 +161,7 @@ public class ConfigurationTemplatePreprocessor {
     public String getDefaultValue() {
       return defaultValue;
     }
-    
+
     /**
      * Describes TemplateEntryMetadata as if it were an AbstractMap.
      */
@@ -183,16 +182,16 @@ public class ConfigurationTemplatePreprocessor {
       return sb.toString();
     }
   }
-  
+
   private Map<String, TemplateEntryMetadata> nameToMetadata =
       new HashMap<String, TemplateEntryMetadata>();
   private Map<String, Element> nameToValueElement = new HashMap<String, Element>();
-  
+
   private boolean preprocessCalled;
-  
+
   /**
    * Initializes a ConfigurationTemplatePreprocessor with the template XML
-   * 
+   *
    * @param xmlString the template XML configuration
    */
   public ConfigurationTemplatePreprocessor(String xmlString) {
@@ -204,7 +203,7 @@ public class ConfigurationTemplatePreprocessor {
       if (!"configuration".equals(root.getTagName())) {
         throw new RuntimeException("Bad configuration file: top-level element not <configuration>");
       }
-      
+
       NodeList props = root.getChildNodes();
       for (int i = 0; i < props.getLength(); i++) {
         Node propNode = props.item(i);
@@ -212,10 +211,10 @@ public class ConfigurationTemplatePreprocessor {
           continue;
         }
         Element prop = (Element) propNode;
-        
-        // TODO(frew): Currently not implementing nested configuration elements.
+
+        // TODO(user): Currently not implementing nested configuration elements.
         // If there's demand, this can be revisited.
-        
+
         populateParameterFromProperty(prop);
       }
     } catch (ParserConfigurationException e) {
@@ -230,17 +229,17 @@ public class ConfigurationTemplatePreprocessor {
     }
   }
 
-  /** 
+  /**
    * For a single {@code Configuration} property, process it, looking
    * for parameter-related attributes, and updating the relevant object maps
-   * if found. 
-   */ 
+   * if found.
+   */
   private void populateParameterFromProperty(Element prop) {
     String name = null;
     String humanName = null;
     Element templateValue = null;
     String defaultValue = null;
-    
+
     NodeList fields = prop.getChildNodes();
     for (int j = 0; j < fields.getLength(); j++) {
       Node fieldNode = fields.item(j);
@@ -265,7 +264,7 @@ public class ConfigurationTemplatePreprocessor {
         }
       }
     }
-    
+
     if (templateValue != null) {
       nameToMetadata.put(name, new TemplateEntryMetadata(name, humanName, defaultValue));
       nameToValueElement.put(name, templateValue);
@@ -277,7 +276,7 @@ public class ConfigurationTemplatePreprocessor {
    */
   static DocumentBuilderFactory createConfigurationDocBuilderFactory() {
     DocumentBuilderFactory docBuilderFactory = DocumentBuilderFactory.newInstance();
-    
+
     // Mirroring the settings in org.apache.hadoop.conf.Configuration
     docBuilderFactory.setIgnoringComments(true);
     docBuilderFactory.setNamespaceAware(false);
@@ -288,17 +287,17 @@ public class ConfigurationTemplatePreprocessor {
     }
     return docBuilderFactory;
   }
-  
+
   /**
    * Substitutes in the values in params for templated values. After this method
    * is called, any subsequent calls to this method for the same object result in
    * an {@link IllegalStateException}. To preprocess the template again,
    * create another {@code ConfigurationTemplatePreprocessor} from the source XML.
-   * 
+   *
    * @param params a map from key to value of all the template parameters
-   * @return the document as an XML string with the template parameters filled 
-   * in  
-   * @throws MissingTemplateParameterException if any required parameter is 
+   * @return the document as an XML string with the template parameters filled
+   * in
+   * @throws MissingTemplateParameterException if any required parameter is
    * omitted
    * @throws IllegalStateException if this method has previously been called
    * on this object
@@ -310,7 +309,7 @@ public class ConfigurationTemplatePreprocessor {
           "Preprocess can't be called twice for the same object");
     }
     preprocessCalled = true;
-     
+
     for (Entry<String, Element> entry : nameToValueElement.entrySet()) {
       Element valueElem = entry.getValue();
       boolean isTemplateValue = valueElem.hasAttribute("template");
@@ -344,22 +343,22 @@ public class ConfigurationTemplatePreprocessor {
         }
         // Remove parameter, so we can tell if they gave us extras.
         paramsCopy.remove(entry.getKey());
-      } else {  
-        throw new IllegalArgumentException("Configuration property " + entry.getKey() 
+      } else {
+        throw new IllegalArgumentException("Configuration property " + entry.getKey()
             + " is not a template property");
       }
-      
+
       // removeAttribute has no effect if the attributes don't exist
       valueElem.removeAttribute("template");
     }
-    
+
     if (paramsCopy.size() > 0) {
-      // TODO(frew): Is there a good way to bubble up all bad parameters?
+      // TODO(user): Is there a good way to bubble up all bad parameters?
       throw new UnexpectedTemplateParameterException(
-          "Parameter " + paramsCopy.keySet().iterator().next() 
+          "Parameter " + paramsCopy.keySet().iterator().next()
               + " wasn't found in the configuration template.");
     }
-    
+
     return getDocAsXmlString();
   }
 
@@ -381,7 +380,7 @@ public class ConfigurationTemplatePreprocessor {
       throw new RuntimeException("JDK doesn't support UTF8", e);
     }
   }
-  
+
   /**
    * Returns a mapping from property name to the TemplateEntryMetadata for each
    * template property.
@@ -389,7 +388,7 @@ public class ConfigurationTemplatePreprocessor {
   public Map<String, TemplateEntryMetadata> getMetadataMap() {
     return nameToMetadata;
   }
-  
+
   /**
    * Generate a JSON version of the template described by this object named
    * by the given {@code name}.
@@ -410,8 +409,8 @@ public class ConfigurationTemplatePreprocessor {
     }
     return configObject;
   }
-  
-  private void convertPropertiesToJson(JSONObject propertiesMap, 
+
+  private void convertPropertiesToJson(JSONObject propertiesMap,
       Entry<String, TemplateEntryMetadata> entry) {
     JSONObject configObject = new JSONObject();
     try {

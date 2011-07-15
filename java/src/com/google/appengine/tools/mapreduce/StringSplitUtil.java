@@ -21,23 +21,22 @@ import java.util.List;
 
 /**
  * Utility functions for lexicographically splitting strings.
- * 
- * @author frew@google.com (Fred Wulff)
+ *
  *
  */
 class StringSplitUtil {
   private StringSplitUtil() {
   }
-  
+
   // Limits for expected range to be split. Your string can contain characters
   // outside of this range, but you'll get crummy splits.
   private static final char MIN_CHAR = '\0';
   private static final char MAX_CHAR = (char) 127;
-  
+
   /*
    * Given two strings, finds the string that is the lexicographical midpoint.
    * Assumes the string is in the ASCII range (0-127).
-   * 
+   *
    * Examples:
    * findMidpoint("a", "c") => "b"
    * findMidpoint("a", "b") => "a" + (char) ((MAX_CHAR + MIN_CHAR) / 2)
@@ -60,7 +59,7 @@ class StringSplitUtil {
     char startChar = firstDiffIndex < start.length() ? start.charAt(firstDiffIndex) : MIN_CHAR;
     char endChar = firstDiffIndex < end.length() ? end.charAt(firstDiffIndex) : MAX_CHAR;
     char midChar = (char) (startChar + (endChar - startChar) / 2);
-    
+
     // Handle the case where the startChar and the endChar are adjacent
     // by extending the division by a place. We don't worry about averaging
     // later letters in this case.

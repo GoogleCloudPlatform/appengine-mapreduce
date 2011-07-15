@@ -41,8 +41,7 @@ import java.util.List;
 
 /**
  * Thin wrapper around a shard state entity in the datastore.
- * 
- * @author frew@google.com (Fred Wulff)
+ *
  *
  */
 class ShardState {
@@ -57,7 +56,7 @@ class ShardState {
   static final String STATUS_STRING_PROPERTY = "statusString";
   static final String STATUS_PROPERTY = "status";
   static final String UPDATE_TIMESTAMP_PROPERTY = "updateTimestamp";
-  
+
   /**
    * Possible states of the status property
    */
@@ -65,20 +64,20 @@ class ShardState {
     ACTIVE,
     DONE
   }
-  
+
   // The datastore service to use for persisting the entity if updated.
   private final DatastoreService service;
-  
+
   // The shard state entity
   private Entity entity;
-  
+
   private Clock clock = new SystemClock();
-  
+
   // VisibleForTesting
   public void setClock(Clock clock) {
     this.clock = clock;
   }
-  
+
   /**
    * Creates the ShardState from its corresponding entity.
    *
@@ -87,10 +86,10 @@ class ShardState {
   protected ShardState(DatastoreService service) {
     this.service = service;
   }
-  
+
   /**
    * Gets the ShardState corresponding to the given TaskID.
-   * 
+   *
    * @param service the datastore to use for persisting the shard state
    * @param taskAttemptId the TaskID corresponding to this ShardState
    * @return the shard state corresponding to the provided key
@@ -103,34 +102,34 @@ class ShardState {
     state.entity = service.get(key);
     return state;
   }
-  
+
   /**
    * Creates a shard state that's active but hasn't made any progress as of yet.
-   * 
+   *
    * The shard state isn't persisted when returned (so {@link #getKey()} will
    * return {@code null} until {@link #persist()} is called.
-   * 
+   *
    * @param service the datastore to persist the ShardState to
-   * @param taskAttemptId the TaskAttemptID corresponding to the returned 
+   * @param taskAttemptId the TaskAttemptID corresponding to the returned
    * ShardState
    * @return the initialized shard state
    */
   public static ShardState generateInitializedShardState(
       DatastoreService service, TaskAttemptID taskAttemptId) {
     ShardState shardState = new ShardState(service);
-    
+
     shardState.entity = new Entity("ShardState", taskAttemptId.toString());
     shardState.entity.setProperty(JOB_ID_PROPERTY, taskAttemptId.getJobID().toString());
 
     Counters counters = new Counters();
     shardState.setCounters(counters);
-    
+
     shardState.setStatusString("");
     shardState.entity.setProperty(STATUS_PROPERTY, "" + Status.ACTIVE);
-    
+
     return shardState;
   }
-  
+
   /**
    * Gets all shard states corresponding to a particular Job ID
    */
@@ -148,13 +147,13 @@ class ShardState {
     }
     return shardStates;
   }
-  
+
   /**
    * Reconstitutes a Counters object from a shard state entity.
-   * The returned counters is a copy. You must call 
+   * The returned counters is a copy. You must call
    * {@link #setCounters(Counters)} to persist updated counters to the
    * datastore.
-   * 
+   *
    * @return the reconstituted Counters object
    */
   public Counters getCounters() {
@@ -163,37 +162,37 @@ class ShardState {
     Writables.initializeWritableFromByteArray(serializedMap.getBytes(), counters);
     return counters;
   }
-    
+
   /**
    * Saves counters to the datastore entity.
-   * 
+   *
    * @param counters the counters to serialize
    */
   public void setCounters(Counters counters) {
-    entity.setUnindexedProperty(COUNTERS_MAP_PROPERTY, 
+    entity.setUnindexedProperty(COUNTERS_MAP_PROPERTY,
         new Blob(Writables.createByteArrayFromWritable(counters)));
   }
-  
+
   /**
    * Get the status string from the shard state. This is a user-defined
    * message, intended to inform a human of the status of the current shard.
-   * 
+   *
    * @return the status string
    */
   public String getStatusString() {
     return (String) entity.getProperty(STATUS_STRING_PROPERTY);
   }
-  
+
   /**
    * Sets the status string for the shard state. This is a user-defined
    * message, intended to inform a human of the status of the current shard.
-   * 
+   *
    * @param status the status string
    */
   public void setStatusString(String status) {
     entity.setProperty(STATUS_STRING_PROPERTY, status);
   }
-  
+
   /**
    * Get status. This is one of {@link Status}.
    *
@@ -202,30 +201,30 @@ class ShardState {
   public Status getStatus() {
     return Status.valueOf((String) entity.getProperty(STATUS_PROPERTY));
   }
-  
+
   /**
    * Set the input split for this shard.
-   * 
+   *
    * @param conf the configuration to use for serializing the split
    * @param split the input split for this shard
    */
   public void setInputSplit(Configuration conf, InputSplit split) {
     Blob serializedSplit = new Blob(SerializationUtil.serializeToByteArray(conf, split));
     entity.setUnindexedProperty(INPUT_SPLIT_PROPERTY, serializedSplit);
-    // TODO(frew): Should we unify this with the Hadoop class stuff (or does it
+    // TODO(user): Should we unify this with the Hadoop class stuff (or does it
     // matter?)
     entity.setProperty(INPUT_SPLIT_CLASS_PROPERTY, split.getClass().getCanonicalName());
   }
-  
+
   /**
    * Get the input split for this shard.
-   * 
+   *
    * @return the serialized input split for this shard
    */
   public byte[] getSerializedInputSplit() {
     return ((Blob) entity.getProperty(INPUT_SPLIT_PROPERTY)).getBytes();
   }
-  
+
   /**
    * Set the record reader for this shard.
    */
@@ -234,38 +233,38 @@ class ShardState {
     entity.setUnindexedProperty(RECORD_READER_PROPERTY, serializedReader);
     entity.setProperty(RECORD_READER_CLASS_PROPERTY, reader.getClass().getCanonicalName());
   }
-   
+
   /**
    * Get the record reader for this shard as a serialized byte array.
    */
   public byte[] getSerializedRecordReader() {
     return ((Blob) entity.getProperty(RECORD_READER_PROPERTY)).getBytes();
   }
-  
+
   /**
    * Marks the current shard as done.
    */
   public void setDone() {
     entity.setProperty("status", Status.DONE.toString());
   }
-  
+
   /**
    * Returns the canonical class name of the shard's input split.
    */
   public String getInputSplitClassName() {
     return (String) entity.getProperty(INPUT_SPLIT_CLASS_PROPERTY);
   }
-  
+
   /**
    * Returns the class name of this shard's record reader.
    */
   public String getRecordReaderClassName() {
     return (String) entity.getProperty(RECORD_READER_CLASS_PROPERTY);
   }
-  
+
   private void checkComplete() {
     Preconditions.checkNotNull(
-        entity.getProperty(INPUT_SPLIT_PROPERTY), 
+        entity.getProperty(INPUT_SPLIT_PROPERTY),
         "Input split must be set.");
     Preconditions.checkNotNull(
         getInputSplitClassName(),
@@ -280,7 +279,7 @@ class ShardState {
         entity.getProperty(COUNTERS_MAP_PROPERTY),
         "Counters map must be set.");
   }
-  
+
   /**
    * Persists this to the datastore.
    */
@@ -289,38 +288,38 @@ class ShardState {
     setUpdateTimestamp(clock.currentTimeMillis());
     service.put(entity);
   }
-  
+
   /**
    * Returns the update timestamp of this shard in milliseconds since the epoch.
    */
   public long getUpdateTimestamp() {
     return (Long) entity.getProperty(UPDATE_TIMESTAMP_PROPERTY);
   }
-  
+
   /**
    * Set the time the state was last updated in milliseconds since the epoch.
    */
   public void setUpdateTimestamp(long timestamp) {
     entity.setProperty(UPDATE_TIMESTAMP_PROPERTY, timestamp);
   }
-  
+
   /**
    * Gets the task attempt ID corresponding to this ShardState.
    * @return the task attempt ID corresponding to this ShardState
    */
   public TaskAttemptID getTaskAttemptID() {
-    Preconditions.checkNotNull(entity.getKey().getName(), 
+    Preconditions.checkNotNull(entity.getKey().getName(),
         "ShardState must be persisted to call getTaskID()");
     return TaskAttemptID.forName(entity.getKey().getName());
   }
-  
+
   /**
    * Gets the key for the underlying ShardState entity.
    */
   public Key getKey() {
     return entity.getKey();
   }
-  
+
   /**
    * Create JSON object from this object.
    */

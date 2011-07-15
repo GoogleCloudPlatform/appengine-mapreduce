@@ -26,7 +26,6 @@ import java.io.DataOutputStream;
 /**
  * Unit test for {@code BlobstoreInputSplit}.
  *
- * @author idk@google.com (Igor Kushnirskiy)
  */
 public class BlobstoreInputSplitTest extends TestCase {
 

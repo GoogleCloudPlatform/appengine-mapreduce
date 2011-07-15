@@ -47,7 +47,7 @@ import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
 
 /**
- * An XML file containing a list of Configuration templates, with user visible 
+ * An XML file containing a list of Configuration templates, with user visible
  * names. The format is:
  * <pre>
  * <configurations>
@@ -56,22 +56,21 @@ import javax.xml.transform.stream.StreamResult;
  * ...
  * </configurations>
  * </pre>
- * 
+ *
  * <p>where each of the configuration entries is a configuration template as
  * described in {@link ConfigurationTemplatePreprocessor}, with a human readable
  * name in the {@code name} attribute.
- * 
- * @author frew@google.com (Fred Wulff)
+ *
  */
 public class MapReduceXml {
   private Map<String, Element> nameToConfigMap = new TreeMap<String, Element>();
   private Document doc;
-    
+
   /**
    * Returns an InputStream for the contents of mapreduce.xml, which should be
    * located at the path WEB-INF/mapreduce.xml in the application root directory.
    */
-  private static InputStream getMapReduceXmlInputStream() throws FileNotFoundException {    
+  private static InputStream getMapReduceXmlInputStream() throws FileNotFoundException {
     String path;
     try {
       // Gets the location of the containing JAR
@@ -121,14 +120,14 @@ public class MapReduceXml {
   public static MapReduceXml getMapReduceXmlFromFile() throws FileNotFoundException {
     return new MapReduceXml(getMapReduceXmlInputStream());
   }
-  
+
   /**
    * Initializes MapReduceXml with the contents of the given input stream,
    * which should contain the contents of a mapreduce.xml file.
    */
   public MapReduceXml(InputStream xmlInputStream) {
-    // TODO(frew): Refactor out DOM ugliness into utility class.
-    DocumentBuilderFactory docBuilderFactory = 
+    // TODO(user): Refactor out DOM ugliness into utility class.
+    DocumentBuilderFactory docBuilderFactory =
         ConfigurationTemplatePreprocessor.createConfigurationDocBuilderFactory();
     try {
       DocumentBuilder builder = docBuilderFactory.newDocumentBuilder();
@@ -138,9 +137,9 @@ public class MapReduceXml {
         throw new RuntimeException(
             "Bad configuration list file: top-level element not <configurations>");
       }
-      
+
       NodeList configurations = root.getChildNodes();
-      
+
       for (int i = 0; i < configurations.getLength(); i++) {
         if (!(configurations.item(i) instanceof Element)) {
           continue;
@@ -200,11 +199,11 @@ public class MapReduceXml {
   public String getTemplateAsXmlString(String name) {
     guessAndSetTransformerFactoryProp();
     Element templateElement = nameToConfigMap.get(name);
-    
+
     if (templateElement == null) {
       throw new IllegalArgumentException("Couldn't find configuration with name " + name);
     }
-    
+
     DOMSource source = new DOMSource(templateElement);
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     StreamResult result = new StreamResult(baos);
@@ -221,14 +220,14 @@ public class MapReduceXml {
       throw new RuntimeException("JDK doesn't support UTF8", e);
     }
   }
-  
+
   /**
    * Returns the set of configuration names defined in this object.
    */
   public Set<String> getConfigurationNames() {
     return nameToConfigMap.keySet();
   }
-  
+
   /**
    * Returns a configuration based on the template in this MapReduceXml
    * identified by {@code name}, substituting in the template parameters
@@ -237,12 +236,12 @@ public class MapReduceXml {
   public Configuration instantiateConfiguration(
       String name, Map<String, String> params)
   throws FileNotFoundException {
-    // TODO(frew): Add error handling for the template parameter exceptions.
+    // TODO(user): Add error handling for the template parameter exceptions.
     String template = getTemplateAsXmlString(name);
     ConfigurationTemplatePreprocessor preprocessor =
       new ConfigurationTemplatePreprocessor(template);
     String configurationString = preprocessor.preprocess(params);
-    Configuration configuration = 
+    Configuration configuration =
       ConfigurationXmlUtil.getConfigurationFromXml(configurationString);
     return configuration;
   }

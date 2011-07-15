@@ -38,7 +38,6 @@ import java.util.Iterator;
  * BlobstoreRecordReader is a RecordReader for the AppEngine Blobstore.
  * It's AppEngine compatible by way of implementing Writable.
  *
- * @author idk@google.com (Igor Kushnirskiy)
  */
 class BlobstoreRecordReader extends RecordReader<BlobstoreRecordKey, byte[]> implements Writable {
 

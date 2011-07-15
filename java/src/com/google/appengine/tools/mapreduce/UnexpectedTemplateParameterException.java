@@ -19,8 +19,7 @@ package com.google.appengine.tools.mapreduce;
 /**
  * A {@code RuntimeException} thrown to indicate that a parameter was received
  * that doesn't have a corresponding template property.
- * 
- * @author frew@google.com (Fred Wulff)
+ *
  */
 public class UnexpectedTemplateParameterException extends RuntimeException {
   public UnexpectedTemplateParameterException(String reason) {

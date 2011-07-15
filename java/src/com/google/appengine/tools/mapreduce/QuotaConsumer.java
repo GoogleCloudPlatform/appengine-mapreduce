@@ -18,11 +18,10 @@ package com.google.appengine.tools.mapreduce;
 
 /**
  * Consumer that prefetches quota from the given manager in batches.
- * 
+ *
  * Call {@link #dispose()} to return any leftover prefetched quota
  * when you're done with the QuotaConsumer.
- * 
- * @author frew@google.com (Fred Wulff)
+ *
  *
  */
 public class QuotaConsumer {
@@ -30,9 +29,9 @@ public class QuotaConsumer {
   private String bucket;
   private long batchSize;
   private long quota;
-  
+
   /**
-   * 
+   *
    * @param manager the manager to consume quota from
    * @param bucket the name of the bucket from which to consume quota
    * @param batchSize the amount of quota to pull at a time from the manager
@@ -42,10 +41,10 @@ public class QuotaConsumer {
     this.bucket = bucket;
     this.batchSize = batchSize;
   }
-  
+
   /**
    * Consumes the given amount of quota.
-   * 
+   *
    * @param amount the amount of quota to consume
    * @return true if there was sufficient quota
    */
@@ -57,26 +56,26 @@ public class QuotaConsumer {
       }
       quota += delta;
     }
-    
+
     quota -= amount;
-    
+
     return true;
   }
-  
+
   /**
    * Returns the given amount of quota.
-   * 
+   *
    * @param amount
    */
   public void put(long amount) {
     quota += amount;
   }
-  
+
   /**
    * Check whether there is a sufficient available quota.
    * This doesn't reserve the quota, so this call may pass, but a subsequent
    * call to {@link #consume(long)} for the same amount may fail.
-   * 
+   *
    * @param amount amount of quota desired
    * @return true if there is sufficient quota available
    */
@@ -84,10 +83,10 @@ public class QuotaConsumer {
     if (quota >= amount) {
       return true;
     }
-    
+
     return quota + manager.get(bucket) >= amount;
   }
-  
+
   /**
    * Return any excess prefetched quota.
    */

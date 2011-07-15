@@ -32,15 +32,15 @@ import java.io.IOException;
 /**
  * An AppEngineMapper is a Hadoop Mapper that is run via a sequential
  * series of task queue executions.
- * 
+ *
  * <p>As such, the  {@link #run(org.apache.hadoop.mapreduce.Mapper.Context)}
  * method is unusable (since task state doesn't persist from one queue iteration
  * to the next).
- * 
+ *
  * <p>Additionally, the {@link Mapper} interface is extended with two methods
- * that get executed with each task queue invocation: 
- * {@link #taskSetup(org.apache.hadoop.Mapper.Context)} and 
- * {@link #taskCleanup(org.apache.hadoop.Mapper.Context)}. 
+ * that get executed with each task queue invocation:
+ * {@link #taskSetup(org.apache.hadoop.Mapper.Context)} and
+ * {@link #taskCleanup(org.apache.hadoop.Mapper.Context)}.
  *
  * <p>The {@link Context} object that is passed to each of the AppEngineMapper
  * methods is actually an {@link AppEngineContext} object. Therefore, you can
@@ -50,9 +50,8 @@ import java.io.IOException;
  * {@link #taskCleanup(org.apache.hadoop.Mapper.Context)} if you override that
  * method in a subclass.
  *
- * @author frew@google.com (Fred Wulff)
  */
-public abstract class AppEngineMapper<KEYIN,VALUEIN,KEYOUT,VALUEOUT> 
+public abstract class AppEngineMapper<KEYIN,VALUEIN,KEYOUT,VALUEOUT>
     extends Mapper<KEYIN,VALUEIN,KEYOUT,VALUEOUT> {
 
   /**
@@ -76,7 +75,7 @@ public abstract class AppEngineMapper<KEYIN,VALUEIN,KEYOUT,VALUEOUT>
     /**
      * Sets the number of mutations and the accumulated size of the mutations
      * before the mutation pool is flushed. May only be called before the first
-     * call to {@link #getMutationPool()}. 
+     * call to {@link #getMutationPool()}.
      *
      * @param countLimit the number of mutations to collect before the mutation
      * pool is flushed
@@ -108,47 +107,47 @@ public abstract class AppEngineMapper<KEYIN,VALUEIN,KEYOUT,VALUEOUT>
       }
     }
   }
-  
+
   /**
    * App Engine mappers have no {@code run(Context)} method, since it would
    * have to span multiple task queue invocations. Therefore, calling this
    * method always throws {@link java.lang.UnsupportedOperationException}.
-   * 
+   *
    * @throws UnsupportedOperationException always
    */
   @Override
   public final void run(Context context) {
     throw new UnsupportedOperationException("AppEngineMappers don't have run methods");
   }
-  
+
   @Override
   public void setup(Context context) throws IOException, InterruptedException {
     super.setup(context);
     // Nothing
   }
-  
+
   /**
    * Run at the start of each task queue invocation.
    */
   public void taskSetup(Context context) throws IOException, InterruptedException {
     // Nothing
   }
-  
+
   @Override
   public void cleanup(Context context) throws IOException, InterruptedException {
     super.cleanup(context);
     // Nothing
   }
-  
+
   /**
    * Run at the end of each task queue invocation. The default flushes the context.
    */
   public void taskCleanup(Context context) throws IOException, InterruptedException {
     getAppEngineContext(context).flush();
   }
-  
+
   @Override
-  public void map(KEYIN key, VALUEIN value, Context context) 
+  public void map(KEYIN key, VALUEIN value, Context context)
       throws IOException, InterruptedException {
     // Nothing (super does the identity map function, which is a bad idea since
     // we don't support shuffle/reduce yet).

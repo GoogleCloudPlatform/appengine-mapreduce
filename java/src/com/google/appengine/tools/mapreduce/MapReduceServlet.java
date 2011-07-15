@@ -88,30 +88,29 @@ import javax.servlet.http.HttpServletResponse;
  * for more details.
  * </pre>
  *
- * @author frew@google.com (Fred Wulff)
  */
 public class MapReduceServlet extends HttpServlet {
   /**
-   * 
+   *
    */
   private static final int DEFAULT_JOBS_PER_PAGE_COUNT = 50;
 
   private static final Logger log = Logger.getLogger(MapReduceServlet.class.getName());
-  
+
   // Amount of time to spend on actual map() calls per task execution.
-  private static final int PROCESSING_TIME_PER_TASK_MS = 10000; 
-  
+  private static final int PROCESSING_TIME_PER_TASK_MS = 10000;
+
   /**
    * Default amount of quota to divvy up per controller execution.
    */
   public static final int DEFAULT_QUOTA_BATCH_SIZE = 20;
-  
+
   // VisibleForTesting
   static final String CONTROLLER_PATH = "controllerCallback";
   static final String START_PATH = "start";
   static final String MAPPER_WORKER_PATH = "mapperCallback";
   static final String COMMAND_PATH = "command";
-  
+
   // Command paths
   static final String LIST_JOBS_PATH = "list_jobs";
   static final String LIST_CONFIGS_PATH = "list_configs";
@@ -123,11 +122,11 @@ public class MapReduceServlet extends HttpServlet {
 
   private DatastoreService ds = DatastoreServiceFactory.getDatastoreService();
   private Clock clock = new SystemClock();
-  
+
   /**
-   * Returns the portion of the URL from the end of the TLD (exclusive) to the 
+   * Returns the portion of the URL from the end of the TLD (exclusive) to the
    * handler portion (exclusive).
-   * 
+   *
    * For example, getBase(https://www.google.com/foo/bar) -> /foo/
    * However, there are handler portions that take more than segment
    * (currently only the command handlers). So in that case, we have:
@@ -152,7 +151,7 @@ public class MapReduceServlet extends HttpServlet {
 
   /**
    * Returns the handler portion of the URL path.
-   * 
+   *
    * For example, getHandler(https://www.google.com/foo/bar) -> bar
    * Note that for command handlers,
    * getHandler(https://www.google.com/foo/command/bar) -> command/bar
@@ -226,10 +225,10 @@ public class MapReduceServlet extends HttpServlet {
       }
       handleMapperWorker(request, response);
     } else if (handler.startsWith(START_PATH)) {
-      // We don't add a GET handler for this one, since we're expecting the user 
+      // We don't add a GET handler for this one, since we're expecting the user
       // to POST the whole XML specification.
-      // TODO(frew): Make name customizable.
-      // TODO(frew): Add ability to specify a redirect.
+      // TODO(user): Make name customizable.
+      // TODO(user): Add ability to specify a redirect.
       handleStart(
           ConfigurationXmlUtil.getConfigurationFromXml(request.getParameter("configuration")),
           "Automatically run request", request);
@@ -243,7 +242,8 @@ public class MapReduceServlet extends HttpServlet {
           "Received an unknown MapReduce request handler. See logs for more detail.");
     }
   }
-  
+
+  @Override
   public void doGet(HttpServletRequest request, HttpServletResponse response) {
     String handler = MapReduceServlet.getHandler(request);
     if (handler.startsWith(COMMAND_PATH)) {
@@ -281,7 +281,7 @@ public class MapReduceServlet extends HttpServlet {
         if (countString != null) {
           count = Integer.parseInt(countString);
         }
-        
+
         retValue = handleListJobs(cursor, count);
       } else if (command.equals(CLEANUP_JOB_PATH) && isPost) {
         retValue = handleCleanupJob(request.getParameter("mapreduce_id"));
@@ -305,9 +305,9 @@ public class MapReduceServlet extends HttpServlet {
         return;
       }
     } catch (Throwable t) {
-      log.log(Level.SEVERE, "Got exception while running command", t); 
+      log.log(Level.SEVERE, "Got exception while running command", t);
       try {
-        retValue = new JSONObject();  
+        retValue = new JSONObject();
         retValue.put("error_class", t.getClass().getName());
         retValue.put("error_message",
             "Full stack trace is available in the server logs. Message: "
@@ -325,7 +325,7 @@ public class MapReduceServlet extends HttpServlet {
       throw new RuntimeException("Couldn't write command response", e);
     }
   }
-  
+
   /**
    * Handle the list_configs AJAX command.
    */
@@ -335,7 +335,7 @@ public class MapReduceServlet extends HttpServlet {
     Set<String> names = xml.getConfigurationNames();
     for (String name : names) {
       String configXml = xml.getTemplateAsXmlString(name);
-      ConfigurationTemplatePreprocessor preprocessor = 
+      ConfigurationTemplatePreprocessor preprocessor =
         new ConfigurationTemplatePreprocessor(configXml);
       configArray.put(preprocessor.toJson(name));
     }
@@ -346,7 +346,7 @@ public class MapReduceServlet extends HttpServlet {
     }
     return retValue;
   }
-  
+
   /**
    * Handle the list_jobs AJAX command.
    */
@@ -357,7 +357,7 @@ public class MapReduceServlet extends HttpServlet {
     for (MapReduceState state : states) {
       jobs.put(state.toJson(false));
     }
-    
+
     JSONObject retValue = new JSONObject();
     try {
       retValue.put("jobs", jobs);
@@ -367,10 +367,10 @@ public class MapReduceServlet extends HttpServlet {
     } catch (JSONException e) {
       throw new RuntimeException("Hard coded string is null", e);
     }
-    
+
     return retValue;
   }
-  
+
   /**
    * Handle the cleanup_job AJAX command.
    */
@@ -390,15 +390,15 @@ public class MapReduceServlet extends HttpServlet {
     }
     return retValue;
   }
-  
+
   /**
    * Handle the abort_job AJAX command.
    */
   public JSONObject handleAbortJob(String jobId) {
-    // TODO(frew): Implement
+    // TODO(user): Implement
     return new JSONObject();
   }
-  
+
   /**
    * Handle the get_job_detail AJAX command.
    */
@@ -411,16 +411,16 @@ public class MapReduceServlet extends HttpServlet {
     }
     return state.toJson(true);
   }
-    
+
   /**
    * Handle the start_job AJAX command.
    */
-  public JSONObject handleStartJob(Map<String, String> params, String name, 
+  public JSONObject handleStartJob(Map<String, String> params, String name,
       HttpServletRequest request) {
     try {
       MapReduceXml mrXml = MapReduceXml.getMapReduceXmlFromFile();
       Configuration configuration = mrXml.instantiateConfiguration(name, params);
-      // TODO(frew): What should we be doing here for error handling?
+      // TODO(user): What should we be doing here for error handling?
       String jobId = handleStart(configuration, name, request);
       JSONObject retValue = new JSONObject();
       try {
@@ -433,10 +433,10 @@ public class MapReduceServlet extends HttpServlet {
       throw new RuntimeException("Couldn't find mapreduce.xml", e);
     }
   }
-  
+
   /**
    * Update the current MR state by aggregating information from shard states.
-   * 
+   *
    * @param mrState the current MR state
    * @param shardStates all shard states (active and inactive)
    */
@@ -447,9 +447,9 @@ public class MapReduceServlet extends HttpServlet {
       Counters shardCounters = shardState.getCounters();
       // findCounter creates the counter if it doesn't exist.
       mapperCounts.add(shardCounters.findCounter(
-          HadoopCounterNames.MAP_INPUT_RECORDS_GROUP, 
+          HadoopCounterNames.MAP_INPUT_RECORDS_GROUP,
           HadoopCounterNames.MAP_INPUT_RECORDS_NAME).getValue());
-      
+
       for (CounterGroup shardCounterGroup : shardCounters) {
         for (Counter shardCounter : shardCounterGroup) {
           counters.findCounter(
@@ -458,20 +458,20 @@ public class MapReduceServlet extends HttpServlet {
         }
       }
     }
-    
+
     log.fine("Aggregated counters: " + counters);
     mrState.setCounters(counters);
     mrState.setProcessedCounts(mapperCounts);
   }
-  
+
   /**
    * Refills quotas for all active shards based on the input processing rate.
-   * 
+   *
    * @param context context to get input processing rate from
    * @param mrState the MR state containing the last poll time
    * @param activeShardStates all active shard states
    */
-  public void refillQuotas(AppEngineJobContext context, MapReduceState mrState, 
+  public void refillQuotas(AppEngineJobContext context, MapReduceState mrState,
       List<ShardState> activeShardStates) {
     if (activeShardStates.size() == 0) {
       return;
@@ -479,7 +479,7 @@ public class MapReduceServlet extends HttpServlet {
 
     long lastPollTime = mrState.getLastPollTime();
     long currentPollTime = clock.currentTimeMillis();
-    
+
     int inputProcessingRate = context.getInputProcessingRate();
     long totalQuotaRefill;
     // Initial quota fill
@@ -495,12 +495,12 @@ public class MapReduceServlet extends HttpServlet {
     for (ShardState activeShardState : activeShardStates) {
       manager.put(activeShardState.getTaskAttemptID().toString(), perShardQuotaRefill);
     }
-    mrState.setLastPollTime(currentPollTime); 
+    mrState.setLastPollTime(currentPollTime);
   }
-  
+
   /**
    * Handles the logic for a controller task queue invocation.
-   * 
+   *
    * The primary jobs of the controller are to aggregate state from the
    * MR workers (e.g. presenting an overall view of the counters), and to set
    * the quota for MR workers.
@@ -512,20 +512,20 @@ public class MapReduceServlet extends HttpServlet {
           ds, context.getJobID());
       MapReduceState mrState = MapReduceState.getMapReduceStateFromJobID(
           ds, context.getJobID());
-      
+
       List<ShardState> activeShardStates = selectActiveShards(shardStates);
-      
+
       aggregateState(mrState, shardStates);
       mrState.setActiveShardCount(activeShardStates.size());
       mrState.setShardCount(shardStates.size());
-      
+
       if (activeShardStates.size() == 0) {
         mrState.setDone();
       } else {
         refillQuotas(context, mrState, activeShardStates);
       }
       mrState.persist();
-      
+
       if (MapReduceState.Status.ACTIVE.equals(mrState.getStatus())) {
         scheduleController(request, context, context.getSliceNumber() + 1);
       } else {
@@ -578,18 +578,18 @@ public class MapReduceServlet extends HttpServlet {
   }
 
   /**
-   * Process one task invocation worth of 
-   * {@link AppEngineMapper#map(Object, Object, org.apache.hadoop.mapreduce.Mapper.Context)} 
+   * Process one task invocation worth of
+   * {@link AppEngineMapper#map(Object, Object, org.apache.hadoop.mapreduce.Mapper.Context)}
    * calls. Also handles calling
    * {@link AppEngineMapper#taskSetup(org.apache.hadoop.mapreduce.Mapper.Context)}
    * and
    * {@link AppEngineMapper#taskCleanup(org.apache.hadoop.mapreduce.Mapper.Context)}
    * before and after any map calls made.
-   * 
+   *
    * @return
    * @throws IOException if the provided {@code mapper} throws such an exception
    * during execution
-   *  
+   *
    * @throws InterruptedException if the provided {@code mapper} throws such an
    * exception during execution
    */
@@ -599,7 +599,7 @@ public class MapReduceServlet extends HttpServlet {
       AppEngineMapper<INKEY,INVALUE,OUTKEY,OUTVALUE> mapper,
       Mapper<INKEY,INVALUE,OUTKEY,OUTVALUE>.Context context,
       QuotaConsumer consumer,
-      long startTime) 
+      long startTime)
       throws IOException, InterruptedException {
     boolean shouldShardContinue = true;
     if (consumer.check(1)) {
@@ -610,7 +610,7 @@ public class MapReduceServlet extends HttpServlet {
         mapper.map(context.getCurrentKey(), context.getCurrentValue(), context);
 
         Counter inputRecordsCounter = context.getCounter(
-            HadoopCounterNames.MAP_INPUT_RECORDS_GROUP, 
+            HadoopCounterNames.MAP_INPUT_RECORDS_GROUP,
             HadoopCounterNames.MAP_INPUT_RECORDS_NAME);
         inputRecordsCounter.increment(1);
       }
@@ -621,7 +621,7 @@ public class MapReduceServlet extends HttpServlet {
           + " (default " + AppEngineJobContext.DEFAULT_MAP_INPUT_PROCESSING_RATE
           + ") if you would like your mapper job to complete faster.");
     }
-    
+
     return shouldShardContinue;
   }
 
@@ -633,55 +633,72 @@ public class MapReduceServlet extends HttpServlet {
    * {@link AppEngineMapper#cleanup(org.apache.hadoop.mapreduce.Mapper.Context)}
    * as appropriate.
    */
-  @SuppressWarnings("unchecked")
-  public <INKEY,INVALUE,OUTKEY,OUTVALUE>    
+  public <INKEY,INVALUE,OUTKEY,OUTVALUE>
   void handleMapperWorker(HttpServletRequest request, HttpServletResponse response) {
     AppEngineJobContext jobContext = new AppEngineJobContext(request, false);
     AppEngineTaskAttemptContext taskAttemptContext = new AppEngineTaskAttemptContext(
         request, jobContext, ds);
+
+    if (taskAttemptContext.getShardState() == null) {
+      // Shard state has vanished. This is probably the task being executed
+      // out of order by taskqueue.
+      log.warning("Shard state not found, aborting: " + taskAttemptContext.getTaskAttemptID() + " "
+          + jobContext.getSliceNumber());
+      return;
+    }
+
+    if (taskAttemptContext.getShardState().getStatus() != ShardState.Status.ACTIVE) {
+      // Shard is not in an active state. This is probably the task being executed
+      // out of order by taskqueue.
+      log.warning("Shard is not active, aborting: " + taskAttemptContext.getTaskAttemptID() + " "
+          + jobContext.getSliceNumber());
+      return;
+    }
+
     long startTime = clock.currentTimeMillis();
-    log.fine("Running worker: " + taskAttemptContext.getTaskAttemptID() + " " 
+    log.fine("Running worker: " + taskAttemptContext.getTaskAttemptID() + " "
         + jobContext.getSliceNumber());
+
     try {
-      AppEngineMapper<INKEY,INVALUE,OUTKEY,OUTVALUE> mapper = 
-        (AppEngineMapper<INKEY,INVALUE,OUTKEY,OUTVALUE>) taskAttemptContext.getMapper();
+      AppEngineMapper<INKEY,INVALUE,OUTKEY,OUTVALUE> mapper =
+        taskAttemptContext.<INKEY,INVALUE,OUTKEY,OUTVALUE>getMapper();
       InputSplit split = taskAttemptContext.getInputSplit();
-      RecordReader<INKEY, INVALUE> reader = 
-          (RecordReader<INKEY,INVALUE>) taskAttemptContext.getRecordReader(split);
+      RecordReader<INKEY, INVALUE> reader =
+          taskAttemptContext.<INKEY, INVALUE>getRecordReader(split);
       DatastorePersistingStatusReporter reporter =
           new DatastorePersistingStatusReporter(taskAttemptContext.getShardState());
-      AppEngineMapper.AppEngineContext context = getMapperContext(
+      AppEngineMapper<INKEY,INVALUE,OUTKEY,OUTVALUE>.AppEngineContext context = getMapperContext(
           taskAttemptContext, mapper, split, reader, reporter);
-      
+
       if (jobContext.getSliceNumber() == 0) {
         // This is the first invocation for this mapper.
-        mapper.setup((Context) context);
+        mapper.setup(context);
       }
-      
+
       QuotaConsumer consumer = getQuotaConsumer(taskAttemptContext);
-      
-      boolean shouldContinue = processMapper(mapper, (Context) context, consumer, startTime);
-      
+
+      boolean shouldContinue = processMapper(mapper, context, consumer, startTime);
+
       if (shouldContinue) {
         taskAttemptContext.getShardState().setRecordReader(jobContext.getConfiguration(), reader);
       } else {
         taskAttemptContext.getShardState().setDone();
       }
-      
+
       // This persists the shard state including the new record reader.
       reporter.persist();
-      
+
       consumer.dispose();
-      
+
       if (shouldContinue) {
         scheduleWorker(
             request, jobContext, context.getTaskAttemptID(), jobContext.getSliceNumber() + 1);
       } else {
         // This is the last invocation for this mapper.
-        mapper.cleanup((Context) context);
+        mapper.cleanup(context);
       }
     } catch (IOException ioe) {
-      // TODO(frew): Currently all user errors result in retry. We should
+      // TODO(user): Currently all user errors result in retry. We should
       // figure out some way to differentiate which should be fatal (or
       // maybe just have a memcache counter for each shard that causes us
       // to bail on repeated errors).
@@ -710,15 +727,15 @@ public class MapReduceServlet extends HttpServlet {
   /**
    * Get the mapper context for the current shard. Since there is currently
    * no reducer support, the output values are currently set to {@code null}.
-   * 
+   *
    * @return the newly initialized context
    * @throws InvocationTargetException if the constructor throws an exception
    */
   @SuppressWarnings("unchecked")
-  private <INKEY, INVALUE, OUTKEY, OUTVALUE> 
+  private <INKEY, INVALUE, OUTKEY, OUTVALUE>
   AppEngineMapper<INKEY, INVALUE, OUTKEY, OUTVALUE>.AppEngineContext getMapperContext(
       AppEngineTaskAttemptContext taskAttemptContext,
-      AppEngineMapper<INKEY, INVALUE, OUTKEY, OUTVALUE> mapper, 
+      AppEngineMapper<INKEY, INVALUE, OUTKEY, OUTVALUE> mapper,
       InputSplit split,
       RecordReader<INKEY, INVALUE> reader,
       StatusReporter reporter) throws InvocationTargetException {
@@ -739,10 +756,10 @@ public class MapReduceServlet extends HttpServlet {
       AppEngineMapper<INKEY, INVALUE, OUTKEY, OUTVALUE>.AppEngineContext context =
           contextConstructor.newInstance(
               mapper,
-              taskAttemptContext.getConfiguration(), 
-              taskAttemptContext.getTaskAttemptID(), 
-              reader, 
-              null, /* not yet implemented */ 
+              taskAttemptContext.getConfiguration(),
+              taskAttemptContext.getTaskAttemptID(),
+              reader,
+              null, /* not yet implemented */
               null, /* not yet implemented */
               reporter,
               split
@@ -767,21 +784,21 @@ public class MapReduceServlet extends HttpServlet {
     }
 
   }
-  
+
   // VisibleForTesting
   void setClock(Clock clock) {
     this.clock = clock;
   }
-  
+
   /**
    * Handle the initial request to start the MapReduce.
-   * 
+   *
    * @return the JobID of the newly created MapReduce or {@code null} if the
    * MapReduce couldn't be created.
    */
   public String handleStart(Configuration conf, String name, HttpServletRequest request) {
     AppEngineJobContext context = new AppEngineJobContext(conf, request, true);
-    
+
     // Initialize InputSplits
     Class<? extends InputFormat<?, ?>> inputFormatClass;
     try {
@@ -799,7 +816,7 @@ public class MapReduceServlet extends HttpServlet {
       throw new InvalidConfigurationException(
           "Input format class must have a visible constructor.", e);
     }
-    
+
     List<InputSplit> splits;
     try {
       splits = inputFormat.getSplits(context);
@@ -813,7 +830,7 @@ public class MapReduceServlet extends HttpServlet {
 
     MapReduceState mrState = MapReduceState.generateInitializedMapReduceState(
         ds, name, context.getJobID(), System.currentTimeMillis());
-    
+
     mrState.setConfigurationXML(
         ConfigurationXmlUtil.convertConfigurationToXml(
             context.getConfiguration()));
@@ -824,18 +841,18 @@ public class MapReduceServlet extends HttpServlet {
       mrState.persist();
       return null;
     }
-    
+
     mrState.persist();
     scheduleController(request, context, 0);
 
     scheduleShards(request, context, inputFormat, splits);
-    
+
     return mrState.getJobID();
   }
 
   /**
    * Schedules a controller task queue invocation.
-   * 
+   *
    * @param req the current request
    * @param context this MR's job context
    * @param sliceNumber a counter that increments for each sequential, successful
@@ -856,10 +873,10 @@ public class MapReduceServlet extends HttpServlet {
       log.warning("Controller task " + taskName + " already exists.");
     }
   }
-  
+
   /**
    * Schedules a worker task on the appropriate queue.
-   * 
+   *
    * @param req the current servlet request
    * @param context the context for this MR job
    * @param taskAttemptId the task attempt ID for this worker
@@ -872,13 +889,13 @@ public class MapReduceServlet extends HttpServlet {
     Preconditions.checkArgument(
         context.getJobID().equals(taskAttemptId.getJobID()),
         "Worker task must be for this MR job");
-    
+
     String taskName = ("worker_" + taskAttemptId + "__" + sliceNumber).replace('_', '-');
     try {
       context.getWorkerQueue().add(
           TaskOptions.Builder.withMethod(TaskOptions.Method.POST)
               .url(getBase(req) + MAPPER_WORKER_PATH)
-              .param(AppEngineTaskAttemptContext.TASK_ATTEMPT_ID_PARAMETER_NAME, 
+              .param(AppEngineTaskAttemptContext.TASK_ATTEMPT_ID_PARAMETER_NAME,
                   "" + taskAttemptId)
               .param(AppEngineJobContext.JOB_ID_PARAMETER_NAME, "" + taskAttemptId.getJobID())
               .param(AppEngineJobContext.SLICE_NUMBER_PARAMETER_NAME, "" + sliceNumber)
@@ -890,7 +907,7 @@ public class MapReduceServlet extends HttpServlet {
 
   /**
    * Schedules the initial worker callback execution for all shards.
-   * 
+   *
    * @param req the current request
    * @param context this MR's context
    * @param format the input format to use for generating {@code RecordReader}s
@@ -898,17 +915,17 @@ public class MapReduceServlet extends HttpServlet {
    * @param splits all input splits for this MR
    */
   // VisibleForTesting
-  void scheduleShards(HttpServletRequest req, AppEngineJobContext context, 
+  void scheduleShards(HttpServletRequest req, AppEngineJobContext context,
       InputFormat<?,?> format, List<InputSplit> splits) {
-    // TODO(frew): To make life easy for people using InputFormats
+    // TODO(user): To make life easy for people using InputFormats
     // from general Hadoop, we should add support for grouping
     // InputFormats that generate many splits into a reasonable
     // number of shards.
 
-    // TODO(frew): We will pass along the configuration so that worker tasks 
+    // TODO(user): We will pass along the configuration so that worker tasks
     // don't have to read the MapReduceState whenever task queue supports
     // reasonable size payloads.
-    
+
     int i = 0;
     for (InputSplit split : splits) {
       Configuration conf = context.getConfiguration();
@@ -933,7 +950,7 @@ public class MapReduceServlet extends HttpServlet {
       i++;
     }
   }
-  
+
   /**
    * Handle serving of static resources (which we do dynamically so users
    * only have to add one entry to their web.xml).
@@ -963,12 +980,15 @@ public class MapReduceServlet extends HttpServlet {
       }
       return;
     }
-    
+
     response.setHeader("Cache-Control", "public; max-age=300");
-    
+
     try {
       InputStream resourceStream = MapReduceServlet.class.getResourceAsStream(
-          "/com/google/appengine/tools/mapreduce/" + fileName);
+          "/third_party/java_src/appengine_mapreduce/" + fileName);
+      if (resourceStream == null) {
+        throw new RuntimeException("Couldn't find static file for MapReduce library: " + fileName);
+      }
       OutputStream responseStream = response.getOutputStream();
       byte[] buffer = new byte[1024];
       int bytesRead;

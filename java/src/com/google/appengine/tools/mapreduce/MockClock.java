@@ -23,17 +23,16 @@ import java.util.List;
 
 /**
  * Mock clock that returns a predefined sequence of times.
- * 
+ *
  * Package visible because it's a utility class for mapreduce.
- * 
- * @author frew@google.com (Fred Wulff)
+ *
  *
  */
 class MockClock implements Clock {
   private List<Long> times;
   private int currentOffset = 0;
   private boolean repeatLastTime;
-  
+
   /**
    * Makes the clock return the given time repeatedly.
    */
@@ -41,10 +40,10 @@ class MockClock implements Clock {
     times = Arrays.asList(new Long(time));
     repeatLastTime = true;
   }
-  
+
   /**
    * Initializes a clock that returns a sequence of predefined times.
-   * 
+   *
    * @param times the sequence of times to return
    * @param repeatLastTime defines the behavior if more than times.sizes() calls
    * to {@link #currentTimeMillis()} are made. If true, then the last time
@@ -54,7 +53,7 @@ class MockClock implements Clock {
     this.times = times;
     this.repeatLastTime = repeatLastTime;
   }
-  
+
   /**
    * Returns the next time in the sequence.
    */
@@ -63,13 +62,13 @@ class MockClock implements Clock {
     Preconditions.checkNotNull(times);
     Preconditions.checkState(times.size() > 0);
     Preconditions.checkElementIndex(currentOffset, times.size());
-    
+
     long timeToReturn = times.get(currentOffset).longValue();
-    
+
     if (!repeatLastTime || currentOffset < times.size() - 1) {
       currentOffset++;
     }
-    
+
     return timeToReturn;
   }
 }
