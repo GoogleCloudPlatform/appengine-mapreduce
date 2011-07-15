@@ -28,40 +28,39 @@ import java.util.HashMap;
 
 /**
  * Tests {@link ConfigurationTemplatePreprocessor}
- * 
- * @author frew@google.com (Fred Wulff)
+ *
  */
 public class ConfigurationTemplatePreprocessorTest extends TestCase {
-  private static final String NONTEMPLATE_PROPERTY = 
+  private static final String NONTEMPLATE_PROPERTY =
       "<property><name>binky</name><value>winky</value></property>";
-  
+
   private static final String SIMPLE_TEMPLATE_PROPERTY =
       "<property><name>foo</name><value template=\"required\" /></property>";
-  
+
   // SIMPLE_TEMPLATE_PROPERTY with "zzz" as value
   private static final String SIMPLE_ZZZ_PROPERTY =
       "<property><name>foo</name><value>zzz</value></property>";
-  
+
   private static final String HUMAN_TEMPLATE_PROPERTY =
       "<property><name human=\"Foo'bar\">bar</name><value template=\"required\" /></property>";
-  
+
   // HUMAN_TEMPLATE_PROPERTY with "zzz" as value
   private static final String HUMAN_ZZZ_PROPERTY =
       "<property><name>bar</name><value>zzz</value></property>";
-  
+
   private static final String DEFAULT_TEMPLATE_PROPERTY =
       "<property><name>baz</name><value template=\"optional\">Whee</value></property>";
-  
+
   // DEFAULT_TEMPLATE_PROPERTY with "Whee" as value
   private static final String DEFAULT_WHEE_PROPERTY =
       "<property><name>baz</name><value>Whee</value></property>";
-    
+
   private static final String EMPTY_DEFAULT_TEMPLATE_PROPERTY =
       "<property><name>baz</name><value template=\"optional\" /></property>";
-  
+
   private static final String EMPTY_EXPANDED_PROPERTY =
     "<property><name>baz</name><value></value></property>";
-  
+
   public ConfigurationTemplatePreprocessor getPreprocessorForProperties(String... properties) {
     StringBuffer buf = new StringBuffer();
     for (String property : properties) {
@@ -70,7 +69,7 @@ public class ConfigurationTemplatePreprocessorTest extends TestCase {
     return new ConfigurationTemplatePreprocessor(
         "<configuration>" + buf.toString() + "</configuration>");
   }
-  
+
   public String getExpectedStringForProperties(String... properties) {
     StringBuffer buf = new StringBuffer();
     for (String property : properties) {
@@ -78,33 +77,33 @@ public class ConfigurationTemplatePreprocessorTest extends TestCase {
     }
     return "<configuration>" + buf.toString() + "</configuration>";
   }
-  
+
   /**
    * Compares configurations given their XML strings.
    */
   private void assertConfigurationsEqual(String expectedConfXml, String actualConfXml) {
     Configuration expectedConf = ConfigurationXmlUtil.getConfigurationFromXml(expectedConfXml);
     Configuration actualConf = ConfigurationXmlUtil.getConfigurationFromXml(actualConfXml);
-    
+
     assertEquals(Sets.newHashSet(expectedConf), Sets.newHashSet(actualConf));
   }
-  
+
   public void testPreprocess_nontemplate() {
     ConfigurationTemplatePreprocessor proc = getPreprocessorForProperties(NONTEMPLATE_PROPERTY);
     String outputString = proc.preprocess(new HashMap<String, String>());
-    
+
     assertConfigurationsEqual(getExpectedStringForProperties(NONTEMPLATE_PROPERTY), outputString);
   }
-  
+
   public void testPreprocess_defaultMissing() {
     ConfigurationTemplatePreprocessor proc = getPreprocessorForProperties(SIMPLE_TEMPLATE_PROPERTY);
     try {
       proc.preprocess(new HashMap<String, String>());
       fail("Should have caught missing property");
     } catch (MissingTemplateParameterException expected) {
-    } 
+    }
   }
-  
+
   public void testPreprocess_nontemplateExtraParam() {
     ConfigurationTemplatePreprocessor proc = getPreprocessorForProperties(NONTEMPLATE_PROPERTY);
     try {
@@ -113,7 +112,7 @@ public class ConfigurationTemplatePreprocessorTest extends TestCase {
     } catch (UnexpectedTemplateParameterException expected) {
     }
   }
-  
+
   public void testPreprocess_simpleParam() {
     ConfigurationTemplatePreprocessor proc = getPreprocessorForProperties(SIMPLE_TEMPLATE_PROPERTY);
     assertEquals(
@@ -121,7 +120,7 @@ public class ConfigurationTemplatePreprocessorTest extends TestCase {
     assertConfigurationsEqual(getExpectedStringForProperties(SIMPLE_ZZZ_PROPERTY),
         proc.preprocess(singletonMap("foo", "zzz")));
   }
-  
+
   public void testPreprocess_humanParam() {
     ConfigurationTemplatePreprocessor proc = getPreprocessorForProperties(HUMAN_TEMPLATE_PROPERTY);
     assertEquals(
@@ -129,7 +128,7 @@ public class ConfigurationTemplatePreprocessorTest extends TestCase {
     assertConfigurationsEqual(getExpectedStringForProperties(HUMAN_ZZZ_PROPERTY),
         proc.preprocess(singletonMap("bar", "zzz")));
   }
-  
+
   public void testPreprocess_defaultParam() {
     ConfigurationTemplatePreprocessor proc = getPreprocessorForProperties(
         DEFAULT_TEMPLATE_PROPERTY);
@@ -137,7 +136,7 @@ public class ConfigurationTemplatePreprocessorTest extends TestCase {
     assertConfigurationsEqual(getExpectedStringForProperties(DEFAULT_WHEE_PROPERTY),
         proc.preprocess(new HashMap<String, String>()));
   }
-  
+
   public void testPreprocess_emptyDefaultParam() {
     ConfigurationTemplatePreprocessor proc = getPreprocessorForProperties(
         EMPTY_DEFAULT_TEMPLATE_PROPERTY);

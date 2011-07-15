@@ -30,7 +30,6 @@ import javax.servlet.http.HttpServletResponse;
 /**
  * Add some test data for our mapper.
  *
- * @author frew@google.com (Fred Wulff)
  *
  */
 public class InitServlet extends HttpServlet {

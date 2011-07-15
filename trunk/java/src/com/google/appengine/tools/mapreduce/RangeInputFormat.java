@@ -30,16 +30,15 @@ import org.apache.hadoop.mapreduce.TaskAttemptContext;
 
 /**
  * An input format that produces integer keys in a given range.
- * 
- * The range is specified to be from the value of 
+ *
+ * The range is specified to be from the value of
  * {@code RangeInputFormat.RANGE_START_KEY} inclusive to the value of
  * {@code RangeInputFormat.RANGE_END_KEY} exclusive.
- * 
- * The number of shards to use is specified by the value of 
+ *
+ * The number of shards to use is specified by the value of
  * {@code RangeInputFormat.SHARD_COUNT_KEY}
- * 
- * @author frew@google.com (Fred Wulff)
- * 
+ *
+ *
  */
 public class RangeInputFormat extends InputFormat<Long, NullWritable> {
   /**
@@ -55,7 +54,7 @@ public class RangeInputFormat extends InputFormat<Long, NullWritable> {
   /**
    * Key for inclusive start value for the range to process.
    */
-  public static final String RANGE_START_KEY 
+  public static final String RANGE_START_KEY
       = "mapreduce.mapper.inputformat.rangeinputformat.range_start";
 
   /**

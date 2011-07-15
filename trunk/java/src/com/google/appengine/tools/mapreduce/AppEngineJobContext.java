@@ -31,44 +31,43 @@ import javax.servlet.http.HttpServletRequest;
 
 /**
  * AppEngineJobContext extends Hadoop's JobContext to make extracting
- * information relevant to running a job on AppEngine easier. 
- * 
+ * information relevant to running a job on AppEngine easier.
+ *
  * <p>Essentially, this class handles all reading of configuration variables,
  * delegating appropriately to the configuration or the request state.
- * 
- * @author frew@google.com (Fred Wulff)
+ *
  */
 public class AppEngineJobContext extends JobContext {
-  // TODO(frew): Make these private after we figure out our equivalent of JobConf.
-  
+  // TODO(user): Make these private after we figure out our equivalent of JobConf.
+
   // Key names for values serialized in the configuration
-  
+
   /**
-   * The {@code Configuration} key for the entry naming the task queue to 
+   * The {@code Configuration} key for the entry naming the task queue to
    * enqueue controller tasks in.
    */
   public static final String CONTROLLER_QUEUE_KEY = "mapreduce.appengine.controller.queue";
-  
+
   /**
-   * The {@code Configuration} key for the entry naming the task queue to 
+   * The {@code Configuration} key for the entry naming the task queue to
    * enqueue worker tasks in.
    */
   public static final String WORKER_QUEUE_KEY = "mapreduce.appengine.mapper.queue";
 
   /**
-   * The {@code Configuration} key for the entry naming the task queue to 
+   * The {@code Configuration} key for the entry naming the task queue to
    * enqueue the done callback in.
    */
   public static final String DONE_CALLBACK_QUEUE_KEY = "mapreduce.appengine.donecallback.queue";
 
-  
+
   /**
    * The {@code Configuration} key for the entry denoting the maximum overall
    * rate of map() calls/second.
    */
-  public static final String MAPPER_INPUT_PROCESSING_RATE_KEY 
+  public static final String MAPPER_INPUT_PROCESSING_RATE_KEY
       = "mapreduce.mapper.inputprocessingrate";
-  
+
   /**
    * The {@code Configuration} key for the entry denoting the number of parallel
    * mapper worker shards to start in parallel.
@@ -80,29 +79,29 @@ public class AppEngineJobContext extends JobContext {
    * to the task queue for the done callback.
    */
   public static final String DONE_CALLBACK_URL_KEY = "mapreduce.appengine.donecallback.url";
-  
+
   // Parameter names for values serialized in the request
   // All VisibleForTesting
   static final String CONFIGURATION_PARAMETER_NAME = "configuration";
   static final String JOB_ID_PARAMETER_NAME = "jobID";
   static final String SLICE_NUMBER_PARAMETER_NAME = "sliceNumber";
-  
+
   /**
    * Default rate of map() calls
    */
   public static final int DEFAULT_MAP_INPUT_PROCESSING_RATE = 1000;
-  
+
   /**
    * Default number of mappers to run in parallel.
    */
   public static final int DEFAULT_MAPPER_SHARD_COUNT = 8;
-  
+
   // Current request
   private final HttpServletRequest request;
-  
+
   /**
    * Initializes a JobContext from a request.
-   * 
+   *
    * @param request the request to initialize from
    * @param startRequest whether this is a request to the start handler.
    * If it is, we generate a new Job ID rather than getting it from the
@@ -111,10 +110,10 @@ public class AppEngineJobContext extends JobContext {
   public AppEngineJobContext(HttpServletRequest request, boolean startRequest) {
     this(getConfigurationFromRequest(request, startRequest), request, startRequest);
   }
-  
+
   /**
    * Initializes a JobContext with a given configuration.
-   * 
+   *
    * @param conf the configuration to initialize from
    * @param request the request to initialize from
    * @param startRequest whether this is a request to the start handler.
@@ -124,7 +123,7 @@ public class AppEngineJobContext extends JobContext {
   public AppEngineJobContext(Configuration conf, HttpServletRequest request, boolean startRequest) {
     this(conf, startRequest ? generateNewJobID() : getJobIDFromRequest(request), request);
   }
-  
+
   /**
    * Initializes the context from its constituent elements.
    */
@@ -133,11 +132,11 @@ public class AppEngineJobContext extends JobContext {
     super(conf, jobId);
     this.request = request;
   }
-    
+
   /**
    * Gets the Configuration that was passed to this request.
    * The request must have a {@link #CONFIGURATION_PARAMETER_NAME} parameter.
-   * 
+   *
    * @param req the request currently being processed
    * @param startRequest whether or not this request is for the start handler
    * @return the corresponding configuration
@@ -159,7 +158,7 @@ public class AppEngineJobContext extends JobContext {
         throw new RuntimeException("Couldn't find MR with job ID: " + jobId);
       }
     }
-    
+
     return ConfigurationXmlUtil.getConfigurationFromXml(serializedConf);
   }
 
@@ -170,8 +169,8 @@ public class AppEngineJobContext extends JobContext {
    * See
    * <a href="http://hadoop.apache.org/common/docs/r0.20.0/api/org/apache/hadoop/mapreduce/TaskAttemptID.html">
    * TaskAttemptID</a> and the linked classes for details.
-   * 
-   * In the interest of making everyone happy, we pretend like we're the world's 
+   *
+   * In the interest of making everyone happy, we pretend like we're the world's
    * worst job tracker. It restarts each time we start a new MR. On the plus
    * side, every job is job #1!
    */
@@ -183,8 +182,8 @@ public class AppEngineJobContext extends JobContext {
 
   /**
    * Gets the Job ID from the given request.
-   * 
-   * @param req a servlet request with the job ID stored in the 
+   *
+   * @param req a servlet request with the job ID stored in the
    * {@link #JOB_ID_PARAMETER_NAME} parameter
    * @return the job ID
    */
@@ -196,7 +195,7 @@ public class AppEngineJobContext extends JobContext {
     }
     return JobID.forName(jobIdString);
   }
-  
+
   /**
    * Given a {@code queueKey} that may exist in this context's
    * {@link Configuration}, attempts to retrieve the queue name corresponding to
@@ -213,16 +212,16 @@ public class AppEngineJobContext extends JobContext {
 
   /**
    * Gets the taskqueue to enqueue worker tasks in.
-   * 
+   *
    * @return the worker taskqueue
    */
   public Queue getWorkerQueue() {
     return QueueFactory.getQueue(getQueueName(WORKER_QUEUE_KEY));
   }
-  
+
   /**
    * Gets the task queue to enqueue controller tasks in.
-   * 
+   *
    * @return the controller taskqueue
    */
   public Queue getControllerQueue() {
@@ -231,7 +230,7 @@ public class AppEngineJobContext extends JobContext {
 
   /**
    * Gets the task queue to enqueue the done callback task in.
-   * 
+   *
    * @return the done callback taskqueue
    */
   public Queue getDoneCallbackQueue() {
@@ -244,7 +243,7 @@ public class AppEngineJobContext extends JobContext {
    */
   public int getInputProcessingRate() {
     return getConfiguration().getInt(
-        MAPPER_INPUT_PROCESSING_RATE_KEY, DEFAULT_MAP_INPUT_PROCESSING_RATE);  
+        MAPPER_INPUT_PROCESSING_RATE_KEY, DEFAULT_MAP_INPUT_PROCESSING_RATE);
   }
 
   /**
@@ -268,7 +267,7 @@ public class AppEngineJobContext extends JobContext {
   public int getMapperShardCount() {
     return getConfiguration().getInt(MAPPER_SHARD_COUNT_KEY, DEFAULT_MAPPER_SHARD_COUNT);
   }
-  
+
   /**
    * Returns the slice number of this task queue execution. This is a
    * counter that is increased with each sequential execution in a particular

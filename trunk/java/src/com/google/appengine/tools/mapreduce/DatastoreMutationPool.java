@@ -31,15 +31,14 @@ import java.util.List;
  * are accumulated until they reach a count limit on the number of unflushed
  * mutations, until they reach a size limit on the byte count of unflushed
  * mutations, or until a manual flush is requested.
- * 
- * @author frew@google.com (Fred Wulff)
+ *
  */
 public class DatastoreMutationPool {
   /**
    * Default number of operations to batch before automatically flushing
    */
   public static final int DEFAULT_COUNT_LIMIT = 100;
-  
+
   /**
    * Default size (in bytes) of operations to batch before automatically
    * flushing.
@@ -47,41 +46,41 @@ public class DatastoreMutationPool {
    * <p>The current value is 256 KB.
    */
   public static final int DEFAULT_SIZE_LIMIT = 1 << 18;
-  
+
   private DatastoreService ds;
-  
+
   private int countLimit;
   private int sizeLimit;
-  
+
   private List<Entity> puts = new ArrayList<Entity>();
   private int putsSize;
-  
+
   private List<Key> deletes = new ArrayList<Key>();
   private int deletesSize;
-  
+
   /**
-   * Initialize a datastore mutation pool with the default batch mutation count 
+   * Initialize a datastore mutation pool with the default batch mutation count
    * limit of {@value #DEFAULT_COUNT_LIMIT} and the default batch mutation
    * size limit of {@value #DEFAULT_SIZE_LIMIT}.
    */
   public DatastoreMutationPool(DatastoreService ds) {
     this(ds, DEFAULT_COUNT_LIMIT, DEFAULT_SIZE_LIMIT);
   }
-  
+
   /**
    * Initialize a batch datastore mutation with the given count and size limits.
    */
-  public DatastoreMutationPool(DatastoreService ds, int countLimit, 
+  public DatastoreMutationPool(DatastoreService ds, int countLimit,
       int sizeLimit) {
     this.ds = ds;
     this.countLimit = countLimit;
     this.sizeLimit = sizeLimit;
   }
-  
+
   /**
    * Adds a mutation inserting the given {@code entity}.
    */
-  public void put(Entity entity) {    
+  public void put(Entity entity) {
     int putSize = EntityTranslator.convertToPb(entity).getSerializedSize();
 
     // Do this before the add so that we guarantee that size is never > sizeLimit
@@ -129,7 +128,7 @@ public class DatastoreMutationPool {
     deletes.clear();
     deletesSize = 0;
   }
-  
+
   /**
    * Flushes all outstanding mutations.
    */
@@ -137,9 +136,9 @@ public class DatastoreMutationPool {
     if (puts.size() > 0) {
       flushPuts();
     }
-    
+
     if (deletes.size() > 0) {
       flushDeletes();
-    } 
+    }
   }
 }

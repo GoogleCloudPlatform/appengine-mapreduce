@@ -32,7 +32,6 @@ import java.util.logging.Logger;
  * A writable implementation of {@code InputSplit} for BlobstoreInputFormat.
  * <p> Holds a {@code BlobKey}, {@code startIndex} and {@code endIndex}.
  *
- * @author idk@google.com (Igor Kushnirskiy)
  */
 class BlobstoreInputSplit extends InputSplit implements Writable {
 

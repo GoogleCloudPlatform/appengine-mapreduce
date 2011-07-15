@@ -38,8 +38,7 @@ import javax.servlet.http.HttpServletRequest;
 
 /**
  * Tests {@link AppEngineJobContext}.
- * 
- * @author frew@google.com (Fred Wulff)
+ *
  */
 public class AppEngineJobContextTest extends TestCase {
   private static final String SIMPLE_CONF_XML =
@@ -51,13 +50,13 @@ public class AppEngineJobContextTest extends TestCase {
     + "<value>/tmp/foo</value>"
     + "</property>"
     + "</configuration>";
-  
+
   private final LocalServiceTestHelper helper =
     new LocalServiceTestHelper(new LocalDatastoreServiceTestConfig(),
         new LocalTaskQueueTestConfig(), new LocalMemcacheServiceTestConfig());
-  
+
   private DatastoreService ds;
-  
+
   private JobID jobId;
 
   @Override
@@ -67,24 +66,24 @@ public class AppEngineJobContextTest extends TestCase {
     ds = DatastoreServiceFactory.getDatastoreService();
     jobId = new JobID("foo", 1);
   }
-  
+
   @Override
   public void tearDown() throws Exception {
     helper.tearDown();
     super.tearDown();
   }
-  
+
   public void testGetConfigurationFromRequest() {
     HttpServletRequest req = createMock(HttpServletRequest.class);
     expect(req.getParameter(AppEngineJobContext.CONFIGURATION_PARAMETER_NAME))
         .andReturn(SIMPLE_CONF_XML);
     replay(req);
-    
+
     Configuration conf = AppEngineJobContext.getConfigurationFromRequest(req, true);
     assertEquals("/tmp/foo", conf.get("foo.bar"));
     verify(req);
   }
-  
+
   public void testGetJobContextFromRequest() {
     HttpServletRequest req = createMock(HttpServletRequest.class);
     JobID jobId = new JobID("foo", 1);
@@ -105,12 +104,12 @@ public class AppEngineJobContextTest extends TestCase {
 
   // Creates an MR state with an empty configuration and the given job ID,
   // and stores it in the datastore.
-  private void persistMRState(JobID jobId, Configuration conf) {    
+  private void persistMRState(JobID jobId, Configuration conf) {
     MapReduceState mrState = MapReduceState.generateInitializedMapReduceState(ds, "", jobId, 0);
     mrState.setConfigurationXML(ConfigurationXmlUtil.convertConfigurationToXml(conf));
     mrState.persist();
   }
-  
+
   /**
    * Ensures that {@link AppEngineJobContext#getWorkerQueue()} falls back
    * to the default queue.
@@ -122,15 +121,15 @@ public class AppEngineJobContextTest extends TestCase {
         .andReturn(jobId.toString())
         .anyTimes();
     replay(req);
-    
+
     Configuration conf = new Configuration(false);
     persistMRState(jobId, conf);
-    
+
     AppEngineJobContext context = new AppEngineJobContext(req, false);
     assertEquals("default", context.getWorkerQueue().getQueueName());
     verify(req);
   }
-  
+
   /**
    * Ensures that {@link AppEngineJobContext#getWorkerQueue()} uses the current
    * task queue if set to non-default.
@@ -142,15 +141,15 @@ public class AppEngineJobContextTest extends TestCase {
       .andReturn(jobId.toString())
       .anyTimes();
     replay(req);
-    
+
     Configuration conf = new Configuration(false);
     persistMRState(jobId, conf);
-    
+
     AppEngineJobContext context = new AppEngineJobContext(req, false);
     assertEquals("bar", context.getWorkerQueue().getQueueName());
     verify(req);
   }
-  
+
   /**
    * Ensures that {@link AppEngineJobContext#getWorkerQueue()} uses the worker
    * queue specified in the job's configuration.
@@ -162,17 +161,17 @@ public class AppEngineJobContextTest extends TestCase {
       .andReturn(jobId.toString())
       .anyTimes();
     replay(req);
-    
+
     Configuration conf = new Configuration(false);
     // Configuration value should take precedence
     conf.set(AppEngineJobContext.WORKER_QUEUE_KEY, "baz");
     persistMRState(jobId, conf);
-    
+
     AppEngineJobContext context = new AppEngineJobContext(req, false);
     assertEquals("baz", context.getWorkerQueue().getQueueName());
     verify(req);
   }
-  
+
   /**
    * Ensures that {@link AppEngineJobContext#getControllerQueue()} uses the
    * controller queue specified in the job's configuration.
@@ -184,12 +183,12 @@ public class AppEngineJobContextTest extends TestCase {
         .andReturn(jobId.toString())
         .anyTimes();
     replay(req);
-    
+
     Configuration conf = new Configuration(false);
     // Configuration value should take precedence
     conf.set(AppEngineJobContext.CONTROLLER_QUEUE_KEY, "baz");
     persistMRState(jobId, conf);
-    
+
     AppEngineJobContext context = new AppEngineJobContext(req, false);
     assertEquals("baz", context.getControllerQueue().getQueueName());
     verify(req);

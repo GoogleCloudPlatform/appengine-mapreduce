@@ -29,7 +29,6 @@ import java.util.List;
  * check it. This has the side effect that tests with the StubMapper cannot
  * be run in parallel, but them's the breaks.
  *
- * @author frew@google.com (Fred Wulff)
  *
  */
 public class StubMapper extends
@@ -40,7 +39,7 @@ public class StubMapper extends
   public static boolean taskSetupCalled;
   public static boolean cleanupCalled;
   public static boolean taskCleanupCalled;
-  
+
   private static void reset() {
     invocationKeys.clear();
     setupCalled = false;
@@ -48,35 +47,35 @@ public class StubMapper extends
     cleanupCalled = false;
     taskCleanupCalled = false;
   }
-  
+
   public static void fakeSetUp() {
     reset();
   }
-  
+
   public static void fakeTearDown() {
     reset();
   }
-  
+
   @Override
   public void map(IntWritable key, IntWritable value, Context context) {
     invocationKeys.add(key);
   }
-  
+
   @Override
   public void setup(Context context) {
     setupCalled = true;
   }
-  
+
   @Override
   public void taskSetup(Context context) {
     taskSetupCalled = true;
   }
-  
+
   @Override
   public void cleanup(Context context) {
     cleanupCalled = true;
   }
-  
+
   @Override
   public void taskCleanup(Context context) {
     taskCleanupCalled = true;

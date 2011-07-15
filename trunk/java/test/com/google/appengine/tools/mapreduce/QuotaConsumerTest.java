@@ -22,30 +22,29 @@ import static org.easymock.EasyMock.*;
 
 /**
  * Tests the {@link QuotaConsumer} class.
- * 
- * @author frew@google.com (Fred Wulff)
+ *
  *
  */
 public class QuotaConsumerTest extends TestCase {
   private static final String BUCKET_NAME = "foo";
   private static final long BATCH_SIZE = 20;
-  
+
   private QuotaManager manager;
   private QuotaConsumer consumer;
-  
+
   @Override
   public void setUp() throws Exception {
     super.setUp();
     manager = createMock(QuotaManager.class);
     consumer = new QuotaConsumer(manager, BUCKET_NAME, BATCH_SIZE);
   }
-  
+
   @Override
   public void tearDown() throws Exception {
     super.tearDown();
     verify(manager);
   }
-  
+
   public void testSimpleConsume() {
     expect(manager.consume(BUCKET_NAME, BATCH_SIZE, true))
       .andReturn(BATCH_SIZE)
@@ -56,7 +55,7 @@ public class QuotaConsumerTest extends TestCase {
     assertTrue(consumer.consume(10));
     assertFalse(consumer.consume(1));
   }
-  
+
   public void testConsumePartial() {
     expect(manager.consume(BUCKET_NAME, BATCH_SIZE, true))
       .andReturn((long) 5)
@@ -65,7 +64,7 @@ public class QuotaConsumerTest extends TestCase {
     assertTrue(consumer.consume(5));
     assertFalse(consumer.consume(1));
   }
-  
+
   public void testCheck() {
     expect(manager.get(BUCKET_NAME))
       .andReturn((long) 10)
@@ -74,14 +73,14 @@ public class QuotaConsumerTest extends TestCase {
     assertTrue(consumer.check(10));
     assertFalse(consumer.check(11));
     consumer.put(1);
-    
+
     // Should be satisfied locally. If there are 4 calls seen to QuotaManager
     // this is probably the culprit
     assertTrue(consumer.check(1));
-    
+
     assertTrue(consumer.check(11));
   }
-  
+
   public void testDispose() {
     manager.put(BUCKET_NAME, 5);
     replay(manager);

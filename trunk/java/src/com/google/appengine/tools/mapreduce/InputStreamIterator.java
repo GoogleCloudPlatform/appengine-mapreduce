@@ -30,7 +30,6 @@ import java.util.logging.Logger;
 /**
  * An iterator iterating over records in an input stream.
  *
- * @author idk@google.com (Igor Kushnirskiy)
  */
 class InputStreamIterator implements Iterator<InputStreamIterator.OffsetRecordPair> {
   public static class OffsetRecordPair {
@@ -132,7 +131,7 @@ class InputStreamIterator implements Iterator<InputStreamIterator.OffsetRecordPa
       if (skipValue == SkipRecordResult.AT_EOF) {
         return false;
       }
-      
+
       long recordEnd = input.getCount();
       input.reset();
       int byteValueLen = (int) (recordEnd - recordStart);

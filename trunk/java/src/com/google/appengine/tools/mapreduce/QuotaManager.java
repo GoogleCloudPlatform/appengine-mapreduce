@@ -20,8 +20,7 @@ import com.google.appengine.api.memcache.MemcacheService;
 
 /**
  * A best effort quota service based on memcache.
- * 
- * @author frew@google.com (Fred Wulff)
+ *
  *
  */
 class QuotaManager {
@@ -29,21 +28,21 @@ class QuotaManager {
    * The default memcache namespace for quota buckets.
    */
   public static final String DEFAULT_NAMESPACE = "quota";
-  
+
   // memcache doesn't allow you to decrement below 0, so we add this offset
   // to all memcache values.
   private static final long OFFSET = 1L << 32;
-  
+
   private final MemcacheService memcacheService;
-  
+
   /**
-   * 
+   *
    * @param memcacheService the memcache service to use for storing quota
    */
   public QuotaManager(MemcacheService memcacheService) {
     this.memcacheService = memcacheService;
   }
-  
+
   /**
    *
    * @param memcacheService the memcache service to use for storing quota
@@ -53,28 +52,28 @@ class QuotaManager {
   @Deprecated
   public QuotaManager(MemcacheService memcacheService, String namespace) {
     this.memcacheService = memcacheService;
-    
+
     if (namespace == null) {
       this.memcacheService.setNamespace(DEFAULT_NAMESPACE);
     } else {
       this.memcacheService.setNamespace(namespace);
     }
   }
-  
+
   /**
    * Add the given amount of quota to the bucket.
-   * 
+   *
    * @param bucket the name of the bucket to add quota to
    * @param amount the amount of quota to add
    */
   public void put(String bucket, long amount) {
     memcacheService.increment(bucket, amount, OFFSET);
   }
-  
+
   /**
    * Attempts to consume the given amount of quota from the given bucket.
    * Fails there is not enough quota available to satisfy the request.
-   * 
+   *
    * @param bucket the name of the bucket to consume quota from
    * @param amount the amount of quota to consume
    * @return amount if there is enough quota, 0 otherwise.
@@ -82,14 +81,14 @@ class QuotaManager {
   public long consume(String bucket, long amount) {
     return consume(bucket, amount, false);
   }
-  
+
   /**
    * Attempts to consume the given amount of quota from the given bucket.
    * If there is not enough quota available to satisfy the request:
    * <ul><li>If consumeSome is true, then consumes all available quota.
    *     <li>If consumeSome is false, doesn't consume any quota.
    * </ul>
-   * 
+   *
    * @param bucket the name of the bucket to consume quota from
    * @param amount the amount of quota to consume
    * @param consumeSome whether to settle for less quota than amount
@@ -101,7 +100,7 @@ class QuotaManager {
     if (newQuota >= OFFSET) {
       return amount;
     }
-    
+
     if (consumeSome && OFFSET - newQuota < amount) {
       put(bucket, OFFSET - newQuota);
       return amount - (OFFSET - newQuota);
@@ -110,10 +109,10 @@ class QuotaManager {
       return 0;
     }
   }
-  
+
   /**
    * Get the amount of quota in the given bucket.
-   * 
+   *
    * @param bucket the name of the bucket to get quota from
    * @return the amount of quota in the bucket
    */
@@ -124,10 +123,10 @@ class QuotaManager {
     }
     return ((Long) amountObject) - OFFSET;
   }
-  
+
   /**
    * Sets the amount of quota available to the given amount.
-   * 
+   *
    * @param bucket the name of the bucket to set quota for
    * @param amount the amount of quota to set available
    */

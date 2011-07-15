@@ -25,17 +25,16 @@ import junit.framework.TestCase;
 
 /**
  * Tests the {@link QuotaManager} class.
- * 
- * @author frew@google.com (Fred Wulff)
+ *
  *
  */
 public class QuotaManagerTest extends TestCase {
-  private final LocalServiceTestHelper helper 
+  private final LocalServiceTestHelper helper
       = new LocalServiceTestHelper(new LocalMemcacheServiceTestConfig());
 
   private MemcacheService memcacheService;
   private QuotaManager manager;
-  
+
   @Override
   public void setUp() throws Exception {
     super.setUp();
@@ -43,13 +42,13 @@ public class QuotaManagerTest extends TestCase {
     memcacheService = MemcacheServiceFactory.getMemcacheService("bob");
     manager = new QuotaManager(memcacheService);
   }
-  
+
   @Override
   public void tearDown() throws Exception {
     helper.tearDown();
     super.tearDown();
   }
-  
+
   public void testConsume() {
     manager.put("foo", 20);
     assertEquals(10, manager.consume("foo", 10));
@@ -57,7 +56,7 @@ public class QuotaManagerTest extends TestCase {
     assertEquals(0, manager.consume("foo", 5));
     assertEquals(3, manager.consume("foo", 5, true));
   }
-  
+
   public void testSet() {
     manager.put("foo", 5);
     manager.set("foo", 7);

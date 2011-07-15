@@ -23,7 +23,6 @@ import com.google.common.base.Preconditions;
 /**
  * A key for mapreduce mapper over Blobstore.
  *
- * @author idk@google.com (Igor Kushnirskiy)
  */
 public final class BlobstoreRecordKey {
 

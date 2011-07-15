@@ -28,8 +28,7 @@ import java.io.IOException;
 
 /**
  * Reader that just passes through the values from a {@link StubInputSplit}.
- * 
- * @author frew@google.com (Fred Wulff)
+ *
  *
  */
 public class StubRecordReader extends RecordReader<IntWritable, IntWritable> implements

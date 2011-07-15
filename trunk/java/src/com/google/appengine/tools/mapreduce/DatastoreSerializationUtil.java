@@ -26,8 +26,7 @@ import java.io.IOException;
 /**
  * Utility functions for serializing datastore keys.
  * Package visible to minimize exposed API.
- * 
- * @author frew@google.com (Fred Wulff)
+ *
  *
  */
 class DatastoreSerializationUtil {
@@ -36,7 +35,7 @@ class DatastoreSerializationUtil {
 
   /**
    * Serializes a datastore key, gracefully handling nulls.
-   * 
+   *
    * @param o the DataOutput to serialize to
    * @param key the datastore key to serialize
    * @throws IOException if the serialization goes horribly awry
@@ -48,10 +47,10 @@ class DatastoreSerializationUtil {
       o.writeUTF(KeyFactory.keyToString(key));
     }
   }
-  
+
   /**
    * Deserializes a datastore key, gracefully handling nulls.
-   * 
+   *
    * @param i the DataInput to deserialize from
    * @return the deserialized datastore key or {@code null}
    * @throws IOException if the deserialization goes horribly awry

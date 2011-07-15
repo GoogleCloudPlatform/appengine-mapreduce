@@ -25,7 +25,6 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 
 /**
- * @author frew@google.com (Fred Wulff)
  */
 public class DatastoreSerializationUtilTest extends TestCase {
   /**

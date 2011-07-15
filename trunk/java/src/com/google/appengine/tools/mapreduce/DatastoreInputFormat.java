@@ -16,12 +16,10 @@
 
 package com.google.appengine.tools.mapreduce;
 
-import com.google.appengine.api.datastore.DatastoreNeedIndexException;
 import com.google.appengine.api.datastore.DatastoreService;
 import com.google.appengine.api.datastore.DatastoreServiceFactory;
 import com.google.appengine.api.datastore.Entity;
 import com.google.appengine.api.datastore.Key;
-import com.google.appengine.api.datastore.KeyFactory;
 import com.google.appengine.api.datastore.Query;
 
 import org.apache.hadoop.mapreduce.InputFormat;
@@ -32,11 +30,9 @@ import org.apache.hadoop.mapreduce.TaskAttemptContext;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.Iterator;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.logging.Logger;
 
@@ -47,7 +43,6 @@ import static com.google.appengine.api.datastore.FetchOptions.Builder.withLimit;
  * Currently only supports querying over an entire entity kind, for which a
  * descending index on {@value Entity#KEY_RESERVED_PROPERTY} has been defined.
  *
- * @author frew@google.com (Fred Wulff)
  */
 public class DatastoreInputFormat extends InputFormat<Key, Entity> {
   private static final Logger log = Logger.getLogger(DatastoreInputFormat.class.getName());
@@ -69,7 +64,7 @@ public class DatastoreInputFormat extends InputFormat<Key, Entity> {
    */
   public static final int DEFAULT_SHARD_COUNT = 4;
 
-  // TODO(frew): Move to using Entity.SCATTER_RESERVED_PROPERTY when
+  // TODO(user): Move to using Entity.SCATTER_RESERVED_PROPERTY when
   // 1.4.2 comes out.
   public static final String SCATTER_RESERVED_PROPERTY = "__scatter__";
 
@@ -91,7 +86,7 @@ public class DatastoreInputFormat extends InputFormat<Key, Entity> {
       throw new IOException("No entity kind specified in job.");
     }
     log.info("Getting input splits for: " + entityKind);
-    
+
     DatastoreService datastoreService = DatastoreServiceFactory.getDatastoreService();
     Key startKey = getStartKey(entityKind, datastoreService);
     if (startKey == null) {
@@ -112,7 +107,7 @@ public class DatastoreInputFormat extends InputFormat<Key, Entity> {
         return e1.getKey().compareTo(e2.getKey());
       }
     });
-        
+
     List<Key> splitKeys = new ArrayList(shardCount);
     // Possibly use a lower oversampling factor if there aren't enough scatter
     // property-containing entities to fill out the list.
@@ -130,7 +125,7 @@ public class DatastoreInputFormat extends InputFormat<Key, Entity> {
       }
       splitKeys.add(scatterList.get(i * usedOversampleFactor).getKey());
     }
-    
+
     return getSplitsFromSplitPoints(startKey, splitKeys);
   }
 
@@ -140,16 +135,16 @@ public class DatastoreInputFormat extends InputFormat<Key, Entity> {
    */
   private static List<InputSplit> getSplitsFromSplitPoints(Key startKey, List<Key> splitKeys) {
     List<InputSplit> splits = new ArrayList<InputSplit>(splitKeys.size());
-    
+
     Key lastKey = startKey;
 
     for (Key currentKey : splitKeys) {
       splits.add(new DatastoreInputSplit(lastKey, currentKey));
-      log.info("Added DatastoreInputSplit " +  splits.get(splits.size() - 1) + " " + lastKey 
+      log.info("Added DatastoreInputSplit " +  splits.get(splits.size() - 1) + " " + lastKey
           + " " + currentKey);
       lastKey = currentKey;
     }
-    
+
     // Add in the final split. null is special cased so this split contains
     // [lastKey, Infinity).
     splits.add(new DatastoreInputSplit(lastKey, null));
@@ -157,12 +152,12 @@ public class DatastoreInputFormat extends InputFormat<Key, Entity> {
     return splits;
   }
 
-  private static Key getStartKey(String entityKind, DatastoreService datastoreService) 
+  private static Key getStartKey(String entityKind, DatastoreService datastoreService)
       throws IOException {
     Query ascending = new Query(entityKind)
         .addSort(Entity.KEY_RESERVED_PROPERTY)
         .setKeysOnly();
-    Iterator<Entity> ascendingIt 
+    Iterator<Entity> ascendingIt
         = datastoreService.prepare(ascending).asIterator(withLimit(1));
     if (!ascendingIt.hasNext()) {
       return null;

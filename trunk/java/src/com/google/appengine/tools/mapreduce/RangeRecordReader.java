@@ -28,19 +28,18 @@ import org.apache.hadoop.mapreduce.TaskAttemptContext;
 
 /**
  * The record reader class for {@link RangeInputFormat}.
- * 
- * @author frew@google.com (Fred Wulff)
+ *
  */
 public class RangeRecordReader extends RecordReader<Long, NullWritable>
     implements Writable {
-  
+
   private RangeInputSplit split;
   private long currentKey;
-  
+
   public RangeRecordReader() {
     currentKey = -1;
   }
-  
+
   @Override
   public void close() throws IOException {
   }
@@ -68,8 +67,8 @@ public class RangeRecordReader extends RecordReader<Long, NullWritable>
     if (currentKey < 0) {
       return 0;
     }
-    
-    return ((float) currentKey - split.getSplitStart()) 
+
+    return ((float) currentKey - split.getSplitStart())
         / (split.getSplitEnd() - split.getSplitStart());
   }
 
@@ -86,11 +85,11 @@ public class RangeRecordReader extends RecordReader<Long, NullWritable>
     } else {
       currentKey++;
     }
-    
+
     if (currentKey >= split.getSplitEnd()) {
       return false;
     }
-    
+
     return true;
   }
 

@@ -29,8 +29,7 @@ import java.util.HashMap;
 
 /**
  * Tests the {@link MapReduceXml} class.
- * 
- * @author frew@google.com (Fred Wulff)
+ *
  */
 public class MapReduceXmlTest extends TestCase {
   // Also used by MapReduceServletTest
@@ -44,7 +43,7 @@ public class MapReduceXmlTest extends TestCase {
       + "    </property>"
       + "  </configuration>"
       + "</configurations>";
-  
+
   public InputStream inputStreamFromString(String s) {
     try {
       return new ByteArrayInputStream(s.getBytes("UTF8"));
@@ -52,16 +51,16 @@ public class MapReduceXmlTest extends TestCase {
       throw new RuntimeException("Huh. JDK doesn't support UTF8");
     }
   }
-  
+
   public void testConstructor() {
     MapReduceXml mrXml = new MapReduceXml(inputStreamFromString(SAMPLE_CONFIGURATION_XML));
     assertEquals(Sets.newHashSet(mrXml.getConfigurationNames()), Sets.newHashSet("Foo", "Bar"));
   }
-  
+
   public void testTemplateIsIntact() {
     MapReduceXml mrXml = new MapReduceXml(inputStreamFromString(SAMPLE_CONFIGURATION_XML));
     String templateString = mrXml.getTemplateAsXmlString("Bar");
-    ConfigurationTemplatePreprocessor preprocessor = 
+    ConfigurationTemplatePreprocessor preprocessor =
         new ConfigurationTemplatePreprocessor(templateString);
     String configString = preprocessor.preprocess(new HashMap<String, String>());
     Configuration conf = ConfigurationXmlUtil.getConfigurationFromXml(configString);

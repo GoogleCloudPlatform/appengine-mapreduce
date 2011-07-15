@@ -39,7 +39,6 @@ import java.util.List;
 /**
  * Unit test for {@code BlobstoreRecordReader}.
  *
- * @author idk@google.com (Igor Kushnirskiy)
  */
 public class BlobstoreRecordReaderTest extends TestCase {
   /**
@@ -57,13 +56,13 @@ public class BlobstoreRecordReaderTest extends TestCase {
       offsets.add(byteContent.length);
       byteContent = Bytes.concat(byteContent, entry, terminator);
     }
-    
+
     byte[] nonTerminatedRecord = "extra content".getBytes();
     content.add(nonTerminatedRecord);
     offsets.add(byteContent.length);
     // Lack of terminator is intentional
     byteContent = Bytes.concat(byteContent, nonTerminatedRecord);
-    
+
     // first iteration is for the first split in a blob
     // second iteration is for non-first split
     for (final long startIndex : new long[]{0, 10}) {
@@ -75,7 +74,7 @@ public class BlobstoreRecordReaderTest extends TestCase {
     }
   }
 
-  /** 
+  /**
    * Tests iterating over InputStream with persisting and restoring the state
    * of iteration
    */
@@ -136,7 +135,7 @@ public class BlobstoreRecordReaderTest extends TestCase {
     if (recordReader.nextKeyValue()) {
       String recordContents = new String(recordReader.getCurrentValue());
       fail("Iterator returned " + recordContents + " after the last expected "
-          + "read and " + recordReader.nextKeyValue() 
+          + "read and " + recordReader.nextKeyValue()
           + " when asked if there's another one after that.");
     }
   }

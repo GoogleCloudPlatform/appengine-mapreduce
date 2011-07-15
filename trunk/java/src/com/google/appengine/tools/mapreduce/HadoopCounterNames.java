@@ -19,17 +19,16 @@ package com.google.appengine.tools.mapreduce;
 /**
  * These constants reimplement counter names from Hadoop that are
  * protected. The class itself is package visible because we plan
- * to move over to the the new enums introduced by 
+ * to move over to the the new enums introduced by
  * https://issues.apache.org/jira/browse/HADOOP-5717
  * when it gets released as part of Hadoop 0.21
- * 
- * @author frew@google.com (Fred Wulff)
+ *
  */
 class HadoopCounterNames {
   private HadoopCounterNames() {
-    
+
   }
-  
+
   /**
    * Group name: # of input records processed.
    */
@@ -38,14 +37,14 @@ class HadoopCounterNames {
    * Counter name: # of input records processed.
    */
   public static final String MAP_INPUT_RECORDS_NAME = "MAP_INPUT_RECORDS";
-  
+
   /**
    * Group name: # of input bytes processed.
    */
-  // TODO(frew): Hook this up.
+  // TODO(user): Hook this up.
   public static final String MAP_INPUT_BYTES_GROUP = "org.apache.hadoop.mapred.Task$Counter";
   /**
    * Counter name: # of input bytes processed.
    */
-  public static final String MAP_INPUT_BYTES_NAME = "MAP_INPUT_BYTES";  
+  public static final String MAP_INPUT_BYTES_NAME = "MAP_INPUT_BYTES";
 }

@@ -33,7 +33,6 @@ import javax.servlet.http.HttpServletResponse;
 /**
  * A sample app using the programmatic interface to start a MapReduce.
  *
- * @author frew@google.com (Fred Wulff)
  */
 public class TestServlet extends HttpServlet {
 

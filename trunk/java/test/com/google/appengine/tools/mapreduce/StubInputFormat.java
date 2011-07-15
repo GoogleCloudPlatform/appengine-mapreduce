@@ -27,8 +27,7 @@ import java.util.List;
 
 /**
  * A format that creates a predetermined set of StubInputSplits.
- * 
- * @author frew@google.com (Fred Wulff)
+ *
  */
 public class StubInputFormat extends InputFormat<IntWritable, IntWritable> {
   @Override
@@ -39,5 +38,5 @@ public class StubInputFormat extends InputFormat<IntWritable, IntWritable> {
   @Override
   public List<InputSplit> getSplits(JobContext context) {
     return Arrays.asList((InputSplit) new StubInputSplit(1), new StubInputSplit(2));
-  }  
+  }
 }

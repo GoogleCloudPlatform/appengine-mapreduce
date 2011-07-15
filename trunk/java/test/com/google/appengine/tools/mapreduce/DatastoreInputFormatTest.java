@@ -39,31 +39,30 @@ import static org.easymock.EasyMock.*;
 
 /**
  * Tests the {@link DatastoreInputFormat} class.
- * 
- * @author frew@google.com (Fred Wulff)
- * 
+ *
+ *
  */
 public class DatastoreInputFormatTest extends TestCase {
-  private final LocalServiceTestHelper helper 
+  private final LocalServiceTestHelper helper
       = new LocalServiceTestHelper(new LocalDatastoreServiceTestConfig());
-  
+
   private DatastoreService ds;
-  
+
   final static String ENTITY_KIND_NAME = "Bob";
-  
+
   @Override
   public void setUp() throws Exception {
     super.setUp();
     helper.setUp();
     ds = DatastoreServiceFactory.getDatastoreService();
   }
-  
+
   @Override
   public void tearDown() throws Exception {
     helper.tearDown();
     super.tearDown();
   }
-  
+
   /**
    * Inserts an entity with the given kind and name into the datastore.
    */
@@ -71,14 +70,14 @@ public class DatastoreInputFormatTest extends TestCase {
     Entity entity = new Entity(entityKind, name);
     ds.put(entity);
   }
-    
+
   private void assertStartAndEndKeys(
       InputSplit split, Key startKey, Key endKey) {
     DatastoreInputSplit dsSplit = (DatastoreInputSplit) split;
     assertEquals(startKey, dsSplit.getStartKey());
     assertEquals(endKey, dsSplit.getEndKey());
   }
-  
+
   /**
    * Asserts that split's start and keys have the given names.
    */
@@ -93,7 +92,7 @@ public class DatastoreInputFormatTest extends TestCase {
     }
     assertStartAndEndKeys(split, startKey, endKey);
   }
-  
+
   /**
    * Create splits with sensible defaults for testing.
    */
@@ -106,12 +105,12 @@ public class DatastoreInputFormatTest extends TestCase {
     JobContext context = new JobContext(conf, new JobID("Foo", 1));
 
     List<InputSplit> splits = inputFormat.getSplits(context);
-    
+
     assertEquals(shardCount, splits.size());
-    
+
     return splits;
   }
-  
+
   public void testGetSplitWithNoData() throws Exception {
     DatastoreInputFormat inputFormat = new DatastoreInputFormat();
     Configuration conf = new Configuration();
@@ -125,16 +124,16 @@ public class DatastoreInputFormatTest extends TestCase {
   }
 
   /**
-   * Ensures that if the datastore has a single entity, then a split is 
+   * Ensures that if the datastore has a single entity, then a split is
    * generated for that entity.
    */
   public void testGetSplitsWithSingleKey() throws Exception {
-    Key key = ds.put(new Entity(ENTITY_KIND_NAME));  
+    Key key = ds.put(new Entity(ENTITY_KIND_NAME));
     List<InputSplit> splits = getEntityKindSplitsFromCount(1);
-    
+
     assertStartAndEndKeys(splits.get(0), key, null);
   }
-  
+
   /**
    * Test that input splits are generated correctly for datastore entities
    * that have keys with names.
@@ -146,13 +145,13 @@ public class DatastoreInputFormatTest extends TestCase {
       putEntityWithName(ENTITY_KIND_NAME, "" + (char) (i));
     }
 
-    // TODO(frew): This test is only testing the single shard fallback
+    // TODO(user): This test is only testing the single shard fallback
     // until the 1.4.2 release. At that point it should break and the expected
     // shards will need to be readjusted.
     List<InputSplit> splits = getEntityKindSplitsFromCount(1);
     assertStartAndEndKeyNames(splits.get(0), ENTITY_KIND_NAME, "a", null);
   }
-  
+
   /**
    * Test that input splits are generated correctly for entities that have
    * keys without names.
@@ -167,7 +166,7 @@ public class DatastoreInputFormatTest extends TestCase {
 
     List<Key> keys = ds.put(entities);
 
-    // TODO(frew): This test is only testing the single shard fallback
+    // TODO(user): This test is only testing the single shard fallback
     // until the 1.4.2 release. At that point it should break and the expected
     // shards will need to be readjusted.
     List<InputSplit> splits = getEntityKindSplitsFromCount(1);
