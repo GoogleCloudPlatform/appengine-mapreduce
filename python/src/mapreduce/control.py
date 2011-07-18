@@ -38,7 +38,7 @@ def start_map(name,
               shard_count=_DEFAULT_SHARD_COUNT,
               output_writer_spec=None,
               mapreduce_parameters=None,
-              base_path=base_handler._DEFAULT_BASE_PATH,
+              base_path=None,
               queue_name="default",
               eta=None,
               countdown=None,
@@ -73,6 +73,8 @@ def start_map(name,
   """
   if not shard_count:
     shard_count = _DEFAULT_SHARD_COUNT
+  if base_path is None:
+    base_path = base_handler._DEFAULT_BASE_PATH
   mapper_spec = model.MapperSpec(handler_spec,
                                  reader_spec,
                                  mapper_parameters,

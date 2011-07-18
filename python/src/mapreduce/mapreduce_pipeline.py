@@ -78,7 +78,7 @@ class ReducePipeline(base_handler.PipelineBase):
     reader_spec: specification of reduce function.
     output_writer_spec: specification of output write to use with reduce
       function.
-    parmas: mapper parameters to use as dict.
+    params: mapper parameters to use as dict.
     filenames: list of filenames to reduce.
 
   Returns:

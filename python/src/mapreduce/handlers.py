@@ -797,7 +797,7 @@ class StartJobHandler(base_handler.PostJsonHandler):
   @classmethod
   def _start_map(cls, name, mapper_spec,
                  mapreduce_params,
-                 base_path="/mapreduce",
+                 base_path=None,
                  queue_name="default",
                  eta=None,
                  countdown=None,

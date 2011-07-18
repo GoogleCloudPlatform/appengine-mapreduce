@@ -2750,6 +2750,14 @@ class _StatusUiHandler(webapp.RequestHandler):
     '/treeview-black.gif': ('ui/images/treeview-black.gif', 'image/gif'),
     '/treeview-black-line.gif': (
         'ui/images/treeview-black-line.gif', 'image/gif'),
+    '/images/treeview-default.gif': (
+        'ui/images/treeview-default.gif', 'image/gif'),
+    '/images/treeview-default-line.gif': (
+        'ui/images/treeview-default-line.gif', 'image/gif'),
+    '/images/treeview-black.gif': (
+        'ui/images/treeview-black.gif', 'image/gif'),
+    '/images/treeview-black-line.gif': (
+        'ui/images/treeview-black-line.gif', 'image/gif'),
   }
 
   def get(self, resource=''):

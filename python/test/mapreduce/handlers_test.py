@@ -842,15 +842,15 @@ class KickOffJobHandlerTest(MapreduceHandlerTestBase):
     del os.environ["HTTP_X_APPENGINE_QUEUENAME"]
 
     self.assertEquals(0, len(self.taskqueue.GetTasks("default")))
-    self.assertEquals(2, len(self.taskqueue.GetTasks("crazy-queue")))
+    self.assertEquals(9, len(self.taskqueue.GetTasks("crazy-queue")))
 
   def testNoData(self):
     self.handler.post()
-    self.assertEquals(2, len(self.taskqueue.GetTasks("default")))
+    self.assertEquals(9, len(self.taskqueue.GetTasks("default")))
 
     state = model.MapreduceState.get_by_job_id(self.mapreduce_id)
     self.assertTrue(state.active)
-    self.assertEquals(1, state.active_shards)
+    self.assertEquals(8, state.active_shards)
 
   def testDifferentShardCount(self):
     """Verifies the case when input reader created diffrent shard number."""

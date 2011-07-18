@@ -400,10 +400,11 @@ class DatastoreInputReaderTest(unittest.TestCase):
         input_readers.AbstractDatastoreInputReader._choose_split_points(
             [0, 1, 7, 8, 9, 3, 2, 4, 6, 5], 10))
 
-    self.assertEquals(
-        range(10),
-        input_readers.AbstractDatastoreInputReader._choose_split_points(
-            [0, 1, 7, 8, 9, 3, 2, 4, 6, 5], 11))
+    # Too few random keys
+    self.assertRaises(
+        AssertionError,
+        input_readers.AbstractDatastoreInputReader._choose_split_points,
+        [0, 1, 7, 8, 9, 3, 2, 4, 6, 5], 11)
 
   def testSplitNotEnoughData(self):
     """Splits should not intersect, if there's not enough data for each."""
@@ -411,16 +412,12 @@ class DatastoreInputReaderTest(unittest.TestCase):
     TestEntity().put()
     self.assertEquals([
         [key_range.KeyRange(key_start=None,
-                            key_end=key(2),
-                            direction="ASC",
-                            include_start=False,
-                            include_end=False)],
-        [key_range.KeyRange(key_start=key(2),
                             key_end=None,
-                            direction="ASC",
+                            direction='ASC',
                             include_start=True,
-                            include_end=False,
-                            namespace="")],
+                            include_end=True,
+                            namespace='')],
+        [None], [None], [None]
         ],
         self.split_into_key_ranges(4))
 
@@ -655,16 +652,15 @@ class DatastoreInputReaderTest(unittest.TestCase):
 
   def testShardDescription(self):
     """Tests the human-visible description of Datastore readers."""
-    TestEntity().put()
-    TestEntity().put()
+    for i in xrange(10):
+      TestEntity().put()
     splits = self.split_into_key_ranges(2)
     stringified = [str(s[0]) for s in splits]
     self.assertEquals(
         ["ASC(None to "
-         "datastore_types.Key.from_path(u'TestEntity', 2L, _app=u'testapp')"
-         ")",
+         "datastore_types.Key.from_path(u'TestEntity', 6L, _app=u'testapp'))",
          "ASC["
-         "datastore_types.Key.from_path(u'TestEntity', 2L, _app=u'testapp')"
+         "datastore_types.Key.from_path(u'TestEntity', 6L, _app=u'testapp')"
          " to None)"],
         stringified)
 
@@ -804,7 +800,7 @@ class BlobstoreLineInputReaderBlobstoreStubTest(unittest.TestCase):
           actual_results.append(line)
         except StopIteration:
           break
-    self.assertSequenceEqual(expected_results, actual_results)
+    self.assertEquals(expected_results, actual_results)
 
   def EndToEndTest(self, data, shard_count):
     """Create a blobstorelineinputreader and run it through its paces."""
