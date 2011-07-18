@@ -70,7 +70,7 @@ class MapperPipeline(base_handler.PipelineBase):
         output_writer_spec=output_writer_spec,
         )
     self.fill(self.outputs.job_id, mapreduce_id)
-    self.set_status(console_url="%s/details/detail?job_id=%s" % (
+    self.set_status(console_url="%s/detail?job_id=%s" % (
         (base_handler._DEFAULT_BASE_PATH, mapreduce_id)))
 
   def callback(self):
