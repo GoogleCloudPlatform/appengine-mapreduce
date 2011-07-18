@@ -985,7 +985,11 @@ public class MapReduceServlet extends HttpServlet {
 
     try {
       InputStream resourceStream = MapReduceServlet.class.getResourceAsStream(
+          "/com/google/appengine/tools/mapreduce/" + fileName);
+      if (resourceStream == null) {
+        resourceStream = MapReduceServlet.class.getResourceAsStream(
           "/third_party/java_src/appengine_mapreduce/" + fileName);
+      }
       if (resourceStream == null) {
         throw new RuntimeException("Couldn't find static file for MapReduce library: " + fileName);
       }
