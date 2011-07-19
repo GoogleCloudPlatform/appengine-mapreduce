@@ -18,7 +18,7 @@
 
 // Sets the status butter, optionally indicating if it's an error message.
 function setButter(message, error) {
-  var butter = $("#butter");
+  var butter = getButterBar();
   // Prevent flicker on butter update by hiding it first.
   butter.css('display', 'none');
   if (error) {
@@ -28,6 +28,16 @@ function setButter(message, error) {
   }
   butter.css('display', null)
   $(document).scrollTop(0);
+}
+
+// Hides the butter bar.
+function hideButter() {
+  getButterBar().css('display', 'none');
+}
+
+// Fetches the butter bar dom element.
+function getButterBar() {
+  return $('#butter');
 }
 
 // Given an AJAX error message (which is empty or null on success) and a
@@ -71,11 +81,17 @@ function listConfigs(resultFunc) {
   });
 }
 
-// Return the list of job records.
+// Return the list of job records and notifies the user the content
+// is being fetched.
 function listJobs(cursor, resultFunc) {
+  // If the user is paging then they scrolled down so let's
+  // help them by scrolling the window back to the top.
+  var jumpToTop = !!cursor;
+  cursor = cursor ? cursor : '';
+  setButter('Loading');
   $.ajax({
     type: 'GET',
-    url: 'command/list_jobs',
+    url: 'command/list_jobs?cursor=' + cursor,
     dataType: 'text',
     error: function(request, textStatus) {
       getResponseDataJson(textStatus);
@@ -84,6 +100,10 @@ function listJobs(cursor, resultFunc) {
       var response = getResponseDataJson(null, data);
       if (response) {
         resultFunc(response.jobs, response.cursor);
+        if (jumpToTop) {
+          window.scrollTo(0, 0);
+        }
+        hideButter();  // Hide the loading message.
       }
     }
   });
@@ -222,7 +242,7 @@ function getElapsedTimeString(start_timestamp_ms, updated_timestamp_ms) {
 // Retrieves the mapreduce_id from the query string. Assumes that it is
 // the only querystring parameter.
 function getJobId() {
-  var index = window.location.search.lastIndexOf("=");
+  var index = window.location.search.lastIndexOf('=');
   if (index == -1) {
     return '';
   }
@@ -238,7 +258,7 @@ function initJobOverview(jobs, cursor) {
   body.empty();
 
   if (!jobs || (jobs && jobs.length == 0)) {
-    $('<td colspan="8">').text("No job records found.").appendTo(body);
+    $('<td colspan="8">').text('No job records found.').appendTo(body);
     return;
   }
 
@@ -380,7 +400,7 @@ function initJobLaunching(configs) {
         return false;
       })
       .css('display', 'none')
-      .appendTo("#launch-container");
+      .appendTo('#launch-container');
 
     // Fixed job config values.
     $.each(FIXED_JOB_PARAMS, function(unused, key) {
@@ -415,12 +435,12 @@ function initJobLaunching(configs) {
         // Deal with the case in which the value is an object rather than
         // just the default value string.
         var prettyKey = key;
-        if (value && value["human_name"]) {
-          prettyKey = value["human_name"];
+        if (value && value['human_name']) {
+          prettyKey = value['human_name'];
         }
 
-        if (value && value["default_value"]) {
-          value = value["default_value"];
+        if (value && value['default_value']) {
+          value = value['default_value'];
         }
 
         $('<label>')
@@ -437,8 +457,8 @@ function initJobLaunching(configs) {
       });
     }
 
-    addParameters(config.params, "params.");
-    addParameters(config.mapper_params, "mapper_params.");
+    addParameters(config.params, 'params.');
+    addParameters(config.mapper_params, 'mapper_params.');
 
     $('<input type="submit">')
       .attr('value', 'Run')
@@ -500,7 +520,7 @@ function refreshJobDetail(jobId, detail) {
     $('<li>')
       .append($('<span class="param-key">').text(getNiceParamKey(key)))
       .append($('<span>').text(': '))
-      .append($('<span class="param-value">').text("" + value))
+      .append($('<span class="param-value">').text('' + value))
       .appendTo(jobParams);
   });
 
@@ -605,7 +625,7 @@ function initJobDetail(jobId, detail) {
 function initDetail() {
   var jobId = getJobId();
   if (!jobId) {
-    setButter("Could not find job ID in query string.", true);
+    setButter('Could not find job ID in query string.', true);
     return;
   }
   getJobDetail(jobId, initJobDetail);
