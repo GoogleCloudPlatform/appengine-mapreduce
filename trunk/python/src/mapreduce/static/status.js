@@ -390,6 +390,7 @@ function initJobLaunching(configs) {
         // Name is up in the page title so doesn't need to be shown again.
         $('<p class="job-static-param">')
           .append($('<span class="param-key">').text(getNiceParamKey(key)))
+          .append($('<span>').text(': '))
           .append($('<span class="param-value">').text(value))
           .appendTo(jobForm);
       }
@@ -426,6 +427,7 @@ function initJobLaunching(configs) {
           .attr('for', paramId)
           .text(prettyKey)
           .appendTo(paramP);
+        $('<span>').text(': ').appendTo(paramP);
         $('<input type="text">')
           .attr('id', paramId)
           .attr('name', prefix + key)
@@ -478,11 +480,13 @@ function refreshJobDetail(jobId, detail) {
 
   $('<li>')
     .append($('<span class="param-key">').text('Elapsed time'))
+    .append($('<span>').text(': '))
     .append($('<span class="param-value">').text(getElapsedTimeString(
           detail.start_timestamp_ms, detail.updated_timestamp_ms)))
     .appendTo(jobParams);
   $('<li>')
     .append($('<span class="param-key">').text('Start time'))
+    .append($('<span>').text(': '))
     .append($('<span class="param-value">').text(getLocalTimestring(
           detail.start_timestamp_ms)))
     .appendTo(jobParams);
@@ -495,6 +499,7 @@ function refreshJobDetail(jobId, detail) {
 
     $('<li>')
       .append($('<span class="param-key">').text(getNiceParamKey(key)))
+      .append($('<span>').text(': '))
       .append($('<span class="param-value">').text("" + value))
       .appendTo(jobParams);
   });
@@ -505,7 +510,8 @@ function refreshJobDetail(jobId, detail) {
     $.each(sortedKeys, function(index, key) {
       var value = detail.mapper_spec.mapper_params[key];
       $('<li>')
-        .append($('<span class="user-param-key"">').text(key))
+        .append($('<span class="user-param-key">').text(key))
+        .append($('<span>').text(': '))
         .append($('<span class="param-value">').html("" + value))
         .appendTo(jobParams);
     });
@@ -532,7 +538,9 @@ function refreshJobDetail(jobId, detail) {
     var avgRate = Math.round(100.0 * value / (runtimeMs / 1000.0)) / 100.0;
     $('<li>')
       .append($('<span class="param-key">').html(getNiceParamKey(key)))
+      .append($('<span>').text(': '))
       .append($('<span class="param-value">').html(value))
+      .append($('<span>').text(' '))
       .append($('<span class="param-aux">').text('(' + avgRate + '/sec avg.)'))
       .appendTo(aggregatedCounters);
   });

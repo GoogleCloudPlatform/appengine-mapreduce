@@ -1665,7 +1665,7 @@ class RecordsReaderTest(testutil.HandlerTestBase):
         "test_handler",
         input_readers.__name__ + ".RecordsReader",
         {"file": "testfile"},
-        10)
+        1)
 
   def testValidatePass(self):
     """Test validation passes."""
@@ -1691,6 +1691,59 @@ class RecordsReaderTest(testutil.HandlerTestBase):
     self.assertEquals(1, len(readers))
     self.assertEquals({"filenames": ["testfile"], "position": 0},
                       readers[0].to_json())
+
+  def testSplitInput_MultipleShards(self):
+    """Test split input implementation for multiple shards."""
+    test_files = ["testfile%d" % i for i in xrange(25)]
+    self.mapper_spec.shard_count = 4
+
+    # Only one file but multiple shards requested
+    self.mapper_spec.params["files"] = test_files[:1]
+    readers = input_readers.RecordsReader.split_input(self.mapper_spec)
+    self.assertEquals(
+        [{'position': 0, 'filenames': ['testfile0']},
+         {'position': 0, 'filenames': []},
+         {'position': 0, 'filenames': []},
+         {'position': 0, 'filenames': []}],
+        [r.to_json() for r in readers])
+
+    # Number of files equal to number of shards
+    self.mapper_spec.params["files"] = test_files[:4]
+    readers = input_readers.RecordsReader.split_input(self.mapper_spec)
+    self.assertEquals(
+        [{'position': 0, 'filenames': ['testfile0']},
+         {'position': 0, 'filenames': ['testfile1']},
+         {'position': 0, 'filenames': ['testfile2']},
+         {'position': 0, 'filenames': ['testfile3']}],
+        [r.to_json() for r in readers])
+
+    # Number of files less than 2x the number of shards
+    self.mapper_spec.params["files"] = test_files[:7]
+    readers = input_readers.RecordsReader.split_input(self.mapper_spec)
+    self.assertEquals(
+        [{'position': 0, 'filenames': ['testfile0', 'testfile4']},
+         {'position': 0, 'filenames': ['testfile1', 'testfile5']},
+         {'position': 0, 'filenames': ['testfile2', 'testfile6']},
+         {'position': 0, 'filenames': ['testfile3']}],
+        [r.to_json() for r in readers])
+
+    # Number of files more than 2x the number of shards
+    self.mapper_spec.params["files"] = test_files[:10]
+    readers = input_readers.RecordsReader.split_input(self.mapper_spec)
+    self.assertEquals(
+        [{'position': 0, 'filenames': ['testfile0', 'testfile4', 'testfile8']},
+         {'position': 0, 'filenames': ['testfile1', 'testfile5', 'testfile9']},
+         {'position': 0, 'filenames': ['testfile2', 'testfile6']},
+         {'position': 0, 'filenames': ['testfile3', 'testfile7']}],
+        [r.to_json() for r in readers])
+
+    # Multiple files but only one shard requested
+    self.mapper_spec.shard_count = 1
+    self.mapper_spec.params["files"] = test_files[:3]
+    readers = input_readers.RecordsReader.split_input(self.mapper_spec)
+    self.assertEquals(
+        [{'position': 0, 'filenames': ['testfile0', 'testfile1', 'testfile2']}],
+        [r.to_json() for r in readers])
 
   def testToJsonFromJson(self):
     """Test to/from json implementations."""
@@ -1749,6 +1802,15 @@ class RecordsReaderTest(testutil.HandlerTestBase):
     # Test reader.
     reader = input_readers.RecordsReader([input_file1, input_file2], 0)
     self.assertEquals(input_data1 + input_data2, list(reader))
+
+  def testStr(self):
+    """Tests the __str__ conversion method."""
+    reader = input_readers.RecordsReader.from_json(
+        {"filenames": ["test"], "position": 200})
+    self.assertEquals("['test']:200", str(reader))
+    reader = input_readers.RecordsReader.from_json(
+        {"filenames": [], "position": 0})
+    self.assertEquals("[]:0", str(reader))
 
 
 if __name__ == "__main__":

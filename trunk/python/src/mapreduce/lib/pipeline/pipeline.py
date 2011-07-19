@@ -769,13 +769,17 @@ class Pipeline(object):
     if self.was_aborted:
       status = 'aborted'
 
+    app_id = os.environ['APPLICATION_ID']
+    shard_index = app_id.find('~')
+    if shard_index != -1:
+      app_id = app_id[shard_index+1:]
+
     param_dict = {
         'status': status,
-        'app_id': os.environ['APPLICATION_ID'],
+        'app_id': app_id,
         'class_path': self._class_path,
         'pipeline_id': self.root_pipeline_id,
-        'base_path': '%s.appspot.com%s' % (
-            os.environ['APPLICATION_ID'], self.base_path),
+        'base_path': '%s.appspot.com%s' % (app_id, self.base_path),
     }
     subject = (
         'Pipeline %(status)s: App "%(app_id)s", %(class_path)s'
@@ -803,14 +807,13 @@ The Pipeline API
 </body></html>
 """ % param_dict
 
-    sender = '%s@%s.appspotmail.com' % (os.environ['APPLICATION_ID'],
-                                        os.environ['APPLICATION_ID'])
+    sender = '%s@%s.appspotmail.com' % (app_id, app_id)
     try:
       self._send_mail(sender, subject, body, html=html)
     except (mail.InvalidSenderError, mail.InvalidEmailError):
-      logging.exception('Could not send result email for '
-                        'root pipeline ID "%s" from sender "%s"',
-                        self.root_pipeline_id, sender)
+      logging.warning('Could not send result email for '
+                      'root pipeline ID "%s" from sender "%s"',
+                      self.root_pipeline_id, sender)
 
   def cleanup(self):
     """Clean up this Pipeline and all Datastore records used for coordination.

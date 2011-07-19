@@ -123,6 +123,7 @@ def _sort_records(records):
 
   logging.debug("Finalizing")
   files.finalize(output_path)
+  time.sleep(1)  # TODO(user): Hack for HR datastore replication delay.
   output_path = files.blobstore.get_file_name(
       files.blobstore.get_blob_key(output_path))
 
