@@ -30,17 +30,17 @@ function adjustStatusConsole() {
   var sidebar = $('#sidebar');
   var control = $('#control');
 
+  // NOTE: 16 px here is the height of the resize grip in most browsers.
+  // Need to specify this explicitly because some browsers (eg, Firefox)
+  // cause the overflow scrollbars to bounce around the page randomly when
+  // they accidentally overlap the resize grip.
   if (statusConsole.css('display') == 'none') {
-    var paddingAndMargin = detail.outerHeight() - detail.height();
+    var paddingAndMargin = detail.outerHeight() - detail.height() + 16;
     detail.css('max-height', (sidebar.outerHeight() - paddingAndMargin) + 'px');
   } else {
     detail.css('max-height', '200px');
     statusConsole.width(
         $(window).width() - sidebar.outerWidth());
-    // NOTE: 16 px here is the height of the resize grip in most browsers.
-    // Need to specify this explicitly because some browsers (eg, Firefox)
-    // cause the overflow scrollbars to bounce around the page randomly when
-    // they accidentally overlap the resize grip.
     statusConsole.height(
         $(window).height() - (statusConsole.offset().top + 16));
   }

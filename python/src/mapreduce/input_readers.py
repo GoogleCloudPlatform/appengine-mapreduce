@@ -38,8 +38,8 @@ __all__ = [
 
 # pylint: disable-msg=C6409
 
-import copy
 import StringIO
+import copy
 import time
 import zipfile
 
@@ -1457,12 +1457,13 @@ class NamespaceInputReader(InputReader):
     return repr(self.ns_range)
 
 
-# TODO(user): extend this to allow reading multiple file lists in multiple
-# shards at the same time.
 class RecordsReader(InputReader):
   """Reader to read a list of Files API file in records format.
 
-  All files are read in a single shard consequently.
+  The number of input shards can be specified by the SHARDS_PARAM
+  mapper parameter. Input files cannot be split, so there will be at most
+  one shard per file. Also the number of shards will not be reduced based on
+  the number of input files, so shards in always equals shards out.
   """
 
   FILE_PARAM = "file"
@@ -1544,6 +1545,7 @@ class RecordsReader(InputReader):
       A list of InputReaders.
     """
     params = mapper_spec.params
+    shard_count = mapper_spec.shard_count
 
     if cls.FILES_PARAM in params:
       filenames = params[cls.FILES_PARAM]
@@ -1552,7 +1554,14 @@ class RecordsReader(InputReader):
     else:
       filenames = [params[cls.FILE_PARAM]]
 
-    return [RecordsReader(filenames, 0)]
+    batch_list = [[] for _ in xrange(shard_count)]
+    for index, filename in enumerate(filenames):
+      # Simplest round robin so we don't have any short shards.
+      batch_list[index % shard_count].append(filenames[index])
+
+    # Sort from most shards to least shards so the short shard is last.
+    batch_list.sort(reverse=True, key=lambda x: len(x))
+    return [RecordsReader(batch, 0) for batch in batch_list]
 
   @classmethod
   def validate(cls, mapper_spec):
@@ -1574,4 +1583,7 @@ class RecordsReader(InputReader):
           (cls.FILES_PARAM, cls.FILE_PARAM))
 
   def __str__(self):
-    return "%s:%s" % (self._filenames, self._reader.tell())
+    position = 0
+    if self._reader:
+      position = self._reader.tell()
+    return "%s:%s" % (self._filenames, position)
