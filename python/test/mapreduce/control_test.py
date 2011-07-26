@@ -25,6 +25,7 @@ from google.appengine.ext import db
 from mapreduce import control
 from mapreduce import hooks
 from mapreduce import model
+from mapreduce import test_support
 from testlib import testutil
 
 
@@ -57,7 +58,7 @@ class ControlTest(testutil.HandlerTestBase):
 
   def get_mapreduce_spec(self, task):
     """Get mapreduce spec form kickoff task payload."""
-    payload = testutil.decode_task_payload(task)
+    payload = test_support.decode_task_payload(task)
     return model.MapreduceSpec.from_json_str(payload["mapreduce_spec"])
 
   def validate_map_started(self, mapreduce_id):

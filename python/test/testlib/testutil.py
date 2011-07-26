@@ -28,11 +28,8 @@
 from google.appengine.tools import os_compat
 # pylint: enable-msg=W0611
 
-import base64
-import cgi
 from testlib import mox
 import os
-import re
 import shutil
 import sys
 import tempfile
@@ -47,9 +44,6 @@ from google.appengine.api import queueinfo
 from google.appengine.api.blobstore import file_blob_storage
 from google.appengine.api.memcache import memcache_stub
 from google.appengine.api.taskqueue import taskqueue_stub
-from mapreduce import main
-from mapreduce import util
-from testlib import mock_webapp
 
 
 class MatchesUserRPC(mox.Comparator):
@@ -114,107 +108,3 @@ class HandlerTestBase(unittest.TestCase):
     self.assertEquals(1, len(tasks))
     self.assertEquals(tasks[0]["url"], self.MAPREDUCE_URL)
 
-
-def decode_task_payload(task):
-  """Decodes POST task payload.
-
-  Args:
-    task: a task to decode its payload.
-
-  Returns:
-    parameter_name -> parameter_value dict. If multiple parameter values are
-    present, then parameter_value will be a list.
-  """
-  body = task["body"]
-  if not body:
-    return {}
-  decoded = base64.b64decode(body)
-  result = {}
-  for (name, value) in cgi.parse_qs(decoded).items():
-    if len(value) == 1:
-      result[name] = value[0]
-    else:
-      result[name] = value
-  return util.HugeTask.decode_payload(result)
-
-
-def execute_task(task, handlers_map=None):
-  """Execute mapper's executor task.
-
-  This will try to determine the correct mapper handler for the task, will set
-  up all mock environment necessary for task execution, and execute the task
-  itself.
-
-  This function can be used for functional-style testing of functionality
-  depending on mapper framework.
-  """
-  if not handlers_map:
-    handlers_map = main.create_handlers_map()
-
-  url = task["url"]
-  handler = None
-
-  for (re_str, handler_class) in handlers_map:
-    if re.match(re_str, url):
-      handler = handler_class()
-      break
-
-  if not handler:
-    raise Exception("Can't determine handler for %s" % task)
-
-  handler.initialize(mock_webapp.MockRequest(),
-                     mock_webapp.MockResponse())
-  handler.request.set_url(url)
-
-  for k, v in task["headers"]:
-    handler.request.headers[k] = v
-    environ_key = "HTTP_" + k.replace("-", "_").upper()
-    handler.request.environ[environ_key] = v
-  handler.request.environ["HTTP_X_APPENGINE_TASKNAME"] = task["name"]
-  handler.request.environ["HTTP_X_APPENGINE_QUEUENAME"] = task["queue_name"]
-  handler.request.environ["PATH_INFO"] = handler.request.path
-
-  saved_os_environ = os.environ
-  try:
-    os.environ = dict(os.environ)
-    os.environ.update(handler.request.environ)
-    if task["method"] == "POST":
-      for k, v in decode_task_payload(task).items():
-        handler.request.set(k, v)
-      handler.post()
-    elif task["method"] == "GET":
-      handler.get()
-    else:
-      raise Exception("Unsupported method: %s" % task.method)
-  finally:
-    os.environ = saved_os_environ
-
-  if handler.response.status != 200:
-    raise Exception("Handler failure: %s (%s). \nTask: %s\nHandler: %s" %
-                    (handler.response.status,
-                     handler.response.status_message,
-                     task,
-                     handler))
-
-
-def execute_all_tasks(taskqueue, queue="default", handlers_map=None):
-  """Run and remove all tasks in the taskqueue.
-
-  Args:
-    taskqueue: An instance of taskqueue stub.
-    queue: Queue name to run all tasks from.
-  """
-  tasks = taskqueue.GetTasks(queue)
-  taskqueue.FlushQueue(queue)
-  for task in tasks:
-    execute_task(task,handlers_map=handlers_map)
-
-def execute_until_empty(taskqueue, queue="default", handlers_map=None):
-  """Execute taskqueue tasks until it becomes empty.
-
-  Args:
-    taskqueue: An instance of taskqueue stub.
-    queue: Queue name to run all tasks from.
-  """
-  while taskqueue.GetTasks(queue):
-    execute_all_tasks(taskqueue, queue, handlers_map)
