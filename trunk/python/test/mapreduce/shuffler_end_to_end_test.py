@@ -19,6 +19,7 @@ from mapreduce import mapreduce_pipeline
 from mapreduce import model
 from mapreduce import output_writers
 from mapreduce import shuffler
+from mapreduce import test_support
 from testlib import testutil
 import unittest
 
@@ -65,7 +66,7 @@ class KeyValueOutputWriterEndToEndTest(testutil.HandlerTestBase):
         base_path="/mapreduce_base_path",
         output_writer_spec=KEY_VALUE_WRITER_NAME)
 
-    testutil.execute_until_empty(self.taskqueue)
+    test_support.execute_until_empty(self.taskqueue)
 
     mapreduce_state = model.MapreduceState.get_by_job_id(mapreduce_id)
     filenames = shuffler._KeyValueBlobstoreOutputWriter.get_filenames(
@@ -133,7 +134,7 @@ class SortFileEndToEndTest(testutil.HandlerTestBase):
 
     p = shuffler.SortPipeline([input_file])
     p.start()
-    testutil.execute_until_empty(self.taskqueue)
+    test_support.execute_until_empty(self.taskqueue)
     p = shuffler.SortPipeline.from_id(p.pipeline_id)
 
     input_data.sort()
@@ -209,7 +210,7 @@ class MergingReaderEndToEndTest(testutil.HandlerTestBase):
 
     p = MergePipeline([input_file, input_file, input_file])
     p.start()
-    testutil.execute_until_empty(self.taskqueue)
+    test_support.execute_until_empty(self.taskqueue)
     p = MergePipeline.from_id(p.pipeline_id)
 
     output_file = p.outputs.default.value[0]

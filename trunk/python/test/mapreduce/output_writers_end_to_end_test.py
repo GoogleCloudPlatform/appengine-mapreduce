@@ -13,6 +13,7 @@ from google.appengine.ext import db
 from mapreduce import control
 from mapreduce import model
 from mapreduce import output_writers
+from mapreduce import test_support
 from testlib import testutil
 
 
@@ -53,7 +54,7 @@ class BlobstoreOutputWriterEndToEndTest(testutil.HandlerTestBase):
         base_path="/mapreduce_base_path",
         output_writer_spec=BLOBSTORE_WRITER_NAME)
 
-    testutil.execute_until_empty(self.taskqueue)
+    test_support.execute_until_empty(self.taskqueue)
 
     mapreduce_state = model.MapreduceState.get_by_job_id(mapreduce_id)
     filenames = output_writers.BlobstoreOutputWriter.get_filenames(
@@ -85,7 +86,7 @@ class BlobstoreOutputWriterEndToEndTest(testutil.HandlerTestBase):
         base_path="/mapreduce_base_path",
         output_writer_spec=BLOBSTORE_WRITER_NAME)
 
-    testutil.execute_until_empty(self.taskqueue)
+    test_support.execute_until_empty(self.taskqueue)
 
     mapreduce_state = model.MapreduceState.get_by_job_id(mapreduce_id)
     filenames = output_writers.BlobstoreOutputWriter.get_filenames(

@@ -15,6 +15,7 @@ from google.appengine.ext import db
 from mapreduce import input_readers
 from mapreduce import mapreduce_pipeline
 from mapreduce import output_writers
+from mapreduce import test_support
 from testlib import testutil
 
 
@@ -71,7 +72,7 @@ class MapperPipelineTest(testutil.HandlerTestBase):
             },
         )
     p.start()
-    testutil.execute_until_empty(self.taskqueue)
+    test_support.execute_until_empty(self.taskqueue)
 
     self.assertEquals(1, len(self.emails))
     self.assertTrue(self.emails[0][1].startswith(
@@ -98,7 +99,7 @@ class MapperPipelineTest(testutil.HandlerTestBase):
             },
         shards=16)
     p.start()
-    testutil.execute_until_empty(self.taskqueue)
+    test_support.execute_until_empty(self.taskqueue)
 
     self.assertEquals(1, len(self.emails))
     self.assertTrue(self.emails[0][1].startswith(

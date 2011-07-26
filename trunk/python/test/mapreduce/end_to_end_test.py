@@ -17,6 +17,7 @@ from google.appengine.ext import db
 from mapreduce import control
 from mapreduce import model
 from mapreduce import output_writers
+from mapreduce import test_support
 from testlib import testutil
 from mapreduce import util
 
@@ -123,7 +124,7 @@ class EndToEndTest(testutil.HandlerTestBase):
         shard_count=4,
         base_path="/mapreduce_base_path")
 
-    testutil.execute_until_empty(self.taskqueue)
+    test_support.execute_until_empty(self.taskqueue)
     self.assertEquals(entity_count, len(TestHandler.processed_entites))
     self.assertEquals([], model.ShardState.all().fetch(100))
 
@@ -145,7 +146,7 @@ class EndToEndTest(testutil.HandlerTestBase):
         base_path="/mapreduce_base_path",
         output_writer_spec=__name__ + ".TestOutputWriter")
 
-    testutil.execute_until_empty(self.taskqueue)
+    test_support.execute_until_empty(self.taskqueue)
     self.assertEquals(1, len(TestOutputWriter.file_contents))
     self.assertEquals(entity_count,
                       len(TestOutputWriter.file_contents.values()[0]))
@@ -173,7 +174,7 @@ class EndToEndTest(testutil.HandlerTestBase):
         shard_count=4,
         base_path="/mapreduce_base_path")
 
-    testutil.execute_until_empty(self.taskqueue)
+    test_support.execute_until_empty(self.taskqueue)
     self.assertEquals(100, len(TestHandler.processed_entites))
 
   def testHugeTaskPayloadTest(self):
@@ -200,7 +201,7 @@ class EndToEndTest(testutil.HandlerTestBase):
         shard_count=4,
         base_path="/mapreduce_base_path")
 
-    testutil.execute_until_empty(self.taskqueue)
+    test_support.execute_until_empty(self.taskqueue)
     self.assertEquals(100, len(TestHandler.processed_entites))
     self.assertEquals([], util._HugeTaskPayload.all().fetch(100))
 

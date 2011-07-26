@@ -52,6 +52,7 @@ from mapreduce import operation
 from mapreduce import output_writers
 from mapreduce import model
 from mapreduce import quota
+from mapreduce import test_support
 from testlib import testutil
 from testlib import mock_webapp
 
@@ -350,7 +351,7 @@ class MapreduceHandlerTestBase(testutil.HandlerTestBase):
       eta_sec = time.mktime(time.strptime(task["eta"], "%Y/%m/%d %H:%M:%S"))
       self.assertTrue(expected_etc_sec < eta_sec + 10)
 
-    payload = testutil.decode_task_payload(task)
+    payload = test_support.decode_task_payload(task)
     self.assertEquals(str(shard_id), payload["shard_id"])
     self.assertEquals(str(slice_id), payload["slice_id"])
 
@@ -429,7 +430,7 @@ class MapreduceHandlerTestBase(testutil.HandlerTestBase):
     self.assertEquals("POST", task["method"])
     self.assertEquals("/mapreduce/controller_callback", task["url"])
 
-    payload = testutil.decode_task_payload(task)
+    payload = test_support.decode_task_payload(task)
     mapreduce_spec = model.MapreduceSpec.from_json_str(
         payload["mapreduce_spec"])
     self.verify_mapreduce_spec(mapreduce_spec, **kwargs)
@@ -548,7 +549,7 @@ class StartJobHandlerTest(MapreduceHandlerTestBase):
 
   def get_mapreduce_spec(self, task):
     """Get mapreduce spec form kickoff task payload."""
-    payload = testutil.decode_task_payload(task)
+    payload = test_support.decode_task_payload(task)
     return model.MapreduceSpec.from_json_str(payload["mapreduce_spec"])
 
   def testCSRF(self):
@@ -580,7 +581,7 @@ class StartJobHandlerTest(MapreduceHandlerTestBase):
     # Only kickoff task should be there.
     tasks = self.taskqueue.GetTasks("default")
     self.assertEquals(1, len(tasks))
-    payload = testutil.decode_task_payload(tasks[0]) 
+    payload = test_support.decode_task_payload(tasks[0]) 
     self.assertEquals("otherapp", payload["app"])
     self.assertTrue(self.get_mapreduce_spec(tasks[0]))
 
