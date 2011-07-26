@@ -38,8 +38,8 @@ __all__ = [
 
 # pylint: disable-msg=C6409
 
-import StringIO
 import copy
+import StringIO
 import time
 import zipfile
 
@@ -326,7 +326,9 @@ class AbstractDatastoreInputReader(InputReader):
     """Return KeyRange objects. Helper for _split_input_from_params.
 
     If there are not enough Entities to make all of the given shards, the
-    returned list of KeyRanges will include Nones.
+    returned list of KeyRanges will include Nones. The returned list will
+    contain KeyRanges ordered lexographically with any Nones appearing at the
+    end.
     """
 
     raw_entity_kind = util.get_short_name(entity_kind_name)
@@ -402,6 +404,7 @@ class AbstractDatastoreInputReader(InputReader):
     for i, k_range in enumerate(key_ranges):
       shared_ranges[i % shard_count].append(k_range)
     batch_size = int(params.get(cls.BATCH_SIZE_PARAM, cls._BATCH_SIZE))
+
     return [cls(entity_kind_name,
                 key_ranges=key_ranges,
                 ns_range=None,
@@ -444,9 +447,7 @@ class AbstractDatastoreInputReader(InputReader):
 
     Tries as best as it can to split the whole query result set into equal
     shards. Due to difficulty of making the perfect split, resulting shards'
-    sizes might differ significantly from each other. The actual number of
-    shards might also be less then requested (even 1), though it is never
-    greater.
+    sizes might differ significantly from each other.
 
     Args:
       mapper_spec: MapperSpec with params containing 'entity_kind'.
@@ -457,7 +458,10 @@ class AbstractDatastoreInputReader(InputReader):
         to specify the number of entities to process in each batch.
 
     Returns:
-      A list of InputReader objects of length <= number_of_shards.
+      A list of InputReader objects. If the query results are empty then the
+      empty list will be returned. Otherwise, the list will always have a length
+      equal to number_of_shards but may be padded with Nones if there are too
+      few results for effective sharding.
     """
     params = mapper_spec.params
     entity_kind_name = params[cls.ENTITY_KIND_PARAM]
@@ -1290,15 +1294,21 @@ class ConsistentKeyReader(DatastoreKeyInputReader):
                                   shard_count):
     key_ranges = super(ConsistentKeyReader, cls)._split_input_from_namespace(
         app, namespace, entity_kind_name, shard_count)
+    assert len(key_ranges) == shard_count
 
     # The KeyRanges calculated by the base class may not include keys for
     # entities that have unapplied jobs. So use an open key range for the first
     # and last KeyRanges to ensure that they will be processed.
-    if key_ranges:
+    try:
+      last_key_range_index = key_ranges.index(None) - 1
+    except ValueError:
+      last_key_range_index = shard_count - 1
+
+    if last_key_range_index != -1:
       key_ranges[0].key_start = None
       key_ranges[0].include_start = False
-      key_ranges[-1].key_end = None
-      key_ranges[-1].include_end = False
+      key_ranges[last_key_range_index].key_end = None
+      key_ranges[last_key_range_index].include_end = False
     return key_ranges
 
   @classmethod

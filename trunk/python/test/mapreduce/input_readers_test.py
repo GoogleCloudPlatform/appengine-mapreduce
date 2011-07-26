@@ -1422,6 +1422,41 @@ class ConsistentKeyReaderTest(unittest.TestCase):
     self.assertEquals(STARTUP_TIME_US, r.start_time_us)
     self.assertEquals(namespace_range.NamespaceRange(), r._ns_range)
 
+  def testSplitInputNotEnoughData(self):
+    """Tests mapper_shard_count > number of entities."""
+    datastore.Put(datastore.Entity(self.kind_id))
+    datastore.Put(datastore.Entity(self.kind_id))
+    namespace_manager.set_namespace('a')
+    datastore.Put(datastore.Entity(self.kind_id))
+    namespace_manager.set_namespace(None)
+
+    readers = input_readers.ConsistentKeyReader.split_input(self.mapper_spec)
+    self.assertEquals(10, len(readers))
+
+    for r in readers:
+      self.assertEquals(self.kind_id, r._entity_kind)
+      self.assertEquals(STARTUP_TIME_US, r.start_time_us)
+
+    self.assertEqual([key_range.KeyRange(key_start=None,
+                                         key_end=None,
+                                         direction='ASC',
+                                         include_start=False,
+                                         include_end=False,
+                                         namespace='a'),
+                      key_range.KeyRange(key_start=None,
+                                         key_end=None,
+                                         direction='ASC',
+                                         include_start=False,
+                                         include_end=False,
+                                         namespace='')],
+                     readers[0]._key_ranges)
+
+    for i in range(1, len(readers)):
+      self.assertEquals([None, None],
+                        readers[i]._key_ranges,
+                        '[None] != readers[%d]._key_ranges (%s)' %
+                        (i, readers[i]._key_ranges))
+
   def testSplitInput(self):
     """Splits input among several shards."""
     for _ in range(100):
