@@ -1520,23 +1520,40 @@ class ConsistentKeyReaderTest(unittest.TestCase):
     keys = list(self.reader)
     self.assertEquals([k1, k2], keys)
 
+  def testReaderGeneratorWithNamespaceRange(self):
+    """Tests reader generator with namespaces but no unapplied jobs."""
+    self.reader = input_readers.ConsistentKeyReader(
+        self.kind_id,
+        ns_range=namespace_range.NamespaceRange("a", "z"))
+    self.reader.start_time_us = STARTUP_TIME_US
+
+    expected_keys = set()
+    for ns in ["b", "g", "happy", "helloworld", "r", "s", "t"]:
+      namespace_manager.set_namespace(ns)
+      expected_keys.add(datastore.Put(datastore.Entity(self.kind_id)))
+    namespace_manager.set_namespace(None)
+
+    self.mox.ReplayAll()
+    keys = set(self.reader)
+    self.assertEquals(expected_keys, keys)
+
   def testReaderGeneratorUnappliedJobsWithNamespaceRange(self):
     """Tests reader generator when there are some unapplied jobs."""
     self.reader = input_readers.ConsistentKeyReader(
         self.kind_id,
-        ns_range=namespace_range.NamespaceRange('a', 'z'))
+        ns_range=namespace_range.NamespaceRange("a", "z"))
     self.reader.start_time_us = STARTUP_TIME_US
 
     expected_keys = set()
     def AddUnappliedEntities(*args):
-      namespace_manager.set_namespace('a')
-      expected_keys.add(datastore.Put(datastore.Entity(self.kind_id, name='a')))
+      namespace_manager.set_namespace("a")
+      expected_keys.add(datastore.Put(datastore.Entity(self.kind_id, name="a")))
 
-      namespace_manager.set_namespace('d')
-      expected_keys.add(datastore.Put(datastore.Entity(self.kind_id, name='d')))
+      namespace_manager.set_namespace("d")
+      expected_keys.add(datastore.Put(datastore.Entity(self.kind_id, name="d")))
 
-      namespace_manager.set_namespace('z')
-      expected_keys.add(datastore.Put(datastore.Entity(self.kind_id, name='z')))
+      namespace_manager.set_namespace("z")
+      expected_keys.add(datastore.Put(datastore.Entity(self.kind_id, name="z")))
       namespace_manager.set_namespace(None)
 
     for c in ["b", "g", "t"]:

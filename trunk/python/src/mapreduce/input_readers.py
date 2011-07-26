@@ -1220,6 +1220,7 @@ class ConsistentKeyReader(DatastoreKeyInputReader):
   UNAPPLIED_LOG_FILTER = "__unapplied_log_timestamp_us__ <"
   DUMMY_KIND = "DUMMY_KIND"
   DUMMY_ID = 106275677020293L
+  UNAPPLIED_QUERY_DEADLINE = 270  # Max supported by datastore.
 
   def _get_unapplied_jobs_accross_namespaces(self,
                                              namespace_start,
@@ -1233,7 +1234,10 @@ class ConsistentKeyReader(DatastoreKeyInputReader):
                                               _app=app),
                self.UNAPPLIED_LOG_FILTER: self.start_time_us}
     unapplied_query = datastore.Query(filters=filters, keys_only=True, _app=app)
-    return unapplied_query.Get(limit=self._batch_size)
+    return unapplied_query.Get(
+        limit=self._batch_size,
+        config=datastore_rpc.Configuration(
+            deadline=self.UNAPPLIED_QUERY_DEADLINE))
 
   def _iter_ns_range(self):
     while True:
@@ -1283,7 +1287,7 @@ class ConsistentKeyReader(DatastoreKeyInputReader):
       keys_to_apply.append(
           db.Key.from_path(_app=key.app(), namespace=key.namespace(), *path))
     db.get(keys_to_apply, config=datastore_rpc.Configuration(
-        deadline=10,
+        deadline=self.UNAPPLIED_QUERY_DEADLINE,
         read_policy=datastore_rpc.Configuration.APPLY_ALL_JOBS_CONSISTENCY))
 
   @classmethod
