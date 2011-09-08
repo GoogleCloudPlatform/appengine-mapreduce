@@ -41,7 +41,6 @@ import org.apache.hadoop.mapreduce.RecordWriter;
 import org.apache.hadoop.mapreduce.StatusReporter;
 import org.apache.hadoop.mapreduce.TaskAttemptID;
 import org.apache.hadoop.mapreduce.TaskID;
-import org.apache.hadoop.mapreduce.Mapper.Context;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -843,9 +842,9 @@ public class MapReduceServlet extends HttpServlet {
     }
 
     mrState.persist();
-    scheduleController(request, context, 0);
 
     scheduleShards(request, context, inputFormat, splits);
+    scheduleController(request, context, 0);
 
     return mrState.getJobID();
   }
