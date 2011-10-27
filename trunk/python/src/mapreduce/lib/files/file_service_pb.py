@@ -163,6 +163,7 @@ class FileServiceErrors(ProtocolBuffer.ProtocolMessage):
 
   _STYLE = """"""
   _STYLE_CONTENT_TYPE = """"""
+  _PROTO_DESCRIPTOR_NAME = 'apphosting.files.FileServiceErrors'
 class KeyValue(ProtocolBuffer.ProtocolMessage):
   has_key_ = 0
   key_ = ""
@@ -301,6 +302,7 @@ class KeyValue(ProtocolBuffer.ProtocolMessage):
 
   _STYLE = """"""
   _STYLE_CONTENT_TYPE = """"""
+  _PROTO_DESCRIPTOR_NAME = 'apphosting.files.KeyValue'
 class KeyValues(ProtocolBuffer.ProtocolMessage):
   has_key_ = 0
   key_ = ""
@@ -443,6 +445,7 @@ class KeyValues(ProtocolBuffer.ProtocolMessage):
 
   _STYLE = """"""
   _STYLE_CONTENT_TYPE = """"""
+  _PROTO_DESCRIPTOR_NAME = 'apphosting.files.KeyValues'
 class FileContentType(ProtocolBuffer.ProtocolMessage):
 
 
@@ -522,6 +525,7 @@ class FileContentType(ProtocolBuffer.ProtocolMessage):
 
   _STYLE = """"""
   _STYLE_CONTENT_TYPE = """"""
+  _PROTO_DESCRIPTOR_NAME = 'apphosting.files.FileContentType'
 class CreateRequest_Parameter(ProtocolBuffer.ProtocolMessage):
   has_name_ = 0
   name_ = ""
@@ -660,6 +664,7 @@ class CreateRequest_Parameter(ProtocolBuffer.ProtocolMessage):
 
   _STYLE = """"""
   _STYLE_CONTENT_TYPE = """"""
+  _PROTO_DESCRIPTOR_NAME = 'apphosting.files.CreateRequest_Parameter'
 class CreateRequest(ProtocolBuffer.ProtocolMessage):
   has_filesystem_ = 0
   filesystem_ = ""
@@ -919,6 +924,7 @@ class CreateRequest(ProtocolBuffer.ProtocolMessage):
 
   _STYLE = """"""
   _STYLE_CONTENT_TYPE = """"""
+  _PROTO_DESCRIPTOR_NAME = 'apphosting.files.CreateRequest'
 class CreateResponse(ProtocolBuffer.ProtocolMessage):
   has_filename_ = 0
   filename_ = ""
@@ -1018,6 +1024,7 @@ class CreateResponse(ProtocolBuffer.ProtocolMessage):
 
   _STYLE = """"""
   _STYLE_CONTENT_TYPE = """"""
+  _PROTO_DESCRIPTOR_NAME = 'apphosting.files.CreateResponse'
 class OpenRequest(ProtocolBuffer.ProtocolMessage):
 
 
@@ -1310,6 +1317,7 @@ class OpenRequest(ProtocolBuffer.ProtocolMessage):
 
   _STYLE = """"""
   _STYLE_CONTENT_TYPE = """"""
+  _PROTO_DESCRIPTOR_NAME = 'apphosting.files.OpenRequest'
 class OpenResponse(ProtocolBuffer.ProtocolMessage):
 
   def __init__(self, contents=None):
@@ -1374,6 +1382,7 @@ class OpenResponse(ProtocolBuffer.ProtocolMessage):
 
   _STYLE = """"""
   _STYLE_CONTENT_TYPE = """"""
+  _PROTO_DESCRIPTOR_NAME = 'apphosting.files.OpenResponse'
 class CloseRequest(ProtocolBuffer.ProtocolMessage):
   has_filename_ = 0
   filename_ = ""
@@ -1507,6 +1516,7 @@ class CloseRequest(ProtocolBuffer.ProtocolMessage):
 
   _STYLE = """"""
   _STYLE_CONTENT_TYPE = """"""
+  _PROTO_DESCRIPTOR_NAME = 'apphosting.files.CloseRequest'
 class CloseResponse(ProtocolBuffer.ProtocolMessage):
 
   def __init__(self, contents=None):
@@ -1571,6 +1581,7 @@ class CloseResponse(ProtocolBuffer.ProtocolMessage):
 
   _STYLE = """"""
   _STYLE_CONTENT_TYPE = """"""
+  _PROTO_DESCRIPTOR_NAME = 'apphosting.files.CloseResponse'
 class FileStat(ProtocolBuffer.ProtocolMessage):
   has_filename_ = 0
   filename_ = ""
@@ -1848,6 +1859,7 @@ class FileStat(ProtocolBuffer.ProtocolMessage):
 
   _STYLE = """"""
   _STYLE_CONTENT_TYPE = """"""
+  _PROTO_DESCRIPTOR_NAME = 'apphosting.files.FileStat'
 class StatRequest(ProtocolBuffer.ProtocolMessage):
   has_filename_ = 0
   filename_ = ""
@@ -1976,6 +1988,7 @@ class StatRequest(ProtocolBuffer.ProtocolMessage):
 
   _STYLE = """"""
   _STYLE_CONTENT_TYPE = """"""
+  _PROTO_DESCRIPTOR_NAME = 'apphosting.files.StatRequest'
 class StatResponse(ProtocolBuffer.ProtocolMessage):
   has_more_files_found_ = 0
   more_files_found_ = 0
@@ -2126,6 +2139,7 @@ class StatResponse(ProtocolBuffer.ProtocolMessage):
 
   _STYLE = """"""
   _STYLE_CONTENT_TYPE = """"""
+  _PROTO_DESCRIPTOR_NAME = 'apphosting.files.StatResponse'
 class AppendRequest(ProtocolBuffer.ProtocolMessage):
   has_filename_ = 0
   filename_ = ""
@@ -2298,6 +2312,7 @@ class AppendRequest(ProtocolBuffer.ProtocolMessage):
 
   _STYLE = """"""
   _STYLE_CONTENT_TYPE = """"""
+  _PROTO_DESCRIPTOR_NAME = 'apphosting.files.AppendRequest'
 class AppendResponse(ProtocolBuffer.ProtocolMessage):
 
   def __init__(self, contents=None):
@@ -2362,6 +2377,7 @@ class AppendResponse(ProtocolBuffer.ProtocolMessage):
 
   _STYLE = """"""
   _STYLE_CONTENT_TYPE = """"""
+  _PROTO_DESCRIPTOR_NAME = 'apphosting.files.AppendResponse'
 class DeleteRequest(ProtocolBuffer.ProtocolMessage):
   has_filename_ = 0
   filename_ = ""
@@ -2461,6 +2477,7 @@ class DeleteRequest(ProtocolBuffer.ProtocolMessage):
 
   _STYLE = """"""
   _STYLE_CONTENT_TYPE = """"""
+  _PROTO_DESCRIPTOR_NAME = 'apphosting.files.DeleteRequest'
 class DeleteResponse(ProtocolBuffer.ProtocolMessage):
 
   def __init__(self, contents=None):
@@ -2525,6 +2542,7 @@ class DeleteResponse(ProtocolBuffer.ProtocolMessage):
 
   _STYLE = """"""
   _STYLE_CONTENT_TYPE = """"""
+  _PROTO_DESCRIPTOR_NAME = 'apphosting.files.DeleteResponse'
 class ReadRequest(ProtocolBuffer.ProtocolMessage):
   has_filename_ = 0
   filename_ = ""
@@ -2702,6 +2720,7 @@ class ReadRequest(ProtocolBuffer.ProtocolMessage):
 
   _STYLE = """"""
   _STYLE_CONTENT_TYPE = """"""
+  _PROTO_DESCRIPTOR_NAME = 'apphosting.files.ReadRequest'
 class ReadResponse(ProtocolBuffer.ProtocolMessage):
   has_data_ = 0
   data_ = ""
@@ -2801,6 +2820,7 @@ class ReadResponse(ProtocolBuffer.ProtocolMessage):
 
   _STYLE = """"""
   _STYLE_CONTENT_TYPE = """"""
+  _PROTO_DESCRIPTOR_NAME = 'apphosting.files.ReadResponse'
 class ReadKeyValueRequest(ProtocolBuffer.ProtocolMessage):
   has_filename_ = 0
   filename_ = ""
@@ -3012,6 +3032,7 @@ class ReadKeyValueRequest(ProtocolBuffer.ProtocolMessage):
 
   _STYLE = """"""
   _STYLE_CONTENT_TYPE = """"""
+  _PROTO_DESCRIPTOR_NAME = 'apphosting.files.ReadKeyValueRequest'
 class ReadKeyValueResponse_KeyValue(ProtocolBuffer.ProtocolMessage):
   has_key_ = 0
   key_ = ""
@@ -3150,6 +3171,7 @@ class ReadKeyValueResponse_KeyValue(ProtocolBuffer.ProtocolMessage):
 
   _STYLE = """"""
   _STYLE_CONTENT_TYPE = """"""
+  _PROTO_DESCRIPTOR_NAME = 'apphosting.files.ReadKeyValueResponse_KeyValue'
 class ReadKeyValueResponse(ProtocolBuffer.ProtocolMessage):
   has_next_key_ = 0
   next_key_ = ""
@@ -3331,6 +3353,7 @@ class ReadKeyValueResponse(ProtocolBuffer.ProtocolMessage):
 
   _STYLE = """"""
   _STYLE_CONTENT_TYPE = """"""
+  _PROTO_DESCRIPTOR_NAME = 'apphosting.files.ReadKeyValueResponse'
 class ShuffleEnums(ProtocolBuffer.ProtocolMessage):
 
 
@@ -3444,6 +3467,7 @@ class ShuffleEnums(ProtocolBuffer.ProtocolMessage):
 
   _STYLE = """"""
   _STYLE_CONTENT_TYPE = """"""
+  _PROTO_DESCRIPTOR_NAME = 'apphosting.files.ShuffleEnums'
 class ShuffleInputSpecification(ProtocolBuffer.ProtocolMessage):
   has_format_ = 0
   format_ = 0
@@ -3577,6 +3601,7 @@ class ShuffleInputSpecification(ProtocolBuffer.ProtocolMessage):
 
   _STYLE = """"""
   _STYLE_CONTENT_TYPE = """"""
+  _PROTO_DESCRIPTOR_NAME = 'apphosting.files.ShuffleInputSpecification'
 class ShuffleOutputSpecification(ProtocolBuffer.ProtocolMessage):
   has_format_ = 0
   format_ = 0
@@ -3714,6 +3739,7 @@ class ShuffleOutputSpecification(ProtocolBuffer.ProtocolMessage):
 
   _STYLE = """"""
   _STYLE_CONTENT_TYPE = """"""
+  _PROTO_DESCRIPTOR_NAME = 'apphosting.files.ShuffleOutputSpecification'
 class ShuffleRequest_Callback(ProtocolBuffer.ProtocolMessage):
   has_url_ = 0
   url_ = ""
@@ -3915,6 +3941,7 @@ class ShuffleRequest_Callback(ProtocolBuffer.ProtocolMessage):
 
   _STYLE = """"""
   _STYLE_CONTENT_TYPE = """"""
+  _PROTO_DESCRIPTOR_NAME = 'apphosting.files.ShuffleRequest_Callback'
 class ShuffleRequest(ProtocolBuffer.ProtocolMessage):
   has_shuffle_name_ = 0
   shuffle_name_ = ""
@@ -4192,6 +4219,7 @@ class ShuffleRequest(ProtocolBuffer.ProtocolMessage):
 
   _STYLE = """"""
   _STYLE_CONTENT_TYPE = """"""
+  _PROTO_DESCRIPTOR_NAME = 'apphosting.files.ShuffleRequest'
 class ShuffleResponse(ProtocolBuffer.ProtocolMessage):
 
   def __init__(self, contents=None):
@@ -4256,6 +4284,7 @@ class ShuffleResponse(ProtocolBuffer.ProtocolMessage):
 
   _STYLE = """"""
   _STYLE_CONTENT_TYPE = """"""
+  _PROTO_DESCRIPTOR_NAME = 'apphosting.files.ShuffleResponse'
 class GetShuffleStatusRequest(ProtocolBuffer.ProtocolMessage):
   has_shuffle_name_ = 0
   shuffle_name_ = ""
@@ -4355,6 +4384,7 @@ class GetShuffleStatusRequest(ProtocolBuffer.ProtocolMessage):
 
   _STYLE = """"""
   _STYLE_CONTENT_TYPE = """"""
+  _PROTO_DESCRIPTOR_NAME = 'apphosting.files.GetShuffleStatusRequest'
 class GetShuffleStatusResponse(ProtocolBuffer.ProtocolMessage):
   has_status_ = 0
   status_ = 0
@@ -4488,6 +4518,7 @@ class GetShuffleStatusResponse(ProtocolBuffer.ProtocolMessage):
 
   _STYLE = """"""
   _STYLE_CONTENT_TYPE = """"""
+  _PROTO_DESCRIPTOR_NAME = 'apphosting.files.GetShuffleStatusResponse'
 class GetCapabilitiesRequest(ProtocolBuffer.ProtocolMessage):
 
   def __init__(self, contents=None):
@@ -4552,6 +4583,7 @@ class GetCapabilitiesRequest(ProtocolBuffer.ProtocolMessage):
 
   _STYLE = """"""
   _STYLE_CONTENT_TYPE = """"""
+  _PROTO_DESCRIPTOR_NAME = 'apphosting.files.GetCapabilitiesRequest'
 class GetCapabilitiesResponse(ProtocolBuffer.ProtocolMessage):
   has_shuffle_available_ = 0
   shuffle_available_ = 0
@@ -4692,5 +4724,6 @@ class GetCapabilitiesResponse(ProtocolBuffer.ProtocolMessage):
 
   _STYLE = """"""
   _STYLE_CONTENT_TYPE = """"""
+  _PROTO_DESCRIPTOR_NAME = 'apphosting.files.GetCapabilitiesResponse'
 
 __all__ = ['FileServiceErrors','KeyValue','KeyValues','FileContentType','CreateRequest_Parameter','CreateRequest','CreateResponse','OpenRequest','OpenResponse','CloseRequest','CloseResponse','FileStat','StatRequest','StatResponse','AppendRequest','AppendResponse','DeleteRequest','DeleteResponse','ReadRequest','ReadResponse','ReadKeyValueRequest','ReadKeyValueResponse_KeyValue','ReadKeyValueResponse','ShuffleEnums','ShuffleInputSpecification','ShuffleOutputSpecification','ShuffleRequest_Callback','ShuffleRequest','ShuffleResponse','GetShuffleStatusRequest','GetShuffleStatusResponse','GetCapabilitiesRequest','GetCapabilitiesResponse']

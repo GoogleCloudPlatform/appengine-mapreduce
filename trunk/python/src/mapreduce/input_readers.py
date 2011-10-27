@@ -1259,25 +1259,42 @@ class ConsistentKeyReader(DatastoreKeyInputReader):
     if self._ns_range is None:
       # _iter_ns_range will have already have dealt with unapplied jobs so only
       # handle the case where it would not have been called.
-      while True:
-        # Creates an unapplied query and fetches unapplied jobs in the result
-        # range. self.split() ensures that the generated KeyRanges cover the
-        # entire possible key range.
-        unapplied_query = k_range.make_ascending_datastore_query(
-            kind=None, keys_only=True)  # datastore.Query instance
-        unapplied_query[
-            ConsistentKeyReader.UNAPPLIED_LOG_FILTER] = self.start_time_us
-
-        unapplied_jobs = unapplied_query.Get(
-            limit=self._batch_size,
-            config=datastore_rpc.Configuration(
-                deadline=self.UNAPPLIED_QUERY_DEADLINE))
-        if not unapplied_jobs:
-          break
-        self._apply_jobs(unapplied_jobs)
+      self._apply_key_range(k_range)
 
     for o in super(ConsistentKeyReader, self)._iter_key_range(k_range):
       yield o
+
+  def _apply_key_range(self, k_range):
+    """Apply all jobs in the given KeyRange."""
+    # The strategy used here will not work if the entire key range cannot be
+    # applied before the task times-out because the results of incremental work
+    # are not checkpointed. It also assumes that the entire key range can be
+    # queried without timing-out, which may not be the case.
+    # See b/5201059.
+    apply_range = copy.deepcopy(k_range)
+    while True:
+      # Creates an unapplied query and fetches unapplied jobs in the result
+      # range. self.split() ensures that the generated KeyRanges cover the
+      # entire possible key range.
+      unapplied_query = self._make_unapplied_query(apply_range)
+      unapplied_jobs = unapplied_query.Get(
+          limit=self._batch_size,
+          config=datastore_rpc.Configuration(
+              deadline=self.UNAPPLIED_QUERY_DEADLINE))
+      if not unapplied_jobs:
+        break
+      self._apply_jobs(unapplied_jobs)
+      # Avoid requerying parts of the key range that have already been
+      # applied.
+      apply_range.advance(unapplied_jobs[-1])
+
+  def _make_unapplied_query(self, k_range):
+    """Returns a datastore.Query that finds the unapplied keys in k_range."""
+    unapplied_query = k_range.make_ascending_datastore_query(
+        kind=None, keys_only=True)
+    unapplied_query[
+        ConsistentKeyReader.UNAPPLIED_LOG_FILTER] = self.start_time_us
+    return unapplied_query
 
   def _apply_jobs(self, unapplied_jobs):
     """Apply all jobs implied by the given keys."""
