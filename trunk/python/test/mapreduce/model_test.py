@@ -151,8 +151,10 @@ class GetDescendingKeyTest(unittest.TestCase):
   def testBasic(self):
     """Basic test of the function."""
     now = 1234567890
+    os.environ["REQUEST_ID_HASH"] = "12345678"
+
     self.assertEquals(
-        "1594530129400FFFFFFFF",
+        "159453012940012345678",
         model._get_descending_key(
             gettime=lambda: now))
 
