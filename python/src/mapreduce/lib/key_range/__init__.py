@@ -27,9 +27,12 @@ import os
 
 
 try:
-  from mapreduce.lib import simplejson
+  import json as simplejson
 except ImportError:
-  simplejson = None
+  try:
+    from mapreduce.lib import simplejson
+  except ImportError:
+    simplejson = None
 
 from google.appengine.api import datastore
 from google.appengine.api import namespace_manager
@@ -46,7 +49,7 @@ class KeyRangeError(Error):
 
 
 class SimplejsonUnavailableError(Error):
-  """Error while using json functionality whith unavailable simplejson."""
+  """Error using json functionality with unavailable json and simplejson."""
 
 
 class KeyRange(object):
@@ -634,7 +637,7 @@ class KeyRange(object):
     """
     if simplejson is None:
       raise SimplejsonUnavailableError(
-          "JSON functionality requires simplejson to be available")
+          "JSON functionality requires json or simplejson to be available")
 
     def key_to_str(key):
       if key:
@@ -668,7 +671,7 @@ class KeyRange(object):
     """
     if simplejson is None:
       raise SimplejsonUnavailableError(
-          "JSON functionality requires simplejson to be available")
+          "JSON functionality requires json or simplejson to be available")
 
     def key_from_str(key_str):
       if key_str:

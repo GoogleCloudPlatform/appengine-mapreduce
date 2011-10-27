@@ -36,7 +36,10 @@ import logging
 import math
 import os
 import random
-from mapreduce.lib import simplejson
+try:
+  import json as simplejson
+except ImportError:
+  from mapreduce.lib import simplejson
 import time
 import types
 
