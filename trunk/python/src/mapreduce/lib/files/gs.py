@@ -69,7 +69,7 @@ def create(filename,
       Google Storage.
 
   Returns:
-    A writable file name for Google Storage file. This file can be opened for
+    A writable file name for a Google Storage file. This file can be opened for
     write by File API open function. To read the file call file::open with the
     plain Google Storage filename (/gs/bucket/object).
   """
