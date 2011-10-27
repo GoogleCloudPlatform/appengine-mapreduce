@@ -58,6 +58,7 @@ class FileServiceErrors(ProtocolBuffer.ProtocolMessage):
   SHUFFLER_INTERNAL_ERROR =  800
   SHUFFLE_REQUEST_TOO_LARGE =  801
   DUPLICATE_SHUFFLE_NAME =  802
+  SHUFFLE_NOT_AVAILABLE =  803
   SHUFFLER_TEMPORARILY_UNAVAILABLE =  900
   MAX_ERROR_CODE = 9999
 
@@ -91,6 +92,7 @@ class FileServiceErrors(ProtocolBuffer.ProtocolMessage):
     800: "SHUFFLER_INTERNAL_ERROR",
     801: "SHUFFLE_REQUEST_TOO_LARGE",
     802: "DUPLICATE_SHUFFLE_NAME",
+    803: "SHUFFLE_NOT_AVAILABLE",
     900: "SHUFFLER_TEMPORARILY_UNAVAILABLE",
     9999: "MAX_ERROR_CODE",
   }
@@ -3712,16 +3714,219 @@ class ShuffleOutputSpecification(ProtocolBuffer.ProtocolMessage):
 
   _STYLE = """"""
   _STYLE_CONTENT_TYPE = """"""
+class ShuffleRequest_Callback(ProtocolBuffer.ProtocolMessage):
+  has_url_ = 0
+  url_ = ""
+  has_app_version_id_ = 0
+  app_version_id_ = ""
+  has_method_ = 0
+  method_ = "POST"
+  has_queue_ = 0
+  queue_ = "default"
+
+  def __init__(self, contents=None):
+    if contents is not None: self.MergeFromString(contents)
+
+  def url(self): return self.url_
+
+  def set_url(self, x):
+    self.has_url_ = 1
+    self.url_ = x
+
+  def clear_url(self):
+    if self.has_url_:
+      self.has_url_ = 0
+      self.url_ = ""
+
+  def has_url(self): return self.has_url_
+
+  def app_version_id(self): return self.app_version_id_
+
+  def set_app_version_id(self, x):
+    self.has_app_version_id_ = 1
+    self.app_version_id_ = x
+
+  def clear_app_version_id(self):
+    if self.has_app_version_id_:
+      self.has_app_version_id_ = 0
+      self.app_version_id_ = ""
+
+  def has_app_version_id(self): return self.has_app_version_id_
+
+  def method(self): return self.method_
+
+  def set_method(self, x):
+    self.has_method_ = 1
+    self.method_ = x
+
+  def clear_method(self):
+    if self.has_method_:
+      self.has_method_ = 0
+      self.method_ = "POST"
+
+  def has_method(self): return self.has_method_
+
+  def queue(self): return self.queue_
+
+  def set_queue(self, x):
+    self.has_queue_ = 1
+    self.queue_ = x
+
+  def clear_queue(self):
+    if self.has_queue_:
+      self.has_queue_ = 0
+      self.queue_ = "default"
+
+  def has_queue(self): return self.has_queue_
+
+
+  def MergeFrom(self, x):
+    assert x is not self
+    if (x.has_url()): self.set_url(x.url())
+    if (x.has_app_version_id()): self.set_app_version_id(x.app_version_id())
+    if (x.has_method()): self.set_method(x.method())
+    if (x.has_queue()): self.set_queue(x.queue())
+
+  def Equals(self, x):
+    if x is self: return 1
+    if self.has_url_ != x.has_url_: return 0
+    if self.has_url_ and self.url_ != x.url_: return 0
+    if self.has_app_version_id_ != x.has_app_version_id_: return 0
+    if self.has_app_version_id_ and self.app_version_id_ != x.app_version_id_: return 0
+    if self.has_method_ != x.has_method_: return 0
+    if self.has_method_ and self.method_ != x.method_: return 0
+    if self.has_queue_ != x.has_queue_: return 0
+    if self.has_queue_ and self.queue_ != x.queue_: return 0
+    return 1
+
+  def IsInitialized(self, debug_strs=None):
+    initialized = 1
+    if (not self.has_url_):
+      initialized = 0
+      if debug_strs is not None:
+        debug_strs.append('Required field: url not set.')
+    return initialized
+
+  def ByteSize(self):
+    n = 0
+    n += self.lengthString(len(self.url_))
+    if (self.has_app_version_id_): n += 1 + self.lengthString(len(self.app_version_id_))
+    if (self.has_method_): n += 1 + self.lengthString(len(self.method_))
+    if (self.has_queue_): n += 1 + self.lengthString(len(self.queue_))
+    return n + 1
+
+  def ByteSizePartial(self):
+    n = 0
+    if (self.has_url_):
+      n += 1
+      n += self.lengthString(len(self.url_))
+    if (self.has_app_version_id_): n += 1 + self.lengthString(len(self.app_version_id_))
+    if (self.has_method_): n += 1 + self.lengthString(len(self.method_))
+    if (self.has_queue_): n += 1 + self.lengthString(len(self.queue_))
+    return n
+
+  def Clear(self):
+    self.clear_url()
+    self.clear_app_version_id()
+    self.clear_method()
+    self.clear_queue()
+
+  def OutputUnchecked(self, out):
+    out.putVarInt32(10)
+    out.putPrefixedString(self.url_)
+    if (self.has_app_version_id_):
+      out.putVarInt32(18)
+      out.putPrefixedString(self.app_version_id_)
+    if (self.has_method_):
+      out.putVarInt32(26)
+      out.putPrefixedString(self.method_)
+    if (self.has_queue_):
+      out.putVarInt32(34)
+      out.putPrefixedString(self.queue_)
+
+  def OutputPartial(self, out):
+    if (self.has_url_):
+      out.putVarInt32(10)
+      out.putPrefixedString(self.url_)
+    if (self.has_app_version_id_):
+      out.putVarInt32(18)
+      out.putPrefixedString(self.app_version_id_)
+    if (self.has_method_):
+      out.putVarInt32(26)
+      out.putPrefixedString(self.method_)
+    if (self.has_queue_):
+      out.putVarInt32(34)
+      out.putPrefixedString(self.queue_)
+
+  def TryMerge(self, d):
+    while d.avail() > 0:
+      tt = d.getVarInt32()
+      if tt == 10:
+        self.set_url(d.getPrefixedString())
+        continue
+      if tt == 18:
+        self.set_app_version_id(d.getPrefixedString())
+        continue
+      if tt == 26:
+        self.set_method(d.getPrefixedString())
+        continue
+      if tt == 34:
+        self.set_queue(d.getPrefixedString())
+        continue
+
+
+      if (tt == 0): raise ProtocolBuffer.ProtocolBufferDecodeError
+      d.skipData(tt)
+
+
+  def __str__(self, prefix="", printElemNumber=0):
+    res=""
+    if self.has_url_: res+=prefix+("url: %s\n" % self.DebugFormatString(self.url_))
+    if self.has_app_version_id_: res+=prefix+("app_version_id: %s\n" % self.DebugFormatString(self.app_version_id_))
+    if self.has_method_: res+=prefix+("method: %s\n" % self.DebugFormatString(self.method_))
+    if self.has_queue_: res+=prefix+("queue: %s\n" % self.DebugFormatString(self.queue_))
+    return res
+
+
+  def _BuildTagLookupTable(sparse, maxtag, default=None):
+    return tuple([sparse.get(i, default) for i in xrange(0, 1+maxtag)])
+
+  kurl = 1
+  kapp_version_id = 2
+  kmethod = 3
+  kqueue = 4
+
+  _TEXT = _BuildTagLookupTable({
+    0: "ErrorCode",
+    1: "url",
+    2: "app_version_id",
+    3: "method",
+    4: "queue",
+  }, 4)
+
+  _TYPES = _BuildTagLookupTable({
+    0: ProtocolBuffer.Encoder.NUMERIC,
+    1: ProtocolBuffer.Encoder.STRING,
+    2: ProtocolBuffer.Encoder.STRING,
+    3: ProtocolBuffer.Encoder.STRING,
+    4: ProtocolBuffer.Encoder.STRING,
+  }, 4, ProtocolBuffer.Encoder.MAX_TYPE)
+
+
+  _STYLE = """"""
+  _STYLE_CONTENT_TYPE = """"""
 class ShuffleRequest(ProtocolBuffer.ProtocolMessage):
   has_shuffle_name_ = 0
   shuffle_name_ = ""
   has_output_ = 0
   has_shuffle_size_bytes_ = 0
   shuffle_size_bytes_ = 0
+  has_callback_ = 0
 
   def __init__(self, contents=None):
     self.input_ = []
     self.output_ = ShuffleOutputSpecification()
+    self.callback_ = ShuffleRequest_Callback()
     if contents is not None: self.MergeFromString(contents)
 
   def shuffle_name(self): return self.shuffle_name_
@@ -3774,6 +3979,14 @@ class ShuffleRequest(ProtocolBuffer.ProtocolMessage):
 
   def has_shuffle_size_bytes(self): return self.has_shuffle_size_bytes_
 
+  def callback(self): return self.callback_
+
+  def mutable_callback(self): self.has_callback_ = 1; return self.callback_
+
+  def clear_callback(self):self.has_callback_ = 0; self.callback_.Clear()
+
+  def has_callback(self): return self.has_callback_
+
 
   def MergeFrom(self, x):
     assert x is not self
@@ -3781,6 +3994,7 @@ class ShuffleRequest(ProtocolBuffer.ProtocolMessage):
     for i in xrange(x.input_size()): self.add_input().CopyFrom(x.input(i))
     if (x.has_output()): self.mutable_output().MergeFrom(x.output())
     if (x.has_shuffle_size_bytes()): self.set_shuffle_size_bytes(x.shuffle_size_bytes())
+    if (x.has_callback()): self.mutable_callback().MergeFrom(x.callback())
 
   def Equals(self, x):
     if x is self: return 1
@@ -3793,6 +4007,8 @@ class ShuffleRequest(ProtocolBuffer.ProtocolMessage):
     if self.has_output_ and self.output_ != x.output_: return 0
     if self.has_shuffle_size_bytes_ != x.has_shuffle_size_bytes_: return 0
     if self.has_shuffle_size_bytes_ and self.shuffle_size_bytes_ != x.shuffle_size_bytes_: return 0
+    if self.has_callback_ != x.has_callback_: return 0
+    if self.has_callback_ and self.callback_ != x.callback_: return 0
     return 1
 
   def IsInitialized(self, debug_strs=None):
@@ -3812,6 +4028,11 @@ class ShuffleRequest(ProtocolBuffer.ProtocolMessage):
       initialized = 0
       if debug_strs is not None:
         debug_strs.append('Required field: shuffle_size_bytes not set.')
+    if (not self.has_callback_):
+      initialized = 0
+      if debug_strs is not None:
+        debug_strs.append('Required field: callback not set.')
+    elif not self.callback_.IsInitialized(debug_strs): initialized = 0
     return initialized
 
   def ByteSize(self):
@@ -3821,7 +4042,8 @@ class ShuffleRequest(ProtocolBuffer.ProtocolMessage):
     for i in xrange(len(self.input_)): n += self.lengthString(self.input_[i].ByteSize())
     n += self.lengthString(self.output_.ByteSize())
     n += self.lengthVarInt64(self.shuffle_size_bytes_)
-    return n + 3
+    n += self.lengthString(self.callback_.ByteSize())
+    return n + 4
 
   def ByteSizePartial(self):
     n = 0
@@ -3836,6 +4058,9 @@ class ShuffleRequest(ProtocolBuffer.ProtocolMessage):
     if (self.has_shuffle_size_bytes_):
       n += 1
       n += self.lengthVarInt64(self.shuffle_size_bytes_)
+    if (self.has_callback_):
+      n += 1
+      n += self.lengthString(self.callback_.ByteSizePartial())
     return n
 
   def Clear(self):
@@ -3843,6 +4068,7 @@ class ShuffleRequest(ProtocolBuffer.ProtocolMessage):
     self.clear_input()
     self.clear_output()
     self.clear_shuffle_size_bytes()
+    self.clear_callback()
 
   def OutputUnchecked(self, out):
     out.putVarInt32(10)
@@ -3856,6 +4082,9 @@ class ShuffleRequest(ProtocolBuffer.ProtocolMessage):
     self.output_.OutputUnchecked(out)
     out.putVarInt32(32)
     out.putVarInt64(self.shuffle_size_bytes_)
+    out.putVarInt32(42)
+    out.putVarInt32(self.callback_.ByteSize())
+    self.callback_.OutputUnchecked(out)
 
   def OutputPartial(self, out):
     if (self.has_shuffle_name_):
@@ -3872,6 +4101,10 @@ class ShuffleRequest(ProtocolBuffer.ProtocolMessage):
     if (self.has_shuffle_size_bytes_):
       out.putVarInt32(32)
       out.putVarInt64(self.shuffle_size_bytes_)
+    if (self.has_callback_):
+      out.putVarInt32(42)
+      out.putVarInt32(self.callback_.ByteSizePartial())
+      self.callback_.OutputPartial(out)
 
   def TryMerge(self, d):
     while d.avail() > 0:
@@ -3893,6 +4126,12 @@ class ShuffleRequest(ProtocolBuffer.ProtocolMessage):
         continue
       if tt == 32:
         self.set_shuffle_size_bytes(d.getVarInt64())
+        continue
+      if tt == 42:
+        length = d.getVarInt32()
+        tmp = ProtocolBuffer.Decoder(d.buffer(), d.pos(), d.pos() + length)
+        d.skip(length)
+        self.mutable_callback().TryMerge(tmp)
         continue
 
 
@@ -3916,6 +4155,10 @@ class ShuffleRequest(ProtocolBuffer.ProtocolMessage):
       res+=self.output_.__str__(prefix + "  ", printElemNumber)
       res+=prefix+">\n"
     if self.has_shuffle_size_bytes_: res+=prefix+("shuffle_size_bytes: %s\n" % self.DebugFormatInt64(self.shuffle_size_bytes_))
+    if self.has_callback_:
+      res+=prefix+"callback <\n"
+      res+=self.callback_.__str__(prefix + "  ", printElemNumber)
+      res+=prefix+">\n"
     return res
 
 
@@ -3926,6 +4169,7 @@ class ShuffleRequest(ProtocolBuffer.ProtocolMessage):
   kinput = 2
   koutput = 3
   kshuffle_size_bytes = 4
+  kcallback = 5
 
   _TEXT = _BuildTagLookupTable({
     0: "ErrorCode",
@@ -3933,7 +4177,8 @@ class ShuffleRequest(ProtocolBuffer.ProtocolMessage):
     2: "input",
     3: "output",
     4: "shuffle_size_bytes",
-  }, 4)
+    5: "callback",
+  }, 5)
 
   _TYPES = _BuildTagLookupTable({
     0: ProtocolBuffer.Encoder.NUMERIC,
@@ -3941,7 +4186,8 @@ class ShuffleRequest(ProtocolBuffer.ProtocolMessage):
     2: ProtocolBuffer.Encoder.STRING,
     3: ProtocolBuffer.Encoder.STRING,
     4: ProtocolBuffer.Encoder.NUMERIC,
-  }, 4, ProtocolBuffer.Encoder.MAX_TYPE)
+    5: ProtocolBuffer.Encoder.STRING,
+  }, 5, ProtocolBuffer.Encoder.MAX_TYPE)
 
 
   _STYLE = """"""
@@ -4243,4 +4489,4 @@ class GetShuffleStatusResponse(ProtocolBuffer.ProtocolMessage):
   _STYLE = """"""
   _STYLE_CONTENT_TYPE = """"""
 
-__all__ = ['FileServiceErrors','KeyValue','KeyValues','FileContentType','CreateRequest_Parameter','CreateRequest','CreateResponse','OpenRequest','OpenResponse','CloseRequest','CloseResponse','FileStat','StatRequest','StatResponse','AppendRequest','AppendResponse','DeleteRequest','DeleteResponse','ReadRequest','ReadResponse','ReadKeyValueRequest','ReadKeyValueResponse_KeyValue','ReadKeyValueResponse','ShuffleEnums','ShuffleInputSpecification','ShuffleOutputSpecification','ShuffleRequest','ShuffleResponse','GetShuffleStatusRequest','GetShuffleStatusResponse']
+__all__ = ['FileServiceErrors','KeyValue','KeyValues','FileContentType','CreateRequest_Parameter','CreateRequest','CreateResponse','OpenRequest','OpenResponse','CloseRequest','CloseResponse','FileStat','StatRequest','StatResponse','AppendRequest','AppendResponse','DeleteRequest','DeleteResponse','ReadRequest','ReadResponse','ReadKeyValueRequest','ReadKeyValueResponse_KeyValue','ReadKeyValueResponse','ShuffleEnums','ShuffleInputSpecification','ShuffleOutputSpecification','ShuffleRequest_Callback','ShuffleRequest','ShuffleResponse','GetShuffleStatusRequest','GetShuffleStatusResponse']
