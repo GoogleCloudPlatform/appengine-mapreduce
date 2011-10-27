@@ -428,6 +428,11 @@ class Pipeline(object):
     return self._root_pipeline_key.name()
 
   @property
+  def is_root(self):
+    """Returns True if this pipeline is a root pipeline, False otherwise."""
+    return self._root_pipeline_key == self._pipeline_key
+
+  @property
   def queue_name(self):
     """Returns the queue name this Pipeline runs on or None if unknown."""
     if self._context:
@@ -818,6 +823,9 @@ The Pipeline API
   def cleanup(self):
     """Clean up this Pipeline and all Datastore records used for coordination.
 
+    Only works when called on a root pipeline. Child pipelines will ignore
+    calls to this method.
+
     After this method is called, Pipeline.from_id() and related status
     methods will return inconsistent or missing results. This method is
     fire-and-forget and asynchronous.
@@ -825,6 +833,8 @@ The Pipeline API
     if self._root_pipeline_key is None:
       raise UnexpectedPipelineError(
           'Could not cleanup Pipeline with unknown root pipeline ID.')
+    if not self.is_root:
+      return
     task = taskqueue.Task(
         params=dict(root_pipeline_key=self._root_pipeline_key),
         url=self.base_path + '/cleanup',

@@ -33,6 +33,7 @@ TEST_VERSION_ID = 'my-version.1234'
 # before doing any other test setup.
 os.environ['APPLICATION_ID'] = TEST_APP_ID
 os.environ['CURRENT_VERSION_ID'] = TEST_VERSION_ID
+os.environ['HTTP_HOST'] = '%s.appspot.com' % TEST_APP_ID
 
 
 def fix_path():
