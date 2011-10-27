@@ -1264,10 +1264,14 @@ class ConsistentKeyReader(DatastoreKeyInputReader):
         # range. self.split() ensures that the generated KeyRanges cover the
         # entire possible key range.
         unapplied_query = k_range.make_ascending_datastore_query(
-            kind=None, keys_only=True)
+            kind=None, keys_only=True)  # datastore.Query instance
         unapplied_query[
             ConsistentKeyReader.UNAPPLIED_LOG_FILTER] = self.start_time_us
-        unapplied_jobs = unapplied_query.Get(limit=self._batch_size)
+
+        unapplied_jobs = unapplied_query.Get(
+            limit=self._batch_size,
+            config=datastore_rpc.Configuration(
+                deadline=self.UNAPPLIED_QUERY_DEADLINE))
         if not unapplied_jobs:
           break
         self._apply_jobs(unapplied_jobs)
