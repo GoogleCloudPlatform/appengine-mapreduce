@@ -13,7 +13,7 @@
   <property name="testlib" location="test_lib" />
 
   <property name="sdk" location="sdk" />
-  <property name="version" value="1.5.3" />
+  <property name="version" value="1.4.3" />
   <property name="sdkdirname" value="appengine-java-sdk-${version}" />
   <property name="sdkfilename" value="${sdkdirname}.zip" />
   <property name="sdklibdir" location="${sdk}/${sdkdirname}/lib" />
