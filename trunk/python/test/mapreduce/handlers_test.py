@@ -1073,6 +1073,14 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
     self.assertEquals(1, len(tasks))
     self.verify_shard_task(tasks[0], self.shard_id, self.slice_id + 1)
 
+  def testLongProcessDataWithAllowCheckpoint(self):
+    """Tests that process_data works with input_readers.ALLOW_CHECKPOINT."""
+    self.handler._start_time = 0
+    self.assertFalse(self.handler.process_data(input_readers.ALLOW_CHECKPOINT,
+                                               None,
+                                               None,
+                                               None))
+
   def testScheduleSlice(self):
     """Test _schedule_slice method."""
     input_reader = input_readers.DatastoreInputReader(

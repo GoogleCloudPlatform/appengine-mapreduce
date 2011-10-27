@@ -20,6 +20,7 @@
 
 __all__ = [
     "AbstractDatastoreInputReader",
+    "ALLOW_CHECKPOINT",
     "BadReaderParamsError",
     "BlobstoreLineInputReader",
     "BlobstoreZipInputReader",
@@ -70,6 +71,11 @@ COUNTER_IO_READ_BYTES = "io-read-bytes"
 
 # Counter name for milliseconds spent reading data.
 COUNTER_IO_READ_MSEC = "io-read-msec"
+
+# Special value that can be yielded by InputReaders if they want to give the
+# framework an opportunity to save the state of the mapreduce without having
+# to yield an actual value to the handler.
+ALLOW_CHECKPOINT = object()
 
 
 class InputReader(model.JsonMixin):
@@ -274,6 +280,7 @@ class AbstractDatastoreInputReader(InputReader):
         namespace = namespace_result[0].name() or ""
         self._current_key_range = key_range.KeyRange(
             namespace=namespace, _app=self._ns_range.app)
+        yield ALLOW_CHECKPOINT
 
       for key, o in self._iter_key_range(
           copy.deepcopy(self._current_key_range)):

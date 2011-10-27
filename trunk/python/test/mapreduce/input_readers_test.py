@@ -593,13 +593,17 @@ class DatastoreInputReaderTest(unittest.TestCase):
 
   def testGeneratorWithNamespaceRange(self):
     """Test DatastoreInputReader as generator using a NamespaceRange."""
+    expected_objects = []
     expected_entities = []
     for namespace in ["A", "B", "C", "D", "E"]:
       namespace_manager.set_namespace(namespace)
-      for _ in range(10):
+      for i in range(10):
         entity = TestEntity()
         entity.put()
         if namespace in ["B", "C", "D"]:
+          if i == 0:
+            expected_objects.append(input_readers.ALLOW_CHECKPOINT)
+          expected_objects.append(entity)
           expected_entities.append(entity)
     namespace_manager.set_namespace(None)
 
@@ -608,16 +612,23 @@ class DatastoreInputReaderTest(unittest.TestCase):
     query_range = input_readers.DatastoreInputReader(
         ENTITY_KIND, key_ranges=None, ns_range=ns_range, batch_size=50)
 
+    objects = []
     entities = []
 
-    for entity in query_range:
-      entities.append(entity)
+    for o in query_range:
+      objects.append(o)
+      if o is not input_readers.ALLOW_CHECKPOINT:
+        entities.append(o)
 
-    self.assertEquals(len(expected_entities), len(entities))
+    self.assertEquals(len(expected_objects), len(objects))
+    self.assertEquals(input_readers.ALLOW_CHECKPOINT, objects[0])
+    self.assertEquals(input_readers.ALLOW_CHECKPOINT, objects[11])
+    self.assertEquals(input_readers.ALLOW_CHECKPOINT, objects[22])
+
     # Model instances are not comparable, so we'll compare a serialization.
     expected_values = [entity.to_xml() for entity in expected_entities]
     actual_values = [entity.to_xml() for entity in entities]
-    self.assertEquals(expected_values, actual_values)
+    self.assertListEqual(expected_values, actual_values)
 
   def testEntityGenerator(self):
     """Test DatastoreEntityInputReader."""
@@ -1533,15 +1544,16 @@ class ConsistentKeyReaderTest(unittest.TestCase):
         ns_range=namespace_range.NamespaceRange("a", "z"))
     self.reader.start_time_us = STARTUP_TIME_US
 
-    expected_keys = set()
+    expected_objects = set()
     for ns in ["b", "g", "happy", "helloworld", "r", "s", "t"]:
       namespace_manager.set_namespace(ns)
-      expected_keys.add(datastore.Put(datastore.Entity(self.kind_id)))
+      expected_objects.add(input_readers.ALLOW_CHECKPOINT)
+      expected_objects.add(datastore.Put(datastore.Entity(self.kind_id)))
     namespace_manager.set_namespace(None)
 
     self.mox.ReplayAll()
     keys = set(self.reader)
-    self.assertEquals(expected_keys, keys)
+    self.assertEquals(expected_objects, keys)
 
   def testReaderGeneratorUnappliedJobsWithNamespaceRange(self):
     """Tests reader generator when there are some unapplied jobs."""
@@ -1550,21 +1562,25 @@ class ConsistentKeyReaderTest(unittest.TestCase):
         ns_range=namespace_range.NamespaceRange("a", "z"))
     self.reader.start_time_us = STARTUP_TIME_US
 
-    expected_keys = set()
+    expected_objects = set()
     def AddUnappliedEntities(*args):
       namespace_manager.set_namespace("a")
-      expected_keys.add(datastore.Put(datastore.Entity(self.kind_id, name="a")))
+      expected_objects.add(input_readers.ALLOW_CHECKPOINT)
+      expected_objects.add(datastore.Put(datastore.Entity(self.kind_id, name="a")))
 
       namespace_manager.set_namespace("d")
-      expected_keys.add(datastore.Put(datastore.Entity(self.kind_id, name="d")))
+      expected_objects.add(input_readers.ALLOW_CHECKPOINT)
+      expected_objects.add(datastore.Put(datastore.Entity(self.kind_id, name="d")))
 
       namespace_manager.set_namespace("z")
-      expected_keys.add(datastore.Put(datastore.Entity(self.kind_id, name="z")))
+      expected_objects.add(input_readers.ALLOW_CHECKPOINT)
+      expected_objects.add(datastore.Put(datastore.Entity(self.kind_id, name="z")))
       namespace_manager.set_namespace(None)
 
     for c in ["b", "g", "t"]:
       namespace_manager.set_namespace(c)
-      expected_keys.add(datastore.Put(datastore.Entity(self.kind_id)))
+      expected_objects.add(input_readers.ALLOW_CHECKPOINT)
+      expected_objects.add(datastore.Put(datastore.Entity(self.kind_id)))
     namespace_manager.set_namespace(None)
 
     self.mox.StubOutWithMock(
@@ -1583,7 +1599,7 @@ class ConsistentKeyReaderTest(unittest.TestCase):
 
     self.mox.ReplayAll()
     keys = set(self.reader)
-    self.assertEquals(expected_keys, keys)
+    self.assertEquals(expected_objects, keys)
 
 
 class NamespaceInputReaderTest(unittest.TestCase):
