@@ -34,14 +34,34 @@ _GS_PREFIX = '/gs/'
 _MIME_TYPE_PARAMETER = 'content_type'
 _CANNED_ACL_PARAMETER = 'acl'
 _FILENAME_PARAMETER = 'filename'
+_CONTENT_ENCODING_PARAMETER = 'content_encoding'
+_CONTENT_DISPOSITION_PARAMETER = 'content_disposition'
+_CACHE_CONTROL_PARAMETER = 'cache_control'
+_USER_METADATA_PREFIX = 'x-goog-meta-'
 
 
-def create(filename, mime_type='application/octet-stream'):
+def create(filename,
+           mime_type='application/octet-stream',
+           acl='private',
+           cache_control=None,
+           content_encoding=None,
+           content_disposition=None,
+           user_metadata=None):
   """Create a writable blobstore file.
 
   Args:
     filename: Bigstore object name (/gs/bucket/object)
     mime_type: Blob content MIME type as string.
+    acl: Canned acl to apply to the object as per:
+      http://code.google.com/apis/storage/docs/reference-headers.html#xgoogacl
+    cache_control: Cache control header to set when serving through Google
+      storage. If not specified, default of 3600 seconds is used.
+    content_encoding: If object is compressed, specify the compression method
+      here to set the header correctly when served through Google Storage.
+    content_disposition: Header to use when serving through Google Storage.
+    user_metadata: Dictionary specifying key value pairs to apply to the
+      object. Each key is prefixed with x-goog-meta- when served through
+      Google Storage.
 
   Returns:
     A writable file name for bigstore file. This file can be opened for write
@@ -59,7 +79,39 @@ def create(filename, mime_type='application/octet-stream'):
     raise files.InvalidArgumentError('Empty mime_type')
   elif not isinstance(mime_type, basestring):
     raise files.InvalidArgumentError('Expected string for mime_type', mime_type)
+  elif not acl:
+    raise files.InvalidArgumentError('Empty acl')
+  elif not isinstance(acl, basestring):
+    raise files.InvalidArgumentError('Expected string for acl', acl)
 
   params = {_MIME_TYPE_PARAMETER: mime_type,
+            _CANNED_ACL_PARAMETER: acl,
             _FILENAME_PARAMETER: filename[len(_GS_PREFIX) - 1:]}
+  if content_encoding:
+    if not isinstance(content_encoding, basestring):
+      raise files.InvalidArgumentError('Expected string for content_encoding')
+    else:
+      params[_CONTENT_ENCODING_PARAMETER] = content_encoding
+  if content_disposition:
+    if not isinstance(content_disposition, basestring):
+      raise files.InvalidArgumentError(
+          'Expected string for content_disposition')
+    else:
+      params[_CONTENT_DISPOSITION_PARAMETER] = content_disposition
+  if cache_control:
+    if not isinstance(cache_control, basestring):
+      raise files.InvalidArgumentError('Expected string for cache_control')
+    else:
+      params[_CACHE_CONTROL_PARAMETER] = cache_control
+  if user_metadata:
+    if not isinstance(user_metadata, dict):
+      raise files.InvalidArgumentError('Expected dict for user_metadata')
+    for key, value in user_metadata.items():
+      if not isinstance(key, basestring):
+        raise files.InvalidArgumentError(
+            'Expected string for key in user_metadata')
+      if not isinstance(value, basestring):
+        raise files.InvalidArgumentError(
+            'Expected string for value in user_metadata for key: ', key)
+      params[_USER_METADATA_PREFIX + key] = value
   return files._create(_GS_FILESYSTEM, params=params)
