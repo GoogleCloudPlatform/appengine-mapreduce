@@ -16,6 +16,8 @@
 
 package com.google.appengine.tools.mapreduce;
 
+import com.google.appengine.tools.mapreduce.v2.impl.ShardState;
+
 import org.apache.hadoop.mapreduce.Counter;
 import org.apache.hadoop.mapreduce.Counters;
 import org.apache.hadoop.mapreduce.StatusReporter;
@@ -27,7 +29,7 @@ import java.util.logging.Logger;
  * A Hadoop StatusReporter that saves reported data to a {@link ShardState}.
  *
  */
-class DatastorePersistingStatusReporter extends StatusReporter {
+public class DatastorePersistingStatusReporter extends StatusReporter {
   private static final Logger log = Logger.getLogger(
       DatastorePersistingStatusReporter.class.getName());
 
@@ -73,7 +75,7 @@ class DatastorePersistingStatusReporter extends StatusReporter {
   /**
    * Persist the underlying state of this shard.
    */
-  void persist() {
+  public void persist() {
     shardState.setCounters(counters);
     shardState.setStatusString(status);
     shardState.persist();

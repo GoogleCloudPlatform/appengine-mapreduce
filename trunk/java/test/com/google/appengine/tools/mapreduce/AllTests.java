@@ -17,6 +17,9 @@
 package com.google.appengine.tools.mapreduce;
 
 import com.google.appengine.tools.mapreduce.contrib.MapperTaskTest;
+import com.google.appengine.tools.mapreduce.v2.impl.handlers.ControllerTest;
+import com.google.appengine.tools.mapreduce.v2.impl.handlers.StatusTest;
+import com.google.appengine.tools.mapreduce.v2.impl.handlers.WorkerTest;
 
 import junit.framework.Test;
 import junit.framework.TestCase;
@@ -49,6 +52,9 @@ public class AllTests extends TestCase {
     suite.addTestSuite(RangeInputFormatTest.class);
     suite.addTestSuite(RangeRecordReaderTest.class);
     suite.addTestSuite(MapperTaskTest.class);
+    suite.addTestSuite(ControllerTest.class);
+    suite.addTestSuite(WorkerTest.class);
+    suite.addTestSuite(StatusTest.class);
     return suite;
   }
 }

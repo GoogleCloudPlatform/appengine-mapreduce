@@ -24,7 +24,7 @@ package com.google.appengine.tools.mapreduce;
  * when it gets released as part of Hadoop 0.21
  *
  */
-class HadoopCounterNames {
+public class HadoopCounterNames {
   private HadoopCounterNames() {
 
   }

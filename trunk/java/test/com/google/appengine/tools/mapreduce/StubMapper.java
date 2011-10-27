@@ -16,6 +16,8 @@
 
 package com.google.appengine.tools.mapreduce;
 
+import com.google.appengine.tools.mapreduce.v2.impl.handlers.Worker;
+
 import org.apache.hadoop.io.IntWritable;
 
 import java.util.ArrayList;
@@ -23,7 +25,7 @@ import java.util.List;
 
 /**
  * StubMapper is a Mapper that stores its state statically,
- * so when {@link MapReduceServlet#handleMapperWorker(
+ * so when {@link Worker#handleMapperWorker(
  * javax.servlet.http.HttpServletRequest,
  * javax.servlet.http.HttpServletResponse)} creates it via reflection, we can
  * check it. This has the side effect that tests with the StubMapper cannot

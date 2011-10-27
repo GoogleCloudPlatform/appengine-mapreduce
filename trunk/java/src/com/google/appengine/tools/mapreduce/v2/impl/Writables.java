@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.google.appengine.tools.mapreduce;
+package com.google.appengine.tools.mapreduce.v2.impl;
 
 import org.apache.hadoop.io.Writable;
 
@@ -30,7 +30,7 @@ import java.io.UnsupportedEncodingException;
  *
  *
  */
-class Writables {
+public class Writables {
   private Writables() {
   }
 

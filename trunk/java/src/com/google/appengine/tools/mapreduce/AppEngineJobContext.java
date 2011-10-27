@@ -20,6 +20,7 @@ import com.google.appengine.api.datastore.DatastoreServiceFactory;
 import com.google.appengine.api.datastore.EntityNotFoundException;
 import com.google.appengine.api.taskqueue.Queue;
 import com.google.appengine.api.taskqueue.QueueFactory;
+import com.google.appengine.tools.mapreduce.v2.impl.MapReduceState;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.mapreduce.JobContext;
@@ -82,9 +83,9 @@ public class AppEngineJobContext extends JobContext {
 
   // Parameter names for values serialized in the request
   // All VisibleForTesting
-  static final String CONFIGURATION_PARAMETER_NAME = "configuration";
-  static final String JOB_ID_PARAMETER_NAME = "jobID";
-  static final String SLICE_NUMBER_PARAMETER_NAME = "sliceNumber";
+  public static final String CONFIGURATION_PARAMETER_NAME = "configuration";
+  public static final String JOB_ID_PARAMETER_NAME = "jobID";
+  public static final String SLICE_NUMBER_PARAMETER_NAME = "sliceNumber";
 
   /**
    * Default rate of map() calls
@@ -127,7 +128,7 @@ public class AppEngineJobContext extends JobContext {
   /**
    * Initializes the context from its constituent elements.
    */
-  // VisibleForTesting
+  public // VisibleForTesting
   AppEngineJobContext(Configuration conf, JobID jobId, HttpServletRequest request) {
     super(conf, jobId);
     this.request = request;

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.google.appengine.tools.mapreduce;
+package com.google.appengine.tools.mapreduce.v2.impl;
 
 import com.google.appengine.api.datastore.Blob;
 import com.google.appengine.api.datastore.DatastoreService;
@@ -25,6 +25,9 @@ import com.google.appengine.api.datastore.Key;
 import com.google.appengine.api.datastore.KeyFactory;
 import com.google.appengine.api.datastore.Query;
 import com.google.appengine.api.datastore.Query.FilterOperator;
+import com.google.appengine.tools.mapreduce.SerializationUtil;
+import com.google.appengine.tools.mapreduce.util.Clock;
+import com.google.appengine.tools.mapreduce.util.SystemClock;
 import com.google.common.base.Preconditions;
 
 import org.apache.hadoop.conf.Configuration;
@@ -44,7 +47,7 @@ import java.util.List;
  *
  *
  */
-class ShardState {
+public class ShardState {
   // Property names in the shard state entity
   // VisibleForTesting
   static final String COUNTERS_MAP_PROPERTY = "countersMap";
