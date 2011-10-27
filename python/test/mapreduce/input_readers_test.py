@@ -1359,12 +1359,15 @@ class MockUnappliedQuery(object):
     else:
       raise Exception("Unexpected filter %s %s" % (qfilter, value))
 
-  def Get(self, limit):
+  def Get(self, limit, config):
     """Fetches query results."""
     if not self.has_unapplied_filter:
       raise Exception("Unapplied filter hasn't been set")
     if limit != input_readers.ConsistentKeyReader._BATCH_SIZE:
       raise Exception("Unexpected limit %s" % limit)
+    if config.deadline != 270:
+      raise Exception("Unexpected deadline %s" % config.deadline)
+
     return self.results
 
 
