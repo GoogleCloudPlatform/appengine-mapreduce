@@ -934,7 +934,8 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
       hooks_class_name: fully qualified name of the hooks class to use in test.
     """
     InputReader.reset()
-    self.handler = handlers.MapperWorkerCallbackHandler(MockTime.time)
+    self.handler = handlers.MapperWorkerCallbackHandler()
+    self.handler._time = MockTime.time
     self.handler.initialize(mock_webapp.MockRequest(),
                             mock_webapp.MockResponse())
     self.handler.request.path = "/mapreduce/worker_callback"
@@ -1411,7 +1412,8 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
   def setUp(self):
     """Sets up the test harness."""
     MapreduceHandlerTestBase.setUp(self)
-    self.handler = handlers.ControllerCallbackHandler(MockTime.time)
+    self.handler = handlers.ControllerCallbackHandler()
+    self.handler._time = MockTime.time
     self.handler.initialize(mock_webapp.MockRequest(),
                             mock_webapp.MockResponse())
     self.handler.request.path = "/mapreduce/worker_callback"

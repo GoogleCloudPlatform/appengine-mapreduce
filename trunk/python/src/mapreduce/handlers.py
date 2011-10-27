@@ -27,7 +27,6 @@ import gc
 import logging
 import math
 import os
-from mapreduce.lib import simplejson
 import time
 
 from google.appengine.api import memcache
@@ -97,14 +96,10 @@ class MapperWorkerCallbackHandler(util.HugeTaskHandler):
     slice_id: id of the slice.
   """
 
-  def __init__(self, time_function=time.time):
-    """Constructor.
-
-    Args:
-      time_function: time function to use to obtain current time.
-    """
-    util.HugeTaskHandler.__init__(self)
-    self._time = time_function
+  def __init__(self, *args):
+    """Constructor."""
+    util.HugeTaskHandler.__init__(self, *args)
+    self._time = time.time
 
   def handle(self):
     """Handle request."""
@@ -335,14 +330,10 @@ class ControllerCallbackHandler(util.HugeTaskHandler):
   mapreduce is still active.
   """
 
-  def __init__(self, time_function=time.time):
-    """Constructor.
-
-    Args:
-      time_function: time function to use to obtain current time.
-    """
-    util.HugeTaskHandler.__init__(self)
-    self._time = time_function
+  def __init__(self, *args):
+    """Constructor."""
+    util.HugeTaskHandler.__init__(self, *args)
+    self._time = time.time
 
   def handle(self):
     """Handle request."""
