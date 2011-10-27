@@ -244,10 +244,8 @@ class Slot(object):
     self.filled = True
     self._filler_pipeline_key = filler_pipeline_key
     self._fill_datetime = datetime.datetime.utcnow()
-    # JSON serialization does not support the tuple type.
-    if isinstance(value, tuple):
-      value = list(value)
-    self._value = value
+    # Convert to JSON and back again, to simulate the behavior of production.
+    self._value = simplejson.loads(simplejson.dumps(value))
 
   def __repr__(self):
     """Returns a string representation of this slot."""
@@ -1085,7 +1083,11 @@ def _write_json_blob(encoded_value):
   file_name = files.blobstore.create(mime_type='application/json')
   handle = files.open(file_name, 'a')
   try:
-    handle.write(encoded_value)
+    # Chunk the file into individual writes of less than 1MB, since the files
+    # API does not do buffered writes implicitly.
+    for start_index in xrange(0, len(encoded_value), _MAX_JSON_SIZE):
+      end_index = start_index + _MAX_JSON_SIZE
+      handle.write(encoded_value[start_index:end_index])
   finally:
     handle.close()
 
