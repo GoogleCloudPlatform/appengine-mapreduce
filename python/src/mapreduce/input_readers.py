@@ -322,7 +322,8 @@ class AbstractDatastoreInputReader(InputReader):
     """Returns the best split points given a random set of db.Keys."""
     assert len(random_keys) >= shard_count
     index_stride = len(random_keys) / float(shard_count)
-    return [sorted(random_keys)[int(round(index_stride * i))]
+    sorted_keys = sorted(random_keys)
+    return [sorted_keys[int(round(index_stride * i))]
             for i in range(1, shard_count)]
 
   # TODO(user): use query splitting functionality when it becomes available
