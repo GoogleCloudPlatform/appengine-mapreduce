@@ -2,6 +2,8 @@
 
 package com.google.appengine.tools.mapreduce.v2.impl.handlers;
 
+import static com.google.appengine.tools.mapreduce.AppEngineJobContext.createContextForTesting;
+import static com.google.appengine.tools.mapreduce.MockRequestFactory.createMockMapReduceRequest;
 import static org.easymock.EasyMock.createMock;
 import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.replay;
@@ -98,15 +100,7 @@ public class WorkerTest extends TestCase {
       return request;
     }
 
-    private static HttpServletRequest createMockStartRequest(Configuration conf) {
-      HttpServletRequest request = createMockRequest(MapReduceServlet.START_PATH, false, false);
-      expect(request.getParameter(AppEngineJobContext.CONFIGURATION_PARAMETER_NAME))
-        .andReturn(ConfigurationXmlUtil.convertConfigurationToXml(conf))
-        .anyTimes();
-      return request;
-    }
-
-    private static HttpServletRequest createMockMapperWorkerRequest(int sliceNumber,
+  private static HttpServletRequest createMockMapperWorkerRequest(int sliceNumber,
         JobID jobId, TaskAttemptID taskAttemptId) {
       HttpServletRequest request = createMockRequest(MapReduceServlet.CONTROLLER_PATH, true, false);
       expect(request.getParameter(AppEngineJobContext.SLICE_NUMBER_PARAMETER_NAME))
@@ -145,9 +139,9 @@ public class WorkerTest extends TestCase {
 
     public void testScheduleShards() {
       JobID jobId = new JobID("123", 1);
-      HttpServletRequest request = createMockStartRequest(getSampleMapReduceConfiguration());
-      expect(request.getParameter(AppEngineJobContext.JOB_ID_PARAMETER_NAME))
-        .andReturn(jobId.toString())
+      HttpServletRequest request = createMockMapReduceRequest(jobId);
+      expect(request.getRequestURI())
+        .andReturn("/mapreduce/" + MapReduceServlet.START_PATH)
         .anyTimes();
       replay(request);
 
@@ -191,7 +185,7 @@ public class WorkerTest extends TestCase {
 
       ShardState state = ShardState.generateInitializedShardState(ds, taskAttemptId);
       StubInputFormat format = new StubInputFormat();
-      AppEngineJobContext context = new AppEngineJobContext(conf, jobId, request);
+      AppEngineJobContext context = createContextForTesting(conf, jobId, request);
 
       AppEngineTaskAttemptContext taskAttemptContext = new AppEngineTaskAttemptContext(
           context, state, taskAttemptId);
@@ -236,7 +230,7 @@ public class WorkerTest extends TestCase {
 
       ShardState state = ShardState.generateInitializedShardState(ds, taskAttemptId);
       StubInputFormat format = new StubInputFormat();
-      AppEngineJobContext context = new AppEngineJobContext(conf, jobId, request);
+      AppEngineJobContext context = createContextForTesting(conf, jobId, request);
 
       AppEngineTaskAttemptContext taskAttemptContext = new AppEngineTaskAttemptContext(
           context, state, taskAttemptId);

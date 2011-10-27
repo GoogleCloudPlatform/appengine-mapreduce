@@ -16,6 +16,7 @@
 
 package com.google.appengine.tools.mapreduce;
 
+import static com.google.appengine.tools.mapreduce.MockRequestFactory.createMockMapReduceRequest;
 import static org.easymock.EasyMock.createMock;
 import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.replay;
@@ -86,11 +87,8 @@ public class AppEngineJobContextTest extends TestCase {
   }
 
   public void testGetJobContextFromRequest() {
-    HttpServletRequest req = createMock(HttpServletRequest.class);
     JobID jobId = new JobID("foo", 1);
-    expect(req.getParameter(AppEngineJobContext.JOB_ID_PARAMETER_NAME))
-        .andReturn(jobId.toString())
-        .anyTimes();
+    HttpServletRequest req = createMockMapReduceRequest(jobId);
     replay(req);
 
 
@@ -116,11 +114,7 @@ public class AppEngineJobContextTest extends TestCase {
    * to the default queue.
    */
   public void testGetQueueDefault() {
-    HttpServletRequest req = createMock(HttpServletRequest.class);
-    expect(req.getHeader("X-AppEngine-QueueName")).andReturn(null);
-    expect(req.getParameter(AppEngineJobContext.JOB_ID_PARAMETER_NAME))
-        .andReturn(jobId.toString())
-        .anyTimes();
+    HttpServletRequest req = createMockMapReduceRequest(jobId, null, 0);
     replay(req);
 
     Configuration conf = new Configuration(false);
@@ -136,11 +130,7 @@ public class AppEngineJobContextTest extends TestCase {
    * task queue if set to non-default.
    */
   public void testGetQueueRequest() {
-    HttpServletRequest req = createMock(HttpServletRequest.class);
-    expect(req.getHeader("X-AppEngine-QueueName")).andReturn("bar");
-    expect(req.getParameter(AppEngineJobContext.JOB_ID_PARAMETER_NAME))
-      .andReturn(jobId.toString())
-      .anyTimes();
+    HttpServletRequest req = createMockMapReduceRequest(jobId, "bar", 0);
     replay(req);
 
     Configuration conf = new Configuration(false);
@@ -156,11 +146,7 @@ public class AppEngineJobContextTest extends TestCase {
    * queue specified in the job's configuration.
    */
   public void testGetQueueConfiguration() {
-    HttpServletRequest req = createMock(HttpServletRequest.class);
-    expect(req.getHeader("X-AppEngine-QueueName")).andReturn("bar");
-    expect(req.getParameter(AppEngineJobContext.JOB_ID_PARAMETER_NAME))
-      .andReturn(jobId.toString())
-      .anyTimes();
+    HttpServletRequest req = createMockMapReduceRequest(jobId, "bar", 0);
     replay(req);
 
     Configuration conf = new Configuration(false);
@@ -178,11 +164,7 @@ public class AppEngineJobContextTest extends TestCase {
    * controller queue specified in the job's configuration.
    */
   public void testGetQueueConfigurationController() {
-    HttpServletRequest req = createMock(HttpServletRequest.class);
-    expect(req.getHeader("X-AppEngine-QueueName")).andReturn("bar");
-    expect(req.getParameter(AppEngineJobContext.JOB_ID_PARAMETER_NAME))
-        .andReturn(jobId.toString())
-        .anyTimes();
+    HttpServletRequest req = createMockMapReduceRequest(jobId, "bar", 0);
     replay(req);
 
     Configuration conf = new Configuration(false);
