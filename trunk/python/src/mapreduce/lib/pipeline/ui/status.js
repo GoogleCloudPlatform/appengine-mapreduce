@@ -265,6 +265,47 @@ function constructStageNode(pipelineId, infoMap, sidebar) {
     containerDiv.append(retryParamsDiv);
   }
 
+  function renderCollapsableValue(value, container) {
+    var stringValue = $.toJSON(value);
+    var SPLIT_LENGTH = 200;
+    if (stringValue.length < SPLIT_LENGTH) {
+      container.append($('<span>').text(stringValue));
+      return;
+    }
+
+    var startValue = stringValue.substr(0, SPLIT_LENGTH);
+    var endValue = stringValue.substr(SPLIT_LENGTH);
+
+    // Split the end value with <wbr> tags so it looks nice; force
+    // word wrapping never works right.
+    var moreSpan = $('<span class="value-disclosure-more">');
+    for (var i = 0; i < endValue.length; i += SPLIT_LENGTH) {
+      moreSpan.append(endValue.substr(i, SPLIT_LENGTH));
+      moreSpan.append('<wbr/>');
+    }
+    var betweenMoreText = '...(' + endValue.length + ' more) ';
+    var betweenSpan = $('<span class="value-disclosure-between">')
+        .text(betweenMoreText);
+    var toggle = $('<a class="value-disclosure-toggle">')
+        .text('Expand')
+        .attr('href', '');
+    toggle.click(function(e) {
+        e.preventDefault();
+        if (moreSpan.css('display') == 'none') {
+          betweenSpan.text(' ');
+          toggle.text('Collapse');
+        } else {
+          betweenSpan.text(betweenMoreText);
+          toggle.text('Expand');
+        }
+        moreSpan.toggle();
+    });
+    container.append($('<span>').text(startValue));
+    container.append(moreSpan);
+    container.append(betweenSpan);
+    container.append(toggle);
+  }
+
   // Slot rendering
   function renderSlot(slotKey) {
     var filledMessage = null;
@@ -281,9 +322,9 @@ function constructStageNode(pipelineId, infoMap, sidebar) {
     if (slot.status == 'filled') {
       var valueDiv = $('<span class="slot-value-container">');
       valueDiv.append($('<span>').text('Value: '));
-      valueDiv.append(
-          $('<span class="slot-value">')
-              .text($.toJSON(slot.value)));
+      var valueContainer = $('<span class="slot-value">');
+      renderCollapsableValue(slot.value, valueContainer);
+      valueDiv.append(valueContainer);
       slotDetailDiv.append(valueDiv);
 
       var filledDiv = $('<div class="slot-filled">');
@@ -337,7 +378,7 @@ function constructStageNode(pipelineId, infoMap, sidebar) {
       paramDiv.append(renderSlot(valueDict.slotKey));
     } else {
       var valueDiv = $('<span class="status-param-value">');
-      valueDiv.append($('<span>').text(valueDict.value));
+      renderCollapsableValue(valueDict.value, valueDiv);
       paramDiv.append(valueDiv);
     }
 
@@ -712,10 +753,13 @@ function initStatusDone() {
   if (!AUTO_REFRESH) {
     $('#auto-refresh').attr('checked', '');
   } else {
-    // TODO: Once in a terminal state, do not update.
-    window.setTimeout(function() {
-      window.location.replace('');
-    }, 30 * 1000);
+    var rootStatus = STATUS_MAP.pipelines[STATUS_MAP.rootPipelineId].status;
+    if (rootStatus != 'done' && rootStatus != 'aborted') {
+      // Only do auto-refresh behavior if we're not in a terminal state.
+      window.setTimeout(function() {
+        window.location.replace('');
+      }, 30 * 1000);
+    }
   }
   $('.refresh-link').click(handleRefreshClick);
   $('#control').show();
