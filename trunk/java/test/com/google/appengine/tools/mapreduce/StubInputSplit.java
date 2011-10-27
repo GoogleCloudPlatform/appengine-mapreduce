@@ -33,7 +33,7 @@ import java.util.List;
  */
 public class StubInputSplit extends InputSplit implements Writable {
   private int id;
-  private static final List<IntWritable> KEYS = Arrays.asList(
+  static final List<IntWritable> KEYS = Arrays.asList(
       new IntWritable(10), new IntWritable(9), new IntWritable(8));
   
   // Only intended for deserialization
