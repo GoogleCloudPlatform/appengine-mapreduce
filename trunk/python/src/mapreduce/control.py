@@ -39,7 +39,7 @@ def start_map(name,
               output_writer_spec=None,
               mapreduce_parameters=None,
               base_path=None,
-              queue_name="default",
+              queue_name=None,
               eta=None,
               countdown=None,
               hooks_class_name=None,
@@ -58,12 +58,14 @@ def start_map(name,
       whole job.
     base_path: base path of mapreduce library handler specified in app.yaml.
       "/mapreduce" by default.
-    queue_name: executor queue name to be used for mapreduce tasks.
+    queue_name: executor queue name to be used for mapreduce tasks. If
+      unspecified it will be the "default" queue or inherit the queue of
+      the currently running request.
     eta: Absolute time when the MR should execute. May not be specified
-        if 'countdown' is also supplied. This may be timezone-aware or
-        timezone-naive.
+      if 'countdown' is also supplied. This may be timezone-aware or
+      timezone-naive.
     countdown: Time in seconds into the future that this MR should execute.
-        Defaults to zero.
+      Defaults to zero.
     hooks_class_name: fully qualified name of a hooks.Hooks subclass.
     transactional: Specifies if job should be started as a part of already
       opened transaction.

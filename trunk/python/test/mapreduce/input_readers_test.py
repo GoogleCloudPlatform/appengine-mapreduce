@@ -628,7 +628,7 @@ class DatastoreInputReaderTest(unittest.TestCase):
     # Model instances are not comparable, so we'll compare a serialization.
     expected_values = [entity.to_xml() for entity in expected_entities]
     actual_values = [entity.to_xml() for entity in entities]
-    self.assertListEqual(expected_values, actual_values)
+    self.assertEqual(expected_values, actual_values)
 
   def testEntityGenerator(self):
     """Test DatastoreEntityInputReader."""

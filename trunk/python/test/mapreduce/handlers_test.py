@@ -1033,6 +1033,11 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
 
   def testUserAbort(self):
     """Tests a user-initiated abort of the shard."""
+    # Be sure to have an output writer for the abort step so we can confirm
+    # that the context is properly passed to the finalize() method.
+    self.init(__name__ + ".test_handler_yield_keys",
+              output_writer_spec=__name__ + ".TestOutputWriter")
+
     model.MapreduceControl.abort(self.mapreduce_id)
     self.handler.post()
     self.verify_shard_state(
