@@ -36,29 +36,29 @@ _CANNED_ACL_PARAMETER = 'acl'
 _FILENAME_PARAMETER = 'filename'
 
 
-def create(mime_type='application/octet-stream', filename=None):
+def create(filename, mime_type='application/octet-stream'):
   """Create a writable blobstore file.
 
   Args:
-    mime_type: Resulting blob content MIME type as string.
     filename: Bigstore object name (/gs/bucket/object)
+    mime_type: Blob content MIME type as string.
 
   Returns:
     A writable file name for bigstore file. This file can be opened for write
     by File API open function. To read the file call file::open with the plain
     Bigstore filename (/gs/bucket/object).
   """
-  if not mime_type:
-    raise files.InvalidArgumentError('Empty mime_type')
-  if not isinstance(mime_type, basestring):
-    raise files.InvalidArgumentError('Expected string for mime_type')
   if not filename:
     raise files.InvalidArgumentError('Empty filename')
-  if not isinstance(filename, basestring):
-    raise files.InvalidArgumentError('Expected string for filename')
-  if not filename.startswith(_GS_PREFIX):
+  elif not isinstance(filename, basestring):
+    raise files.InvalidArgumentError('Expected string for filename', filename)
+  elif not filename.startswith(_GS_PREFIX) or filename == _GS_PREFIX:
     raise files.InvalidArgumentError(
-        'Google storage files must be of the form /gs/bucket/object')
+        'Google storage files must be of the form /gs/bucket/object', filename)
+  elif not mime_type:
+    raise files.InvalidArgumentError('Empty mime_type')
+  elif not isinstance(mime_type, basestring):
+    raise files.InvalidArgumentError('Expected string for mime_type', mime_type)
 
   params = {_MIME_TYPE_PARAMETER: mime_type,
             _FILENAME_PARAMETER: filename[len(_GS_PREFIX) - 1:]}
