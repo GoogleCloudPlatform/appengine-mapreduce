@@ -120,11 +120,14 @@ class MapperWorkerCallbackHandler(util.HugeTaskHandler):
                     shard_id)
       return
 
+    ctx = context.Context(spec, shard_state,
+                          task_retry_count=self.task_retry_count())
+
     if control and control.command == model.MapreduceControl.ABORT:
       logging.info("Abort command received by shard %d of job '%s'",
                    shard_state.shard_number, shard_state.mapreduce_id)
       if tstate.output_writer:
-        tstate.output_writer.finalize(None, shard_state.shard_number)
+        tstate.output_writer.finalize(ctx, shard_state.shard_number)
       shard_state.active = False
       shard_state.result_status = model.ShardState.RESULT_ABORTED
       shard_state.put(config=util.create_datastore_write_config(spec))
@@ -141,10 +144,7 @@ class MapperWorkerCallbackHandler(util.HugeTaskHandler):
     else:
       quota_consumer = None
 
-    ctx = context.Context(spec, shard_state,
-                          task_retry_count=self.task_retry_count())
     context.Context._set(ctx)
-
     try:
       # consume quota ahead, because we do not want to run a datastore
       # query if there's not enough quota for the shard.
@@ -791,12 +791,15 @@ class StartJobHandler(base_handler.PostJsonHandler):
   def _start_map(cls, name, mapper_spec,
                  mapreduce_params,
                  base_path=None,
-                 queue_name="default",
+                 queue_name=None,
                  eta=None,
                  countdown=None,
                  hooks_class_name=None,
                  _app=None,
                  transactional=False):
+    queue_name = queue_name or os.environ.get("HTTP_X_APPENGINE_QUEUENAME",
+                                              "default")
+
     # Check that handler can be instantiated.
     mapper_spec.get_handler()
 
@@ -822,7 +825,8 @@ class StartJobHandler(base_handler.PostJsonHandler):
     kickoff_worker_task = util.HugeTask(
         url=base_path + "/kickoffjob_callback",
         params=kickoff_params,
-        eta=eta, countdown=countdown)
+        eta=eta,
+        countdown=countdown)
 
     hooks = mapreduce_spec.get_hooks()
     config = util.create_datastore_write_config(mapreduce_spec)
