@@ -1540,7 +1540,7 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
     self.verify_done_task()
 
     self.assertEquals(
-        3, len(model.ShardState.find_by_mapreduce_id(self.mapreduce_id)))
+        3, len(model.ShardState.find_by_mapreduce_state(mapreduce_state)))
 
   def testShardsDoneFinalizeOutputWriter(self):
     self.mapreduce_state.mapreduce_spec.mapper.output_writer_spec = (
@@ -1633,7 +1633,7 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
     self.verify_done_task()
 
     self.assertEquals(
-        3, len(model.ShardState.find_by_mapreduce_id(self.mapreduce_id)))
+        3, len(model.ShardState.find_by_mapreduce_state(mapreduce_state)))
 
   def testUserAbort(self):
     """Tests that user abort will stop the job."""
@@ -1671,7 +1671,7 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
     self.taskqueue.FlushQueue("default")
 
     # Force all shards to completion state (success, failure, or abort).
-    shard_state_list = model.ShardState.find_by_mapreduce_id(self.mapreduce_id)
+    shard_state_list = model.ShardState.find_by_mapreduce_state(mapreduce_state)
     self.assertEquals(3, len(shard_state_list))
     shard_state_list[0].active = False
     shard_state_list[0].result_status = model.ShardState.RESULT_SUCCESS

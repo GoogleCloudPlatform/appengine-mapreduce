@@ -354,7 +354,7 @@ class ControllerCallbackHandler(util.HugeTaskHandler):
                     spec.mapreduce_id)
       return
 
-    shard_states = model.ShardState.find_by_mapreduce_id(spec.mapreduce_id)
+    shard_states = model.ShardState.find_by_mapreduce_state(state)
     if state.active and len(shard_states) != spec.mapper.shard_count:
       # Some shards were lost
       logging.error("Incorrect number of shard states: %d vs %d; "
@@ -863,15 +863,16 @@ class FinalizeJobHandler(base_handler.TaskQueueHandler):
 
   def handle(self):
     mapreduce_id = self.request.get("mapreduce_id")
+    mapreduce_state = model.MapreduceState.get_by_job_id(mapreduce_id)
+
     db.delete(model.MapreduceControl.get_key_by_job_id(mapreduce_id))
 
-    shard_states = model.ShardState.find_by_mapreduce_id(mapreduce_id)
-    for shard_state in shard_states:
-      db.delete(util._HugeTaskPayload.all().ancestor(shard_state))
-    db.delete(shard_states)
-
-    mapreduce_state = model.MapreduceState.get_key_by_job_id(mapreduce_id)
-    db.delete(util._HugeTaskPayload.all().ancestor(mapreduce_state))
+    if mapreduce_state:
+      shard_states = model.ShardState.find_by_mapreduce_state(mapreduce_state)
+      for shard_state in shard_states:
+        db.delete(util._HugeTaskPayload.all().ancestor(shard_state))
+      db.delete(shard_states)
+      db.delete(util._HugeTaskPayload.all().ancestor(mapreduce_state))
 
   @classmethod
   def schedule(cls, base_path, mapreduce_spec):
