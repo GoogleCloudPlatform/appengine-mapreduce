@@ -34,6 +34,7 @@ from google.appengine.api import taskqueue
 from google.appengine.ext import db
 from mapreduce import base_handler
 from mapreduce import context
+from mapreduce import input_readers
 from mapreduce import model
 from mapreduce import operation
 from mapreduce import quota
@@ -213,32 +214,33 @@ class MapperWorkerCallbackHandler(util.HugeTaskHandler):
     Call mapper handler on the data.
 
     Args:
-      data: an data to process.
+      data: a datum to process.
       input_reader: input reader.
       ctx: current execution context.
 
     Returns:
       True if scan should be continued, False if scan should be aborted.
     """
-    ctx.counters.increment(context.COUNTER_MAPPER_CALLS)
+    if data is not input_readers.ALLOW_CHECKPOINT:
+      ctx.counters.increment(context.COUNTER_MAPPER_CALLS)
 
-    handler = ctx.mapreduce_spec.mapper.handler
-    if input_reader.expand_parameters:
-      result = handler(*data)
-    else:
-      result = handler(data)
+      handler = ctx.mapreduce_spec.mapper.handler
+      if input_reader.expand_parameters:
+        result = handler(*data)
+      else:
+        result = handler(data)
 
-    if util.is_generator_function(handler):
-      for output in result:
-        if isinstance(output, operation.Operation):
-          output(ctx)
-        else:
-          output_writer = transient_shard_state.output_writer
-          if not output_writer:
-            logging.error(
-                "Handler yielded %s, but no output writer is set.", output)
+      if util.is_generator_function(handler):
+        for output in result:
+          if isinstance(output, operation.Operation):
+            output(ctx)
           else:
-            output_writer.write(output, ctx)
+            output_writer = transient_shard_state.output_writer
+            if not output_writer:
+              logging.error(
+                  "Handler yielded %s, but no output writer is set.", output)
+            else:
+              output_writer.write(output, ctx)
 
     if self._time() - self._start_time > _SLICE_DURATION_SEC:
       logging.debug("Spent %s seconds. Rescheduling",
