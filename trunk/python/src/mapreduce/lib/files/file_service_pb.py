@@ -4488,5 +4488,209 @@ class GetShuffleStatusResponse(ProtocolBuffer.ProtocolMessage):
 
   _STYLE = """"""
   _STYLE_CONTENT_TYPE = """"""
+class GetCapabilitiesRequest(ProtocolBuffer.ProtocolMessage):
 
-__all__ = ['FileServiceErrors','KeyValue','KeyValues','FileContentType','CreateRequest_Parameter','CreateRequest','CreateResponse','OpenRequest','OpenResponse','CloseRequest','CloseResponse','FileStat','StatRequest','StatResponse','AppendRequest','AppendResponse','DeleteRequest','DeleteResponse','ReadRequest','ReadResponse','ReadKeyValueRequest','ReadKeyValueResponse_KeyValue','ReadKeyValueResponse','ShuffleEnums','ShuffleInputSpecification','ShuffleOutputSpecification','ShuffleRequest_Callback','ShuffleRequest','ShuffleResponse','GetShuffleStatusRequest','GetShuffleStatusResponse']
+  def __init__(self, contents=None):
+    pass
+    if contents is not None: self.MergeFromString(contents)
+
+
+  def MergeFrom(self, x):
+    assert x is not self
+
+  def Equals(self, x):
+    if x is self: return 1
+    return 1
+
+  def IsInitialized(self, debug_strs=None):
+    initialized = 1
+    return initialized
+
+  def ByteSize(self):
+    n = 0
+    return n
+
+  def ByteSizePartial(self):
+    n = 0
+    return n
+
+  def Clear(self):
+    pass
+
+  def OutputUnchecked(self, out):
+    pass
+
+  def OutputPartial(self, out):
+    pass
+
+  def TryMerge(self, d):
+    while d.avail() > 0:
+      tt = d.getVarInt32()
+
+
+      if (tt == 0): raise ProtocolBuffer.ProtocolBufferDecodeError
+      d.skipData(tt)
+
+
+  def __str__(self, prefix="", printElemNumber=0):
+    res=""
+    return res
+
+
+  def _BuildTagLookupTable(sparse, maxtag, default=None):
+    return tuple([sparse.get(i, default) for i in xrange(0, 1+maxtag)])
+
+
+  _TEXT = _BuildTagLookupTable({
+    0: "ErrorCode",
+  }, 0)
+
+  _TYPES = _BuildTagLookupTable({
+    0: ProtocolBuffer.Encoder.NUMERIC,
+  }, 0, ProtocolBuffer.Encoder.MAX_TYPE)
+
+
+  _STYLE = """"""
+  _STYLE_CONTENT_TYPE = """"""
+class GetCapabilitiesResponse(ProtocolBuffer.ProtocolMessage):
+  has_shuffle_available_ = 0
+  shuffle_available_ = 0
+
+  def __init__(self, contents=None):
+    self.filesystem_ = []
+    if contents is not None: self.MergeFromString(contents)
+
+  def filesystem_size(self): return len(self.filesystem_)
+  def filesystem_list(self): return self.filesystem_
+
+  def filesystem(self, i):
+    return self.filesystem_[i]
+
+  def set_filesystem(self, i, x):
+    self.filesystem_[i] = x
+
+  def add_filesystem(self, x):
+    self.filesystem_.append(x)
+
+  def clear_filesystem(self):
+    self.filesystem_ = []
+
+  def shuffle_available(self): return self.shuffle_available_
+
+  def set_shuffle_available(self, x):
+    self.has_shuffle_available_ = 1
+    self.shuffle_available_ = x
+
+  def clear_shuffle_available(self):
+    if self.has_shuffle_available_:
+      self.has_shuffle_available_ = 0
+      self.shuffle_available_ = 0
+
+  def has_shuffle_available(self): return self.has_shuffle_available_
+
+
+  def MergeFrom(self, x):
+    assert x is not self
+    for i in xrange(x.filesystem_size()): self.add_filesystem(x.filesystem(i))
+    if (x.has_shuffle_available()): self.set_shuffle_available(x.shuffle_available())
+
+  def Equals(self, x):
+    if x is self: return 1
+    if len(self.filesystem_) != len(x.filesystem_): return 0
+    for e1, e2 in zip(self.filesystem_, x.filesystem_):
+      if e1 != e2: return 0
+    if self.has_shuffle_available_ != x.has_shuffle_available_: return 0
+    if self.has_shuffle_available_ and self.shuffle_available_ != x.shuffle_available_: return 0
+    return 1
+
+  def IsInitialized(self, debug_strs=None):
+    initialized = 1
+    if (not self.has_shuffle_available_):
+      initialized = 0
+      if debug_strs is not None:
+        debug_strs.append('Required field: shuffle_available not set.')
+    return initialized
+
+  def ByteSize(self):
+    n = 0
+    n += 1 * len(self.filesystem_)
+    for i in xrange(len(self.filesystem_)): n += self.lengthString(len(self.filesystem_[i]))
+    return n + 2
+
+  def ByteSizePartial(self):
+    n = 0
+    n += 1 * len(self.filesystem_)
+    for i in xrange(len(self.filesystem_)): n += self.lengthString(len(self.filesystem_[i]))
+    if (self.has_shuffle_available_):
+      n += 2
+    return n
+
+  def Clear(self):
+    self.clear_filesystem()
+    self.clear_shuffle_available()
+
+  def OutputUnchecked(self, out):
+    for i in xrange(len(self.filesystem_)):
+      out.putVarInt32(10)
+      out.putPrefixedString(self.filesystem_[i])
+    out.putVarInt32(16)
+    out.putBoolean(self.shuffle_available_)
+
+  def OutputPartial(self, out):
+    for i in xrange(len(self.filesystem_)):
+      out.putVarInt32(10)
+      out.putPrefixedString(self.filesystem_[i])
+    if (self.has_shuffle_available_):
+      out.putVarInt32(16)
+      out.putBoolean(self.shuffle_available_)
+
+  def TryMerge(self, d):
+    while d.avail() > 0:
+      tt = d.getVarInt32()
+      if tt == 10:
+        self.add_filesystem(d.getPrefixedString())
+        continue
+      if tt == 16:
+        self.set_shuffle_available(d.getBoolean())
+        continue
+
+
+      if (tt == 0): raise ProtocolBuffer.ProtocolBufferDecodeError
+      d.skipData(tt)
+
+
+  def __str__(self, prefix="", printElemNumber=0):
+    res=""
+    cnt=0
+    for e in self.filesystem_:
+      elm=""
+      if printElemNumber: elm="(%d)" % cnt
+      res+=prefix+("filesystem%s: %s\n" % (elm, self.DebugFormatString(e)))
+      cnt+=1
+    if self.has_shuffle_available_: res+=prefix+("shuffle_available: %s\n" % self.DebugFormatBool(self.shuffle_available_))
+    return res
+
+
+  def _BuildTagLookupTable(sparse, maxtag, default=None):
+    return tuple([sparse.get(i, default) for i in xrange(0, 1+maxtag)])
+
+  kfilesystem = 1
+  kshuffle_available = 2
+
+  _TEXT = _BuildTagLookupTable({
+    0: "ErrorCode",
+    1: "filesystem",
+    2: "shuffle_available",
+  }, 2)
+
+  _TYPES = _BuildTagLookupTable({
+    0: ProtocolBuffer.Encoder.NUMERIC,
+    1: ProtocolBuffer.Encoder.STRING,
+    2: ProtocolBuffer.Encoder.NUMERIC,
+  }, 2, ProtocolBuffer.Encoder.MAX_TYPE)
+
+
+  _STYLE = """"""
+  _STYLE_CONTENT_TYPE = """"""
+
+__all__ = ['FileServiceErrors','KeyValue','KeyValues','FileContentType','CreateRequest_Parameter','CreateRequest','CreateResponse','OpenRequest','OpenResponse','CloseRequest','CloseResponse','FileStat','StatRequest','StatResponse','AppendRequest','AppendResponse','DeleteRequest','DeleteResponse','ReadRequest','ReadResponse','ReadKeyValueRequest','ReadKeyValueResponse_KeyValue','ReadKeyValueResponse','ShuffleEnums','ShuffleInputSpecification','ShuffleOutputSpecification','ShuffleRequest_Callback','ShuffleRequest','ShuffleResponse','GetShuffleStatusRequest','GetShuffleStatusResponse','GetCapabilitiesRequest','GetCapabilitiesResponse']

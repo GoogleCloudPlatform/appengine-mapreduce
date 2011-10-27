@@ -505,6 +505,19 @@ def delete(filename):
     raise InvalidFileNameError( 'Unsupported file name: %s' % filename)
 
 
+def _get_capabilities():
+  """Get files API capabilities.
+
+  Returns:
+    An instance of file_service_pb.GetCapabilitiesResponse.
+  """
+  request = file_service_pb.GetCapabilitiesRequest()
+  response = file_service_pb.GetCapabilitiesResponse()
+
+  _make_call('GetCapabilities', request, response)
+  return response
+
+
 class BufferedFile(object):
   """BufferedFile is a file-like object reading underlying file in chunks."""
 
