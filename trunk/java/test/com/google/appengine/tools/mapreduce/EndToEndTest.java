@@ -75,7 +75,7 @@ public class EndToEndTest extends TestCase {
     HttpServletRequest request = createMockStartRequest(configuration);
     replay(request);
 
-    AppEngineMapreduce.start(configuration, "test", request);
+    AppEngineMapreduce.INSTANCE.start(configuration, "test", request);
 
     executeTasksUntilEmpty(queueName);
 
