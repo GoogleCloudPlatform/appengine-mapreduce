@@ -152,8 +152,12 @@ RAW = file_service_pb.FileContentType.RAW
 
 def _raise_app_error(e):
   """Convert RPC error into api-specific exception."""
-  if (e.application_error ==
-      file_service_pb.FileServiceErrors.EXISTENCE_ERROR):
+  if (e.application_error in
+      [file_service_pb.FileServiceErrors.EXISTENCE_ERROR,
+       file_service_pb.FileServiceErrors.EXISTENCE_ERROR_METADATA_NOT_FOUND,
+       file_service_pb.FileServiceErrors.EXISTENCE_ERROR_METADATA_FOUND,
+       file_service_pb.FileServiceErrors.EXISTENCE_ERROR_SHARDING_MISMATCH,
+       ]):
     raise ExistenceError()
   elif (e.application_error ==
         file_service_pb.FileServiceErrors.API_TEMPORARILY_UNAVAILABLE):
