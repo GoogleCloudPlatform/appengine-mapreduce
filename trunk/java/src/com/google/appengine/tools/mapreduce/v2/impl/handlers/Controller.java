@@ -54,18 +54,18 @@ public class Controller {
   /**
    * Schedules a controller task queue invocation.
    *
-   * @param req the current request
    * @param context this MR's job context
    * @param sliceNumber a counter that increments for each sequential, successful
    * task queue invocation
+   * @param baseUrl
    */
   public static // VisibleForTesting
-  void scheduleController(HttpServletRequest req, AppEngineJobContext context, int sliceNumber) {
+  void scheduleController(AppEngineJobContext context, int sliceNumber, String baseUrl) {
     String taskName = ("controller_" + context.getJobID() + "__" + sliceNumber).replace('_', '-');
     try {
       context.getControllerQueue().add(
           TaskOptions.Builder.withMethod(TaskOptions.Method.POST)
-              .url(MapReduceServlet.getBase(req) + MapReduceServlet.CONTROLLER_PATH)
+              .url(baseUrl + MapReduceServlet.CONTROLLER_PATH)
               .param(AppEngineJobContext.JOB_ID_PARAMETER_NAME, context.getJobID().toString())
               .param(AppEngineJobContext.SLICE_NUMBER_PARAMETER_NAME, "" + sliceNumber)
               .countdownMillis(2000)
@@ -81,8 +81,9 @@ public class Controller {
    * @return the JobID of the newly created MapReduce or {@code null} if the
    * MapReduce couldn't be created.
    */
-  public static String handleStart(Configuration conf, String name, HttpServletRequest request) {
-    AppEngineJobContext context = new AppEngineJobContext(conf, request, true);
+  public static String handleStart(Configuration configuration, String name, HttpServletRequest request) {
+    String baseUrl = MapReduceServlet.getBase(request);
+    AppEngineJobContext context = AppEngineJobContext.createContextForNewJob(configuration, request);
 
     // Initialize InputSplits
     Class<? extends InputFormat<?, ?>> inputFormatClass;
@@ -128,9 +129,9 @@ public class Controller {
     }
 
     mrState.persist();
-    scheduleController(request, context, 0);
+    scheduleController(context, 0, baseUrl);
 
-    Worker.scheduleShards(request, context, inputFormat, splits);
+    Worker.scheduleShards(context, inputFormat, splits, baseUrl);
 
     return mrState.getJobID();
   }
@@ -212,7 +213,7 @@ public class Controller {
    * the quota for MR workers.
    */
   public static void handleController(HttpServletRequest request) {
-    AppEngineJobContext context = new AppEngineJobContext(request, false);
+    AppEngineJobContext context = new AppEngineJobContext(request);
     try {
       List<ShardState> shardStates = ShardState.getShardStatesFromJobID(
           ds, context.getJobID());
@@ -233,7 +234,7 @@ public class Controller {
       mrState.persist();
 
       if (MapReduceState.Status.ACTIVE.equals(mrState.getStatus())) {
-        scheduleController(request, context, context.getSliceNumber() + 1);
+        scheduleController(context, context.getSliceNumber() + 1, MapReduceServlet.getBase(request));
       } else {
         deleteAllShards(shardStates);
         if (context.hasDoneCallback()) {

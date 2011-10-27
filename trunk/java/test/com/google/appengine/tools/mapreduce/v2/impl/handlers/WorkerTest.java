@@ -153,11 +153,11 @@ public class WorkerTest extends TestCase {
 
       Configuration conf = getSampleMapReduceConfiguration();
       persistMRState(jobId, conf);
-      AppEngineJobContext context = new AppEngineJobContext(request, false);
+      AppEngineJobContext context = new AppEngineJobContext(request);
       List<InputSplit> splits = Arrays.asList(
           (InputSplit) new StubInputSplit(1), new StubInputSplit(2));
       StubInputFormat format = new StubInputFormat();
-      Worker.scheduleShards(request, context, format, splits);
+      Worker.scheduleShards(context, format, splits, MapReduceServlet.getBase(request));
       QueueStateInfo defaultQueue = getDefaultQueueInfo();
       assertEquals(2, defaultQueue.getCountTasks());
       TaskStateInfo firstTask = defaultQueue.getTaskInfo().get(0);

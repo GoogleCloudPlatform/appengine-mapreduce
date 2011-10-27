@@ -104,25 +104,10 @@ public class AppEngineJobContext extends JobContext {
    * Initializes a JobContext from a request.
    *
    * @param request the request to initialize from
-   * @param startRequest whether this is a request to the start handler.
-   * If it is, we generate a new Job ID rather than getting it from the
-   * request.
-   */
-  public AppEngineJobContext(HttpServletRequest request, boolean startRequest) {
-    this(getConfigurationFromRequest(request, startRequest), request, startRequest);
-  }
-
-  /**
-   * Initializes a JobContext with a given configuration.
    *
-   * @param conf the configuration to initialize from
-   * @param request the request to initialize from
-   * @param startRequest whether this is a request to the start handler.
-   * If it is, we generate a new Job ID rather than getting it from the
-   * request.
    */
-  public AppEngineJobContext(Configuration conf, HttpServletRequest request, boolean startRequest) {
-    this(conf, startRequest ? generateNewJobID() : getJobIDFromRequest(request), request);
+  public AppEngineJobContext(HttpServletRequest request) {
+    this(getConfigurationFromRequest(request, false), getJobIDFromRequest(request), request);
   }
 
   /**
@@ -132,6 +117,13 @@ public class AppEngineJobContext extends JobContext {
   AppEngineJobContext(Configuration conf, JobID jobId, HttpServletRequest request) {
     super(conf, jobId);
     this.request = request;
+  }
+
+  /**
+   * Create context for new mapreduce job.
+   */
+  public static AppEngineJobContext createContextForNewJob(Configuration configuration, HttpServletRequest request) {
+    return new AppEngineJobContext(configuration, generateNewJobID(), request);
   }
 
   /**

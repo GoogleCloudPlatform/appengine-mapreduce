@@ -255,7 +255,7 @@ public class ControllerTest extends TestCase {
 
       replay(req);
 
-      AppEngineJobContext context = new AppEngineJobContext(req, false);
+      AppEngineJobContext context = new AppEngineJobContext(req);
 
       MockClock clock = new MockClock(startTime + 1000);
       Controller.clock = clock;

@@ -50,15 +50,14 @@ public class Worker {
   /**
    * Schedules a worker task on the appropriate queue.
    *
-   * @param req the current servlet request
    * @param context the context for this MR job
    * @param taskAttemptId the task attempt ID for this worker
    * @param sliceNumber a counter that increments for each sequential, successful
    * task queue invocation
+   * @param baseUrl
    */
   public static // VisibleForTesting
-  void scheduleWorker(HttpServletRequest req, AppEngineJobContext context,
-      TaskAttemptID taskAttemptId, int sliceNumber) {
+  void scheduleWorker(AppEngineJobContext context, TaskAttemptID taskAttemptId, int sliceNumber, String baseUrl) {
     Preconditions.checkArgument(
         context.getJobID().equals(taskAttemptId.getJobID()),
         "Worker task must be for this MR job");
@@ -67,7 +66,7 @@ public class Worker {
     try {
       context.getWorkerQueue().add(
           TaskOptions.Builder.withMethod(TaskOptions.Method.POST)
-              .url(MapReduceServlet.getBase(req) + MapReduceServlet.MAPPER_WORKER_PATH)
+              .url(baseUrl + MapReduceServlet.MAPPER_WORKER_PATH)
               .param(AppEngineTaskAttemptContext.TASK_ATTEMPT_ID_PARAMETER_NAME,
                   "" + taskAttemptId)
               .param(AppEngineJobContext.JOB_ID_PARAMETER_NAME, "" + taskAttemptId.getJobID())
@@ -192,15 +191,15 @@ public class Worker {
   /**
    * Schedules the initial worker callback execution for all shards.
    *
-   * @param req the current request
    * @param context this MR's context
    * @param format the input format to use for generating {@code RecordReader}s
    * from the {@code InputSplit}s
    * @param splits all input splits for this MR
+   * @param baseUrl
    */
   public static // VisibleForTesting
-  void scheduleShards(HttpServletRequest req, AppEngineJobContext context,
-      InputFormat<?,?> format, List<InputSplit> splits) {
+  void scheduleShards(AppEngineJobContext context,
+      InputFormat<?, ?> format, List<InputSplit> splits, String baseUrl) {
     // TODO(user): To make life easy for people using InputFormats
     // from general Hadoop, we should add support for grouping
     // InputFormats that generate many splits into a reasonable
@@ -230,7 +229,7 @@ public class Worker {
             "Got an interrupted exception in a single threaded environment.", e);
       }
       shardState.persist();
-      scheduleWorker(req, context, taskAttemptId, 0);
+      scheduleWorker(context, taskAttemptId, 0, baseUrl);
       i++;
     }
   }
@@ -245,7 +244,7 @@ public class Worker {
    */
   public static <INKEY,INVALUE,OUTKEY,OUTVALUE>
   void handleMapperWorker(HttpServletRequest request) {
-    AppEngineJobContext jobContext = new AppEngineJobContext(request, false);
+    AppEngineJobContext jobContext = new AppEngineJobContext(request);
     AppEngineTaskAttemptContext taskAttemptContext = new AppEngineTaskAttemptContext(
         request, jobContext, ds);
 
@@ -302,7 +301,8 @@ public class Worker {
 
       if (shouldContinue) {
         scheduleWorker(
-            request, jobContext, context.getTaskAttemptID(), jobContext.getSliceNumber() + 1);
+            jobContext, context.getTaskAttemptID(), jobContext.getSliceNumber() + 1,
+            MapReduceServlet.getBase(request));
       } else {
         // This is the last invocation for this mapper.
         mapper.cleanup(context);
