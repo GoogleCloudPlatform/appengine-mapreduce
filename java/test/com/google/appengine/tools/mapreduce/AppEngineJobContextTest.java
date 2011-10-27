@@ -97,7 +97,7 @@ public class AppEngineJobContextTest extends TestCase {
     Configuration conf = ConfigurationXmlUtil.getConfigurationFromXml(SIMPLE_CONF_XML);
     persistMRState(jobId, conf);
 
-    JobContext context = new AppEngineJobContext(req, false);
+    JobContext context = new AppEngineJobContext(req);
     assertEquals("/tmp/foo", context.getConfiguration().get("foo.bar"));
     assertEquals(jobId.toString(), context.getJobID().toString());
     verify(req);
@@ -126,7 +126,7 @@ public class AppEngineJobContextTest extends TestCase {
     Configuration conf = new Configuration(false);
     persistMRState(jobId, conf);
 
-    AppEngineJobContext context = new AppEngineJobContext(req, false);
+    AppEngineJobContext context = new AppEngineJobContext(req);
     assertEquals("default", context.getWorkerQueue().getQueueName());
     verify(req);
   }
@@ -146,7 +146,7 @@ public class AppEngineJobContextTest extends TestCase {
     Configuration conf = new Configuration(false);
     persistMRState(jobId, conf);
 
-    AppEngineJobContext context = new AppEngineJobContext(req, false);
+    AppEngineJobContext context = new AppEngineJobContext(req);
     assertEquals("bar", context.getWorkerQueue().getQueueName());
     verify(req);
   }
@@ -168,7 +168,7 @@ public class AppEngineJobContextTest extends TestCase {
     conf.set(AppEngineJobContext.WORKER_QUEUE_KEY, "baz");
     persistMRState(jobId, conf);
 
-    AppEngineJobContext context = new AppEngineJobContext(req, false);
+    AppEngineJobContext context = new AppEngineJobContext(req);
     assertEquals("baz", context.getWorkerQueue().getQueueName());
     verify(req);
   }
@@ -190,7 +190,7 @@ public class AppEngineJobContextTest extends TestCase {
     conf.set(AppEngineJobContext.CONTROLLER_QUEUE_KEY, "baz");
     persistMRState(jobId, conf);
 
-    AppEngineJobContext context = new AppEngineJobContext(req, false);
+    AppEngineJobContext context = new AppEngineJobContext(req);
     assertEquals("baz", context.getControllerQueue().getQueueName());
     verify(req);
   }
