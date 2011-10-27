@@ -17,7 +17,6 @@
 
 
 
-
 """Lightweight record format.
 
 This format implements log file format from leveldb:

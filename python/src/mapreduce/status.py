@@ -30,7 +30,6 @@ from google.appengine.ext import db
 from mapreduce import base_handler
 from mapreduce import errors
 from mapreduce import model
-from google.appengine.ext.webapp import template
 
 
 # TODO(user): a list of features we'd like to have in status page:
