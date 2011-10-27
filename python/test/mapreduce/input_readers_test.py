@@ -1341,28 +1341,15 @@ class BlobstoreZipLineInputReaderTest(unittest.TestCase):
 STARTUP_TIME_US = 1000
 
 
-class MockUnappliedQuery(object):
+class MockUnappliedQuery(datastore.Query):
   """Mocks unapplied query in order to mimic existence of unapplied jobs."""
 
   def __init__(self, results):
     """Constructs unapplied query with given results."""
     self.results = results
-    self.has_r_filter = False
-
-  def __setitem__(self, qfilter, value):
-    """Sets a query filter."""
-    if qfilter == "__key__ <=":
-      pass
-    elif (qfilter == "__unapplied_log_timestamp_us__ <" and
-          value == STARTUP_TIME_US):
-      self.has_unapplied_filter = True
-    else:
-      raise Exception("Unexpected filter %s %s" % (qfilter, value))
 
   def Get(self, limit, config):
     """Fetches query results."""
-    if not self.has_unapplied_filter:
-      raise Exception("Unapplied filter hasn't been set")
     if limit != input_readers.ConsistentKeyReader._BATCH_SIZE:
       raise Exception("Unexpected limit %s" % limit)
     if config.deadline != 270:
@@ -1492,6 +1479,7 @@ class ConsistentKeyReaderTest(unittest.TestCase):
     """Tests reader generator when there are some unapplied jobs."""
     k1 = datastore.Put(datastore.Entity(self.kind_id))
     k2 = datastore.Put(datastore.Entity(self.kind_id))
+    k3 = datastore.Put(datastore.Entity(self.kind_id))
 
     dummy_k1 = db.Key.from_path(
         *(k1.to_path() + [input_readers.ConsistentKeyReader.DUMMY_KIND,
@@ -1499,29 +1487,29 @@ class ConsistentKeyReaderTest(unittest.TestCase):
     dummy_k2 = db.Key.from_path(
         *(k2.to_path() + [input_readers.ConsistentKeyReader.DUMMY_KIND,
                           input_readers.ConsistentKeyReader.DUMMY_ID]))
+    dummy_k3 = db.Key.from_path(
+        *(k3.to_path() + [input_readers.ConsistentKeyReader.DUMMY_KIND,
+                          input_readers.ConsistentKeyReader.DUMMY_ID]))
 
-    # This method is used only for unapplied query construction.
-    self.mox.StubOutWithMock(
-        key_range.KeyRange, "make_ascending_datastore_query")
+    self.mox.StubOutWithMock(self.reader, "_make_unapplied_query")
     self.mox.StubOutWithMock(db, "get")
 
-    datastore_query = datastore.Query(self.kind_id, keys_only=True)
-
-    # Applying jobs first.
-    key_range.KeyRange.make_ascending_datastore_query(
-        kind=None, keys_only=True).AndReturn(MockUnappliedQuery([k1, k2]))
+    # Pretend that batch_size = 2.
+    self.reader._make_unapplied_query(key_range.KeyRange()).AndReturn(
+        MockUnappliedQuery([k1, k2]))
     db.get([dummy_k1, dummy_k2], config=mox.IgnoreArg())
-    key_range.KeyRange.make_ascending_datastore_query(
-        kind=None, keys_only=True).AndReturn(MockUnappliedQuery([]))
-
-    # Got all keys no unapplied jobs.
-    key_range.KeyRange.make_ascending_datastore_query(
-        self.kind_id, keys_only=True).AndReturn(datastore_query)
+    self.reader._make_unapplied_query(
+        key_range.KeyRange(key_start=k2, include_start=False)).AndReturn(
+            MockUnappliedQuery([k3]))
+    db.get([dummy_k3], config=mox.IgnoreArg())  # Entity was deleted.
+    self.reader._make_unapplied_query(
+        key_range.KeyRange(key_start=k3, include_start=False)).AndReturn(
+            MockUnappliedQuery([]))
 
     self.mox.ReplayAll()
 
     keys = list(self.reader)
-    self.assertEquals([k1, k2], keys)
+    self.assertEquals([k1, k2, k3], keys)
 
   def testReaderGeneratorWithNamespaceRange(self):
     """Tests reader generator with namespaces but no unapplied jobs."""
