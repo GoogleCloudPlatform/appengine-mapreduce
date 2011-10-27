@@ -32,7 +32,7 @@ from mapreduce import errors
 from mapreduce import handlers
 from mapreduce import status
 from testlib import testutil
-from testlib import mock_webapp
+from mapreduce import mock_webapp
 
 
 class TestKind(db.Model):
