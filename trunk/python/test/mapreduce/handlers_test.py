@@ -54,7 +54,7 @@ from mapreduce import model
 from mapreduce import quota
 from mapreduce import test_support
 from testlib import testutil
-from testlib import mock_webapp
+from mapreduce import mock_webapp
 
 
 MAPPER_PARAMS = {"batch_size": 50}

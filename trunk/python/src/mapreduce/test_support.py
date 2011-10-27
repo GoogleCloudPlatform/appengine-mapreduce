@@ -24,7 +24,7 @@ import os
 import re
 
 from mapreduce import main
-from testlib import mock_webapp
+from mapreduce import mock_webapp
 from mapreduce import util
 
 
