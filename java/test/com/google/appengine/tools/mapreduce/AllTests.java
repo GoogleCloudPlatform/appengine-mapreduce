@@ -56,11 +56,6 @@ public class AllTests extends TestCase {
     suite.addTestSuite(WorkerTest.class);
     suite.addTestSuite(StatusTest.class);
     suite.addTestSuite(EndToEndTest.class);
-    suite.addTestSuite(ObjectReaderWriterTest.class);
-    suite.addTestSuite(SerializerTest.class);
-    suite.addTestSuite(KeyValueReaderWriterTest.class);
-    suite.addTestSuite(KeyValuesReaderWriterTest.class);
-    suite.addTestSuite(MockRecordChannelTest.class);
     return suite;
   }
 }
