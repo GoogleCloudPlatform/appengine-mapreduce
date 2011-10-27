@@ -16,42 +16,30 @@
 
 package com.google.appengine.tools.mapreduce;
 
-import com.google.appengine.api.datastore.DatastoreService;
-import com.google.appengine.api.datastore.DatastoreServiceFactory;
-import com.google.appengine.api.datastore.EntityNotFoundException;
 import com.google.appengine.tools.mapreduce.v2.impl.MapReduceState;
-import com.google.appengine.tools.mapreduce.v2.impl.handlers.Controller;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.mapreduce.JobID;
 
 import javax.servlet.http.HttpServletRequest;
 
 /**
- * Functions for controlling and observing mapreduce jobs.
+ * Functions for controlling and observing mapreduce jobs. Defined as interface to be more
+ * test-friendly.
  *
  */
-public class AppEngineMapreduce {
+public interface AppEngineMapreduce {
+  AppEngineMapreduce INSTANCE = new AppEngineMapreduceImpl();
 
   /**
-   * Start the MapReduce.
+   * Starts new MapReduce job.
    *
    * @return the job id of the newly created MapReduce or {@code null} if the
-   * MapReduce couldn't be created.
+   *         MapReduce couldn't be created.
    */
-  public static String start(Configuration configuration, String name, HttpServletRequest request) {
-    return Controller.handleStart(configuration, name, request);
-  }
+  String start(Configuration configuration, String name, HttpServletRequest request);
 
   /**
-   * Obtain mapreduce state.
+   * Obtains mapreduce state for a job.
    */
-  public static MapReduceState getState(String jobId) {
-    DatastoreService datastoreService = DatastoreServiceFactory.getDatastoreService();
-    try {
-      return MapReduceState.getMapReduceStateFromJobID(datastoreService, JobID.forName(jobId));
-    } catch (EntityNotFoundException e) {
-      return null;
-    }
-  }
+  MapReduceState getState(String jobId);
 }
