@@ -18,7 +18,12 @@
 
 
 
-"""Bigstore-specific Files API calls."""
+"""Google Storage specific Files API calls."""
+
+
+
+
+
 
 from __future__ import with_statement
 
@@ -50,7 +55,7 @@ def create(filename,
   """Create a writable blobstore file.
 
   Args:
-    filename: Bigstore object name (/gs/bucket/object)
+    filename: Google Storage object name (/gs/bucket/object)
     mime_type: Blob content MIME type as string.
     acl: Canned acl to apply to the object as per:
       http://code.google.com/apis/storage/docs/reference-headers.html#xgoogacl
@@ -64,9 +69,9 @@ def create(filename,
       Google Storage.
 
   Returns:
-    A writable file name for bigstore file. This file can be opened for write
-    by File API open function. To read the file call file::open with the plain
-    Bigstore filename (/gs/bucket/object).
+    A writable file name for Google Storage file. This file can be opened for
+    write by File API open function. To read the file call file::open with the
+    plain Google Storage filename (/gs/bucket/object).
   """
   if not filename:
     raise files.InvalidArgumentError('Empty filename')
