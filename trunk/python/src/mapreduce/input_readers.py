@@ -318,11 +318,10 @@ class AbstractDatastoreInputReader(InputReader):
       return repr(self._ns_range)
 
   @classmethod
-  def _choose_split_points(cls, random_keys, shard_count):
+  def _choose_split_points(cls, sorted_keys, shard_count):
     """Returns the best split points given a random set of db.Keys."""
-    assert len(random_keys) >= shard_count
-    index_stride = len(random_keys) / float(shard_count)
-    sorted_keys = sorted(random_keys)
+    assert len(sorted_keys) >= shard_count
+    index_stride = len(sorted_keys) / float(shard_count)
     return [sorted_keys[int(round(index_stride * i))]
             for i in range(1, shard_count)]
 
@@ -355,10 +354,13 @@ class AbstractDatastoreInputReader(InputReader):
     random_keys = ds_query.Get(shard_count * cls._OVERSAMPLING_FACTOR)
 
     if not random_keys:
-      # There are no entities with scatter property. We have no idea 
+      # There are no entities with scatter property. We have no idea
       # how to split.
       return ([key_range.KeyRange(namespace=namespace, _app=app)] +
               [None] * (shard_count - 1))
+
+    random_keys.sort()
+
     if len(random_keys) >= shard_count:
       # We've got a lot of scatter values. Sample them down.
       random_keys = cls._choose_split_points(random_keys, shard_count)
