@@ -81,9 +81,8 @@ public class Controller {
    * @return the JobID of the newly created MapReduce or {@code null} if the
    * MapReduce couldn't be created.
    */
-  public static String handleStart(Configuration configuration, String name, HttpServletRequest request) {
-    String baseUrl = MapReduceServlet.getBase(request);
-    AppEngineJobContext context = AppEngineJobContext.createContextForNewJob(configuration, request);
+  public static String handleStart(Configuration configuration, String name, String baseUrl) {
+    AppEngineJobContext context = AppEngineJobContext.createContextForNewJob(configuration);
 
     // Initialize InputSplits
     Class<? extends InputFormat<?, ?>> inputFormatClass;

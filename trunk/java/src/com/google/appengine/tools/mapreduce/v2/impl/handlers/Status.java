@@ -78,7 +78,7 @@ public class Status {
       MapReduceXml mrXml = MapReduceXml.getMapReduceXmlFromFile();
       Configuration configuration = mrXml.instantiateConfiguration(name, params);
       // TODO(user): What should we be doing here for error handling?
-      String jobId = Controller.handleStart(configuration, name, request);
+      String jobId = Controller.handleStart(configuration, name, MapReduceServlet.getBase(request));
       JSONObject retValue = new JSONObject();
       try {
         retValue.put("mapreduce_id", jobId);

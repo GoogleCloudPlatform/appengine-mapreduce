@@ -195,7 +195,7 @@ public class MapReduceServlet extends HttpServlet {
       // TODO(user): Add ability to specify a redirect.
       Controller.handleStart(
           ConfigurationXmlUtil.getConfigurationFromXml(request.getParameter("configuration")),
-          "Automatically run request", request);
+          "Automatically run request", getBase(request));
     } else if (handler.startsWith(COMMAND_PATH)) {
       if (!checkForAjax(request, response)) {
         return;

@@ -72,10 +72,7 @@ public class EndToEndTest extends TestCase {
     configuration.setClass("mapreduce.inputformat.class", StubInputFormat.class, InputFormat.class);
     configuration.setClass("mapreduce.map.class", StubMapper.class, AppEngineMapper.class);
 
-    HttpServletRequest request = createMockStartRequest(configuration);
-    replay(request);
-
-    AppEngineMapreduce.INSTANCE.start(configuration, "test", request);
+    AppEngineMapreduce.INSTANCE.start(configuration, "test", "/mapreduce/");
 
     executeTasksUntilEmpty(queueName);
 

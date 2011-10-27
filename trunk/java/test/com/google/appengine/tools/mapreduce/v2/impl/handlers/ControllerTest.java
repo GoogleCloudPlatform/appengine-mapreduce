@@ -2,6 +2,7 @@
 
 package com.google.appengine.tools.mapreduce.v2.impl.handlers;
 
+import static com.google.appengine.tools.mapreduce.MockRequestFactory.createMockMapReduceRequest;
 import static org.easymock.EasyMock.createMock;
 import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.replay;
@@ -248,11 +249,7 @@ public class ControllerTest extends TestCase {
           ConfigurationXmlUtil.convertConfigurationToXml(conf));
       mrState.persist();
 
-      HttpServletRequest req = createMock(HttpServletRequest.class);
-      expect(req.getParameter(AppEngineJobContext.JOB_ID_PARAMETER_NAME))
-          .andReturn(jobId.toString())
-          .anyTimes();
-
+      HttpServletRequest req = createMockMapReduceRequest(jobId);
       replay(req);
 
       AppEngineJobContext context = new AppEngineJobContext(req);

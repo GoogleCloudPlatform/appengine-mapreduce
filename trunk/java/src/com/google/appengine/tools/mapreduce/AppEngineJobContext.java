@@ -96,9 +96,10 @@ public class AppEngineJobContext extends JobContext {
    * Default number of mappers to run in parallel.
    */
   public static final int DEFAULT_MAPPER_SHARD_COUNT = 8;
+  public static final String QUEUE_NAME_HEADER = "X-AppEngine-QueueName";
 
-  // Current request
-  private final HttpServletRequest request;
+  private final String queueName;
+  private final int sliceNumber;
 
   /**
    * Initializes a JobContext from a request.
@@ -110,20 +111,32 @@ public class AppEngineJobContext extends JobContext {
     this(getConfigurationFromRequest(request, false), getJobIDFromRequest(request), request);
   }
 
-  /**
-   * Initializes the context from its constituent elements.
-   */
-  public // VisibleForTesting
-  AppEngineJobContext(Configuration conf, JobID jobId, HttpServletRequest request) {
-    super(conf, jobId);
-    this.request = request;
+  private AppEngineJobContext(Configuration configuration, JobID jobId,
+      HttpServletRequest request) {
+    this(configuration, jobId,
+        request.getHeader(QUEUE_NAME_HEADER),
+        Integer.parseInt(request.getParameter(SLICE_NUMBER_PARAMETER_NAME)));
+  }
+
+  private AppEngineJobContext(Configuration configuration, JobID jobId, String queueName,
+      int sliceNumber) {
+    super(configuration, jobId);
+    this.queueName = queueName != null ? queueName : "default";
+    this.sliceNumber = sliceNumber;
   }
 
   /**
    * Create context for new mapreduce job.
    */
-  public static AppEngineJobContext createContextForNewJob(Configuration configuration, HttpServletRequest request) {
-    return new AppEngineJobContext(configuration, generateNewJobID(), request);
+  public static AppEngineJobContext createContextForNewJob(Configuration configuration) {
+    return new AppEngineJobContext(configuration, generateNewJobID(), null, 0);
+  }
+
+  // VisibleForTesting
+  // TODO(user): kill this method
+  public static AppEngineJobContext createContextForTesting(Configuration configuration,
+      JobID jobId, HttpServletRequest request) {
+    return new AppEngineJobContext(configuration, jobId, request);
   }
 
   /**
@@ -196,11 +209,7 @@ public class AppEngineJobContext extends JobContext {
    */
   // VisibleForTesting
   String getQueueName(String queueKey) {
-    String currentQueueName = request.getHeader("X-AppEngine-QueueName");
-    if (currentQueueName == null) {
-      currentQueueName = "default";
-    }
-    return getConfiguration().get(queueKey, currentQueueName);
+    return getConfiguration().get(queueKey, queueName);
   }
 
   /**
@@ -267,6 +276,6 @@ public class AppEngineJobContext extends JobContext {
    * task queue chain.
    */
   public int getSliceNumber() {
-    return Integer.parseInt(request.getParameter(SLICE_NUMBER_PARAMETER_NAME));
+    return sliceNumber;
   }
 }

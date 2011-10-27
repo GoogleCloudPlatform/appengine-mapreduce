@@ -10,7 +10,6 @@ import com.google.appengine.tools.mapreduce.v2.impl.handlers.Controller;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.mapreduce.JobID;
 
-import javax.servlet.http.HttpServletRequest;
 
 /**
  * Real implementation of AppEngineMapreduce. Functionality for controlling and observing mapreduce
@@ -20,8 +19,11 @@ import javax.servlet.http.HttpServletRequest;
 class AppEngineMapreduceImpl implements AppEngineMapreduce {
 
   @Override
-  public String start(Configuration configuration, String name, HttpServletRequest request) {
-    return Controller.handleStart(configuration, name, request);
+  public String start(Configuration configuration, String name, String basePath) {
+    if (!basePath.endsWith("/")) {
+      basePath += "/";
+    }
+    return Controller.handleStart(configuration, name, basePath);
   }
 
   @Override

@@ -20,7 +20,6 @@ import com.google.appengine.tools.mapreduce.v2.impl.MapReduceState;
 
 import org.apache.hadoop.conf.Configuration;
 
-import javax.servlet.http.HttpServletRequest;
 
 /**
  * Functions for controlling and observing mapreduce jobs. Defined as interface to be more
@@ -33,13 +32,17 @@ public interface AppEngineMapreduce {
   /**
    * Starts new MapReduce job.
    *
+   * @param configuration MapReduce configuration
+   * @param name MapReduce job name
+   * @param basePath base path for MapReduce servlet registration. Usually it is "/mapreduce/".
    * @return the job id of the newly created MapReduce or {@code null} if the
    *         MapReduce couldn't be created.
    */
-  String start(Configuration configuration, String name, HttpServletRequest request);
+  String start(Configuration configuration, String name, String basePath);
 
   /**
    * Obtains mapreduce state for a job.
+   * @param jobId MapReduce job id which was obtained by invoking {@link #start}.
    */
   MapReduceState getState(String jobId);
 }
