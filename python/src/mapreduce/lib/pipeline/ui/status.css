@@ -78,11 +78,10 @@ abbr {
 .slot-detail,
 .status-param-value {
   padding-left: 1em;
-  max-width: 400px;
   word-wrap: break-word;
 }
-.status-param-detail {
-  padding-left: 2em;
+.value-disclosure-more {
+  display: none;
 }
 .run-after-pipeline-id,
 .child-pipeline-id,

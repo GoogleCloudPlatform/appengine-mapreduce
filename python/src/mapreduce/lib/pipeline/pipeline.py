@@ -22,7 +22,7 @@ __all__ = [
     'PipelineRuntimeError', 'SlotNotFilledError', 'SlotNotDeclaredError',
     'UnexpectedPipelineError', 'PipelineStatusError', 'Slot', 'Pipeline',
     'PipelineFuture', 'After', 'InOrder', 'Retry', 'Abort', 'get_status_tree',
-    'create_handlers_map',
+    'create_handlers_map', 'set_enforce_auth',
 ]
 
 import datetime
@@ -140,6 +140,8 @@ _RETRY_WIGGLE_TIMEDELTA = datetime.timedelta(seconds=20)
 _DEBUG = False
 
 _MAX_JSON_SIZE = 900000
+
+_ENFORCE_AUTH = True
 
 ################################################################################
 
@@ -360,6 +362,8 @@ class Pipeline(object):
       followed is (backoff_seconds * backoff_factor^current_attempt).
     max_attempts: Maximum number of retry attempts to make before failing
       completely and aborting the entire pipeline up to the root.
+    target: The application version to use for processing this Pipeline. This
+      can be set to the name of a backend to direct Pipelines to run there.
 
   Instance properties:
     pipeline_id: The ID of this pipeline.
@@ -390,6 +394,7 @@ class Pipeline(object):
     self.backoff_seconds = _DEFAULT_BACKOFF_SECONDS
     self.backoff_factor = _DEFAULT_BACKOFF_FACTOR
     self.max_attempts = _DEFAULT_MAX_ATTEMPTS
+    self.target = None
     self.task_retry = False
     self._current_attempt = 0
     self._root_pipeline_key = None
@@ -498,6 +503,7 @@ class Pipeline(object):
     stage.backoff_factor = params['backoff_factor']
     stage.max_attempts = params['max_attempts']
     stage.task_retry = params['task_retry']
+    stage.target = params.get('target')  # May not be defined for old Pipelines
     stage._current_attempt = pipeline_record.current_attempt
     stage._set_values_internal(
         _PipelineContext('', params['queue_name'], params['base_path']),
@@ -833,6 +839,36 @@ The Pipeline API
         url=self.base_path + '/cleanup',
         headers={'X-Ae-Pipeline-Key': self._root_pipeline_key})
     taskqueue.Queue(self.queue_name).add(task)
+
+  def with_params(self, **kwargs):
+    """Modify various execution parameters of a Pipeline before it runs.
+
+    This method has no effect in test mode.
+
+    Args:
+      kwargs: Attributes to modify on this Pipeline instance before it has
+        been executed.
+
+    Returns:
+      This Pipeline instance, for easy chaining.
+    """
+    if _TEST_MODE:
+      logging.info(
+          'Setting runtime parameters for %s#%s: %r',
+          self, self.pipeline_id, kwargs)
+      return self
+
+    if self.pipeline_id is not None:
+      raise UnexpectedPipelineError(
+          'May only call with_params() on a Pipeline that has not yet '
+          'been scheduled for execution.')
+
+    ALLOWED = ('backoff_seconds', 'backoff_factor', 'max_attempts', 'target')
+    for name, value in kwargs.iteritems():
+      if name not in ALLOWED:
+        raise TypeError('Unexpected keyword: %s=%r' % (name, value))
+      setattr(self, name, value)
+    return self
 
   # Methods implemented by developers for lifecycle management. These
   # must be idempotent under all circumstances.
@@ -1191,6 +1227,7 @@ def _generate_args(pipeline, future, queue_name, base_path):
     'backoff_factor': pipeline.backoff_factor,
     'max_attempts': pipeline.max_attempts,
     'task_retry': pipeline.task_retry,
+    'target': pipeline.target,
   }
   dependent_slots = set()
 
@@ -1600,10 +1637,11 @@ class _PipelineContext(object):
 
       db.put(entities_to_put)
 
-      task = task = taskqueue.Task(
+      task = taskqueue.Task(
           url=self.pipeline_handler_path,
           params=dict(pipeline_key=pipeline._pipeline_key),
-          headers={'X-Ae-Pipeline-Key': pipeline._pipeline_key})
+          headers={'X-Ae-Pipeline-Key': pipeline._pipeline_key},
+          target=pipeline.target)
       if return_task:
         return task
       task.add(queue_name=self.queue_name, transactional=True)
@@ -2843,15 +2881,15 @@ class _StatusUiHandler(webapp.RequestHandler):
   }
 
   def get(self, resource=''):
-    if users.get_current_user() is None:
-      self.redirect(users.create_login_url(self.request.url))
-      return
+    if _ENFORCE_AUTH:
+      if users.get_current_user() is None:
+        self.redirect(users.create_login_url(self.request.url))
+        return
 
-    # Note: Disable this when deploying the demo.
-    if not users.is_current_user_admin():
-      self.response.out.write('Forbidden')
-      self.response.set_status(403)
-      return
+      if not users.is_current_user_admin():
+        self.response.out.write('Forbidden')
+        self.response.set_status(403)
+        return
 
     if resource not in self._RESOURCE_MAP:
       logging.info('Could not find: %s', resource)
@@ -2876,11 +2914,11 @@ class _BaseRpcHandler(webapp.RequestHandler):
   """
 
   def get(self):
-    # Note: Disable this when deploying the demo.
-    if not users.is_current_user_admin():
-      self.response.out.write('Forbidden')
-      self.response.set_status(403)
-      return
+    if _ENFORCE_AUTH:
+      if not users.is_current_user_admin():
+        self.response.out.write('Forbidden')
+        self.response.set_status(403)
+        return
 
     # XSRF protection
     if (not _DEBUG and
@@ -2917,6 +2955,17 @@ class _TreeStatusHandler(_BaseRpcHandler):
         get_status_tree(self.request.get('root_pipeline_id')))
 
 ################################################################################
+
+def set_enforce_auth(new_status):
+  """Sets whether Pipeline API handlers rely on app.yaml for access control.
+
+  Args:
+    new_status: If True, then the Pipeline API will enforce its own
+      access control on status and static file handlers. If False, then
+      it will assume app.yaml is doing the enforcement.
+  """
+  global _ENFORCE_AUTH
+  _ENFORCE_AUTH = new_status
 
 
 def create_handlers_map(prefix='.*'):
