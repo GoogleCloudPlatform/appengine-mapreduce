@@ -23,12 +23,6 @@ __all__ = [
     'UnexpectedPipelineError', 'PipelineStatusError', 'Slot', 'Pipeline',
     'PipelineFuture', 'After', 'InOrder', 'Retry', 'Abort', 'get_status_tree',
     'create_handlers_map',
-
-    # For testing or internal imports.
-    '_dereference_args', '_generate_args', '_PipelineContext',
-    '_CallbackHandler', '_FanoutHandler', '_PipelineHandler', '_BarrierHandler',
-    '_FanoutAbortHandler', '_CleanupHandler', '_get_timestamp_ms',
-    '_get_internal_status', '_get_internal_slot', '_TEST_MODE',
 ]
 
 import datetime
@@ -44,6 +38,7 @@ import urllib
 import uuid
 
 from google.appengine.api import mail
+from mapreduce.lib import files
 from google.appengine.api import users
 from google.appengine.api import taskqueue
 from google.appengine.ext import db
@@ -62,7 +57,7 @@ _BarrierRecord = models._BarrierRecord
 _StatusRecord = models._StatusRecord
 
 
-# Soon TODO:
+# Overall TODOs:
 # - Add a human readable name for start()
 # - Consider using sha1 of the UUID for user-supplied pipeline keys to ensure
 #   that they keys are definitely not sequential or guessable (Python's uuid1
@@ -143,6 +138,8 @@ _DEFAULT_MAX_ATTEMPTS = 3
 _RETRY_WIGGLE_TIMEDELTA = datetime.timedelta(seconds=20)
 
 _DEBUG = False
+
+_MAX_JSON_SIZE = 900000
 
 ################################################################################
 
@@ -344,8 +341,6 @@ class PipelineFuture(object):
     slot = self._output_dict[name]
     return slot
 
-# TODO: Make async and generator pipelines into separate child classes of
-# this base class instead of flags and/or the function's generator flag.
 
 class Pipeline(object):
   """A Pipeline function-object that performs operations and has a life cycle.
@@ -951,9 +946,9 @@ The Pipeline API
 
   def _callback_internal(self, kwargs):
     """Used to execute callbacks on asynchronous pipelines."""
-    logging.debug('Callback %s(*%r, **%r)#%s with params: %r',
-                  self._class_path, self.args, self.kwargs,
-                  self._pipeline_key.name(), kwargs)
+    logging.debug('Callback %s(*%s, **%s)#%s with params: %r',
+                  self._class_path, _short_repr(self.args),
+                  _short_repr(self.kwargs), self._pipeline_key.name(), kwargs)
     return self.callback(**kwargs)
 
   def _run_internal(self,
@@ -965,9 +960,9 @@ The Pipeline API
     self._set_values_internal(
         context, pipeline_key, root_pipeline_key, caller_output,
         _PipelineRecord.RUN)
-    logging.debug('Running %s(*%r, **%r)#%s',
-                  self._class_path, self.args, self.kwargs,
-                  self._pipeline_key.name())
+    logging.debug('Running %s(*%s, **%s)#%s',
+                  self._class_path, _short_repr(self.args),
+                  _short_repr(self.kwargs), self._pipeline_key.name())
     return self.run(*self.args, **self.kwargs)
 
   def _finalized_internal(self,
@@ -984,8 +979,8 @@ The Pipeline API
     self._set_values_internal(
         context, pipeline_key, root_pipeline_key, caller_output, result_status)
     logging.debug('Finalizing %s(*%r, **%r)#%s',
-                  self._class_path, self.args, self.kwargs,
-                  self._pipeline_key.name())
+                  self._class_path, _short_repr(self.args),
+                  _short_repr(self.kwargs), self._pipeline_key.name())
     try:
       self.finalized()
     except NotImplementedError:
@@ -993,7 +988,8 @@ The Pipeline API
 
   def __repr__(self):
     """Returns a string representation of this Pipeline."""
-    return '%s(*%r, **%r)' % (self._class_path, self.args, self.kwargs)
+    return '%s(*%s, **%s)' % (
+        self._class_path, _short_repr(self.args), _short_repr(self.kwargs))
 
 
 # TODO: Change InOrder and After to use a common thread-local list of
@@ -1069,6 +1065,34 @@ class InOrder(object):
 
 ################################################################################
 
+def _short_repr(obj):
+  """Helper function returns a truncated repr() of an object."""
+  stringified = repr(obj)
+  if len(stringified) > 200:
+    return '%s... (%d bytes)' % (stringified[:200], len(stringified))
+  return stringified
+
+
+def _write_json_blob(encoded_value):
+  """Writes a JSON encoded value to a Blobstore File.
+
+  Args:
+    encoded_value: The encoded JSON string.
+
+  Returns:
+    The blobstore.BlobKey for the file that was created.
+  """
+  file_name = files.blobstore.create(mime_type='application/json')
+  handle = files.open(file_name, 'a')
+  try:
+    handle.write(encoded_value)
+  finally:
+    handle.close()
+
+  files.finalize(file_name)
+  return files.blobstore.get_blob_key(file_name)
+
+
 def _dereference_args(pipeline_name, args, kwargs):
   """Dereference a Pipeline's arguments that are slots, validating them.
 
@@ -1100,8 +1124,8 @@ def _dereference_args(pipeline_name, args, kwargs):
   for key, slot_record in zip(lookup_slots, db.get(lookup_slots)):
     if slot_record is None or slot_record.status != _SlotRecord.FILLED:
       raise SlotNotFilledError(
-          'Slot "%s" missing its value. From %s(*args=%r, **kwargs=%r)' %
-          (key, pipeline_name, args, kwargs))
+          'Slot "%s" missing its value. From %s(*args=%s, **kwargs=%s)' %
+          (key, pipeline_name, _short_repr(args), _short_repr(kwargs)))
     slot_dict[key] = slot_record.value
 
   arg_list = []
@@ -1139,15 +1163,19 @@ def _generate_args(pipeline, future, queue_name, base_path):
     base_path: Relative URL for pipeline URL handlers.
 
   Returns:
-    Tuple (dependent_slots, output_slot_keys, params) where:
+    Tuple (dependent_slots, output_slot_keys, params_text, params_blob) where:
       dependent_slots: List of db.Key instances of _SlotRecords on which
         this pipeline will need to block before execution (passed to
         create a _BarrierRecord for running the pipeline).
       output_slot_keys: List of db.Key instances of _SlotRecords that will
         be filled by this pipeline during its execution (passed to create
         a _BarrierRecord for finalizing the pipeline).
-      params: Dictionary of pipeline parameters to be serialized and saved
-        in a corresponding _PipelineRecord.
+      params_text: JSON dictionary of pipeline parameters to be serialized and
+        saved in a corresponding _PipelineRecord. Will be None if the params are
+        too big and must be saved in a blob instead.
+      params_blob: JSON dictionary of pipeline parameters to be serialized and
+        saved in a Blob file, and then attached to a _PipelineRecord. Will be
+        None if the params data size was small enough to fit in the entity.
   """
   params = {
     'args': [],
@@ -1196,7 +1224,15 @@ def _generate_args(pipeline, future, queue_name, base_path):
     output_slot_keys.add(slot.key)
     output_slots[name] = str(slot.key)
 
-  return dependent_slots, output_slot_keys, params
+  params_encoded = simplejson.dumps(params)
+  params_text = None
+  params_blob = None
+  if len(params_encoded) > _MAX_JSON_SIZE:
+    params_blob = _write_json_blob(params_encoded)
+  else:
+    params_text = params_encoded
+
+  return dependent_slots, output_slot_keys, params_text, params_blob
 
 
 class _PipelineContext(object):
@@ -1256,6 +1292,15 @@ class _PipelineContext(object):
     if _TEST_MODE:
       slot._set_value_test(filler_pipeline_key, value)
     else:
+      encoded_value = simplejson.dumps(value, sort_keys=True)
+      value_text = None
+      value_blob = None
+      if len(encoded_value) <= _MAX_JSON_SIZE:
+        value_text = db.Text(encoded_value)
+      else:
+        # The encoded value is too big. Save it as a blob.
+        value_blob = _write_json_blob(encoded_value)
+
       def txn():
         slot_record = db.get(slot.key)
         if slot_record is None:
@@ -1269,7 +1314,8 @@ class _PipelineContext(object):
         # the down-stream pipeline must also wait for the 'default' output
         # of these up-stream pipelines.
         slot_record.filler = filler_pipeline_key
-        slot_record.value = value
+        slot_record.value_text = value_text
+        slot_record.value_blob = value_blob
         slot_record.status = _SlotRecord.FILLED
         slot_record.fill_time = self._gettime()
         slot_record.put()
@@ -1506,29 +1552,39 @@ class _PipelineContext(object):
     Raises:
       PipelineExistsError if the pipeline with the given ID already exists.
     """
+    # Adjust all pipeline output keys for this Pipeline to be children of
+    # the _PipelineRecord, that way we can write them all and submit in a
+    # single transaction.
+    entities_to_put = []
+    for name, slot in pipeline.outputs._output_dict.iteritems():
+      slot.key = db.Key.from_path(
+          *slot.key.to_path(), **dict(parent=pipeline._pipeline_key))
+
+    _, output_slots, params_text, params_blob = _generate_args(
+        pipeline, pipeline.outputs, self.queue_name, self.base_path)
+
     def txn():
       pipeline_record = db.get(pipeline._pipeline_key)
       if pipeline_record is not None:
         raise PipelineExistsError(
-            'Pipeline with idempotence key "%s" already exists; params=%r' %
-            (pipeline._pipeline_key.name(), pipeline_record.params))
+            'Pipeline with idempotence key "%s" already exists; params=%s' %
+            (pipeline._pipeline_key.name(),
+             _short_repr(pipeline_record.params)))
 
       entities_to_put = []
       for name, slot in pipeline.outputs._output_dict.iteritems():
-        slot.key = db.Key.from_path(
-            *slot.key.to_path(), **dict(parent=pipeline._pipeline_key))
         entities_to_put.append(_SlotRecord(
             key=slot.key,
             root_pipeline=pipeline._pipeline_key))
-
-      dependent_slots, output_slots, params = _generate_args(
-          pipeline, pipeline.outputs, self.queue_name, self.base_path)
 
       entities_to_put.append(_PipelineRecord(
           key=pipeline._pipeline_key,
           root_pipeline=pipeline._pipeline_key,
           is_root_pipeline=True,
-          params=params,
+          # Bug in DB means we need to use the storage name here,
+          # not the local property name.
+          params=params_text,
+          params_blob=params_blob,
           start_time=self._gettime(),
           class_path=pipeline._class_path,
           max_attempts=pipeline.max_attempts))
@@ -1603,8 +1659,8 @@ class _PipelineContext(object):
 
     stage.args, stage.kwargs = args_adjusted, kwargs_adjusted
     pipeline_generator = mr_util.is_generator_function(stage.run)
-    logging.debug('Running %s(*%r, **%r)',
-                  stage._class_path, stage.args, stage.kwargs)
+    logging.debug('Running %s(*%s, **%s)', stage._class_path,
+                  _short_repr(stage.args), _short_repr(stage.kwargs))
 
     if stage.async:
       stage.run_test(*stage.args, **stage.kwargs)
@@ -1685,8 +1741,8 @@ class _PipelineContext(object):
         raise SlotNotFilledError(
             'Outputs %r were never filled.' % missing_outputs)
 
-    logging.debug('Finalizing %s(*%r, **%r)',
-                  stage._class_path, stage.args, stage.kwargs)
+    logging.debug('Finalizing %s(*%s, **%s)', stage._class_path,
+                  _short_repr(stage.args), _short_repr(stage.kwargs))
     ran = False
     try:
       stage.finalized_test()
@@ -1962,7 +2018,7 @@ class _PipelineContext(object):
     all_output_slots = set()
     for sub_stage in sub_stage_ordering:
       future = sub_stage_dict[sub_stage]
-      dependent_slots, output_slots, params = _generate_args(
+      dependent_slots, output_slots, params_text, params_blob = _generate_args(
           sub_stage, future, self.queue_name, self.base_path)
       child_pipeline_key = db.Key.from_path(
           _PipelineRecord.kind(), uuid.uuid1().hex)
@@ -1972,7 +2028,10 @@ class _PipelineContext(object):
       child_pipeline = _PipelineRecord(
           key=child_pipeline_key,
           root_pipeline=root_pipeline_key,
-          params=params,
+          # Bug in DB means we need to use the storage name here,
+          # not the local property name.
+          params=params_text,
+          params_blob=params_blob,
           class_path=sub_stage._class_path,
           max_attempts=sub_stage.max_attempts)
       entities_to_put.append(child_pipeline)
@@ -2336,6 +2395,8 @@ class _CleanupHandler(webapp.RequestHandler):
     root_pipeline_key = db.Key(self.request.get('root_pipeline_key'))
     logging.debug('Cleaning up root_pipeline_key=%r', root_pipeline_key)
 
+    # TODO(user): Accumulate all BlobKeys from _PipelineRecord and
+    # _SlotRecord entities and delete them.
     pipeline_keys = (
         _PipelineRecord.all(keys_only=True)
         .filter('root_pipeline =', root_pipeline_key))
@@ -2544,6 +2605,11 @@ def _get_internal_status(pipeline_key=None,
     'backoffFactor': pipeline_record.params['backoff_factor'],
   }
 
+  # TODO(user): Truncate args, kwargs, and outputs to < 1MB each so we
+  # can reasonably return the whole tree of pipelines and their outputs.
+  # Coerce each value to a string to truncate if necessary. For now if the
+  # params are too big it will just cause the whole status page to break.
+
   # Fix the key names in parameters to match JavaScript style.
   for value_dict in itertools.chain(
       output['args'], output['kwargs'].itervalues()):
@@ -2642,7 +2708,8 @@ def _get_internal_slot(slot_key=None,
     output['status'] = 'filled'
     output['fillTimeMs'] = _get_timestamp_ms(slot_record.fill_time)
     output['value'] = slot_record.value
-    filler_pipeline_key = _SlotRecord.filler.get_value_for_datastore(slot_record)
+    filler_pipeline_key = \
+        _SlotRecord.filler.get_value_for_datastore(slot_record)
   else:
     output['status'] = 'waiting'
 

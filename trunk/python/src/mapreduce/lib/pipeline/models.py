@@ -16,74 +16,11 @@
 
 """Datastore models used by the Google App Engine Pipeline API."""
 
+from google.appengine.ext import db
+from google.appengine.ext import blobstore
+
 # Relative imports
 from mapreduce.lib import simplejson
-
-from google.appengine.ext import db
-
-
-class JsonProperty(db.UnindexedProperty):
-  """Property type for storing JSON-serialized data."""
-
-  data_type = unicode
-
-  def __init__(self, **kwargs):
-    """Constructor.
-
-    Args:
-      default: default value for the property. The value is deep copied
-        for each model instance.
-      kwargs: remaining arguments.
-    """
-    super(JsonProperty, self).__init__(**kwargs)
-
-  def get_value_for_datastore(self, model_instance):
-    """Gets a value to store in the Datastore.
-
-    Args:
-      model_instance: instance of the model class.
-
-    Returns:
-      datastore-compatible value.
-    """
-    value = super(JsonProperty, self).get_value_for_datastore(model_instance)
-    if value is None:
-      return None
-    return db.Text(simplejson.dumps(value, sort_keys=True))
-
-  def make_value_from_datastore(self, value):
-    """Convert a value from its Datastore representation.
-
-    Args:
-      value: Datastore value.
-
-    Returns:
-      value to return to user code.
-    """
-    if value is None:
-      return None
-    return simplejson.loads(value)
-
-  def validate(self, value):
-    """Pass-through since only JSON serialization will validate."""
-    return value
-
-
-class ParamsProperty(JsonProperty):
-  """Property for storing Pipeline parameters."""
-
-  def make_value_from_datastore(self, value):
-    """Sanitizes and normalizes certain parameter keys."""
-    value = super(ParamsProperty, self).make_value_from_datastore(value)
-    if isinstance(value, dict):
-      kwargs = value.get('kwargs')
-      if kwargs:
-        adjusted_kwargs = {}
-        for arg_key, arg_value in kwargs.iteritems():
-          # Python only allows non-unicode strings as keyword arguments.
-          adjusted_kwargs[str(arg_key)] = arg_value
-        value['kwargs'] = adjusted_kwargs
-    return value
 
 
 class _PipelineRecord(db.Model):
@@ -124,7 +61,11 @@ class _PipelineRecord(db.Model):
   fanned_out = db.ListProperty(db.Key, indexed=False)
   start_time = db.DateTimeProperty(indexed=False)
   finalized_time = db.DateTimeProperty(indexed=False)
-  params = ParamsProperty()
+
+  # One of these two will be set, depending on the size of the params.
+  params_text = db.TextProperty(name='params')
+  params_blob = blobstore.BlobReferenceProperty(indexed=False)
+
   status = db.StringProperty(choices=(WAITING, RUN, DONE, ABORTED),
                              default=WAITING)
 
@@ -142,6 +83,30 @@ class _PipelineRecord(db.Model):
   @classmethod
   def kind(cls):
     return '_AE_Pipeline_Record'
+
+  @property
+  def params(self):
+    """Returns the dictionary of parameters for this Pipeline."""
+    if hasattr(self, '_params_decoded'):
+      return self._params_decoded
+
+    if self.params_blob is not None:
+      value_encoded = self.params_blob.open().read()
+    else:
+      value_encoded = self.params_text
+
+    value = simplejson.loads(value_encoded)
+    if isinstance(value, dict):
+      kwargs = value.get('kwargs')
+      if kwargs:
+        adjusted_kwargs = {}
+        for arg_key, arg_value in kwargs.iteritems():
+          # Python only allows non-unicode strings as keyword arguments.
+          adjusted_kwargs[str(arg_key)] = arg_value
+        value['kwargs'] = adjusted_kwargs
+
+    self._params_decoded = value
+    return self._params_decoded
 
 
 class _SlotRecord(db.Model):
@@ -161,7 +126,11 @@ class _SlotRecord(db.Model):
   root_pipeline = db.ReferenceProperty(_PipelineRecord)
   filler = db.ReferenceProperty(_PipelineRecord,
                                 collection_name='filled_slots_set')
-  value = JsonProperty()
+
+  # One of these two will be set, depending on the size of the value.
+  value_text = db.TextProperty(name='value')
+  value_blob = blobstore.BlobReferenceProperty(indexed=False)
+
   status = db.StringProperty(choices=(FILLED, WAITING), default=WAITING,
                              indexed=False)
   fill_time = db.DateTimeProperty(indexed=False)
@@ -169,6 +138,21 @@ class _SlotRecord(db.Model):
   @classmethod
   def kind(cls):
     return '_AE_Pipeline_Slot'
+
+  @property
+  def value(self):
+    """Returns the value of this Slot."""
+    if hasattr(self, '_value_decoded'):
+      return self._value_decoded
+
+    if self.value_blob is not None:
+      encoded_value = self.value_blob.open().read()
+    else:
+      encoded_value = self.value_text
+
+    self._value_decoded = simplejson.loads(encoded_value)
+    return self._value_decoded
+
 
 
 class _BarrierRecord(db.Model):
