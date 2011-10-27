@@ -356,7 +356,7 @@ class GetJobDetailHandler(base_handler.GetJsonHandler):
     })
     self.json_response["result_status"] = job.result_status
 
-    shards_list = model.ShardState.find_by_mapreduce_id(mapreduce_id)
+    shards_list = model.ShardState.find_by_mapreduce_state(job)
     all_shards = []
     shards_list.sort(key=lambda x: x.shard_number)
     for shard in shards_list:

@@ -795,16 +795,28 @@ class ShardState(db.Model):
     return cls.get_by_key_name(shard_id)
 
   @classmethod
-  def find_by_mapreduce_id(cls, mapreduce_id):
+  def find_by_mapreduce_state(cls, mapreduce_state):
     """Find all shard states for given mapreduce.
 
     Args:
-      mapreduce_id: mapreduce id.
+      mapreduce_state: MapreduceState instance
 
     Returns:
-      iterable of all ShardState for given mapreduce id.
+      iterable of all ShardState for given mapreduce.
     """
-    return cls.all().filter("mapreduce_id =", mapreduce_id).fetch(99999)
+    keys = []
+    for i in range(mapreduce_state.mapreduce_spec.mapper.shard_count):
+      shard_id = cls.shard_id_from_number(mapreduce_state.key().name(), i)
+      keys.append(cls.get_key_by_shard_id(shard_id))
+    return [state for state in db.get(keys) if state]
+
+  @classmethod
+  def find_by_mapreduce_id(cls, mapreduce_id):
+    logging.error(
+        "ShardState.find_by_mapreduce_id method may be inconsistent. " +
+        "ShardState.find_by_mapreduce_state should be used instead.")
+    return cls.all().filter(
+        "mapreduce_id =", mapreduce_id).fetch(99999)
 
   @classmethod
   def create_new(cls, mapreduce_id, shard_number):
