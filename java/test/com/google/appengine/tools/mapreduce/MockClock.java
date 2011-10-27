@@ -16,6 +16,7 @@
 
 package com.google.appengine.tools.mapreduce;
 
+import com.google.appengine.tools.mapreduce.util.Clock;
 import com.google.common.base.Preconditions;
 
 import java.util.Arrays;
@@ -28,7 +29,7 @@ import java.util.List;
  *
  *
  */
-class MockClock implements Clock {
+public class MockClock implements Clock {
   private List<Long> times;
   private int currentOffset = 0;
   private boolean repeatLastTime;

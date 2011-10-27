@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.google.appengine.tools.mapreduce;
+package com.google.appengine.tools.mapreduce.v2.impl;
 
 import static com.google.appengine.api.datastore.FetchOptions.Builder.withPrefetchSize;
 

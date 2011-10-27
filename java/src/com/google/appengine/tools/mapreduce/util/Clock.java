@@ -14,21 +14,18 @@
  * limitations under the License.
  */
 
-package com.google.appengine.tools.mapreduce;
+package com.google.appengine.tools.mapreduce.util;
 
 /**
- * Clock that uses System.
+ * Simple mockable clock.
  *
- * Package visible because it's a utility class for mapreduce.
- *
+ * Package visible because it's a utility class for MapReduce.
  *
  */
-class SystemClock implements Clock {
+public interface Clock {
   /**
-   * Returns the current time according to the system clock.
+   * Returns the current time as defined by the particular clock implementation
+   * in milliseconds from the epoch.
    */
-  @Override
-  public long currentTimeMillis() {
-    return System.currentTimeMillis();
-  }
+  long currentTimeMillis();
 }

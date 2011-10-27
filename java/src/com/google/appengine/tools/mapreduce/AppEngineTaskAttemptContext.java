@@ -18,6 +18,7 @@ package com.google.appengine.tools.mapreduce;
 
 import com.google.appengine.api.datastore.DatastoreService;
 import com.google.appengine.api.datastore.EntityNotFoundException;
+import com.google.appengine.tools.mapreduce.v2.impl.ShardState;
 
 import org.apache.hadoop.mapreduce.InputSplit;
 import org.apache.hadoop.mapreduce.RecordReader;
@@ -41,7 +42,7 @@ import javax.servlet.http.HttpServletRequest;
  */
 public class AppEngineTaskAttemptContext extends TaskAttemptContext {
   // VisibleForTesting
-  static final String TASK_ATTEMPT_ID_PARAMETER_NAME = "taskAttemptID";
+  public static final String TASK_ATTEMPT_ID_PARAMETER_NAME = "taskAttemptID";
 
   private final ShardState state;
 
@@ -72,7 +73,7 @@ public class AppEngineTaskAttemptContext extends TaskAttemptContext {
   /**
    * Initialize the context from a task attempt ID, a context, and a shard state.
    */
-  AppEngineTaskAttemptContext(AppEngineJobContext jobContext, ShardState state,
+  public AppEngineTaskAttemptContext(AppEngineJobContext jobContext, ShardState state,
       TaskAttemptID taskAttemptId) {
     super(jobContext.getConfiguration(), taskAttemptId);
     this.state = state;
