@@ -345,12 +345,14 @@ class AbstractDatastoreInputReader(InputReader):
                                keys_only=True)
     ds_query.Order("__scatter__")
     random_keys = ds_query.Get(shard_count * cls._OVERSAMPLING_FACTOR)
-    if not random_keys or len(random_keys) < shard_count:
-      # This might mean that there are no entities with scatter property
-      # or there are not enough entities to do proper splits.
+
+    if not random_keys:
+      # There are no entities with scatter property. We have no idea 
+      # how to split.
       return ([key_range.KeyRange(namespace=namespace, _app=app)] +
-          [None] * (shard_count - 1))
-    else:
+              [None] * (shard_count - 1))
+    if len(random_keys) >= shard_count:
+      # We've got a lot of scatter values. Sample them down.
       random_keys = cls._choose_split_points(random_keys, shard_count)
 
     key_ranges = []
@@ -382,6 +384,10 @@ class AbstractDatastoreInputReader(InputReader):
         include_end=False,
         namespace=namespace,
         _app=app))
+
+    if len(key_ranges) < shard_count:
+      # We need to have as many shards as it was requested. Add some Nones.
+      key_ranges = key_ranges + [None] * (shard_count - len(key_ranges))
 
     return key_ranges
 

@@ -76,7 +76,7 @@ class TestEntity(db.Model):
 ENTITY_KIND = "__main__.TestEntity"
 
 
-def key(entity_id, namespace=None):
+def key(entity_id, namespace=None, kind="TestEntity"):
   """Create a key for TestEntity with specified id.
 
   Used to shorten expected data.
@@ -86,7 +86,7 @@ def key(entity_id, namespace=None):
   Returns:
     db.Key instance with specified id for TestEntity.
   """
-  return db.Key.from_path("TestEntity", entity_id, namespace=namespace)
+  return db.Key.from_path(kind, entity_id, namespace=namespace)
 
 
 class DatastoreInputReaderTest(unittest.TestCase):
@@ -412,12 +412,18 @@ class DatastoreInputReaderTest(unittest.TestCase):
     TestEntity().put()
     self.assertEquals([
         [key_range.KeyRange(key_start=None,
+                            key_end=key(2),
+                            direction='ASC',
+                            include_start=False,
+                            include_end=False,
+                            namespace='')],
+        [key_range.KeyRange(key_start=key(2),
                             key_end=None,
                             direction='ASC',
                             include_start=True,
-                            include_end=True,
+                            include_end=False,
                             namespace='')],
-        [None], [None], [None]
+        [None], [None]
         ],
         self.split_into_key_ranges(4))
 
@@ -1434,14 +1440,23 @@ class ConsistentKeyReaderTest(unittest.TestCase):
                                          include_end=False,
                                          namespace='a'),
                       key_range.KeyRange(key_start=None,
-                                         key_end=None,
+                                         key_end=key(2, kind=self.kind_id),
                                          direction='ASC',
                                          include_start=False,
                                          include_end=False,
                                          namespace='')],
                      readers[0]._key_ranges)
 
-    for i in range(1, len(readers)):
+    self.assertEqual([None,
+                      key_range.KeyRange(key_start=key(2, kind=self.kind_id),
+                                         key_end=None,
+                                         direction='ASC',
+                                         include_start=True,
+                                         include_end=False,
+                                         namespace='')],
+                     readers[1]._key_ranges)
+
+    for i in range(2, len(readers)):
       self.assertEquals([None, None],
                         readers[i]._key_ranges,
                         '[None] != readers[%d]._key_ranges (%s)' %

@@ -24,6 +24,13 @@ import dummy_thread as thread
 __pychecker__ = """maxreturns=0 maxbranches=0 no-callinit
                    unusednames=printElemNumber,debug_strs no-special"""
 
+if hasattr(ProtocolBuffer, 'ExtendableProtocolMessage'):
+  _extension_runtime = True
+  _ExtendableProtocolMessage = ProtocolBuffer.ExtendableProtocolMessage
+else:
+  _extension_runtime = False
+  _ExtendableProtocolMessage = ProtocolBuffer.ProtocolMessage
+
 from google.appengine.api.api_base_pb import *
 import google.appengine.api.api_base_pb
 class FileServiceErrors(ProtocolBuffer.ProtocolMessage):
@@ -4731,5 +4738,7 @@ class GetCapabilitiesResponse(ProtocolBuffer.ProtocolMessage):
   _STYLE = """"""
   _STYLE_CONTENT_TYPE = """"""
   _PROTO_DESCRIPTOR_NAME = 'apphosting.files.GetCapabilitiesResponse'
+if _extension_runtime:
+  pass
 
 __all__ = ['FileServiceErrors','KeyValue','KeyValues','FileContentType','CreateRequest_Parameter','CreateRequest','CreateResponse','OpenRequest','OpenResponse','CloseRequest','CloseResponse','FileStat','StatRequest','StatResponse','AppendRequest','AppendResponse','DeleteRequest','DeleteResponse','ReadRequest','ReadResponse','ReadKeyValueRequest','ReadKeyValueResponse_KeyValue','ReadKeyValueResponse','ShuffleEnums','ShuffleInputSpecification','ShuffleOutputSpecification','ShuffleRequest_Callback','ShuffleRequest','ShuffleResponse','GetShuffleStatusRequest','GetShuffleStatusResponse','GetCapabilitiesRequest','GetCapabilitiesResponse']
