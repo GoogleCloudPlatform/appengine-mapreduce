@@ -35,6 +35,7 @@ import datetime
 import logging
 import math
 import os
+import random
 from mapreduce.lib import simplejson
 import time
 import types
@@ -213,8 +214,10 @@ def _get_descending_key(gettime=time.time):
     A string with a time descending key.
   """
   now_descending = int((_FUTURE_TIME - gettime()) * 100)
-  return "%d%s" % (now_descending,
-                   os.environ.get("REQUEST_ID_HASH", "FFFFFFFF"))
+  request_id_hash = os.environ.get("REQUEST_ID_HASH")
+  if not request_id_hash:
+    request_id_hash = str(random.getrandbits(32))
+  return "%d%s" % (now_descending, request_id_hash)
 
 
 class CountersMap(JsonMixin):
