@@ -388,23 +388,23 @@ class DatastoreInputReaderTest(unittest.TestCase):
     self.assertEquals(
         [5],
         input_readers.AbstractDatastoreInputReader._choose_split_points(
-            [0, 9, 8, 7, 1, 2, 3, 4, 5, 6], 2))
+            sorted([0, 9, 8, 7, 1, 2, 3, 4, 5, 6]), 2))
 
     self.assertEquals(
         [3, 7],
         input_readers.AbstractDatastoreInputReader._choose_split_points(
-            [0, 1, 7, 8, 9, 3, 2, 4, 6, 5], 3))
+            sorted([0, 1, 7, 8, 9, 3, 2, 4, 6, 5]), 3))
 
     self.assertEquals(
         range(1, 10),
         input_readers.AbstractDatastoreInputReader._choose_split_points(
-            [0, 1, 7, 8, 9, 3, 2, 4, 6, 5], 10))
+            sorted([0, 1, 7, 8, 9, 3, 2, 4, 6, 5]), 10))
 
     # Too few random keys
     self.assertRaises(
         AssertionError,
         input_readers.AbstractDatastoreInputReader._choose_split_points,
-        [0, 1, 7, 8, 9, 3, 2, 4, 6, 5], 11)
+        sorted([0, 1, 7, 8, 9, 3, 2, 4, 6, 5]), 11)
 
   def testSplitNotEnoughData(self):
     """Splits should not intersect, if there's not enough data for each."""
@@ -424,6 +424,35 @@ class DatastoreInputReaderTest(unittest.TestCase):
                             include_end=False,
                             namespace='')],
         [None], [None]
+        ],
+        self.split_into_key_ranges(4))
+
+  def testSplitNotEnoughDataSorts(self):
+    """Splits should not intersect, if there's not enough data for each."""
+    TestEntity().put()
+    TestEntity().put()
+    TestEntity().put()
+    TestEntity().put()
+    self.assertEquals([
+        [key_range.KeyRange(key_start=None,
+                            key_end=key(2),
+                            direction='ASC',
+                            include_start=False,
+                            include_end=False,
+                            namespace='')],
+        [key_range.KeyRange(key_start=key(2),
+                            key_end=key(4),
+                            direction='ASC',
+                            include_start=True,
+                            include_end=False,
+                            namespace='')],
+        [key_range.KeyRange(key_start=key(4),
+                            key_end=None,
+                            direction='ASC',
+                            include_start=True,
+                            include_end=False,
+                            namespace='')],
+        [None]
         ],
         self.split_into_key_ranges(4))
 
