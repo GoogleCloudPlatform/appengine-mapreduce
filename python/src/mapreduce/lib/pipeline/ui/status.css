@@ -178,6 +178,7 @@ abbr {
   text-decoration: underline;
 }
 #sidebar .detail-link {
+  word-wrap: break-word;
 }
 .detail-link a {
   font-size: 1.2em;
