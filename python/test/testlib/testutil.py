@@ -72,6 +72,7 @@ class HandlerTestBase(unittest.TestCase):
 
     self.appid = "testapp"
     os.environ["APPLICATION_ID"] = self.appid
+    os.environ["HTTP_HOST"] = "localhost"
 
     self.memcache = memcache_stub.MemcacheServiceStub()
     self.taskqueue = taskqueue_stub.TaskQueueServiceStub()

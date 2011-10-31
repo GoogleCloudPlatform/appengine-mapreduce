@@ -27,6 +27,7 @@ import logging
 import time
 
 from mapreduce.lib import pipeline
+from mapreduce.lib.pipeline import common as pipeline_common
 from mapreduce.lib import files
 from mapreduce.lib.files import file_service_pb
 from mapreduce.lib.files import records
@@ -89,7 +90,7 @@ class _BatchRecordsReader(input_readers.RecordsReader):
       yield records
 
 
-def _sort_records(records):
+def _sort_records_map(records):
   """Map function sorting records.
 
   Converts records to KeyValue protos, sorts them by key and writes them
@@ -132,49 +133,67 @@ def _sort_records(records):
   entity.put()
 
 
-class _CollectOutputFiles(base_handler.PipelineBase):
-  """Collect output file names from _OutputFile entities for a given job.
-
-  Args:
-    job_id: job id to load filenames.
-
-  Returns:
-    list of filenames produced by job id.
-  """
-
-  def run(self, job_id):
-    entities = _OutputFile.all().ancestor(
-        _OutputFile.get_root_key(job_id))
-    return [entity.key().name() for entity in entities]
-
-
-class SortPipeline(base_handler.PipelineBase):
+class _SortChunksPipeline(base_handler.PipelineBase):
   """A pipeline to sort multiple key-value files.
 
   Args:
-    filenames: list of file names to sort. Files have to be of records format
-    defined by Files API and contain serialized file_service_pb.KeyValue
-    protocol messages.
+    filenames: list of filenames to sort.
 
   Returns:
-    The list of filenames as string. Resulting files have the same format as
-    input and are sorted by key.
+    The list of lists of sorted filenames. Each list corresponds to one
+    input file. Each filenames contains a chunk of sorted data.
+  """
+  def run(self, filenames):
+    sort_mappers = []
+    for filename in filenames:
+      sort_mapper = yield mapper_pipeline.MapperPipeline(
+          "sort",
+          __name__ + "._sort_records_map",
+          __name__ + "._BatchRecordsReader",
+          None,
+          {
+              "files": [filename],
+              "processing_rate": 1000000,
+          },
+          shards=1)
+      sort_mappers.append(sort_mapper)
+    job_ids = yield pipeline_common.Append(*[mapper.job_id for mapper in
+                                             sort_mappers])
+    result = yield _CollectOutputFiles(job_ids)
+    with pipeline.After(result):
+      yield _CleanupOutputFiles(job_ids)
+    yield pipeline_common.Return(result)
+
+
+class _CollectOutputFiles(base_handler.PipelineBase):
+  """Collect output file names from _OutputFile entities for given jobs.
+
+  Args:
+    job_ids: list of job ids to load filenames.
+
+  Returns:
+    list of lists of filenames produced by specified job ids.
   """
 
-  def run(self, filenames):
-    mapper = yield mapper_pipeline.MapperPipeline(
-        "sort",
-        __name__ + "._sort_records",
-        __name__ + "._BatchRecordsReader",
-        None,
-        {
-            "files": filenames,
-            "processing_rate": 1000000,
-        },
-        shards=1)
-    # TODO(user): delete _OutputFile entities after collect
-    with pipeline.After(mapper):
-      yield _CollectOutputFiles(mapper.job_id)
+  def run(self, job_ids):
+    result = []
+    for job_id in job_ids:
+      entities = _OutputFile.all().ancestor(_OutputFile.get_root_key(job_id))
+      result.append([entity.key().name() for entity in entities])
+    return result
+
+
+class _CleanupOutputFiles(base_handler.PipelineBase):
+  """Cleanup _OutputFile entities for given job ids.
+
+  Args:
+    job_ids: list of job ids.
+  """
+
+  def run(self, job_ids):
+    result = []
+    for job_id in job_ids:
+      db.delete(_OutputFile.all().ancestor(_OutputFile.get_root_key(job_id)))
 
 
 class _MergingReader(input_readers.InputReader):
@@ -288,13 +307,11 @@ class _MergingReader(input_readers.InputReader):
       raise errors.BadReaderParamsError("Missing files parameter.")
 
 
-class _KeyValueBlobstoreOutputWriter(output_writers.BlobstoreOutputWriterBase):
+class _HashingBlobstoreOutputWriter(output_writers.BlobstoreOutputWriterBase):
   """An OutputWriter which outputs data into blobstore in key-value format.
 
-  The output is tailored towards shuffler needs. Each mapper shard creates
-  number of outpupt files equal to the number of shards itself. On each
-  output it hashes the key and picks a file corresponding to a key. This way,
-  file 0 from all shards will have all key/values with the same hash key modulo.
+  The output is tailored towards shuffler needs. It shards key/values using
+  key hash modulo number of output files.
   """
 
   def __init__(self, filenames):
@@ -324,19 +341,15 @@ class _KeyValueBlobstoreOutputWriter(output_writers.BlobstoreOutputWriterBase):
       job. State can be modified during initialization.
     """
     shards = mapreduce_state.mapreduce_spec.mapper.shard_count
-    subshards = shards
 
     filenames = []
     for i in range(shards):
-      subshard_filenames = []
-      for j in range(subshards):
-        blob_file_name = (mapreduce_state.mapreduce_spec.name +
-                          "-" + mapreduce_state.mapreduce_spec.mapreduce_id +
-                          "-output-" + str(i) + "-" + str(j))
-        subshard_filenames.append(
-            files.blobstore.create(
-                _blobinfo_uploaded_filename=blob_file_name))
-      filenames.append(subshard_filenames)
+      blob_file_name = (mapreduce_state.mapreduce_spec.name +
+                        "-" + mapreduce_state.mapreduce_spec.mapreduce_id +
+                        "-output-" + str(i))
+      filenames.append(
+          files.blobstore.create(
+              _blobinfo_uploaded_filename=blob_file_name))
     mapreduce_state.writer_state = {"filenames": filenames}
 
   @classmethod
@@ -348,13 +361,11 @@ class _KeyValueBlobstoreOutputWriter(output_writers.BlobstoreOutputWriterBase):
         job. State can be modified during finalization.
     """
     finalized_filenames = []
-    for subshard_filenames in mapreduce_state.writer_state["filenames"]:
-      finalized_subshard_filenames = []
-      for filename in subshard_filenames:
-        finalized_subshard_filenames.append(
-            files.blobstore.get_file_name(
-                files.blobstore.get_blob_key(filename)))
-      finalized_filenames.append(finalized_subshard_filenames)
+    for filename in mapreduce_state.writer_state["filenames"]:
+      files.finalize(filename)
+      finalized_filenames.append(
+          files.blobstore.get_file_name(
+              files.blobstore.get_blob_key(filename)))
     mapreduce_state.writer_state = {"filenames": finalized_filenames}
 
   @classmethod
@@ -386,19 +397,7 @@ class _KeyValueBlobstoreOutputWriter(output_writers.BlobstoreOutputWriterBase):
       job. State can be modified.
       shard_number: shard number as integer.
     """
-    filenames = mapreduce_state.writer_state["filenames"][shard_number]
-    return cls(filenames)
-
-  def finalize(self, ctx, shard_number):
-    """Finalize writer shard-level state.
-
-    Args:
-      ctx: an instance of context.Context.
-      shard_number: shard number as integer.
-    """
-    finalized_filenames = []
-    for filename in self._filenames:
-      files.finalize(filename)
+    return cls(mapreduce_state.writer_state["filenames"])
 
   @classmethod
   def get_filenames(cls, mapreduce_state):
@@ -442,3 +441,74 @@ class _KeyValueBlobstoreOutputWriter(output_writers.BlobstoreOutputWriterBase):
     proto.set_key(key)
     proto.set_value(value)
     ctx.get_pool(pool_name).append(proto.Encode())
+
+
+def _merge_map(k, values):
+  """A map function used in merge phase.
+
+  Stores (k, values) into KeyValues proto and yields its serialization.
+  """
+  proto = file_service_pb.KeyValues()
+  proto.set_key(k)
+  proto.value_list().extend(values)
+  yield proto.Encode()
+
+
+class _MergePipeline(base_handler.PipelineBase):
+  """Pipeline to merge sorted chunks.
+
+  This pipeline merges together individually sorted chunks of each shard.
+
+  Args:
+    filenames: list of lists of filenames. Each list will correspond to a single
+      shard. Each file in the list should have keys sorted and should contain
+      records with KeyValue serialized entity.
+
+  Returns:
+    The list of filenames, where each filename is fully merged and will contain
+    records with KeyValues serialized entity.
+  """
+  def run(self, job_name, filenames):
+    yield mapper_pipeline.MapperPipeline(
+            job_name + "-shuffle-merge",
+            __name__ + "._merge_map",
+            __name__ + "._MergingReader",
+            output_writer_spec=
+                output_writers.__name__ + ".BlobstoreRecordsOutputWriter",
+            params={'files': filenames},
+            shards=len(filenames))
+
+
+def _hashing_map(binary_record):
+  """A map function used in hash phase.
+
+  Reads KeyValue from binary record and yields (key, value).
+  """
+  proto = file_service_pb.KeyValue()
+  proto.ParseFromString(binary_record)
+  yield (proto.key(), proto.value())
+
+
+class ShufflePipeline(base_handler.PipelineBase):
+  """A pipeline to shuffle multiple key-value files.
+
+  Args:
+    filenames: list of file names to sort. Files have to be of records format
+      defined by Files API and contain serialized file_service_pb.KeyValue
+      protocol messages.
+
+  Returns:
+    The list of filenames as string. Resulting files contain serialized
+    file_service_pb.KeyValues protocol messages with all values collated
+    to a single key.
+  """
+  def run(self, job_name, filenames):
+    hashed_files = yield mapper_pipeline.MapperPipeline(
+        job_name + "-shuffle-hash",
+        __name__ + "._hashing_map",
+        input_readers.__name__ + ".RecordsReader",
+        output_writer_spec= __name__ + "._HashingBlobstoreOutputWriter",
+        params={'files': filenames},
+        shards=len(filenames))
+    sorted_files = yield _SortChunksPipeline(hashed_files)
+    yield _MergePipeline(job_name, sorted_files)
