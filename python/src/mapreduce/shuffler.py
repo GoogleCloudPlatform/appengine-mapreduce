@@ -157,12 +157,13 @@ class _SortChunksPipeline(base_handler.PipelineBase):
           },
           shards=1)
       sort_mappers.append(sort_mapper)
-    job_ids = yield pipeline_common.Append(*[mapper.job_id for mapper in
-                                             sort_mappers])
-    result = yield _CollectOutputFiles(job_ids)
-    with pipeline.After(result):
-      yield _CleanupOutputFiles(job_ids)
-    yield pipeline_common.Return(result)
+    with pipeline.After(*sort_mappers):
+      job_ids = yield pipeline_common.Append(*[mapper.job_id for mapper in
+                                               sort_mappers])
+      result = yield _CollectOutputFiles(job_ids)
+      with pipeline.After(result):
+        yield _CleanupOutputFiles(job_ids)
+      yield pipeline_common.Return(result)
 
 
 class _CollectOutputFiles(base_handler.PipelineBase):
