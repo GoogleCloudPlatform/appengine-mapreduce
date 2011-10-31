@@ -108,7 +108,8 @@ function constructStageNode(pipelineId, infoMap, sidebar) {
   detailLink.attr('href', '#pipeline-' + pipelineId);
   detailLink.attr('title', 'ID #' + pipelineId);
   detailLink.attr('id', 'link-pipeline-' + pipelineId);
-  detailLink.text(infoMap.classPath);
+  var nameWithBreaks = infoMap.classPath.replace(/\./, '.<wbr>');
+  detailLink.html(nameWithBreaks);
   detailDiv.append(detailLink);
   containerDiv.append(detailDiv);
 
