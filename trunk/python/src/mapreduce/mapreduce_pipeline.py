@@ -25,7 +25,10 @@ from __future__ import with_statement
 from mapreduce.lib import pipeline
 from mapreduce.lib.pipeline import common as pipeline_common
 from mapreduce.lib import files
+from mapreduce.lib.files import file_service_pb
+from mapreduce import output_writers
 from mapreduce import base_handler
+from mapreduce import input_readers
 from mapreduce import mapper_pipeline
 from mapreduce import shuffler
 
@@ -33,6 +36,30 @@ from mapreduce import shuffler
 # Mapper pipeline is extracted only to remove dependency cycle with shuffler.py
 # Reimport it back.
 MapperPipeline = mapper_pipeline.MapperPipeline
+
+ShufflePipeline = shuffler.ShufflePipeline
+
+
+class KeyValueBlobstoreOutputWriter(
+    output_writers.BlobstoreRecordsOutputWriter):
+  """Output writer for KeyValue records files in blobstore."""
+
+  def write(self, data, ctx):
+    if len(data) != 2:
+      logging.error("Got bad tuple of length %d (2-tuple expected): %s",
+                    len(data), data)
+
+    try:
+      key = str(data[0])
+      value = str(data[1])
+    except TypeError:
+      logging.error("Expecting a tuple, but got %s: %s",
+                    data.__class__.__name__, data)
+
+    proto = file_service_pb.KeyValue()
+    proto.set_key(key)
+    proto.set_value(value)
+    output_writers.BlobstoreRecordsOutputWriter.write(self, proto.Encode(), ctx)
 
 
 class MapPipeline(base_handler.PipelineBase):
@@ -62,10 +89,21 @@ class MapPipeline(base_handler.PipelineBase):
         job_name + "-map",
         mapper_spec,
         input_reader_spec,
-        output_writer_spec=
-            shuffler.__name__ + "._KeyValueBlobstoreOutputWriter",
+        output_writer_spec= __name__ + ".KeyValueBlobstoreOutputWriter",
         params=params,
         shards=shards)
+
+
+class KeyValuesReader(input_readers.RecordsReader):
+  """Reader to read KeyValues records files from Files API."""
+
+  expand_parameters = True
+
+  def __iter__(self):
+    for binary_record in input_readers.RecordsReader.__iter__(self):
+      proto = file_service_pb.KeyValues()
+      proto.ParseFromString(binary_record)
+      yield (proto.key(), proto.value_list())
 
 
 class ReducePipeline(base_handler.PipelineBase):
@@ -98,36 +136,10 @@ class ReducePipeline(base_handler.PipelineBase):
     yield mapper_pipeline.MapperPipeline(
         job_name + "-reduce",
         reducer_spec,
-        shuffler.__name__ + "._MergingReader",
+        __name__ + ".KeyValuesReader",
         output_writer_spec,
         new_params)
 
-
-class ShufflePipeline(base_handler.PipelineBase):
-  """A pipeline to sort multiple key-value files.
-
-  Args:
-    filenames: list of file names to sort. Files have to be of records format
-      defined by Files API and contain serialized file_service_pb.KeyValue
-      protocol messages.
-
-  Returns:
-    The list of filenames as string. Resulting files have the same format as
-    input and are sorted by key.
-  """
-  def run(self, shards):
-    result = []
-
-    # Shuffle files to sort all 0 files together, all 1 files together, etc.
-    shuffled_shards = [[] for _ in shards[0]]
-    for shard in shards:
-      for i, filename in enumerate(shard):
-        shuffled_shards[i].append(filename)
-
-    for filenames in shuffled_shards:
-      sorted_files = yield shuffler.SortPipeline(filenames)
-      result.append(sorted_files)
-    yield pipeline_common.Append(*result)
 
 
 class CleanupPipeline(base_handler.PipelineBase):
@@ -181,7 +193,7 @@ class MapreducePipeline(base_handler.PipelineBase):
                                      input_reader_spec,
                                      params=mapper_params,
                                      shards=shards)
-    shuffler_pipeline = yield ShufflePipeline(map_pipeline)
+    shuffler_pipeline = yield ShufflePipeline(job_name, map_pipeline)
     reducer_pipeline = yield ReducePipeline(job_name,
                                             reducer_spec,
                                             output_writer_spec,

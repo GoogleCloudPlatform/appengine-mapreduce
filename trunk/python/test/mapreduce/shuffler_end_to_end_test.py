@@ -24,84 +24,6 @@ from testlib import testutil
 import unittest
 
 
-KEY_VALUE_WRITER_NAME = (shuffler.__name__ + "." +
-                         shuffler._KeyValueBlobstoreOutputWriter.__name__)
-
-
-class TestEntity(db.Model):
-  """Test entity class."""
-
-
-def test_handler_yield_key_value(entity):
-  """Test handler which yields key value pair."""
-  yield (entity.key(), entity)
-
-
-class KeyValueOutputWriterEndToEndTest(testutil.HandlerTestBase):
-  """End-to-end test for KeyValueBlobstoreOutputWriter."""
-
-  def setUp(self):
-    testutil.HandlerTestBase.setUp(self)
-    pipeline.Pipeline._send_mail = self._send_mail
-    self.emails = []
-
-  def _send_mail(self, sender, subject, body, html=None):
-    """Callback function for sending mail."""
-    self.emails.append((sender, subject, body, html))
-
-  def testKeyValueOutputWriter(self):
-    entity_count = 1000
-
-    for _ in range(entity_count):
-      TestEntity().put()
-
-    mapreduce_id = control.start_map(
-        "test_map",
-        __name__ + ".test_handler_yield_key_value",
-        "mapreduce.input_readers.DatastoreInputReader",
-        {
-            "entity_kind": __name__ + "." + TestEntity.__name__,
-        },
-        shard_count=4,
-        base_path="/mapreduce_base_path",
-        output_writer_spec=KEY_VALUE_WRITER_NAME)
-
-    test_support.execute_until_empty(self.taskqueue)
-
-    mapreduce_state = model.MapreduceState.get_by_job_id(mapreduce_id)
-    filenames = shuffler._KeyValueBlobstoreOutputWriter.get_filenames(
-        mapreduce_state)
-    self.assertEqual(4, len(filenames))
-
-    file_lengths = []
-    for shard_files in filenames:
-      for filename in shard_files:
-        self.assertTrue(filename.startswith("/blobstore/"))
-        self.assertFalse(filename.startswith("/blobstore/writable:"))
-
-        with files.open(filename, "r") as f:
-          reader = records.RecordsReader(f)
-          count = 0
-          try:
-            while True:
-              reader.read()
-              count += 1
-          except EOFError:
-            pass
-          file_lengths.append(count)
-
-    # these numbers are totally random and depend on our sharding,
-    # which is quite deterministic.
-    expected_lengths = [
-        48, 54, 48, 49,
-        58, 47, 51, 54,
-        60, 74, 71, 70,
-        84, 77, 76, 79,
-        ]
-    self.assertEqual(1000, sum(expected_lengths))
-    self.assertEquals(expected_lengths, file_lengths)
-
-
 class SortFileEndToEndTest(testutil.HandlerTestBase):
   """End-to-end test for _SortFilePipeline."""
 
@@ -132,19 +54,20 @@ class SortFileEndToEndTest(testutil.HandlerTestBase):
     input_file = files.blobstore.get_file_name(
         files.blobstore.get_blob_key(input_file))
 
-    p = shuffler.SortPipeline([input_file])
+    p = shuffler._SortChunksPipeline([input_file])
     p.start()
     test_support.execute_until_empty(self.taskqueue)
-    p = shuffler.SortPipeline.from_id(p.pipeline_id)
+    p = shuffler._SortChunksPipeline.from_id(p.pipeline_id)
 
     input_data.sort()
-    output_file = p.outputs.default.value[0]
+    output_files = p.outputs.default.value[0]
     output_data = []
-    with files.open(output_file, "r") as f:
-      for binary_record in records.RecordsReader(f):
-        proto = file_service_pb.KeyValue()
-        proto.ParseFromString(binary_record)
-        output_data.append((proto.key(), proto.value()))
+    for output_file in output_files:
+      with files.open(output_file, "r") as f:
+        for binary_record in records.RecordsReader(f):
+          proto = file_service_pb.KeyValue()
+          proto.ParseFromString(binary_record)
+          output_data.append((proto.key(), proto.value()))
 
     self.assertEquals(input_data, output_data)
 
@@ -221,6 +144,56 @@ class MergingReaderEndToEndTest(testutil.HandlerTestBase):
 
     expected_data = [
         str((k, [v, v, v])) for (k, v) in input_data]
+    self.assertEquals(expected_data, output_data)
+
+
+class ShuffleEndToEndTest(testutil.HandlerTestBase):
+  """End-to-end test for ShufflePipeline."""
+
+  def setUp(self):
+    testutil.HandlerTestBase.setUp(self)
+    pipeline.Pipeline._send_mail = self._send_mail
+    self.emails = []
+
+  def _send_mail(self, sender, subject, body, html=None):
+    """Callback function for sending mail."""
+    self.emails.append((sender, subject, body, html))
+
+  def testShuffleFiles(self):
+    """Test shuffling multiple files."""
+    input_data = [(str(i), str(i)) for i in range(100)]
+    input_data.sort()
+
+    input_file = files.blobstore.create()
+
+    with files.open(input_file, "a") as f:
+      with records.RecordsWriter(f) as w:
+        for (k, v) in input_data:
+          proto = file_service_pb.KeyValue()
+          proto.set_key(k)
+          proto.set_value(v)
+          w.write(proto.Encode())
+    files.finalize(input_file)
+    input_file = files.blobstore.get_file_name(
+        files.blobstore.get_blob_key(input_file))
+
+    p = shuffler.ShufflePipeline("testjob", [input_file, input_file, input_file])
+    p.start()
+    test_support.execute_until_empty(self.taskqueue)
+    p = shuffler.ShufflePipeline.from_id(p.pipeline_id)
+
+    output_files = p.outputs.default.value
+    output_data = []
+    for output_file in output_files:
+      with files.open(output_file, "r") as f:
+        for record in records.RecordsReader(f):
+          proto = file_service_pb.KeyValues()
+          proto.ParseFromString(record)
+          output_data.append((proto.key(), proto.value_list()))
+    output_data.sort()
+
+    expected_data = sorted([
+        (str(k), [str(v), str(v), str(v)]) for (k, v) in input_data])
     self.assertEquals(expected_data, output_data)
 
 
