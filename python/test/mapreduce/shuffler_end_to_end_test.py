@@ -54,7 +54,7 @@ class SortFileEndToEndTest(testutil.HandlerTestBase):
     input_file = files.blobstore.get_file_name(
         files.blobstore.get_blob_key(input_file))
 
-    p = shuffler._SortChunksPipeline([input_file])
+    p = shuffler._SortChunksPipeline("testjob", [input_file])
     p.start()
     test_support.execute_until_empty(self.taskqueue)
     p = shuffler._SortChunksPipeline.from_id(p.pipeline_id)
