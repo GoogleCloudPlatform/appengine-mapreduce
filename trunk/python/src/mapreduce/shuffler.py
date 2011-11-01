@@ -65,9 +65,9 @@ class _OutputFile(db.Model):
     return db.Key.from_path(cls.kind(), job_id)
 
 
-def _compare_keys(proto1, proto2):
-  """Compare two KeyValue protos by key."""
-  return cmp(proto1.key(), proto2.key())
+def _compare_keys(key_record1, key_record2):
+  """Compare two (key, records) protos by key."""
+  return cmp(key_record1[0], key_record2[0])
 
 
 class _BatchRecordsReader(input_readers.RecordsReader):
@@ -88,6 +88,8 @@ class _BatchRecordsReader(input_readers.RecordsReader):
         gc.collect()
     if records:
       yield records
+      records = []
+      gc.collect()
 
 
 def _sort_records_map(records):
@@ -102,16 +104,16 @@ def _sort_records_map(records):
   """
   ctx = context.get()
   l = len(records)
-  proto_records = [None] * l
+  key_records = [None] * l
 
   logging.debug("Parsing")
   for i in range(l):
     proto = file_service_pb.KeyValue()
     proto.ParseFromString(records[i])
-    proto_records[i] = proto
+    key_records[i] = (proto.key(), records[i])
 
   logging.debug("Sorting")
-  proto_records.sort(cmp=_compare_keys)
+  key_records.sort(cmp=_compare_keys)
 
   logging.debug("Writing")
   blob_file_name = (ctx.mapreduce_spec.name + "-" +
@@ -119,12 +121,11 @@ def _sort_records_map(records):
   output_path = files.blobstore.create(
       _blobinfo_uploaded_filename=blob_file_name)
   with output_writers.RecordsPool(output_path, ctx=ctx) as pool:
-    for proto in proto_records:
-      pool.append(proto.Encode())
+    for key_record in key_records:
+      pool.append(key_record[1])
 
   logging.debug("Finalizing")
   files.finalize(output_path)
-  time.sleep(1)  # TODO(user): Hack for HR datastore replication delay.
   output_path = files.blobstore.get_file_name(
       files.blobstore.get_blob_key(output_path))
 
@@ -137,17 +138,19 @@ class _SortChunksPipeline(base_handler.PipelineBase):
   """A pipeline to sort multiple key-value files.
 
   Args:
+    job_name: root job name.
     filenames: list of filenames to sort.
 
   Returns:
     The list of lists of sorted filenames. Each list corresponds to one
     input file. Each filenames contains a chunk of sorted data.
   """
-  def run(self, filenames):
+  def run(self, job_name, filenames):
     sort_mappers = []
-    for filename in filenames:
+    for i in range(len(filenames)):
+      filename = filenames[i]
       sort_mapper = yield mapper_pipeline.MapperPipeline(
-          "sort",
+          "%s-shuffle-sort-%s" % (job_name, str(i)),
           __name__ + "._sort_records_map",
           __name__ + "._BatchRecordsReader",
           None,
@@ -490,6 +493,29 @@ def _hashing_map(binary_record):
   yield (proto.key(), proto.value())
 
 
+class _HashPipeline(base_handler.PipelineBase):
+  """A pipeline to read mapper output and hash by key.
+
+  Args:
+    job_name: root mapreduce job name.
+    filenames: filenames of mapper output. Should be of records format
+      with serialized KeyValue proto.
+
+  Returns:
+    The list of filenames. Each file is of records formad with serialized
+    KeyValue proto. For each proto its output file is decided based on key
+    hash. Thus all equal keys would end up in the same file.
+  """
+  def run(self, job_name, filenames):
+    yield mapper_pipeline.MapperPipeline(
+            job_name + "-shuffle-hash",
+            __name__ + "._hashing_map",
+            input_readers.__name__ + ".RecordsReader",
+            output_writer_spec= __name__ + "._HashingBlobstoreOutputWriter",
+            params={'files': filenames},
+            shards=len(filenames))
+
+
 class ShufflePipeline(base_handler.PipelineBase):
   """A pipeline to shuffle multiple key-value files.
 
@@ -504,12 +530,6 @@ class ShufflePipeline(base_handler.PipelineBase):
     to a single key.
   """
   def run(self, job_name, filenames):
-    hashed_files = yield mapper_pipeline.MapperPipeline(
-        job_name + "-shuffle-hash",
-        __name__ + "._hashing_map",
-        input_readers.__name__ + ".RecordsReader",
-        output_writer_spec= __name__ + "._HashingBlobstoreOutputWriter",
-        params={'files': filenames},
-        shards=len(filenames))
-    sorted_files = yield _SortChunksPipeline(hashed_files)
+    hashed_files = yield _HashPipeline(job_name, filenames)
+    sorted_files = yield _SortChunksPipeline(job_name, hashed_files)
     yield _MergePipeline(job_name, sorted_files)
