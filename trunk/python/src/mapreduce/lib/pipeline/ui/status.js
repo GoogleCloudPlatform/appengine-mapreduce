@@ -758,7 +758,9 @@ function initStatusDone() {
     if (rootStatus != 'done' && rootStatus != 'aborted') {
       // Only do auto-refresh behavior if we're not in a terminal state.
       window.setTimeout(function() {
-        window.location.replace('');
+        var loc = window.location;
+        var search = '?root=' + ROOT_PIPELINE_ID;
+        loc.replace(loc.protocol + '//' + loc.host + loc.pathname + search);
       }, 30 * 1000);
     }
   }
@@ -774,7 +776,7 @@ function initStatusDone() {
   $(window).hashchange();  // Trigger for initial load.
 
   // When there's no hash selected, auto-navigate to the most active node.
-  if (window.location.hash == '') {
+  if (window.location.hash == '' || window.location.hash == '#') {
     var activePipelineId = findActivePipeline(STATUS_MAP.rootPipelineId, true);
     if (activePipelineId) {
       selectPipeline(activePipelineId);
