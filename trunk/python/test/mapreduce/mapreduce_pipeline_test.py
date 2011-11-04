@@ -5,12 +5,14 @@
 
 
 
+import re
 import unittest
 
 
 from mapreduce.lib import pipeline
 from mapreduce.lib import files
 from mapreduce.lib.files import records
+from google.appengine.ext import blobstore
 from google.appengine.ext import db
 from mapreduce import input_readers
 from mapreduce import mapreduce_pipeline
@@ -118,6 +120,13 @@ class MapperPipelineTest(testutil.HandlerTestBase):
     expected_data.sort()
     output_data.sort()
     self.assertEquals(expected_data, output_data)
+
+    # Verify that mapreduce doesn't leave intermediate files behind.
+    blobInfos = blobstore.BlobInfo.all().fetch(limit=1000)
+    for blobinfo in blobInfos:
+      self.assertTrue(
+          "Bad filename: %s" % blobinfo.filename,
+          re.match("test-reduce-.*-output-\d+", blobinfo.filename))
 
 
 if __name__ == "__main__":
