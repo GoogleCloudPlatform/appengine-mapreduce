@@ -532,4 +532,9 @@ class ShufflePipeline(base_handler.PipelineBase):
   def run(self, job_name, filenames):
     hashed_files = yield _HashPipeline(job_name, filenames)
     sorted_files = yield _SortChunksPipeline(job_name, hashed_files)
-    yield _MergePipeline(job_name, sorted_files)
+    merged_files = yield _MergePipeline(job_name, sorted_files)
+    with pipeline.After(merged_files):
+      all_temp_files = yield pipeline_common.Extend(
+          hashed_files, sorted_files)
+      yield mapper_pipeline._CleanupPipeline(all_temp_files)
+    yield pipeline_common.Return(merged_files)
