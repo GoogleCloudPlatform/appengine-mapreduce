@@ -30,6 +30,7 @@ __all__ = [
     "RecordsPool",
     ]
 
+import gc
 import string
 import time
 
@@ -254,19 +255,25 @@ class RecordsPool(object):
   _RECORD_OVERHEAD_BYTES = 10
 
   def __init__(self, filename,
-               flush_size_chars=_FILES_API_FLUSH_SIZE, ctx=None):
+               flush_size_chars=_FILES_API_FLUSH_SIZE,
+               ctx=None,
+               exclusive=False):
     """Constructor.
 
     Args:
       filename: file name to write data to as string.
       flush_size_chars: buffer flush threshold as int.
       ctx: mapreduce context as context.Context.
+      exclusive: a boolean flag indicating if the pool has an exclusive
+        access to the file. If it is True, then it's possible to write
+        bigger chunks of data.
     """
     self._flush_size = flush_size_chars
     self._buffer = []
     self._size = 0
     self._filename = filename
     self._ctx = ctx
+    self._exclusive = exclusive
 
   def append(self, data):
     """Append data to a file."""
@@ -274,7 +281,7 @@ class RecordsPool(object):
     if self._size + data_length > self._flush_size:
       self.flush()
 
-    if data_length > _FILES_API_MAX_SIZE:
+    if not self._exclusive and data_length > _FILES_API_MAX_SIZE:
       raise errors.Error(
           "Too big input %s (%s)."  % (data_length, _FILES_API_MAX_SIZE))
     else:
@@ -293,7 +300,7 @@ class RecordsPool(object):
         w.write(record)
 
     str_buf = buf.to_string()
-    if len(str_buf) > _FILES_API_MAX_SIZE:
+    if not self._exclusive and len(str_buf) > _FILES_API_MAX_SIZE:
       # Shouldn't really happen because of flush size.
       raise errors.Error(
           "Buffer too big. Can't write more than %s bytes in one request: "
@@ -302,7 +309,7 @@ class RecordsPool(object):
 
     # Write data to file.
     start_time = time.time()
-    with files.open(self._filename, "a") as f:
+    with files.open(self._filename, "a", exclusive_lock=self._exclusive) as f:
       f.write(str_buf)
       if self._ctx:
         operation.counters.Increment(
@@ -315,6 +322,7 @@ class RecordsPool(object):
     # reset buffer
     self._buffer = []
     self._size = 0
+    gc.collect()
 
   def __enter__(self):
     return self
@@ -553,5 +561,8 @@ class BlobstoreRecordsOutputWriter(BlobstoreOutputWriterBase):
       ctx: an instance of context.Context.
     """
     if ctx.get_pool("records_pool") is None:
-      ctx.register_pool("records_pool", RecordsPool(self._filename, ctx=ctx))
+      ctx.register_pool("records_pool",
+                        # we can have exclusive pool because we create one
+                        # file per shard.
+                        RecordsPool(self._filename, ctx=ctx, exclusive=True))
     ctx.get_pool("records_pool").append(str(data))
