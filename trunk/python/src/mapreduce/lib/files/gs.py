@@ -38,7 +38,6 @@ _GS_FILESYSTEM = 'gs'
 _GS_PREFIX = '/gs/'
 _MIME_TYPE_PARAMETER = 'content_type'
 _CANNED_ACL_PARAMETER = 'acl'
-_FILENAME_PARAMETER = 'filename'
 _CONTENT_ENCODING_PARAMETER = 'content_encoding'
 _CONTENT_DISPOSITION_PARAMETER = 'content_disposition'
 _CACHE_CONTROL_PARAMETER = 'cache_control'
@@ -90,8 +89,7 @@ def create(filename,
     raise files.InvalidArgumentError('Expected string for acl', acl)
 
   params = {_MIME_TYPE_PARAMETER: mime_type,
-            _CANNED_ACL_PARAMETER: acl,
-            _FILENAME_PARAMETER: filename[len(_GS_PREFIX) - 1:]}
+            _CANNED_ACL_PARAMETER: acl}
   if content_encoding:
     if not isinstance(content_encoding, basestring):
       raise files.InvalidArgumentError('Expected string for content_encoding')
@@ -119,4 +117,4 @@ def create(filename,
         raise files.InvalidArgumentError(
             'Expected string for value in user_metadata for key: ', key)
       params[_USER_METADATA_PREFIX + key] = value
-  return files._create(_GS_FILESYSTEM, params=params)
+  return files._create(_GS_FILESYSTEM, filename=filename, params=params)
