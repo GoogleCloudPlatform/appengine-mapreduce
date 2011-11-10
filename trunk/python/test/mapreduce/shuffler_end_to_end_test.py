@@ -177,7 +177,8 @@ class ShuffleEndToEndTest(testutil.HandlerTestBase):
     input_file = files.blobstore.get_file_name(
         files.blobstore.get_blob_key(input_file))
 
-    p = shuffler.ShufflePipeline("testjob", [input_file, input_file, input_file])
+    p = shuffler.ShufflePipeline(
+        "testjob", [input_file, input_file, input_file])
     p.start()
     test_support.execute_until_empty(self.taskqueue)
     p = shuffler.ShufflePipeline.from_id(p.pipeline_id)

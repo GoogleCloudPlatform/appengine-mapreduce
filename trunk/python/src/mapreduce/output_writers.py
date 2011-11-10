@@ -24,6 +24,7 @@ __all__ = [
     "BlobstoreOutputWriter",
     "BlobstoreOutputWriterBase",
     "BlobstoreRecordsOutputWriter",
+    "KeyValueBlobstoreOutputWriter",
     "COUNTER_IO_WRITE_BYTES",
     "COUNTER_IO_WRITE_MSEC",
     "OutputWriter",
@@ -31,10 +32,12 @@ __all__ = [
     ]
 
 import gc
+import logging
 import string
 import time
 
 from mapreduce.lib import files
+from mapreduce.lib.files import file_service_pb
 from mapreduce.lib.files import records
 from mapreduce import errors
 from mapreduce import model
@@ -566,3 +569,25 @@ class BlobstoreRecordsOutputWriter(BlobstoreOutputWriterBase):
                         # file per shard.
                         RecordsPool(self._filename, ctx=ctx, exclusive=True))
     ctx.get_pool("records_pool").append(str(data))
+
+
+class KeyValueBlobstoreOutputWriter(BlobstoreRecordsOutputWriter):
+  """Output writer for KeyValue records files in blobstore."""
+
+  def write(self, data, ctx):
+    if len(data) != 2:
+      logging.error("Got bad tuple of length %d (2-tuple expected): %s",
+                    len(data), data)
+
+    try:
+      key = str(data[0])
+      value = str(data[1])
+    except TypeError:
+      logging.error("Expecting a tuple, but got %s: %s",
+                    data.__class__.__name__, data)
+
+    proto = file_service_pb.KeyValue()
+    proto.set_key(key)
+    proto.set_value(value)
+    BlobstoreRecordsOutputWriter.write(self, proto.Encode(), ctx)
+

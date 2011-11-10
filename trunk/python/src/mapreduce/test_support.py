@@ -79,6 +79,7 @@ def execute_task(task, handlers_map=None):
                      mock_webapp.MockResponse())
   handler.request.set_url(url)
 
+  handler.request.environ["HTTP_HOST"] = "myapp.appspot.com"
   for k, v in task["headers"]:
     handler.request.headers[k] = v
     environ_key = "HTTP_" + k.replace("-", "_").upper()

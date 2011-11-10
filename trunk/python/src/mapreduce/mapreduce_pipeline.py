@@ -30,6 +30,7 @@ from mapreduce import output_writers
 from mapreduce import base_handler
 from mapreduce import input_readers
 from mapreduce import mapper_pipeline
+from mapreduce import output_writers
 from mapreduce import shuffler
 
 
@@ -38,28 +39,6 @@ from mapreduce import shuffler
 MapperPipeline = mapper_pipeline.MapperPipeline
 
 ShufflePipeline = shuffler.ShufflePipeline
-
-
-class KeyValueBlobstoreOutputWriter(
-    output_writers.BlobstoreRecordsOutputWriter):
-  """Output writer for KeyValue records files in blobstore."""
-
-  def write(self, data, ctx):
-    if len(data) != 2:
-      logging.error("Got bad tuple of length %d (2-tuple expected): %s",
-                    len(data), data)
-
-    try:
-      key = str(data[0])
-      value = str(data[1])
-    except TypeError:
-      logging.error("Expecting a tuple, but got %s: %s",
-                    data.__class__.__name__, data)
-
-    proto = file_service_pb.KeyValue()
-    proto.set_key(key)
-    proto.set_value(value)
-    output_writers.BlobstoreRecordsOutputWriter.write(self, proto.Encode(), ctx)
 
 
 class MapPipeline(base_handler.PipelineBase):
@@ -76,7 +55,7 @@ class MapPipeline(base_handler.PipelineBase):
     shards: number of shards to start as int.
 
   Returns:
-    list of filenames list sharded by hash code.
+    list of filenames written to by this mapper, one for each shard.
   """
 
   def run(self,
@@ -89,7 +68,8 @@ class MapPipeline(base_handler.PipelineBase):
         job_name + "-map",
         mapper_spec,
         input_reader_spec,
-        output_writer_spec= __name__ + ".KeyValueBlobstoreOutputWriter",
+        output_writer_spec=
+            output_writers.__name__ + ".KeyValueBlobstoreOutputWriter",
         params=params,
         shards=shards)
 
@@ -139,7 +119,6 @@ class ReducePipeline(base_handler.PipelineBase):
         __name__ + ".KeyValuesReader",
         output_writer_spec,
         new_params)
-
 
 
 class MapreducePipeline(base_handler.PipelineBase):
