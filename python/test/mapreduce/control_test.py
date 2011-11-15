@@ -62,12 +62,13 @@ class ControlTest(testutil.HandlerTestBase):
     payload = test_support.decode_task_payload(task)
     return model.MapreduceSpec.from_json_str(payload["mapreduce_spec"])
 
-  def validate_map_started(self, mapreduce_id):
+  def validate_map_started(self, mapreduce_id, queue_name=None):
     """Tests that the map has been started."""
+    queue_name = queue_name or self.QUEUE_NAME
     self.assertTrue(mapreduce_id)
 
     # Note: only a kickoff job is pending at this stage, shards come later.
-    tasks = self.taskqueue.GetTasks(self.QUEUE_NAME)
+    tasks = self.taskqueue.GetTasks(queue_name)
     self.assertEquals(1, len(tasks))
     # Checks that tasks are scheduled into the future.
     task = tasks[0]
@@ -124,6 +125,28 @@ class ControlTest(testutil.HandlerTestBase):
       del os.environ["HTTP_X_APPENGINE_QUEUENAME"]
 
     self.validate_map_started(mapreduce_id)
+
+  def testStartMap_Cron(self):
+    """Test that the start_map works from cron."""
+    TestEntity().put()
+
+    shard_count = 4
+    os.environ["HTTP_X_APPENGINE_QUEUENAME"] = "__cron"
+    try:
+      mapreduce_id = control.start_map(
+          "test_map",
+          __name__ + ".test_handler",
+          "mapreduce.input_readers.DatastoreInputReader",
+          {
+              "entity_kind": __name__ + "." + TestEntity.__name__,
+          },
+          shard_count,
+          mapreduce_parameters={"foo": "bar"},
+          base_path="/mapreduce_base_path")
+    finally:
+      del os.environ["HTTP_X_APPENGINE_QUEUENAME"]
+
+    self.validate_map_started(mapreduce_id, queue_name="default")
 
   def testStartMap_Countdown(self):
     """Test that MR can be scheduled into the future.

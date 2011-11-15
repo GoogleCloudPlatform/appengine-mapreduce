@@ -799,6 +799,9 @@ class StartJobHandler(base_handler.PostJsonHandler):
                  transactional=False):
     queue_name = queue_name or os.environ.get("HTTP_X_APPENGINE_QUEUENAME",
                                               "default")
+    if queue_name[0] == "_":
+      # We are currently in some special queue. E.g. __cron.
+      queue_name = "default"
 
     # Check that handler can be instantiated.
     mapper_spec.get_handler()
