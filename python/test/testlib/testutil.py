@@ -69,9 +69,12 @@ class HandlerTestBase(unittest.TestCase):
 
   def setUp(self):
     unittest.TestCase.setUp(self)
+    self.mox = mox.Mox()
 
     self.appid = "testapp"
+    self.version_id = "1.23456789"
     os.environ["APPLICATION_ID"] = self.appid
+    os.environ["CURRENT_VERSION_ID"] = self.version_id
     os.environ["HTTP_HOST"] = "localhost"
 
     self.memcache = memcache_stub.MemcacheServiceStub()
@@ -91,21 +94,27 @@ class HandlerTestBase(unittest.TestCase):
     blob_storage = file_blob_storage.FileBlobStorage(
         self.blob_storage_directory, self.appid)
     self.blobstore_stub = blobstore_stub.BlobstoreServiceStub(blob_storage)
+    self.file_service = self.createFileServiceStub(blob_storage)
 
     apiproxy_stub_map.apiproxy = apiproxy_stub_map.APIProxyStubMap()
     apiproxy_stub_map.apiproxy.RegisterStub("taskqueue", self.taskqueue)
     apiproxy_stub_map.apiproxy.RegisterStub("memcache", self.memcache)
     apiproxy_stub_map.apiproxy.RegisterStub("datastore_v3", self.datastore)
     apiproxy_stub_map.apiproxy.RegisterStub("blobstore", self.blobstore_stub)
-    apiproxy_stub_map.apiproxy.RegisterStub(
-        "file", file_service_stub.FileServiceStub(blob_storage))
+    apiproxy_stub_map.apiproxy.RegisterStub("file", self.file_service)
+
+  def createFileServiceStub(self, blob_storage):
+    return file_service_stub.FileServiceStub(blob_storage)
 
   def tearDown(self):
-    shutil.rmtree(self.blob_storage_directory)
+    try:
+      self.mox.VerifyAll()
+    finally:
+      self.mox.UnsetStubs()
+      shutil.rmtree(self.blob_storage_directory)
     unittest.TestCase.tearDown(self)
 
   def assertTaskStarted(self, queue="default"):
     tasks = self.taskqueue.GetTasks(queue)
     self.assertEquals(1, len(tasks))
     self.assertEquals(tasks[0]["url"], self.MAPREDUCE_URL)
-

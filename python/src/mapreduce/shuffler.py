@@ -24,6 +24,7 @@ from __future__ import with_statement
 import gc
 import heapq
 import logging
+import os
 import time
 
 from mapreduce.lib import pipeline
@@ -633,6 +634,61 @@ class _HashPipeline(base_handler.PipelineBase):
             shards=shards)
 
 
+class _ShuffleServicePipeline(base_handler.PipelineBase):
+  """A pipeline to invoke shuffle service.
+
+  Args:
+    input_files: list of file names to shuffle.
+
+  Returns:
+    list of shuffled file names.
+  """
+  async = True
+
+  output_names = [
+      # Unfinalized files.
+      "_output_files",
+      ]
+
+  def run(self, job_name, input_files):
+    shard_number = len(input_files)
+    output_files = []
+    for i in range(shard_number):
+      blob_file_name = (job_name + "-shuffle-output-" + str(i))
+      file_name = files.blobstore.create(
+          _blobinfo_uploaded_filename=blob_file_name)
+      output_files.append(file_name)
+    self.fill(self.outputs._output_files, output_files)
+    files.shuffler.shuffle("%s-%s" % (job_name, int(time.time())),
+                           input_files,
+                           output_files,
+                           {
+                               "url": self.get_callback_url(),
+                               "method": "GET",
+                               "queue": self.queue_name,
+                               "version": os.environ["CURRENT_VERSION_ID"],
+                           })
+
+  def callback(self, **kwargs):
+    if "error" in kwargs:
+      self.abort("Error from shuffle service: %s" % kwargs["error"])
+      return
+
+    output_files = self.outputs._output_files.value
+    for filename in output_files:
+      files.finalize(filename)
+
+    finalized_file_names = []
+    for filename in output_files:
+      finalized_file_names.append(
+          files.blobstore.get_file_name(
+              files.blobstore.get_blob_key(filename)))
+    self.complete(finalized_file_names)
+
+  def try_cancel(self):
+    return True
+
+
 class ShufflePipeline(base_handler.PipelineBase):
   """A pipeline to shuffle multiple key-value files.
 
@@ -653,21 +709,24 @@ class ShufflePipeline(base_handler.PipelineBase):
     file_service_pb.KeyValues protocol messages with all values collated
     to a single key.
   """
-
   def run(self, job_name, filenames, shards=None, combine_spec=None):
-    hashed_files = yield _HashPipeline(job_name, filenames, shards=shards)
-    sorted_files = yield _SortChunksPipeline(job_name, hashed_files)
-    temp_files = [hashed_files, sorted_files]
+    if files.shuffler.available():
+      assert not combine_spec
+      yield _ShuffleServicePipeline(job_name, filenames)
+    else:
+      hashed_files = yield _HashPipeline(job_name, filenames, shards=shards)
+      sorted_files = yield _SortChunksPipeline(job_name, hashed_files)
+      temp_files = [hashed_files, sorted_files]
 
-    if combine_spec:
-      sorted_files = yield _CombinePipeline(
-          job_name, sorted_files, combine_spec)
-      temp_files.append(sorted_files)
+      if combine_spec:
+        sorted_files = yield _CombinePipeline(
+            job_name, sorted_files, combine_spec)
+        temp_files.append(sorted_files)
 
-    merged_files = yield _MergePipeline(job_name, sorted_files)
+      merged_files = yield _MergePipeline(job_name, sorted_files)
 
-    with pipeline.After(merged_files):
-      all_temp_files = yield pipeline_common.Extend(*temp_files)
-      yield mapper_pipeline._CleanupPipeline(all_temp_files)
+      with pipeline.After(merged_files):
+        all_temp_files = yield pipeline_common.Extend(*temp_files)
+        yield mapper_pipeline._CleanupPipeline(all_temp_files)
 
-    yield pipeline_common.Return(merged_files)
+      yield pipeline_common.Return(merged_files)
