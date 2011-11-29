@@ -46,7 +46,7 @@ _USER_METADATA_PREFIX = 'x-goog-meta-'
 
 def create(filename,
            mime_type='application/octet-stream',
-           acl='private',
+           acl=None,
            cache_control=None,
            content_encoding=None,
            content_disposition=None,
@@ -58,6 +58,7 @@ def create(filename,
     mime_type: Blob content MIME type as string.
     acl: Canned acl to apply to the object as per:
       http://code.google.com/apis/storage/docs/reference-headers.html#xgoogacl
+      If not specified (or set to None), default object acl is used.
     cache_control: Cache control header to set when serving through Google
       storage. If not specified, default of 3600 seconds is used.
     content_encoding: If object is compressed, specify the compression method
@@ -83,13 +84,14 @@ def create(filename,
     raise files.InvalidArgumentError('Empty mime_type')
   elif not isinstance(mime_type, basestring):
     raise files.InvalidArgumentError('Expected string for mime_type', mime_type)
-  elif not acl:
-    raise files.InvalidArgumentError('Empty acl')
-  elif not isinstance(acl, basestring):
-    raise files.InvalidArgumentError('Expected string for acl', acl)
 
-  params = {_MIME_TYPE_PARAMETER: mime_type,
-            _CANNED_ACL_PARAMETER: acl}
+  params = {_MIME_TYPE_PARAMETER: mime_type}
+
+  if acl:
+    if not isinstance(acl, basestring):
+      raise files.InvalidArgumentError('Expected string for acl', acl)
+    params[_CANNED_ACL_PARAMETER] = acl
+
   if content_encoding:
     if not isinstance(content_encoding, basestring):
       raise files.InvalidArgumentError('Expected string for content_encoding')
