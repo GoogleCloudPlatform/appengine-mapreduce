@@ -921,6 +921,10 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
     MapreduceHandlerTestBase.setUp(self)
     self.init()
 
+  def tearDown(self):
+    handlers._TEST_INJECTED_FAULTS.clear()
+    MapreduceHandlerTestBase.tearDown(self)
+
   def init(self,
            mapper_handler_spec=MAPPER_HANDLER_SPEC,
            mapper_parameters=None,
@@ -1006,6 +1010,36 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
     self.assertEquals(self.initial_quota - len(TestHandler.processed_keys),
                       self.quota_manager.get(self.shard_id))
 
+  def testCompletedState(self):
+    self.shard_state.active = False
+    self.shard_state.put()
+
+    e1 = TestEntity()
+    e1.put()
+
+    self.handler.post()
+
+    # completed state => no data processed
+    self.assertEquals([], TestHandler.processed_keys)
+    self.verify_shard_state(
+        model.ShardState.get_by_shard_id(self.shard_id), active=False)
+    self.assertEquals(0, len(self.taskqueue.GetTasks("default")))
+
+  def testShardStateCollision(self):
+    handlers._TEST_INJECTED_FAULTS.add("worker_active_state_collision")
+
+    e1 = TestEntity()
+    e1.put()
+
+    self.handler.post()
+
+    # Data will still be processed
+    self.assertEquals([str(e1.key())], TestHandler.processed_keys)
+    # Shard state should not be overriden, i.e. left active.
+    self.verify_shard_state(
+        model.ShardState.get_by_shard_id(self.shard_id), active=True)
+    self.assertEquals(0, len(self.taskqueue.GetTasks("default")))
+
   def testNoShardState(self):
     """Correct handling of missing shard state."""
     self.shard_state.delete()
@@ -1016,6 +1050,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
 
     # no state => no data processed
     self.assertEquals([], TestHandler.processed_keys)
+    self.assertEquals(0, len(self.taskqueue.GetTasks("default")))
 
   def testNoData(self):
     """Test no data to scan case."""

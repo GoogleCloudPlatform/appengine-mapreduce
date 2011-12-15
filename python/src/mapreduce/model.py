@@ -760,6 +760,11 @@ class ShardState(db.Model):
   shard_description = db.TextProperty(default="")
   last_work_item = db.TextProperty(default="")
 
+  def copy_from(self, other_state):
+    """Copy data from another shard state entity to self."""
+    for prop in self.properties().values():
+      setattr(self, prop.name, getattr(other_state, prop.name))
+
   def get_shard_number(self):
     """Gets the shard number from the key name."""
     return int(self.key().name().split("-")[-1])
