@@ -588,9 +588,6 @@ class KickOffJobHandler(util.HugeTaskHandler):
     state = model.MapreduceState.create_new(spec.mapreduce_id)
     state.mapreduce_spec = spec
     state.active = True
-    # TODO(user): Initialize UI fields correctly.
-    state.char_url = ""
-    state.sparkline_url = ""
     if app_id:
       state.app_id = app_id
 

@@ -334,8 +334,10 @@ class MapreduceStateTest(unittest.TestCase):
     mapreduce_state = model.MapreduceState.create_new()
     mapreduce_state.set_processed_counts([1, 2])
     self.assertEquals(
-        "http://chart.apis.google.com/chart?chd=s%3AD6&chco=0000ff&chbh=a&"
-        "chs=300x200&cht=bvg", mapreduce_state.chart_url)
+        "http://chart.apis.google.com/chart?chxt=y%2Cx&"
+        "chd=s%3Ad6&chxr=0%2C0%2C2.1&chco=0000ff&chbh=a&chs=300x200"
+         "&cht=bvg&chxl=0%3A%7C0%7C2%7C1%3A%7C0%7C1",
+         mapreduce_state.chart_url)
 
 
 class ShardStateTest(unittest.TestCase):

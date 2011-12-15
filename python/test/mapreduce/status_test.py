@@ -430,8 +430,16 @@ class ListJobsTest(testutil.HandlerTestBase):
     self.handler.get()
     result = simplejson.loads(self.handler.response.out.getvalue())
     expected_args = set([
-        "name", "updated_timestamp_ms", "shards", "start_timestamp_ms",
-        "mapreduce_id", "chart_url", "active_shards", "active"])
+        "active",
+        "active_shards",
+        "chart_url",
+        "chart_width",
+        "mapreduce_id",
+        "name",
+        "shards",
+        "start_timestamp_ms",
+        "updated_timestamp_ms",
+        ])
     self.assertEquals(3, len(result["jobs"]))
     self.assertEquals("my job 3", result["jobs"][0]["name"])
     self.assertEquals("my job 2", result["jobs"][1]["name"])

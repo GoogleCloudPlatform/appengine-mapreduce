@@ -561,6 +561,7 @@ class MapreduceState(db.Model):
 
   # For UI purposes only.
   chart_url = db.TextProperty(default="")
+  chart_width = db.IntegerProperty(default=300, indexed=False)
   sparkline_url = db.TextProperty(default="")
   result_status = db.StringProperty(required=False, choices=_RESULTS)
   active_shards = db.IntegerProperty(default=0, indexed=False)
@@ -605,12 +606,23 @@ class MapreduceState(db.Model):
         each shard
     """
     chart = google_chart_api.BarChart(shards_processed)
-    if self.mapreduce_spec and shards_processed:
-      chart.bottom.labels = [
-          str(x) for x in xrange(self.mapreduce_spec.mapper.shard_count)]
+    shard_count = len(shards_processed)
+
+    if shards_processed:
+      # Only 16 labels on the whole chart.
+      stride_length = max(1, shard_count / 16)
+      chart.bottom.labels = []
+      for x in xrange(shard_count):
+        if (x % stride_length == 0 or
+            x == shard_count - 1):
+          chart.bottom.labels.append(x)
+        else:
+          chart.bottom.labels.append("")
       chart.left.labels = ['0', str(max(shards_processed))]
       chart.left.min = 0
-    self.chart_url = chart.display.Url(300, 200)
+
+    self.chart_width = min(700, max(300, shard_count * 20))
+    self.chart_url = chart.display.Url(self.chart_width, 200)
 
   def get_processed(self):
     """Number of processed entities.
