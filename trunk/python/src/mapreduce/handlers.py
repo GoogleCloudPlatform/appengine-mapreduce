@@ -34,6 +34,7 @@ from google.appengine.api import taskqueue
 from google.appengine.ext import db
 from mapreduce import base_handler
 from mapreduce import context
+from mapreduce import errors
 from mapreduce import input_readers
 from mapreduce import model
 from mapreduce import operation
@@ -50,6 +51,9 @@ _SLICE_DURATION_SEC = 15
 
 # Delay between consecutive controller callback invocations.
 _CONTROLLER_PERIOD_SEC = 2
+
+# Set of strings of various test-injected faults.
+_TEST_INJECTED_FAULTS = set()
 
 
 class Error(Exception):
@@ -120,6 +124,10 @@ class MapperWorkerCallbackHandler(util.HugeTaskHandler):
                     shard_id)
       return
 
+    if not shard_state.active:
+      logging.error("Shard is not active. Looks like spurious task execution.")
+      return
+
     ctx = context.Context(spec, shard_state,
                           task_retry_count=self.task_retry_count())
 
@@ -128,6 +136,8 @@ class MapperWorkerCallbackHandler(util.HugeTaskHandler):
                    shard_state.shard_number, shard_state.mapreduce_id)
       if tstate.output_writer:
         tstate.output_writer.finalize(ctx, shard_state.shard_number)
+      # We recieved a command to abort. We don't care if we override
+      # some data.
       shard_state.active = False
       shard_state.result_status = model.ShardState.RESULT_ABORTED
       shard_state.put(config=util.create_datastore_write_config(spec))
@@ -196,7 +206,27 @@ class MapperWorkerCallbackHandler(util.HugeTaskHandler):
         # shard is going to stop. Finalize output writer if any.
         if tstate.output_writer:
           tstate.output_writer.finalize(ctx, shard_state.shard_number)
-      shard_state.put(config=util.create_datastore_write_config(spec))
+
+      config = util.create_datastore_write_config(spec)
+      # We don't want shard state to override active state, since that
+      # may stuck job execution (see issue 116). Do a transactional
+      # verification for status.
+      # TODO(user): this might still result in some data inconsistency
+      # which can be avoided. It doesn't seem to be worth it now, because
+      # various crashes might result in all sort of data consistencies
+      # anyway.
+      @db.transactional(retries=5)
+      def tx():
+        fresh_shard_state = db.get(
+            model.ShardState.get_key_by_shard_id(shard_id))
+        if (not fresh_shard_state.active or
+            "worker_active_state_collision" in _TEST_INJECTED_FAULTS):
+          shard_state.active = False
+          logging.error("Spurious task execution. Aborting the shard.")
+          return
+        fresh_shard_state.copy_from(shard_state)
+        fresh_shard_state.put(config=config)
+      tx()
     finally:
       context.Context._set(None)
       if quota_consumer:
