@@ -27,6 +27,14 @@ Use this classes to test functionality depending on webapp framework.
 import StringIO
 import urlparse
 
+
+class MockHeaders(dict):
+  """Mocks out headers in webapp.Request and webapp.Response."""
+
+  def add_header(self, key, value):
+    self[key] = value
+
+
 class MockRequest(object):
   """Mocks out webapp.Request.
 
@@ -47,7 +55,7 @@ class MockRequest(object):
     self._path = '/start'
     self.params = {}
     self.params_list = []
-    self.headers = {}
+    self.headers = MockHeaders()
     self.body = ''
     self.url = ''
     self.path_qs = ''
@@ -204,7 +212,7 @@ class MockResponse(object):
 
   def __init__(self):
     self.out = StringIO.StringIO()
-    self.headers = {}
+    self.headers = MockHeaders()
     self.status = 200
     self.status_message = 'OK'
 
