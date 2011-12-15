@@ -203,5 +203,40 @@ class ShufflerCombinePipelineTest(testutil.HandlerTestBase):
     self.assertEquals(set(xrange(200)), seen_numbers)
 
 
+class KeyValuesReaderTest(testutil.HandlerTestBase):
+  """Tests for KeyValues reader."""
+
+  def testReadPartial(self):
+    input_file = files.blobstore.create()
+
+    with files.open(input_file, "a") as f:
+      with records.RecordsWriter(f) as w:
+        # First record is full
+        proto = file_service_pb.KeyValues()
+        proto.set_key("key1")
+        proto.value_list().extend(["a", "b"])
+        w.write(proto.Encode())
+        # Second record is partial
+        proto = file_service_pb.KeyValues()
+        proto.set_key("key2")
+        proto.value_list().extend(["a", "b"])
+        proto.set_partial(True)
+        w.write(proto.Encode())
+        proto = file_service_pb.KeyValues()
+        proto.set_key("key2")
+        proto.value_list().extend(["c", "d"])
+        w.write(proto.Encode())
+
+    files.finalize(input_file)
+    input_file = files.blobstore.get_file_name(
+        files.blobstore.get_blob_key(input_file))
+
+    reader = mapreduce_pipeline.KeyValuesReader([input_file], 0)
+    self.assertEquals(
+        [("key1", ["a", "b"]),
+         ("key2", ["a", "b", "c", "d"])],
+        list(reader))
+
+
 if __name__ == "__main__":
   unittest.main()
