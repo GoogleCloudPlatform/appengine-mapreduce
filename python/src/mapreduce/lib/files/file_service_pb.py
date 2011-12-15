@@ -3370,11 +3370,9 @@ class ReadKeyValueResponse(ProtocolBuffer.ProtocolMessage):
 class ShuffleEnums(ProtocolBuffer.ProtocolMessage):
 
 
-  CSV_INPUT    =    0
   RECORDS_KEY_VALUE_PROTO_INPUT =    1
 
   _InputFormat_NAMES = {
-    0: "CSV_INPUT",
     1: "RECORDS_KEY_VALUE_PROTO_INPUT",
   }
 
@@ -3383,11 +3381,9 @@ class ShuffleEnums(ProtocolBuffer.ProtocolMessage):
 
 
 
-  CSV_OUTPUT   =    0
   RECORDS_KEY_MULTI_VALUE_PROTO_OUTPUT =    1
 
   _OutputFormat_NAMES = {
-    0: "CSV_OUTPUT",
     1: "RECORDS_KEY_MULTI_VALUE_PROTO_OUTPUT",
   }
 
@@ -3483,7 +3479,7 @@ class ShuffleEnums(ProtocolBuffer.ProtocolMessage):
   _PROTO_DESCRIPTOR_NAME = 'apphosting.files.ShuffleEnums'
 class ShuffleInputSpecification(ProtocolBuffer.ProtocolMessage):
   has_format_ = 0
-  format_ = 0
+  format_ = 1
   has_path_ = 0
   path_ = ""
 
@@ -3499,7 +3495,7 @@ class ShuffleInputSpecification(ProtocolBuffer.ProtocolMessage):
   def clear_format(self):
     if self.has_format_:
       self.has_format_ = 0
-      self.format_ = 0
+      self.format_ = 1
 
   def has_format(self): return self.has_format_
 
@@ -3617,7 +3613,7 @@ class ShuffleInputSpecification(ProtocolBuffer.ProtocolMessage):
   _PROTO_DESCRIPTOR_NAME = 'apphosting.files.ShuffleInputSpecification'
 class ShuffleOutputSpecification(ProtocolBuffer.ProtocolMessage):
   has_format_ = 0
-  format_ = 0
+  format_ = 1
 
   def __init__(self, contents=None):
     self.path_ = []
@@ -3632,7 +3628,7 @@ class ShuffleOutputSpecification(ProtocolBuffer.ProtocolMessage):
   def clear_format(self):
     if self.has_format_:
       self.has_format_ = 0
-      self.format_ = 0
+      self.format_ = 1
 
   def has_format(self): return self.has_format_
 
