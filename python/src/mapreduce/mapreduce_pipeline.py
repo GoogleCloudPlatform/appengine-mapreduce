@@ -80,10 +80,25 @@ class KeyValuesReader(input_readers.RecordsReader):
   expand_parameters = True
 
   def __iter__(self):
+    current_key = None
+    current_values = None
+
     for binary_record in input_readers.RecordsReader.__iter__(self):
       proto = file_service_pb.KeyValues()
       proto.ParseFromString(binary_record)
-      yield (proto.key(), proto.value_list())
+      if current_key is None:
+        current_key = proto.key()
+        current_values = proto.value_list()
+      else:
+        assert proto.key() == current_key
+        current_values.extend(proto.value_list())
+
+      if not proto.partial():
+        # __iter__ can be interrupted only on yield, so we don't need to
+        # persist current_key and current_value.
+        yield (current_key, current_values)
+        current_key = None
+        current_values = None
 
 
 class ReducePipeline(base_handler.PipelineBase):

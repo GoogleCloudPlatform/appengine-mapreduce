@@ -319,6 +319,8 @@ class KeyValue(ProtocolBuffer.ProtocolMessage):
 class KeyValues(ProtocolBuffer.ProtocolMessage):
   has_key_ = 0
   key_ = ""
+  has_partial_ = 0
+  partial_ = 0
 
   def __init__(self, contents=None):
     self.value_ = []
@@ -352,11 +354,25 @@ class KeyValues(ProtocolBuffer.ProtocolMessage):
   def clear_value(self):
     self.value_ = []
 
+  def partial(self): return self.partial_
+
+  def set_partial(self, x):
+    self.has_partial_ = 1
+    self.partial_ = x
+
+  def clear_partial(self):
+    if self.has_partial_:
+      self.has_partial_ = 0
+      self.partial_ = 0
+
+  def has_partial(self): return self.has_partial_
+
 
   def MergeFrom(self, x):
     assert x is not self
     if (x.has_key()): self.set_key(x.key())
     for i in xrange(x.value_size()): self.add_value(x.value(i))
+    if (x.has_partial()): self.set_partial(x.partial())
 
   def Equals(self, x):
     if x is self: return 1
@@ -365,6 +381,8 @@ class KeyValues(ProtocolBuffer.ProtocolMessage):
     if len(self.value_) != len(x.value_): return 0
     for e1, e2 in zip(self.value_, x.value_):
       if e1 != e2: return 0
+    if self.has_partial_ != x.has_partial_: return 0
+    if self.has_partial_ and self.partial_ != x.partial_: return 0
     return 1
 
   def IsInitialized(self, debug_strs=None):
@@ -380,6 +398,7 @@ class KeyValues(ProtocolBuffer.ProtocolMessage):
     n += self.lengthString(len(self.key_))
     n += 1 * len(self.value_)
     for i in xrange(len(self.value_)): n += self.lengthString(len(self.value_[i]))
+    if (self.has_partial_): n += 2
     return n + 1
 
   def ByteSizePartial(self):
@@ -389,11 +408,13 @@ class KeyValues(ProtocolBuffer.ProtocolMessage):
       n += self.lengthString(len(self.key_))
     n += 1 * len(self.value_)
     for i in xrange(len(self.value_)): n += self.lengthString(len(self.value_[i]))
+    if (self.has_partial_): n += 2
     return n
 
   def Clear(self):
     self.clear_key()
     self.clear_value()
+    self.clear_partial()
 
   def OutputUnchecked(self, out):
     out.putVarInt32(10)
@@ -401,6 +422,9 @@ class KeyValues(ProtocolBuffer.ProtocolMessage):
     for i in xrange(len(self.value_)):
       out.putVarInt32(18)
       out.putPrefixedString(self.value_[i])
+    if (self.has_partial_):
+      out.putVarInt32(24)
+      out.putBoolean(self.partial_)
 
   def OutputPartial(self, out):
     if (self.has_key_):
@@ -409,6 +433,9 @@ class KeyValues(ProtocolBuffer.ProtocolMessage):
     for i in xrange(len(self.value_)):
       out.putVarInt32(18)
       out.putPrefixedString(self.value_[i])
+    if (self.has_partial_):
+      out.putVarInt32(24)
+      out.putBoolean(self.partial_)
 
   def TryMerge(self, d):
     while d.avail() > 0:
@@ -418,6 +445,9 @@ class KeyValues(ProtocolBuffer.ProtocolMessage):
         continue
       if tt == 18:
         self.add_value(d.getPrefixedString())
+        continue
+      if tt == 24:
+        self.set_partial(d.getBoolean())
         continue
 
 
@@ -434,6 +464,7 @@ class KeyValues(ProtocolBuffer.ProtocolMessage):
       if printElemNumber: elm="(%d)" % cnt
       res+=prefix+("value%s: %s\n" % (elm, self.DebugFormatString(e)))
       cnt+=1
+    if self.has_partial_: res+=prefix+("partial: %s\n" % self.DebugFormatBool(self.partial_))
     return res
 
 
@@ -442,18 +473,21 @@ class KeyValues(ProtocolBuffer.ProtocolMessage):
 
   kkey = 1
   kvalue = 2
+  kpartial = 3
 
   _TEXT = _BuildTagLookupTable({
     0: "ErrorCode",
     1: "key",
     2: "value",
-  }, 2)
+    3: "partial",
+  }, 3)
 
   _TYPES = _BuildTagLookupTable({
     0: ProtocolBuffer.Encoder.NUMERIC,
     1: ProtocolBuffer.Encoder.STRING,
     2: ProtocolBuffer.Encoder.STRING,
-  }, 2, ProtocolBuffer.Encoder.MAX_TYPE)
+    3: ProtocolBuffer.Encoder.NUMERIC,
+  }, 3, ProtocolBuffer.Encoder.MAX_TYPE)
 
 
   _STYLE = """"""
