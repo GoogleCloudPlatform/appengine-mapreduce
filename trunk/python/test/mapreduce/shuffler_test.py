@@ -49,8 +49,10 @@ class ShuffleServicePipelineTest(testutil.HandlerTestBase):
     self.assertTrue(request)
     self.assertTrue(request.shuffle_name().startswith("testjob-"))
     self.assertEquals(2, len(request.input_list()))
-    self.assertEquals("format:1 path:\"file1\"", request.input(0).ToShortASCII())
-    self.assertEquals("format:1 path:\"file2\"", request.input(1).ToShortASCII())
+    self.assertEquals(1, request.input(0).format())
+    self.assertEquals("file1", request.input(0).path())
+    self.assertEquals(1, request.input(1).format())
+    self.assertEquals("file2", request.input(1).path())
     self.assertEquals(2, len(request.output().path_list()))
 
     callback = request.callback()
