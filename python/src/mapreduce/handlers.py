@@ -185,7 +185,7 @@ class MapperWorkerCallbackHandler(util.HugeTaskHandler):
           shard_state.result_status = model.ShardState.RESULT_SUCCESS
 
       operation.counters.Increment(
-          "mapper-walltime-msec",
+          context.COUNTER_MAPPER_WALLTIME_MS,
           int((time.time() - self._start_time)*1000))(ctx)
 
       # TODO(user): Mike said we don't want this happen in case of

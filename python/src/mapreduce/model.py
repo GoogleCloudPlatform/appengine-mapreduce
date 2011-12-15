@@ -322,6 +322,14 @@ class CountersMap(JsonMixin):
     counters_map.counters = json["counters"]
     return counters_map
 
+  def to_dict(self):
+    """Convert to dictionary.
+
+    Returns:
+      a dictionary with counter name as key and counter values as value.
+    """
+    return self.counters
+
 
 class MapperSpec(JsonMixin):
   """Contains a specification for the mapper phase of the mapreduce.

@@ -27,11 +27,6 @@ class TestEntity(db.Model):
   data = db.TextProperty()
 
 
-def test_empty_handler(entity):
-  """Test handler that does nothing."""
-  pass
-
-
 def test_handler_yield_key(entity):
   """Test handler that yields entity key."""
   yield entity.key()
@@ -76,23 +71,6 @@ class MapreducePipelineTest(testutil.HandlerTestBase):
   def _send_mail(self, sender, subject, body, html=None):
     """Callback function for sending mail."""
     self.emails.append((sender, subject, body, html))
-
-  def testEmptyMapper(self):
-    """Test empty mapper over empty dataset."""
-    p = mapreduce_pipeline.MapperPipeline(
-        "empty_map",
-        handler_spec=__name__ + ".test_empty_handler",
-        input_reader_spec=input_readers.__name__ + ".DatastoreInputReader",
-        params={
-            "entity_kind": __name__ + ".TestEntity",
-            },
-        )
-    p.start()
-    test_support.execute_until_empty(self.taskqueue)
-
-    self.assertEquals(1, len(self.emails))
-    self.assertTrue(self.emails[0][1].startswith(
-        "Pipeline successful:"))
 
   def testMapReduce(self):
     # Prepare test data

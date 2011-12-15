@@ -48,6 +48,8 @@ class MapperPipeline(base_handler.PipelineBase):
       # Job ID. MapreduceState.get_by_job_id can be used to load
       # mapreduce state. Is filled immediately after job starts up.
       "job_id",
+      # Dictionary of final counter values. Filled when job is completed.
+      "counters",
       ]
 
   def run(self,
@@ -83,6 +85,7 @@ class MapperPipeline(base_handler.PipelineBase):
     if output_writer_class:
       files = output_writer_class.get_filenames(mapreduce_state)
 
+    self.fill(self.outputs.counters, mapreduce_state.counters_map.to_dict())
     self.complete(files)
 
 
@@ -108,4 +111,3 @@ class _CleanupPipeline(base_handler.PipelineBase):
 
   def run(self, temp_files):
     self.delete_file_or_list(temp_files)
-

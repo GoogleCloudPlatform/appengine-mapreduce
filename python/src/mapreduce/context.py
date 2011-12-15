@@ -23,9 +23,19 @@ from handlers such as counters, log messages, mutation pools.
 
 
 
-__all__ = ["MAX_ENTITY_COUNT", "MAX_POOL_SIZE", "Context", "MutationPool",
-           "Counters", "ItemList", "EntityList", "get", "COUNTER_MAPPER_CALLS",
-           "DATASTORE_DEADLINE"]
+__all__ = [
+           "get",
+           "Context",
+           "Counters",
+           "EntityList",
+           "ItemList",
+           "MutationPool",
+           "COUNTER_MAPPER_CALLS",
+           "COUNTER_MAPPER_WALLTIME_MS",
+           "DATASTORE_DEADLINE",
+           "MAX_ENTITY_COUNT",
+           "MAX_POOL_SIZE",
+           ]
 
 from google.appengine.api import datastore
 from google.appengine.ext import db
@@ -43,7 +53,11 @@ MAX_ENTITY_COUNT = 500
 DATASTORE_DEADLINE = 15
 
 # The name of the counter which counts all mapper calls.
-COUNTER_MAPPER_CALLS = "mapper_calls"
+COUNTER_MAPPER_CALLS = "mapper-calls"
+
+# Total walltime in msec given to mapper process. This is not just mapper
+# hundler function, but includes all i/o overhead.
+COUNTER_MAPPER_WALLTIME_MS = "mapper-walltime-ms"
 
 
 def _normalize_entity(value):
