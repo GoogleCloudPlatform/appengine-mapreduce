@@ -219,7 +219,7 @@ class _FilePool(object):
     for filename, data in self._append_buffer.iteritems():
       with files.open(filename, "a") as f:
         if len(data) > self._flush_size:
-          raise "Bad data: " + str(len(data))
+          raise errors.Error("Bad data: %s" % len(data))
         if self._ctx:
           operation.counters.Increment(
               COUNTER_IO_WRITE_BYTES, len(data))(self._ctx)
