@@ -77,6 +77,12 @@ def start_map(name,
     shard_count = _DEFAULT_SHARD_COUNT
   if base_path is None:
     base_path = base_handler._DEFAULT_BASE_PATH
+
+  if mapper_parameters:
+    mapper_parameters = dict(mapper_parameters)
+  if mapreduce_parameters:
+    mapreduce_parameters = dict(mapreduce_parameters)
+
   mapper_spec = model.MapperSpec(handler_spec,
                                  reader_spec,
                                  mapper_parameters,
