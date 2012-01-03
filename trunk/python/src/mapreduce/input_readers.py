@@ -513,6 +513,11 @@ class AbstractDatastoreInputReader(InputReader):
                     ns_range=ns_range,
                     batch_size=batch_size)
                 for ns_range in ns_ranges]
+      elif not namespace_keys:
+        return [cls(entity_kind_name,
+                    key_ranges=None,
+                    ns_range=namespace_range.NamespaceRange(),
+                    batch_size=shard_count)]
       else:
         namespaces = [namespace_key.name() or ""
                       for namespace_key in namespace_keys]

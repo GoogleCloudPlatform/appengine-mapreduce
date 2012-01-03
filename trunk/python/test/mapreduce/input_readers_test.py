@@ -128,7 +128,9 @@ class DatastoreInputReaderTest(unittest.TestCase):
         shard_count)
     ds_input_readers = input_readers.DatastoreInputReader.split_input(
         mapper_spec)
-    return [input_reader._key_ranges for input_reader in ds_input_readers]
+    return [
+        input_reader._key_ranges or input_reader._ns_range
+        for input_reader in ds_input_readers]
 
   def split_into_namespace_ranges(self, shard_count):
     """Generate TestEntity split.
@@ -380,8 +382,10 @@ class DatastoreInputReaderTest(unittest.TestCase):
                       reader[0].__class__)
 
   def testSplitNoData(self):
-    """Empty split should be produced if there's no data in database."""
-    self.assertEquals([], self.split_into_key_ranges(10))
+    """Full namespace range should be produced if there's no data."""
+    self.assertEquals(
+        [namespace_range.NamespaceRange()],
+        self.split_into_key_ranges(10))
 
   def testChooseSplitPoints(self):
     """Tests AbstractDatastoreInputReader._choose_split_points."""
