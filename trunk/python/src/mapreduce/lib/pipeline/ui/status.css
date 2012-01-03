@@ -17,6 +17,7 @@ html, body {
   padding: 0;
   border-right: 1px solid grey;
   margin: 0;
+  background-color: #f8f8f8;
 }
 #content {
   border: 0;
@@ -30,11 +31,9 @@ html, body {
 #control {
   padding: 0;
   margin: 0;
-  top: 0;
-  right: 0;
   height: 25px;
   width: 100%;
-  border-bottom: 1px solid grey;
+  border-bottom: 1px solid #808080;
 }
 #control-table {
   height: 100%;
@@ -56,6 +55,8 @@ html, body {
 
 /* shared styling of pipeline info divs */
 .status-message {
+}
+.status-message-text {
   font-family: monospace;
 }
 abbr {
@@ -110,7 +111,6 @@ abbr {
 #sidebar .status-title {
 }
 #sidebar .status-message {
-  max-width: 200px;
   word-wrap: break-word;
 }
 #sidebar .status-time {
@@ -121,34 +121,28 @@ abbr {
 }
 #sidebar .status-box {
   font-size: 0.85em;
-  padding: 1px 3px;
+  padding: 3px 3px;
   min-width: 200px;
   border-left: 1px solid #BFBFBF;
-  border-right: 1px solid #BFBFBF;
+  border-right: 0;
+  border-top: 0;
+  border-bottom: 1px solid #BFBFBF;
 }
 #sidebar .status-waiting {
-  background-color: #D3D3D3;
-  border-top: 1px solid #bfbfbf;
-  border-bottom: 1px solid #959595;
+  background-color: #EDEDED;
 }
 #sidebar .status-run,
 #sidebar .status-finalizing {
   background-color: #fff;
-  border-top: 1px solid #bfbfbf;
-  border-bottom: 1px solid #959595;
 }
 #sidebar .status-done {
-  background-color: #90EE90;
-  border-top: 1px solid #C5EBC5;
-  border-bottom: 1px solid #75BF75;
+  background-color: #BEEDBE;
 }
 #sidebar .status-aborted {
-  background-color: #FFC0CB;
-  border-top: 1px solid #FFDBE1;
-  border-bottom: 1px solid #FFADBB;
+  background-color: #EDBEC6;
 }
 #sidebar .status-retry {
-  background-color: khaki;
+  background-color: #EDE7B2;
 }
 .treeview li {
   padding: 0 0 0 16px;
@@ -160,17 +154,28 @@ abbr {
   padding-left: 3px;
   display: block;
 }
-#sidebar .selected-link:before {
-  content: '*';
-  vertical-align: middle;
-  margin-right: 2px;
+.selected-indicator {
+  display: none;
+}
+.selected-link .selected-indicator {
+  display: block;
+  float: right;
+  margin: 0;
+  padding: 0;
+  font-size: 30px;
+  color: #000;
+  font-weight: bold;
+  line-height: 15px;
+}
+.status-links .selected-link {
+  font-weight: bold !important;
 }
 .status-links a:active,
 .status-links a:link,
 .status-links a:visited {
-  text-decoration: none;
+  text-decoration: underline;
   color: blue;
-  font-weight: bold;
+  font-weight: normal;
 }
 .disclosure:hover,
 .status-links a:hover,

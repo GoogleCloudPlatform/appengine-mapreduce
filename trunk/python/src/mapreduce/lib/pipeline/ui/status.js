@@ -98,20 +98,65 @@ function handleTreeToggle(index, element) {
 }
 
 
+// Counts the number of total and active children for the given pipeline.
+// Will include the supplied pipeline in the totals.
+function countChildren(pipelineId) {
+  var current = STATUS_MAP.pipelines[pipelineId];
+  if (!current) {
+    return [0, 0];
+  }
+  var total = 1;
+  var done = 0;
+  if (current.status == 'done') {
+    done += 1;
+  }
+  for (var i = 0, n = current.children.length; i < n; i++) {
+    var parts = countChildren(current.children[i]);
+    total += parts[0];
+    done += parts[1];
+  }
+  return [total, done];
+}
+
+
+// Create the readable name for the pipeline name.
+function prettyName(name, sidebar) {
+  var adjustedName = name;
+  if (sidebar) {
+    var adjustedName = name;
+    var parts = name.split('.');
+    if (parts.length > 0) {
+      adjustedName = parts[parts.length - 1];
+    }
+  }
+  return adjustedName.replace(/\./, '.<wbr>');
+}
+
+
 // Constructs the info div for a stage.
 function constructStageNode(pipelineId, infoMap, sidebar) {
   var containerDiv = $('<div class="status-box">');
   containerDiv.addClass('status-' + infoMap.status);
 
   var detailDiv = $('<div class="detail-link">');
+  if (sidebar) {
+    detailDiv.append($('<div class="selected-indicator">').html('&#x2023;'));
+  }
+
   var detailLink = $('<a>');
   detailLink.attr('href', '#pipeline-' + pipelineId);
   detailLink.attr('title', 'ID #' + pipelineId);
   detailLink.attr('id', 'link-pipeline-' + pipelineId);
-  var nameWithBreaks = infoMap.classPath.replace(/\./, '.<wbr>');
-  detailLink.html(nameWithBreaks);
+  detailLink.html(prettyName(infoMap.classPath, sidebar));
   detailDiv.append(detailLink);
   containerDiv.append(detailDiv);
+
+  // ID of the pipeline
+  if (!sidebar) {
+    var pipelineIdDiv = $('<div class="status-pipeline-id">');
+    pipelineIdDiv.text('ID #' + pipelineId);
+    containerDiv.append(pipelineIdDiv);
+  }
 
   // Broad status category.
   var statusTitleDiv = $('<div class="status-title">');
@@ -121,15 +166,7 @@ function constructStageNode(pipelineId, infoMap, sidebar) {
   statusTitleDiv.append($('<span>').text(infoMap.status));
   containerDiv.append(statusTitleDiv);
 
-  // ID of the pipeline
-  if (!sidebar) {
-    var pipelineIdDiv = $('<div class="status-pipeline-id">');
-    pipelineIdDiv.text('ID #' + pipelineId);
-    containerDiv.append(pipelineIdDiv);
-  }
-
   // Determine timing information based on state.
-  var statusMessage = null;
   var statusTimeLabel = null;
   var statusTimeMs = null;
   var statusRuntimeDiv = null
@@ -148,42 +185,82 @@ function constructStageNode(pipelineId, infoMap, sidebar) {
 
     statusTimeLabel = 'Complete';
     statusTimeMs = infoMap.endTimeMs;
-    if (infoMap.statusMessage) {
-      statusMessage = infoMap.statusMessage;
-    }
   } else if (infoMap.status == 'run') {
     statusTimeLabel = 'Started';
     statusTimeMs = infoMap.startTimeMs;
-    if (infoMap.statusMessage) {
-      statusMessage = infoMap.statusMessage;
-    }
   } else if (infoMap.status == 'retry') {
     statusTimeLabel = 'Will run';
     statusTimeMs = infoMap.startTimeMs;
-    if (infoMap.lastRetryMessage) {
-      statusMessage = infoMap.lastRetryMessage;
-    }
   } else if (infoMap.status == 'finalizing') {
     statusTimeLabel = 'Complete';
     statusTimeMs = infoMap.endTimeMs;
-    if (infoMap.statusMessage) {
-      statusMessage = infoMap.statusMessage;
-    }
   } else if (infoMap.status == 'aborted') {
     statusTimeLabel = 'Aborted';
     statusTimeMs = infoMap.endTimeMs;
-    if (infoMap.abortMessage) {
-      statusMessage = infoMap.abortMessage;
-    }
   } else if (infoMap.status == 'waiting') {
     // Do nothing.
   }
 
+  // Last abort message, if any.
+  if (infoMap.abortMessage) {
+    var abortMessageDiv = $('<div class="status-message abort">');
+    abortMessageDiv.append($('<span>').text('Abort Message: '));
+    abortMessageDiv.append(
+        $('<span class="status-message-text">').text(infoMap.abortMessage));
+    containerDiv.append(abortMessageDiv);
+  }
+
+  // Last error message that caused a retry, if any.
+  if (infoMap.lastRetryMessage) {
+    var errorMessageDiv = $('<div class="status-message error">');
+    errorMessageDiv.append($('<span>').text('Retry Message: '));
+    errorMessageDiv.append(
+        $('<span class="status-message-text">').text(infoMap.lastRetryMessage));
+    containerDiv.append(errorMessageDiv);
+  }
+
   // User-supplied status message.
-  if (statusMessage) {
-    var statusMessageDiv = $('<div class="status-message">');
-    statusMessageDiv.text(statusMessage);
+  if (infoMap.statusMessage) {
+    var statusMessageDiv = $('<div class="status-message normal">');
+    statusMessageDiv.append($('<span>').text('Message: '));
+    statusMessageDiv.append(
+        $('<span class="status-message-text">').text(infoMap.statusMessage));
     containerDiv.append(statusMessageDiv);
+  }
+
+  // Completed children count.
+  if (infoMap.status == 'run' || infoMap.status == 'done') {
+    var counts = countChildren(pipelineId);
+    var totalChildren = counts[0];
+    var doneChildren = counts[1];
+    // Do not count ourselves
+    totalChildren--;
+    if (infoMap.status == 'done') {
+      doneChildren--;
+    }
+    if (totalChildren > 0 && doneChildren < totalChildren) {
+      var doneChildrenDiv = $('<div class="active-children">');
+      doneChildrenDiv.append($('<span>').text('Children: '));
+      var countText = '' + doneChildren + ' / ' + totalChildren + ' done';
+      doneChildrenDiv.append($('<span>').text(countText));
+      containerDiv.append(doneChildrenDiv);
+    }
+  }
+
+  // Number of attempts, if more than one.
+  if (infoMap.currentAttempt > 1) {
+    var attemptDiv = $('<div class="status-attempt">');
+    var attemptTitle = 'Attempt: ';
+    if (infoMap.status == 'retry') {
+      attemptTitle = 'Next Attempt: ';
+    } else if (infoMap.status == 'done') {
+      attemptTitle = 'Attempts: ';
+    }
+    attemptDiv.append($('<span>').text(attemptTitle));
+    var attemptText = '' + infoMap.currentAttempt + ' / ' +
+        infoMap.maxAttempts + '';
+    attemptDiv.append($('<span>').text(attemptText));
+    containerDiv.append(attemptDiv);
   }
 
   // Runtime if present.
@@ -533,7 +610,6 @@ function generateSidebar(statusMap, nextPipelineId, rootElement) {
 }
 
 
-
 function selectPipeline(pipelineId, linkName) {
   if (linkName) {
     location.hash = '#pipeline-' + pipelineId + ';' + linkName;
@@ -649,7 +725,9 @@ function handleHashChange() {
   }
 
   // Mark the pipeline as selected.
-  $('#link-pipeline-' + pipelineId).addClass('selected-link');
+  var selected = $('#link-pipeline-' + pipelineId);
+  selected.addClass('selected-link');
+  selected.parents('.status-box').addClass('selected-link');
 
   // Title is always the info for the root pipeline, to make it easier to
   // track across multiple tabs.
