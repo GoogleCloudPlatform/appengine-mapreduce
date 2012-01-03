@@ -18,6 +18,9 @@
 
 
 
+__all__ = [
+    "MapperPipeline",
+    ]
 
 
 from mapreduce.lib import files

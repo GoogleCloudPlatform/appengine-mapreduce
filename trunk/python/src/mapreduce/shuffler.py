@@ -21,6 +21,10 @@ from __future__ import with_statement
 
 
 
+__all__ = [
+    "ShufflePipeline",
+    ]
+
 import gc
 import heapq
 import logging
@@ -40,7 +44,6 @@ from mapreduce import input_readers
 from mapreduce import mapper_pipeline
 from mapreduce import operation
 from mapreduce import output_writers
-from mapreduce import util
 
 
 class _OutputFile(db.Model):
@@ -261,6 +264,9 @@ class _MergingReader(input_readers.InputReader):
       readers.append((None, None, i, reader))
 
     # Read records from heap and merge values with the same key.
+
+    # current_result is yielded and consumed buy _merge_map.
+    # current_result = (key, value, is_partial)
     current_result = None
     current_count = 0
     current_size = 0
@@ -276,16 +282,18 @@ class _MergingReader(input_readers.InputReader):
           should_yield = key != current_result[0]
           if (self._max_values_count != -1 and
               current_count >= self._max_values_count):
+            current_result[2] = True
             should_yield = True
           if (self._max_values_size != -1 and
               current_size >= self._max_values_size):
+            current_result[2] = True
             should_yield = True
 
         if should_yield:
           # New key encountered or maximum count hit. Yield current key.
           yield current_result
         if not current_result or should_yield:
-          current_result = (key, [])
+          current_result = [key, [], False]
           current_count = 0
           current_size = 0
         current_result[1].append(value)
@@ -483,31 +491,6 @@ class _HashingBlobstoreOutputWriter(output_writers.BlobstoreOutputWriterBase):
     ctx.get_pool(pool_name).append(proto.Encode())
 
 
-class _CombineMap(object):
-  """A map function used in the combine phase.
-
-  Uses a combine function to merge N values for a single key into one value
-  for that same key. Outputs encoded KeyValue protos (the singular kind).
-  """
-
-  def __init__(self):
-    self._initialized = False
-    self._combiner = None
-
-  def run(self, key, values):
-    if not self._combiner:
-      ctx = context.get()
-      params = ctx.mapreduce_spec.mapper.params
-      combine_spec = params.get(_CombinePipeline.COMBINE_SPEC_PARAM)
-      self._combiner = util.for_name(combine_spec)
-
-    for combined_value in self._combiner(key, values, []):
-      proto = file_service_pb.KeyValue()
-      proto.set_key(key)
-      proto.set_value(combined_value)
-      yield proto.Encode()
-
-
 class _ShardOutputs(base_handler.PipelineBase):
   """Takes a flat list of filenames, returns a list of lists, each with
   one member each.
@@ -520,50 +503,20 @@ class _ShardOutputs(base_handler.PipelineBase):
     return result
 
 
-class _CombinePipeline(base_handler.PipelineBase):
-  """Pipeline to combine sorted output.
-
-  Args:
-    filenames: list of lists of filenames. Each list will correspond to a single
-      shard. Each file in the list should have keys sorted and should contain
-      records with KeyValue serialized entity.
-    combine_spec: Specification of a combine function. The combine function
-      takes a key and list of values and yields a single value or no values. The
-      combiner output key is assumed to be the same as the input key.
-
-  Returns:
-    A list of filenames lists, where each filename contains records with
-    KeyValue serialized entities.
-  """
-
-  COMBINE_SPEC_PARAM = "combine_spec"
-
-  def run(self, job_name, filenames, combine_spec):
-    max_values_count = 100000  # Combiners usually good for 5 orders of magnitude
-    max_values_size = 1000000
-    combined_result = yield mapper_pipeline.MapperPipeline(
-            job_name + "-combine",
-            __name__ + "._CombineMap.run",
-            __name__ + "._MergingReader",
-            output_writer_spec=
-                output_writers.__name__ + ".BlobstoreRecordsOutputWriter",
-            params={
-                _MergingReader.FILES_PARAM: filenames,
-                _MergingReader.MAX_VALUES_COUNT_PARAM: max_values_count,
-                _MergingReader.MAX_VALUES_SIZE_PARAM: max_values_size,
-                _CombinePipeline.COMBINE_SPEC_PARAM: combine_spec},
-            shards=len(filenames))
-    yield _ShardOutputs(combined_result)
-
-
-def _merge_map(k, values):
+def _merge_map(key, values, partial):
   """A map function used in merge phase.
 
-  Stores (k, values) into KeyValues proto and yields its serialization.
+  Stores (key, values) into KeyValues proto and yields its serialization.
+
+  Args:
+    key: values key.
+    values: values themselves.
+    partial: True if more values for this key will follow. False otherwise.
   """
   proto = file_service_pb.KeyValues()
-  proto.set_key(k)
+  proto.set_key(key)
   proto.value_list().extend(values)
+  proto.set_partial(partial)
   yield proto.Encode()
 
 
@@ -576,25 +529,30 @@ class _MergePipeline(base_handler.PipelineBase):
     filenames: list of lists of filenames. Each list will correspond to a single
       shard. Each file in the list should have keys sorted and should contain
       records with KeyValue serialized entity.
-    combine_spec: Specification of a combine function. If not supplied,
-      no combine step will take place. The combine function takes a key and
-      list of values and yields one value or no values. The combiner output key
-      is assumed to be the same as the input key.
 
   Returns:
     The list of filenames, where each filename is fully merged and will contain
     records with KeyValues serialized entity.
   """
 
+  # Maximum number of values to produce in a single KeyValues proto.
+  _MAX_VALUES_COUNT = 100000  # Combiners usually good for 5 orders of magnitude
+  # Maximum size of values to produce in a single KeyValues proto.
+  _MAX_VALUES_SIZE = 1000000
+
   def run(self, job_name, filenames):
     yield mapper_pipeline.MapperPipeline(
-            job_name + "-shuffle-merge",
-            __name__ + "._merge_map",
-            __name__ + "._MergingReader",
-            output_writer_spec=
-                output_writers.__name__ + ".BlobstoreRecordsOutputWriter",
-            params={_MergingReader.FILES_PARAM: filenames},
-            shards=len(filenames))
+        job_name + "-shuffle-merge",
+        __name__ + "._merge_map",
+        __name__ + "._MergingReader",
+        output_writer_spec=
+        output_writers.__name__ + ".BlobstoreRecordsOutputWriter",
+        params={
+          _MergingReader.FILES_PARAM: filenames,
+          _MergingReader.MAX_VALUES_COUNT_PARAM: self._MAX_VALUES_COUNT,
+          _MergingReader.MAX_VALUES_SIZE_PARAM: self._MAX_VALUES_SIZE,
+          },
+        shards=len(filenames))
 
 
 def _hashing_map(binary_record):
@@ -699,29 +657,19 @@ class ShufflePipeline(base_handler.PipelineBase):
       protocol messages.
     shards: Optional. Number of output shards to generate. Defaults
       to the number of input files.
-    combine_spec: Optional. Specification of a combine function. If not
-      supplied, no combine step will take place. The combine function takes a
-      key and list of values and yields a single value or no values. The
-      combiner output key is assumed to be the same as the input key.
 
   Returns:
     The list of filenames as string. Resulting files contain serialized
     file_service_pb.KeyValues protocol messages with all values collated
     to a single key.
   """
-  def run(self, job_name, filenames, shards=None, combine_spec=None):
+  def run(self, job_name, filenames, shards=None):
     if files.shuffler.available():
-      assert not combine_spec
       yield _ShuffleServicePipeline(job_name, filenames)
     else:
       hashed_files = yield _HashPipeline(job_name, filenames, shards=shards)
       sorted_files = yield _SortChunksPipeline(job_name, hashed_files)
       temp_files = [hashed_files, sorted_files]
-
-      if combine_spec:
-        sorted_files = yield _CombinePipeline(
-            job_name, sorted_files, combine_spec)
-        temp_files.append(sorted_files)
 
       merged_files = yield _MergePipeline(job_name, sorted_files)
 

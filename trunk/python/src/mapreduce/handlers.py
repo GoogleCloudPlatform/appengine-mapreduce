@@ -260,7 +260,7 @@ class MapperWorkerCallbackHandler(util.HugeTaskHandler):
       else:
         result = handler(data)
 
-      if util.is_generator_function(handler):
+      if util.is_generator(handler):
         for output in result:
           if isinstance(output, operation.Operation):
             output(ctx)

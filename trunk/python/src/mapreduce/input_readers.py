@@ -1617,7 +1617,7 @@ class RecordsReader(InputReader):
 
     # Sort from most shards to least shards so the short shard is last.
     batch_list.sort(reverse=True, key=lambda x: len(x))
-    return [RecordsReader(batch, 0) for batch in batch_list]
+    return [cls(batch, 0) for batch in batch_list]
 
   @classmethod
   def validate(cls, mapper_spec):
