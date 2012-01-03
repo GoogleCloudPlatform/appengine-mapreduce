@@ -81,6 +81,7 @@ C will be stored as a FULL record in the fourth block.
 """
 
 
+import logging
 import struct
 
 import google
@@ -349,7 +350,9 @@ class RecordsReader(object):
         else:
           raise InvalidRecordError('Unsupported record type: %s' %
                                    (record_type))
-      except InvalidRecordError:
+      except InvalidRecordError, e:
+        logging.debug("Invalid record encountered at %s (%s). Syncing to "
+                      "the next block", self.tell(), e)
         self.__sync()
 
   def __iter__(self):
