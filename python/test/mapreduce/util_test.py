@@ -129,13 +129,13 @@ class ForNameTest(unittest.TestCase):
 
 
 class IsGeneratorFunctionTest(unittest.TestCase):
-  """Test util.is_generator_function function."""
+  """Test util.is_generator function."""
 
   def testGenerator(self):
-    self.assertTrue(util.is_generator_function(test_handler_yield))
+    self.assertTrue(util.is_generator(test_handler_yield))
 
   def testNotGenerator(self):
-    self.assertFalse(util.is_generator_function(test_handler_function))
+    self.assertFalse(util.is_generator(test_handler_function))
 
 
 class GetShortNameTest(unittest.TestCase):

@@ -41,7 +41,6 @@ try:
 except ImportError:
   from mapreduce.lib import simplejson
 import time
-import types
 
 from google.appengine.api import datastore_errors
 from google.appengine.api import datastore_types
@@ -384,16 +383,7 @@ class MapperSpec(JsonMixin):
       cached handler instance as callable.
     """
     if self.__handler is None:
-      resolved_spec = util.for_name(self.handler_spec)
-      if isinstance(resolved_spec, type):
-        # create new instance if this is type
-        self.__handler = resolved_spec()
-      elif isinstance(resolved_spec, types.MethodType):
-        # bind the method
-        self.__handler = getattr(resolved_spec.im_class(),
-                                 resolved_spec.__name__)
-      else:
-        self.__handler = resolved_spec
+      self.__handler = util.handler_for_name(self.handler_spec)
     return self.__handler
 
   handler = property(get_handler)

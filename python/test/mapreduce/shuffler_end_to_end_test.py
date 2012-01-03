@@ -72,7 +72,7 @@ class SortFileEndToEndTest(testutil.HandlerTestBase):
     self.assertEquals(input_data, output_data)
 
 
-def test_handler_yield_str(key, value):
+def test_handler_yield_str(key, value, partial):
   """Test handler that yields parameters converted to string."""
   yield str((key, value))
 

@@ -42,19 +42,6 @@ def test_map(entity):
   yield (entity.data, "")
 
 
-def test_combiner_map(entity):
-  """Tests map handler for use with the Combiner test."""
-  yield str(int(entity.data) % 4), entity.data
-
-
-def test_combine(key, values, combiner_values):
-  """Test combine handler."""
-  assert not combiner_values
-  value_ints = [int(x) for x in values]
-  value_ints.sort()
-  yield str(value_ints)
-
-
 def test_reduce(key, values):
   """Test reduce handler."""
   yield str((key, values))
@@ -121,90 +108,8 @@ class MapreducePipelineTest(testutil.HandlerTestBase):
           re.match("test-reduce-.*-output-\d+", blobinfo.filename))
 
 
-class ShufflerCombinePipelineTest(testutil.HandlerTestBase):
-  """Tests for combiners in the shuffle pipeline."""
-
-  def setUp(self):
-    testutil.HandlerTestBase.setUp(self)
-    pipeline.Pipeline._send_mail = self._send_mail
-    self.emails = []
-
-  def _send_mail(self, sender, subject, body, html=None):
-    """Callback function for sending mail."""
-    self.emails.append((sender, subject, body, html))
-
-  def testCombine(self):
-    # Prepare test data
-    entity_count = 200
-
-    for i in range(entity_count):
-      TestEntity(data=str(i)).put()
-      TestEntity(data=str(i)).put()
-
-    # Run map
-    p = mapreduce_pipeline.MapperPipeline(
-        "test",
-        handler_spec=__name__ + ".test_combiner_map",
-        input_reader_spec=input_readers.__name__ + ".DatastoreInputReader",
-        output_writer_spec=
-            output_writers.__name__ + ".KeyValueBlobstoreOutputWriter",
-        params={
-            "entity_kind": __name__ + ".TestEntity",
-            },
-        shards=4)
-    p.start()
-    test_support.execute_until_empty(self.taskqueue)
-
-    finished_map = mapreduce_pipeline.MapperPipeline.from_id(p.pipeline_id)
-
-    # Run Combine
-    p = mapreduce_pipeline.ShufflePipeline(
-        "test",
-        finished_map.outputs.default.value,
-        combine_spec=__name__ + ".test_combine")
-    p.start()
-    test_support.execute_until_empty(self.taskqueue)
-
-    self.assertEquals(2, len(self.emails))
-    for i in xrange(2):
-      self.assertTrue(self.emails[i][1].startswith(
-          "Pipeline successful:"))
-
-    # Verify combine output. A filename for each processing shard.
-    finished_combine = mapreduce_pipeline.ShufflePipeline.from_id(p.pipeline_id)
-    self.assertEquals(4, len(finished_combine.outputs.default.value))
-
-    seen_keys = set()
-    repeated_keys = []
-    output_data = []
-    for output_file in finished_combine.outputs.default.value:
-      with files.open(output_file, "r") as f:
-        for record in records.RecordsReader(f):
-          proto = file_service_pb.KeyValue()
-          proto.ParseFromString(record)
-          key = proto.key()
-          output_data.append(eval(proto.value()))
-
-    # Validate the combined data.
-    seen_numbers = set()
-    for shard in output_data:
-      # Each sub-shard should be in order.
-      self.assertEquals(shard, sorted(shard))
-
-      output_set = set(shard)
-      for number in output_set:
-        # Within each shard, each number should appear twice.
-        self.assertEquals(2, shard.count(number))
-        # And should not appear in other shards.
-        self.assertFalse(number in seen_numbers)
-
-      seen_numbers.update(output_set)
-
-    self.assertEquals(set(xrange(200)), seen_numbers)
-
-
-class KeyValuesReaderTest(testutil.HandlerTestBase):
-  """Tests for KeyValues reader."""
+class ReducerReaderTest(testutil.HandlerTestBase):
+  """Tests for _ReducerReader."""
 
   def testReadPartial(self):
     input_file = files.blobstore.create()
@@ -231,11 +136,74 @@ class KeyValuesReaderTest(testutil.HandlerTestBase):
     input_file = files.blobstore.get_file_name(
         files.blobstore.get_blob_key(input_file))
 
-    reader = mapreduce_pipeline.KeyValuesReader([input_file], 0)
+    reader = mapreduce_pipeline._ReducerReader([input_file], 0)
     self.assertEquals(
         [("key1", ["a", "b"]),
+         input_readers.ALLOW_CHECKPOINT,
          ("key2", ["a", "b", "c", "d"])],
         list(reader))
+
+    # now test state serialization
+    reader = mapreduce_pipeline._ReducerReader([input_file], 0)
+    i = reader.__iter__()
+    self.assertEquals(
+        {"position": 0,
+         "current_values": None,
+         "current_key": None,
+         "filenames": [input_file]},
+        reader.to_json())
+
+    self.assertEquals(("key1", ["a", "b"]), i.next())
+    self.assertEquals(
+        {"position": 19,
+         "current_values": None,
+         "current_key": None,
+         "filenames": [input_file]},
+        reader.to_json())
+
+    self.assertEquals(input_readers.ALLOW_CHECKPOINT, i.next())
+    self.assertEquals(
+        {"position": 40,
+         "current_values": ["a", "b"],
+         "current_key": "key2",
+         "filenames": [input_file]},
+        reader.to_json())
+
+    self.assertEquals(("key2", ["a", "b", "c", "d"]), i.next())
+    self.assertEquals(
+        {"position": 59,
+         "current_values": None,
+         "current_key": None,
+         "filenames": [input_file]},
+        reader.to_json())
+
+    try:
+      i.next()
+      self.fail("Exception expected")
+    except StopIteration:
+      # expected
+      pass
+
+    # now do test deserialization at every moment.
+    reader = mapreduce_pipeline._ReducerReader([input_file], 0)
+    i = reader.__iter__()
+    reader = mapreduce_pipeline._ReducerReader.from_json(reader.to_json())
+
+    self.assertEquals(("key1", ["a", "b"]), i.next())
+    reader = mapreduce_pipeline._ReducerReader.from_json(reader.to_json())
+
+    self.assertEquals(input_readers.ALLOW_CHECKPOINT, i.next())
+    reader = mapreduce_pipeline._ReducerReader.from_json(reader.to_json())
+
+    self.assertEquals(("key2", ["a", "b", "c", "d"]), i.next())
+    reader = mapreduce_pipeline._ReducerReader.from_json(reader.to_json())
+
+    try:
+      i.next()
+      self.fail("Exception expected")
+    except StopIteration:
+      # expected
+      pass
 
 
 if __name__ == "__main__":
