@@ -27,8 +27,9 @@ __all__ = ['create', 'get_blob_key', 'get_file_name']
 
 import urllib
 
-from mapreduce.lib.files import file as files
 from google.appengine.api import datastore
+from google.appengine.api import namespace_manager
+from mapreduce.lib.files import file as files
 from google.appengine.ext import blobstore
 
 
@@ -105,37 +106,44 @@ def get_blob_key(create_file_name):
 
     return blobstore.BlobKey(ticket)
 
+  namespace = namespace_manager.get_namespace()
 
-  blob_file_index = datastore.Get([datastore.Key.from_path(
-      _BLOB_FILE_INDEX_KIND,
-      ticket)])[0]
-  if blob_file_index:
-    blob_key_str = blob_file_index[_BLOB_KEY_PROPERTY_NAME]
+  try:
+    namespace_manager.set_namespace(None)
 
 
-
-
-
-
-
-    results = datastore.Get([datastore.Key.from_path(
-        blobstore.BLOB_INFO_KIND, blob_key_str)])
-    if results[0] is None:
-      return None
-  else:
+    blob_file_index = datastore.Get([datastore.Key.from_path(
+        _BLOB_FILE_INDEX_KIND,
+        ticket)])[0]
+    if blob_file_index:
+      blob_key_str = blob_file_index[_BLOB_KEY_PROPERTY_NAME]
 
 
 
 
-    query = datastore.Query(blobstore.BLOB_INFO_KIND,
-                            {'creation_handle =': ticket},
-                            keys_only=True,
-                            namespace='')
-    results = query.Get(1)
-    if not results:
-      return None
-    blob_key_str = results[0].name()
-  return blobstore.BlobKey(blob_key_str)
+
+
+
+      results = datastore.Get([datastore.Key.from_path(
+          blobstore.BLOB_INFO_KIND, blob_key_str)])
+      if results[0] is None:
+        return None
+    else:
+
+
+
+
+      query = datastore.Query(blobstore.BLOB_INFO_KIND,
+                              {'creation_handle =': ticket},
+                              keys_only=True,
+                              namespace='')
+      results = query.Get(1)
+      if not results:
+        return None
+      blob_key_str = results[0].name()
+    return blobstore.BlobKey(blob_key_str)
+  finally:
+    namespace_manager.set_namespace(namespace)
 
 
 def get_file_name(blob_key):
