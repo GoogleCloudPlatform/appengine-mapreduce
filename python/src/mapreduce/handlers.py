@@ -432,36 +432,12 @@ class ControllerCallbackHandler(util.HugeTaskHandler):
     poll_time = state.last_poll_time
     state.last_poll_time = datetime.datetime.utcfromtimestamp(self._time())
 
-    config = util.create_datastore_write_config(spec)
-
     if not state.active:
-      # This is the last execution.
-      # Enqueue done_callback if needed.
-      if spec.mapper.output_writer_class():
-        spec.mapper.output_writer_class().finalize_job(state)
-      def put_state(state):
-        state.put(config=config)
-        done_callback = spec.params.get(
-            model.MapreduceSpec.PARAM_DONE_CALLBACK)
-        if done_callback:
-          done_task = taskqueue.Task(
-              url=done_callback,
-              headers={"Mapreduce-Id": spec.mapreduce_id},
-              method=spec.params.get("done_callback_method", "POST"))
-          queue_name = spec.params.get(
-              model.MapreduceSpec.PARAM_DONE_CALLBACK_QUEUE,
-              "default")
-
-          if not _run_task_hook(spec.get_hooks(),
-                                "enqueue_done_task",
-                                done_task,
-                                queue_name):
-            done_task.add(queue_name, transactional=True)
-        FinalizeJobHandler.schedule(self.base_path(), spec)
-
-      db.run_in_transaction(put_state, state)
+      ControllerCallbackHandler._finalize_job(
+          spec, state, self.base_path())
       return
     else:
+      config = util.create_datastore_write_config(spec)
       state.put(config=config)
 
     processing_rate = int(spec.mapper.params.get(
@@ -522,6 +498,44 @@ class ControllerCallbackHandler(util.HugeTaskHandler):
       serial identifier as int.
     """
     return int(self.request.get("serial_id"))
+
+  @staticmethod
+  def _finalize_job(mapreduce_spec, mapreduce_state, base_path):
+    """Finalize job execution.
+
+    Finalizes output writer, invokes done callback an schedules
+    finalize job execution.
+
+    Args:
+      mapreduce_spec: an instance of MapreduceSpec
+      mapreduce_state: an instance of MapreduceState
+      base_path: handler base path.
+    """
+    config = util.create_datastore_write_config(mapreduce_spec)
+    # Enqueue done_callback if needed.
+    if mapreduce_spec.mapper.output_writer_class():
+      mapreduce_spec.mapper.output_writer_class().finalize_job(mapreduce_state)
+    def put_state(state):
+      state.put(config=config)
+      done_callback = mapreduce_spec.params.get(
+          model.MapreduceSpec.PARAM_DONE_CALLBACK)
+      if done_callback:
+        done_task = taskqueue.Task(
+            url=done_callback,
+            headers={"Mapreduce-Id": mapreduce_spec.mapreduce_id},
+            method=mapreduce_spec.params.get("done_callback_method", "POST"))
+        queue_name = mapreduce_spec.params.get(
+            model.MapreduceSpec.PARAM_DONE_CALLBACK_QUEUE,
+            "default")
+
+        if not _run_task_hook(mapreduce_spec.get_hooks(),
+                              "enqueue_done_task",
+                              done_task,
+                              queue_name):
+          done_task.add(queue_name, transactional=True)
+      FinalizeJobHandler.schedule(base_path, mapreduce_spec)
+
+    db.run_in_transaction(put_state, mapreduce_state)
 
   @staticmethod
   def get_task_name(mapreduce_spec, serial_id):
@@ -627,7 +641,7 @@ class KickOffJobHandler(util.HugeTaskHandler):
       logging.warning("Found no mapper input data to process.")
       state.active = False
       state.active_shards = 0
-      state.put(config=util.create_datastore_write_config(spec))
+      ControllerCallbackHandler._finalize_job(spec, state, self.base_path())
       return
 
     # Update state and spec with actual shard count.
