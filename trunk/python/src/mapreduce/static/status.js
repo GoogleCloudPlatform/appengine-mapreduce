@@ -20,19 +20,19 @@
 function setButter(message, error) {
   var butter = getButterBar();
   // Prevent flicker on butter update by hiding it first.
-  butter.css('display', 'none');
+  butter.hide();
   if (error) {
     butter.removeClass('info').addClass('error').text(message);
   } else {
     butter.removeClass('error').addClass('info').text(message);
   }
-  butter.css('display', null)
+  butter.show();
   $(document).scrollTop(0);
 }
 
 // Hides the butter bar.
 function hideButter() {
-  getButterBar().css('display', 'none');
+  getButterBar().hide();
 }
 
 // Fetches the butter bar dom element.
@@ -69,7 +69,7 @@ function renderCollapsableValue(value, container) {
       .attr('href', '');
   toggle.click(function(e) {
       e.preventDefault();
-      if (moreSpan.css('display') == 'none') {
+      if (moreSpan.is(':hidden')) {
         betweenSpan.text(' ');
         toggle.text('Collapse');
       } else {
@@ -307,7 +307,7 @@ function initJobOverview(jobs, cursor) {
   }
 
   // Show header.
-  $('#running-list > thead').css('display', null);
+  $('#running-list > thead').show();
 
   // Populate the table.
   $.each(jobs, function(index, job) {
@@ -355,7 +355,7 @@ function initJobOverview(jobs, cursor) {
 
   // Set up the next/first page links.
   $('#running-first-page')
-    .css('display', null)
+    .show()
     .unbind('click')
     .click(function() {
     listJobs(null, initJobOverview);
@@ -364,15 +364,15 @@ function initJobOverview(jobs, cursor) {
   $('#running-next-page').unbind('click');
   if (cursor) {
     $('#running-next-page')
-      .css('display', null)
+      .show()
       .click(function() {
         listJobs(cursor, initJobOverview);
         return false;
       });
   } else {
-    $('#running-next-page').css('display', 'none');
+    $('#running-next-page').hide();
   }
-  $('#running-list > tfoot').css('display', null);
+  $('#running-list > tfoot').show();
 }
 
 //////// Launching jobs.
@@ -395,10 +395,10 @@ function showRunJobConfig(name) {
     if ($(jobForm).find('input[name="name"]').val() == name) {
       matchedForm = jobForm;
     } else {
-      $(jobForm).css('display', 'none');
+      $(jobForm).hide();
     }
   });
-  $(matchedForm).css('display', null);
+  $(matchedForm).show();
 }
 
 function runJobDone(name, error, data) {
@@ -442,7 +442,7 @@ function initJobLaunching(configs) {
         runJob(config.name);
         return false;
       })
-      .css('display', 'none')
+      .hide()
       .appendTo('#launch-container');
 
     // Fixed job config values.
