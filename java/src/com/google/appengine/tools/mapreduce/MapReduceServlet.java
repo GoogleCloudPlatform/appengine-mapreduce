@@ -237,7 +237,7 @@ public class MapReduceServlet extends HttpServlet {
       fileName = "base.css";
     } else if (handler.equals("jquery.js")) {
       response.setContentType("text/javascript");
-      fileName = "jquery-1.4.2.min.js";
+      fileName = "jquery-1.6.1.min.js";
     } else if (handler.equals("status.js")) {
       response.setContentType("text/javascript");
       fileName = "status.js";
