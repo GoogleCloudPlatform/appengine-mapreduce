@@ -37,6 +37,8 @@ __all__ = [
            "MAX_POOL_SIZE",
            ]
 
+import threading
+
 from google.appengine.api import datastore
 from google.appengine.ext import db
 
@@ -235,7 +237,7 @@ class Context(object):
   """
 
   # Current context instance
-  _context_instance = None
+  _local = threading.local()
 
   def __init__(self, mapreduce_spec, shard_state, task_retry_count=0):
     """Constructor.
@@ -306,7 +308,7 @@ class Context(object):
     Args:
       context: new context as Context or None.
     """
-    cls._context_instance = context
+    cls._local._context_instance = context
 
 
 def get():
@@ -315,4 +317,6 @@ def get():
   Returns:
     current context as Context.
   """
-  return Context._context_instance
+  if not hasattr(Context._local, '_context_instance') :
+    return None
+  return Context._local._context_instance
