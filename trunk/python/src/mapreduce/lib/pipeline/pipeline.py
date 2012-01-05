@@ -1036,7 +1036,6 @@ class After(object):
   """
 
   _local = threading.local()
-  _local._after_all_futures = []
 
   def __init__(self, *futures):
     """Initializer.
@@ -1052,6 +1051,7 @@ class After(object):
 
   def __enter__(self):
     """When entering a 'with' block."""
+    After._thread_init()
     After._local._after_all_futures.extend(self._futures)
 
   def __exit__(self, type, value, trace):
@@ -1059,6 +1059,12 @@ class After(object):
     for future in self._futures:
       After._local._after_all_futures.remove(future)
     return False
+
+  @classmethod
+  def _thread_init(cls):
+    """Ensure thread local is initialized."""
+    if not hasattr(cls._local, '_after_all_futures'):
+      cls._local._after_all_futures = []
 
 
 class InOrder(object):
@@ -1068,8 +1074,6 @@ class InOrder(object):
   """
 
   _local = threading.local()
-  _local._in_order_futures = set()
-  _local._activated = False
 
   @classmethod
   def _add_future(cls, future):
@@ -1086,6 +1090,7 @@ class InOrder(object):
 
   def __enter__(self):
     """When entering a 'with' block."""
+    InOrder._thread_init()
     if InOrder._local._activated:
       raise UnexpectedPipelineError('Already in an InOrder "with" block.')
     InOrder._local._activated = True
@@ -1096,6 +1101,14 @@ class InOrder(object):
     InOrder._local._activated = False
     InOrder._local._in_order_futures.clear()
     return False
+
+  @classmethod
+  def _thread_init(cls):
+    """Ensure thread local is initialized."""
+    if not hasattr(cls._local, '_in_order_futures'):
+      cls._local._in_order_futures = set()
+      cls._local._activated = False
+
 
 ################################################################################
 
@@ -1803,8 +1816,9 @@ class _PipelineContext(object):
       purpose: Why evaluate was called ('start', 'finalize', or 'abort').
       attempt: The attempt number that should be tried.
     """
-    After._local._after_all_futures = []
-    InOrder._activated = False
+    After._thread_init()
+    InOrder._thread_init()
+    InOrder._local._activated = False
 
     if not isinstance(pipeline_key, db.Key):
       pipeline_key = db.Key(pipeline_key)
