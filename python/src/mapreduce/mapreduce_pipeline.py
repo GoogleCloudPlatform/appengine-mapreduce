@@ -114,7 +114,9 @@ class _ReducerReader(input_readers.RecordsReader):
         self.current_key = proto.key()
         self.current_values = []
       else:
-        assert proto.key() == self.current_key
+        assert proto.key() == self.current_key, (
+            "inconsistent key sequence. Expected %s but got %s" %
+            (self.current_key, proto.key()))
 
       if combiner:
         combiner_result = combiner(
