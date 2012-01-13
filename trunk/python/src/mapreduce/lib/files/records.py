@@ -121,10 +121,6 @@ class InvalidRecordError(Error):
   """Raised when invalid record encountered."""
 
 
-class OrderingError(Error):
-  """Raised when the order of record fragments is invalid."""
-
-
 class FileWriter(object):
   """Interface specification for writers to be used with records module."""
 
@@ -337,24 +333,33 @@ class RecordsReader(object):
         if record_type == RECORD_TYPE_NONE:
           self.__sync()
         elif record_type == RECORD_TYPE_FULL:
+          if data is not None:
+            logging.warning(
+                "Ordering corruption: Got FULL record while already "
+                "in a chunk at offset %d", last_offset)
           return chunk
         elif record_type == RECORD_TYPE_FIRST:
           if data is not None:
-            raise OrderingError(
-                "Got FIRST record while already in a chunk")
+            logging.warning(
+                "Ordering corruption: Got FIRST record while already "
+                "in a chunk at offset %d", last_offset)
           data = chunk
         elif record_type == RECORD_TYPE_MIDDLE:
           if data is None:
-            raise OrderingError(
-                "Got MIDDLE record before FIRST record")
-          data += chunk
+            logging.warning(
+                "Ordering corruption: Got MIDDLE record before FIRST "
+                "record at offset %d", last_offset)
+          else:
+            data += chunk
         elif record_type == RECORD_TYPE_LAST:
           if data is None:
-            raise OrderingError(
-                "Got LAST record but no chunk is in progress")
-          result = data + chunk
-          data = None
-          return result
+            logging.warning(
+                "Ordering corruption: Got LAST record but no chunk is in "
+                "progress at offset %d", last_offset)
+          else:
+            result = data + chunk
+            data = None
+            return result
         else:
           raise InvalidRecordError("Unsupported record type: %s" % record_type)
 
@@ -363,10 +368,6 @@ class RecordsReader(object):
                         "the next block", last_offset, e)
         data = None
         self.__sync()
-      except OrderingError, e:
-        logging.warning("Bad record ordering encountered at %s (%s)",
-                        last_offset, e)
-        data = None
 
   def __iter__(self):
     try:
