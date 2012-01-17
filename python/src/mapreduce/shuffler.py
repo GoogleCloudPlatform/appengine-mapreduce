@@ -279,13 +279,17 @@ class _MergingReader(input_readers.InputReader):
 
         should_yield = False
         if current_result:
-          should_yield = key != current_result[0]
-          if (self._max_values_count != -1 and
+          if key != current_result[0]:
+            # New key encountered
+            should_yield = True
+          elif (self._max_values_count != -1 and
               current_count >= self._max_values_count):
+            # Maximum number of values encountered.
             current_result[2] = True
             should_yield = True
-          if (self._max_values_size != -1 and
+          elif (self._max_values_size != -1 and
               current_size >= self._max_values_size):
+            # Maximum size of values encountered
             current_result[2] = True
             should_yield = True
 

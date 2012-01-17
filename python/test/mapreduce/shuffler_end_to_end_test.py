@@ -74,10 +74,10 @@ class SortFileEndToEndTest(testutil.HandlerTestBase):
 
 def test_handler_yield_str(key, value, partial):
   """Test handler that yields parameters converted to string."""
-  yield str((key, value))
+  yield str((key, value, partial))
 
 
-class MergePipeline(base_handler.PipelineBase):
+class TestMergePipeline(base_handler.PipelineBase):
   """A pipeline to merge-sort multiple sorted files.
 
   Args:
@@ -96,7 +96,13 @@ class MergePipeline(base_handler.PipelineBase):
         __name__ + ".test_handler_yield_str",
         shuffler.__name__ + "._MergingReader",
         output_writers.__name__ + ".BlobstoreRecordsOutputWriter",
-        {"files": [filenames]},
+        params={
+          shuffler._MergingReader.FILES_PARAM:[filenames],
+          shuffler._MergingReader.MAX_VALUES_COUNT_PARAM:
+              shuffler._MergePipeline._MAX_VALUES_COUNT,
+          shuffler._MergingReader.MAX_VALUES_SIZE_PARAM:
+              shuffler._MergePipeline._MAX_VALUES_SIZE,
+          },
         )
 
 
@@ -114,8 +120,7 @@ class MergingReaderEndToEndTest(testutil.HandlerTestBase):
 
   def testMergeFiles(self):
     """Test merging multiple files."""
-    input_data = [
-        (str(i), "_" + str(i)) for i in range(100)]
+    input_data = [(str(i), "_" + str(i)) for i in range(100)]
     input_data.sort()
 
     input_file = files.blobstore.create()
@@ -131,10 +136,10 @@ class MergingReaderEndToEndTest(testutil.HandlerTestBase):
     input_file = files.blobstore.get_file_name(
         files.blobstore.get_blob_key(input_file))
 
-    p = MergePipeline([input_file, input_file, input_file])
+    p = TestMergePipeline([input_file, input_file, input_file])
     p.start()
     test_support.execute_until_empty(self.taskqueue)
-    p = MergePipeline.from_id(p.pipeline_id)
+    p = TestMergePipeline.from_id(p.pipeline_id)
 
     output_file = p.outputs.default.value[0]
     output_data = []
@@ -143,8 +148,57 @@ class MergingReaderEndToEndTest(testutil.HandlerTestBase):
         output_data.append(record)
 
     expected_data = [
-        str((k, [v, v, v])) for (k, v) in input_data]
+        str((k, [v, v, v], False)) for (k, v) in input_data]
     self.assertEquals(expected_data, output_data)
+
+  def testPartialRecords(self):
+    """Test merging into partial key values."""
+    try:
+      self._prev_max_values_count = shuffler._MergePipeline._MAX_VALUES_COUNT
+      # force max values count to extremely low value.
+      shuffler._MergePipeline._MAX_VALUES_COUNT = 1
+
+      input_data = [('1', 'a'), ('2', 'b'), ('3', 'c')]
+      input_data.sort()
+
+      input_file = files.blobstore.create()
+
+      with files.open(input_file, "a") as f:
+        with records.RecordsWriter(f) as w:
+          for (k, v) in input_data:
+            proto = file_service_pb.KeyValue()
+            proto.set_key(k)
+            proto.set_value(v)
+            w.write(proto.Encode())
+      files.finalize(input_file)
+      input_file = files.blobstore.get_file_name(
+          files.blobstore.get_blob_key(input_file))
+
+      p = TestMergePipeline([input_file, input_file, input_file])
+      p.start()
+      test_support.execute_until_empty(self.taskqueue)
+      p = TestMergePipeline.from_id(p.pipeline_id)
+
+      output_file = p.outputs.default.value[0]
+      output_data = []
+      with files.open(output_file, "r") as f:
+        for record in records.RecordsReader(f):
+          output_data.append(record)
+
+      expected_data = [
+          ('1', ['a'], True),
+          ('1', ['a'], True),
+          ('1', ['a'], False),
+          ('2', ['b'], True),
+          ('2', ['b'], True),
+          ('2', ['b'], False),
+          ('3', ['c'], True),
+          ('3', ['c'], True),
+          ('3', ['c'], False),
+          ]
+      self.assertEquals([str(e) for e in expected_data], output_data)
+    finally:
+      shuffler._MergePipeline._MAX_VALUES_COUNT = self._prev_max_values_count
 
 
 class ShuffleEndToEndTest(testutil.HandlerTestBase):
