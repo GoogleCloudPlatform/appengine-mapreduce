@@ -914,15 +914,17 @@ class FinalizeJobHandler(base_handler.TaskQueueHandler):
   def handle(self):
     mapreduce_id = self.request.get("mapreduce_id")
     mapreduce_state = model.MapreduceState.get_by_job_id(mapreduce_id)
-
-    db.delete(model.MapreduceControl.get_key_by_job_id(mapreduce_id))
-
     if mapreduce_state:
+      config=util.create_datastore_write_config(mapreduce_state.mapreduce_spec)
+      db.delete(model.MapreduceControl.get_key_by_job_id(mapreduce_id),
+              config=config)
       shard_states = model.ShardState.find_by_mapreduce_state(mapreduce_state)
       for shard_state in shard_states:
-        db.delete(util._HugeTaskPayload.all().ancestor(shard_state))
-      db.delete(shard_states)
-      db.delete(util._HugeTaskPayload.all().ancestor(mapreduce_state))
+        db.delete(util._HugeTaskPayload.all().ancestor(shard_state),
+                  config=config)
+      db.delete(shard_states, config=config)
+      db.delete(util._HugeTaskPayload.all().ancestor(mapreduce_state),
+                config=config)
 
   @classmethod
   def schedule(cls, base_path, mapreduce_spec):

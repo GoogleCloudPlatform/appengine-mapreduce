@@ -26,6 +26,7 @@ from google.appengine.api import datastore
 from google.appengine.ext import db
 from mapreduce import context
 from testlib import testutil
+from mapreduce import model
 
 
 class TestEntity(db.Model):
@@ -81,18 +82,51 @@ class MutationPoolTest(testutil.HandlerTestBase):
     super(MutationPoolTest, self).setUp()
     self.pool = context.MutationPool()
 
-  def record_put(self, entities):
+  def record_put(self, entities, force_writes=False):
     datastore.Put(
         entities,
-        rpc=testutil.MatchesUserRPC(deadline=context.DATASTORE_DEADLINE))
+        config=testutil.MatchesDatastoreConfig(
+            deadline=context.DATASTORE_DEADLINE,
+            force_writes=force_writes))
 
-  def record_delete(self, entities):
+  def record_delete(self, entities, force_writes=False):
     datastore.Delete(
         entities,
-        rpc=testutil.MatchesUserRPC(deadline=context.DATASTORE_DEADLINE))
+        config=testutil.MatchesDatastoreConfig(
+            deadline=context.DATASTORE_DEADLINE,
+            force_writes=force_writes))
+
+  def testPoolWithForceWrites(self):
+    class MapreduceSpec:
+      def __init__(self):
+        self.params = {'force_ops_writes':True}
+    pool = context.MutationPool(mapreduce_spec=MapreduceSpec())
+    m = mox.Mox()
+    m.StubOutWithMock(datastore, 'Put', use_mock_anything=True)
+    m.StubOutWithMock(datastore, 'Delete', use_mock_anything=True)
+    e1 = TestEntity()
+    e2 = TestEntity(key_name='key2')
+    self.record_put([e1._populate_internal_entity()], True)
+    self.record_delete([e2.key()], True)
+    m.ReplayAll()
+    try:  # test, verify
+      pool.put(e1)
+      pool.delete(e2.key())
+      self.assertEquals([e1._populate_internal_entity()], pool.puts.items)
+      self.assertEquals([e2.key()], pool.deletes.items)
+      pool.flush()
+      m.VerifyAll()
+    finally:
+      m.UnsetStubs()
 
   def testPut(self):
     """Test put method."""
+    e = TestEntity()
+    self.pool.put(e)
+    self.assertEquals([e._populate_internal_entity()], self.pool.puts.items)
+    self.assertEquals([], self.pool.deletes.items)
+
+  def testPutWithForceWrite(self):
     e = TestEntity()
     self.pool.put(e)
     self.assertEquals([e._populate_internal_entity()], self.pool.puts.items)
