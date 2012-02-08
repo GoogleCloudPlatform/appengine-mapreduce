@@ -22,6 +22,12 @@ from testlib import testutil
 from mapreduce import util
 
 
+def random_string(length):
+  """Generate a random string of given length."""
+  return "".join(
+      random.choice(string.letters + string.digits) for _ in range(length))
+
+
 class TestEntity(db.Model):
   """Test entity class."""
 
@@ -196,7 +202,39 @@ class EndToEndTest(testutil.HandlerTestBase):
         "mapreduce.input_readers.RecordsReader",
         {
             "file": input_file,
+            # the parameter will be compressed and should fit into
+            # taskqueue payload
             "huge_parameter": "0" * 200000, # 200K
+        },
+        shard_count=4,
+        base_path="/mapreduce_base_path")
+
+    test_support.execute_until_empty(self.taskqueue)
+    self.assertEquals(100, len(TestHandler.processed_entites))
+    self.assertEquals([], util._HugeTaskPayload.all().fetch(100))
+
+  def testHugeTaskUseDatastore(self):
+    """Test map job with huge parameter values."""
+    input_file = files.blobstore.create()
+    input_data = [str(i) for i in range(100)]
+
+    with files.open(input_file, "a") as f:
+      with records.RecordsWriter(f) as w:
+        for record in input_data:
+          w.write(record)
+    files.finalize(input_file)
+    input_file = files.blobstore.get_file_name(
+        files.blobstore.get_blob_key(input_file))
+
+    mapreduce_id = control.start_map(
+        "test_map",
+        __name__ + ".TestHandler",
+        "mapreduce.input_readers.RecordsReader",
+        {
+            "file": input_file,
+            # the parameter can't be compressed and wouldn't fit into
+            # taskqueue payload
+            "huge_parameter": random_string(900000)
         },
         shard_count=4,
         base_path="/mapreduce_base_path")
