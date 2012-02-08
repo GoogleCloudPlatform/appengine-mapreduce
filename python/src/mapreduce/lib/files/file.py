@@ -157,6 +157,8 @@ def _raise_app_error(e):
        file_service_pb.FileServiceErrors.EXISTENCE_ERROR_METADATA_NOT_FOUND,
        file_service_pb.FileServiceErrors.EXISTENCE_ERROR_METADATA_FOUND,
        file_service_pb.FileServiceErrors.EXISTENCE_ERROR_SHARDING_MISMATCH,
+       file_service_pb.FileServiceErrors.EXISTENCE_ERROR_OBJECT_NOT_FOUND,
+       file_service_pb.FileServiceErrors.EXISTENCE_ERROR_BUCKET_NOT_FOUND,
        ]):
     raise ExistenceError()
   elif (e.application_error ==
