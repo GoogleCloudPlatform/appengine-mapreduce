@@ -22,6 +22,7 @@ __all__ = ["start_map"]
 
 # pylint: disable-msg=C6409
 
+import logging
 
 from mapreduce import base_handler
 from mapreduce import handlers
@@ -44,7 +45,8 @@ def start_map(name,
               countdown=None,
               hooks_class_name=None,
               _app=None,
-              transactional=False):
+              transactional=False,
+              transactional_parent=None):
   """Start a new, mapper-only mapreduce.
 
   Args:
@@ -61,14 +63,17 @@ def start_map(name,
     queue_name: executor queue name to be used for mapreduce tasks. If
       unspecified it will be the "default" queue or inherit the queue of
       the currently running request.
-    eta: Absolute time when the MR should execute. May not be specified
+    eta: absolute time when the MR should execute. May not be specified
       if 'countdown' is also supplied. This may be timezone-aware or
       timezone-naive.
-    countdown: Time in seconds into the future that this MR should execute.
+    countdown: time in seconds into the future that this MR should execute.
       Defaults to zero.
     hooks_class_name: fully qualified name of a hooks.Hooks subclass.
-    transactional: Specifies if job should be started as a part of already
+    transactional: specifies if job should be started as a part of already
       opened transaction.
+    transactional_parent: specifies the entity which is already a part of
+      transaction. Child entity will be used to store task payload if mapreduce
+      specification is too big.
 
   Returns:
     mapreduce id as string.
@@ -89,6 +94,14 @@ def start_map(name,
                                  shard_count,
                                  output_writer_spec=output_writer_spec)
 
+  if transactional and not transactional_parent:
+    # We should really fail here, but there might be some customers
+    # of this code that wouldn't like this.
+    # This will cause problems only for huge job definitions.
+    logging.error(
+        "transactional_parent should be specified for transactional starts."
+        "Your job will fail to start if mapreduce specification is too big.")
+
   return handlers.StartJobHandler._start_map(
       name,
       mapper_spec,
@@ -99,5 +112,6 @@ def start_map(name,
       countdown=countdown,
       hooks_class_name=hooks_class_name,
       _app=_app,
-      transactional=transactional)
+      transactional=transactional,
+      parent_entity=transactional_parent)
 

@@ -829,7 +829,9 @@ class StartJobHandler(base_handler.PostJsonHandler):
     return value
 
   @classmethod
-  def _start_map(cls, name, mapper_spec,
+  def _start_map(cls,
+                 name,
+                 mapper_spec,
                  mapreduce_params,
                  base_path=None,
                  queue_name=None,
@@ -837,12 +839,17 @@ class StartJobHandler(base_handler.PostJsonHandler):
                  countdown=None,
                  hooks_class_name=None,
                  _app=None,
-                 transactional=False):
+                 transactional=False,
+                 parent_entity=None):
     queue_name = queue_name or os.environ.get("HTTP_X_APPENGINE_QUEUENAME",
                                               "default")
     if queue_name[0] == "_":
       # We are currently in some special queue. E.g. __cron.
       queue_name = "default"
+
+    if not transactional and parent_entity:
+      raise Exception("Parent shouldn't be specfied "
+                      "for non-transactional starts.")
 
     # Check that handler can be instantiated.
     mapper_spec.get_handler()
@@ -876,7 +883,7 @@ class StartJobHandler(base_handler.PostJsonHandler):
     config = util.create_datastore_write_config(mapreduce_spec)
 
     def start_mapreduce():
-      parent = None
+      parent = parent_entity
       if not transactional:
         # Save state in datastore so that UI can see it.
         # We can't save state in foreign transaction, but conventional UI

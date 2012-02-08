@@ -19,6 +19,8 @@
 
 import datetime
 import os
+import random
+import string
 import time
 import unittest
 
@@ -28,6 +30,12 @@ from mapreduce import hooks
 from mapreduce import model
 from mapreduce import test_support
 from testlib import testutil
+
+
+def random_string(length):
+  """Generate a random string of given length."""
+  return "".join(
+      random.choice(string.letters + string.digits) for _ in range(length))
 
 
 class TestEntity(db.Model):
@@ -257,6 +265,89 @@ class ControlTest(testutil.HandlerTestBase):
         queue_name="crazy-queue",
         hooks_class_name=hooks.__name__+"."+hooks.Hooks.__name__)
 
+    self.validate_map_started(mapreduce_id)
+
+  def testStartMap_HugePayload(self):
+    """Test start_map function.
+
+    Most of start_map functionality is already tested by handlers_test.
+    Just a smoke test is enough.
+    """
+    TestEntity().put()
+
+    shard_count = 4
+    mapreduce_id = ""
+
+    mapreduce_id = control.start_map(
+        "test_map",
+        __name__ + ".test_handler",
+        "mapreduce.input_readers.DatastoreInputReader",
+        {
+            "entity_kind": __name__ + "." + TestEntity.__name__,
+            "huge_parameter": random_string(900000)
+        },
+        shard_count,
+        mapreduce_parameters={"foo": "bar"},
+        base_path="/mapreduce_base_path",
+        queue_name=self.QUEUE_NAME)
+    self.validate_map_started(mapreduce_id)
+
+  def testStartMapTransactional(self):
+    """Test start_map function.
+
+    Most of start_map functionality is already tested by handlers_test.
+    Just a smoke test is enough.
+    """
+    TestEntity().put()
+
+    shard_count = 4
+    mapreduce_id = ""
+
+    def tx():
+      return control.start_map(
+          "test_map",
+          __name__ + ".test_handler",
+          "mapreduce.input_readers.DatastoreInputReader",
+          {
+              "entity_kind": __name__ + "." + TestEntity.__name__,
+          },
+          shard_count,
+          mapreduce_parameters={"foo": "bar"},
+          base_path="/mapreduce_base_path",
+          queue_name=self.QUEUE_NAME,
+          transactional=True)
+    mapreduce_id = db.run_in_transaction(tx)
+    self.validate_map_started(mapreduce_id)
+
+  def testStartMapTransactional_HugePayload(self):
+    """Test start_map function.
+
+    Most of start_map functionality is already tested by handlers_test.
+    Just a smoke test is enough.
+    """
+    TestEntity().put()
+
+    shard_count = 4
+    mapreduce_id = ""
+
+    def tx():
+      root_entity = TestEntity()
+      root_entity.put()
+      return control.start_map(
+          "test_map",
+          __name__ + ".test_handler",
+          "mapreduce.input_readers.DatastoreInputReader",
+          {
+              "entity_kind": __name__ + "." + TestEntity.__name__,
+              "huge_parameter": random_string(900000)
+          },
+          shard_count,
+          mapreduce_parameters={"foo": "bar"},
+          base_path="/mapreduce_base_path",
+          queue_name=self.QUEUE_NAME,
+          transactional=True,
+          transactional_parent=root_entity)
+    mapreduce_id = db.run_in_transaction(tx)
     self.validate_map_started(mapreduce_id)
 
 
