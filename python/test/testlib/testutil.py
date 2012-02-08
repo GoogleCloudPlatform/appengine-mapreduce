@@ -46,6 +46,24 @@ from google.appengine.api.memcache import memcache_stub
 from google.appengine.api.taskqueue import taskqueue_stub
 
 
+class MatchesDatastoreConfig(mox.Comparator):
+  """Mox comparator for MatchesDatastoreConfig objects."""
+
+  def __init__(self, **kwargs):
+    self.kwargs = kwargs
+
+  def equals(self, config):
+    """Check to see if config matches arguments."""
+    if self.kwargs.get("deadline", None) != config.deadline:
+      return False
+    if self.kwargs.get("force_writes", None) != config.force_writes:
+      return False
+    return True
+
+  def __repr__(self):
+    return "MatchesDatastoreConfig(%s)" % self.kwargs
+
+
 class MatchesUserRPC(mox.Comparator):
   """Mox comparator for UserRPC objects."""
 
