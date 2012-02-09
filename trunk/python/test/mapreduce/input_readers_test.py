@@ -39,6 +39,9 @@ from google.appengine.api import datastore
 from google.appengine.api import datastore_file_stub
 from mapreduce.lib import files
 from mapreduce.lib.files import records
+from google.appengine.api import logservice
+from google.appengine.api.logservice import log_service_pb
+from google.appengine.api.logservice import logservice_stub
 from google.appengine.api import namespace_manager
 from google.appengine.ext import blobstore
 from google.appengine.ext import db
@@ -1918,6 +1921,280 @@ class RecordsReaderTest(testutil.HandlerTestBase):
     reader = input_readers.RecordsReader.from_json(
         {"filenames": [], "position": 0})
     self.assertEquals("[]:0", str(reader))
+
+
+class LogInputReaderTest(unittest.TestCase):
+  """Tests for LogInputReaderTest."""
+
+  def setUp(self):
+    unittest.TestCase.setUp(self)
+
+    self.num_shards = 4
+    self.app_id = "app1"
+    self.major_version_id = "1"
+    self.version_id = "1.2"
+    self.offset = "\n\x0eO)\x1c\xf7\x00\tn\xde\x08\xd5C{\x00\x00"
+    os.environ["APPLICATION_ID"] = self.app_id
+    prototype_request = log_service_pb.LogReadRequest()
+    prototype_request.set_app_id(self.app_id)
+    self.mapper_spec = model.MapperSpec(
+        "test_handler",
+        input_readers.__name__ + ".LogInputReader",
+        {"start_time": 0,
+         "end_time": 128,
+         "offset": self.offset,
+         "version_ids": ["1"],
+         "minimum_log_level": logservice.LOG_LEVEL_INFO,
+         "include_incomplete": True,
+         "include_app_logs": True,
+         "prototype_request": prototype_request.Encode()},
+        self.num_shards)
+
+  def testValidatePasses(self):
+    """Test validate function accepts valid parameters."""
+    input_readers.LogInputReader.validate(self.mapper_spec)
+
+  def testValidateInvalidReaderClass(self):
+    """Test invalid reader class name."""
+    self.mapper_spec.input_reader_spec = __name__ + ".LogInputReaderTest"
+    self.assertRaises(errors.BadReaderParamsError,
+                      input_readers.LogInputReader.validate,
+                      self.mapper_spec)
+
+  def testValidateUnrecognizedParam(self):
+    """Test validate with an unrecognized parameter."""
+    self.mapper_spec.params["unrecognized"] = True
+    self.assertRaises(errors.BadReaderParamsError,
+                      input_readers.LogInputReader.validate,
+                      self.mapper_spec)
+
+  def testValidateNoVersionIdsParam(self):
+    """Test validate without version_ids param."""
+    del self.mapper_spec.params["version_ids"]
+    self.assertRaises(errors.BadReaderParamsError,
+                      input_readers.LogInputReader.validate,
+                      self.mapper_spec)
+
+  def testValidateTooManyVersionIdsParam(self):
+    """Test validate with a malformed version_ids param."""
+    # This is really testing the validation that logservice.fetch() itself does.
+    self.mapper_spec.params["version_ids"] = "1"
+    self.assertRaises(errors.BadReaderParamsError,
+                      input_readers.LogInputReader.validate,
+                      self.mapper_spec)
+
+  def testValidateTimeRangeParams(self):
+    """Test validate with bad sets of start/end time params."""
+    # start_time must be specified and may not be None.
+    del self.mapper_spec.params["start_time"]
+    self.assertRaises(errors.BadReaderParamsError,
+                      input_readers.LogInputReader.validate,
+                      self.mapper_spec)
+
+    self.mapper_spec.params["start_time"] = None
+    self.assertRaises(errors.BadReaderParamsError,
+                      input_readers.LogInputReader.validate,
+                      self.mapper_spec)
+
+    # It's okay to not specify an end_time; the current time will be assumed.
+    self.mapper_spec.params["start_time"] = time.time() - 1
+    del self.mapper_spec.params["end_time"]
+    input_readers.LogInputReader.validate(self.mapper_spec)
+
+    # Start time must be less than end_time, whether implicit or explicit.
+    self.mapper_spec.params["start_time"] = time.time() + 100
+    self.assertRaises(errors.BadReaderParamsError,
+                      input_readers.LogInputReader.validate,
+                      self.mapper_spec)
+
+    self.mapper_spec.params["end_time"] = time.time() + 50
+    self.assertRaises(errors.BadReaderParamsError,
+                      input_readers.LogInputReader.validate,
+                      self.mapper_spec)
+
+    self.mapper_spec.params["end_time"] = time.time() + 150  # Success again.
+    input_readers.LogInputReader.validate(self.mapper_spec)
+
+    # start_time must be less than end time.
+    self.mapper_spec.params["start_time"] = self.mapper_spec.params["end_time"]
+    self.assertRaises(errors.BadReaderParamsError,
+                      input_readers.LogInputReader.validate,
+                      self.mapper_spec)
+
+  def testValidateInvalidPrototypeRequest(self):
+    """Test validate without specifying a prototype request."""
+    self.mapper_spec.params["prototype_request"] = "not parseable"
+    self.assertRaises(errors.BadReaderParamsError,
+                      input_readers.LogInputReader.validate,
+                      self.mapper_spec)
+
+  def testValidateNoPrototypeRequest(self):
+    """Test validate without specifying a prototype request."""
+    del self.mapper_spec.params["prototype_request"]
+    input_readers.LogInputReader.validate(self.mapper_spec)
+
+  def testStr(self):
+    """Simplistic test for stringification of LogInputReader."""
+    readers = input_readers.LogInputReader.split_input(self.mapper_spec)
+    self.assertEqual(
+        "LogInputReader(include_incomplete=True, minimum_log_level=1, "
+        "start_time=96, prototype_request='app_id: \"app1\"\n', "
+        "version_ids=['1'], end_time=128, offset='%s', "
+        "include_app_logs=True)" % self.offset, str(readers[-1]))
+
+  def testEvenLogSplit(self):
+    readers = input_readers.LogInputReader.split_input(self.mapper_spec)
+    self.assertEquals(self.num_shards, len(readers))
+
+    for i, reader in enumerate(readers):
+      start = i * 32
+      end = (i + 1) * 32
+      self.assertEquals(start, reader._LogInputReader__params["start_time"])
+      self.assertEquals(end, reader._LogInputReader__params["end_time"])
+
+  def testUnevenLogSplit(self):
+    start = 0
+    end = 100
+    num_shards = 3
+
+    mapper_spec = model.MapperSpec(
+        "test_handler",
+        input_readers.__name__ + ".LogInputReader",
+        {"start_time": start, "end_time": end},
+        num_shards)
+
+    readers = input_readers.LogInputReader.split_input(mapper_spec)
+    self.assertEquals(num_shards, len(readers))
+
+    self.assertEquals(0, readers[0]._LogInputReader__params["start_time"])
+    self.assertEquals(33, readers[0]._LogInputReader__params["end_time"])
+    self.assertEquals(33, readers[1]._LogInputReader__params["start_time"])
+    self.assertEquals(66, readers[1]._LogInputReader__params["end_time"])
+    self.assertEquals(66, readers[2]._LogInputReader__params["start_time"])
+    self.assertEquals(100, readers[2]._LogInputReader__params["end_time"])
+
+  def testToJsonFromJson(self):
+    """Test to/from json implementations."""
+    readers = input_readers.LogInputReader.split_input(self.mapper_spec)
+    start_time = self.mapper_spec.params["start_time"]
+    end_time = self.mapper_spec.params["end_time"]
+    seconds_per_shard = (end_time - start_time) / self.mapper_spec.shard_count
+    for i, reader in enumerate(readers):
+      # Full roundtrip test; this cannot verify that all fields are encoded.
+      as_json = reader.to_json_str()
+      from_json = input_readers.LogInputReader.from_json_str(as_json)
+      self.assertEquals(from_json.to_json_str(), as_json)
+
+      # Test correctness of individual fields.
+      params_from_json = from_json._LogInputReader__params
+      self.assertEquals(params_from_json["start_time"],
+                        start_time + i * seconds_per_shard)
+      if i != len(readers) - 1:
+        self.assertEquals(params_from_json["end_time"],
+                          start_time + (i + 1) * seconds_per_shard)
+      else:
+        self.assertEquals(params_from_json["end_time"], end_time)
+      self.assertEquals(params_from_json["offset"], self.offset)
+      self.assertEquals(params_from_json["version_ids"], ["1"])
+      self.assertEquals(params_from_json["minimum_log_level"],
+                        logservice.LOG_LEVEL_INFO)
+      self.assertEquals(params_from_json["include_incomplete"], True)
+      self.assertEquals(params_from_json["include_app_logs"], True)
+      self.assertEquals(params_from_json["prototype_request"].app_id(),
+                        self.app_id)
+
+  def createLogs(self, count=10):
+    """Create a set of test log records."""
+    # Prepare the data.
+    apiproxy_stub_map.apiproxy = apiproxy_stub_map.APIProxyStubMap()
+    apiproxy_stub_map.apiproxy.RegisterStub(
+        "datastore_v3",
+        datastore_file_stub.DatastoreFileStub(self.app_id, None))
+    apiproxy_stub_map.apiproxy.RegisterStub(
+        "logservice", logservice_stub.LogServiceStub(persist=False))
+
+    # Write test data.
+    writer = logservice_stub.RequestLogWriter(persist=True)
+    expected = []
+    for i in xrange(count):
+      os.environ["REQUEST_ID_HASH"] = str(i)  # Required by logservice_stub.
+      writer.write_request_info(ip="127.0.0.1",
+                                app_id=self.app_id,
+                                version_id=self.version_id,
+                                nickname="test@example.com",
+                                user_agent="Chrome/15.0.874.106",
+                                host="127.0.0.1:8080",
+                                start_time=i * 1000000,
+                                end_time=i * 1000000 + 500)
+      writer.write("GET", "/", 200, 0, "HTTP/1.1")
+      expected.append({"start_time": i, "end_time": i + .0005})
+    # NOTE(user): write_request_info() calls set_namespace(), and has a long
+    # comment on why it can't restore the previous namespace, but I don't
+    # understand it.  Manually resetting here to avoid test state leakage.
+    namespace_manager.set_namespace(None)
+    expected.reverse()  # Results come back in most-recent-first order.
+
+    return expected
+
+  def verifyLogs(self, expected, retrieved):
+    """Verifies a list of retrieved logs against a list of expectations.
+
+    Args:
+      expected: A list of dictionaries, each containing property names and
+        values to be compared against the corresponding entries in 'retrieved'.
+      retrieved: A list of RequestLog objects, hopefully matching 'expected'.
+    """
+    self.assertEquals(len(expected), len(retrieved))
+    for expected, retrieved in zip(expected, retrieved):
+      for property_name, value in expected.iteritems():
+        self.assertEquals(value, getattr(retrieved, property_name))
+
+  def testIter(self):
+    """Test __iter__ implementation."""
+    request_count = 100  # Number of log records over which we'll test.
+    restart_interval = 7  # Frequency of de/serialization test below.
+
+    expected = self.createLogs(request_count)
+
+    # Test simple read.
+    reader = input_readers.LogInputReader(version_ids=[self.major_version_id],
+                                          start_time=0, end_time=101 * 1e6)
+    self.verifyLogs(expected, list(reader))
+
+    # Test interrupted read, exercising de/serialization process occassionally.
+    reader = input_readers.LogInputReader(version_ids=[self.major_version_id],
+                                          start_time=0, end_time=101 * 1e6)
+    logs = []
+    iterator = reader.__iter__()
+    restart_counter = 0
+    while True:
+      restart_counter += 1
+      if restart_counter >= restart_interval:
+        as_json = reader.to_json_str()
+        reader = input_readers.LogInputReader.from_json_str(as_json)
+        iterator = reader.__iter__()
+        restart_counter = 0
+      try:
+        logs.append(iterator.next())
+      except StopIteration:
+        break
+    self.verifyLogs(expected, logs)
+
+  def testOffset(self):
+    """Test that the user can provide an offset parameter."""
+    request_count = 10  # NOTE(user): This test is O(N*N), so keep this low.
+
+    # Iterate through the logs using logservice.fetch(); for each log found,
+    # retrieve all records after it using the LogInputReader, and verify that
+    # the sum of records fetched plus those from the InputReader adds up.
+    expected = self.createLogs(request_count)
+    fetched_logs = []
+    for log in logservice.fetch(version_ids=[self.major_version_id]):
+      fetched_logs.append(log)
+      reader = input_readers.LogInputReader(version_ids=[self.major_version_id],
+                                            start_time=0, end_time=101 * 1e6,
+                                            offset=log.offset)
+      self.verifyLogs(expected, fetched_logs + list(reader))
 
 
 if __name__ == "__main__":
