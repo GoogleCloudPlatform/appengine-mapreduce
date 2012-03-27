@@ -426,11 +426,13 @@ class FileOutputWriterBase(OutputWriter):
     if filesystem == files.GS_FILESYSTEM:
       if not cls.GS_BUCKET_NAME_PARAM in mapper_spec.params:
         raise errors.BadWriterParamsError(
-            "bucket_name is required for Google store filesystem")
+            "%s is required for Google store filesystem" %
+            cls.GS_BUCKET_NAME_PARAM)
     else:
       if mapper_spec.params.get(cls.GS_BUCKET_NAME_PARAM) is not None:
         raise errors.BadWriterParamsError(
-            "bucket_name can only be provided for Google store filesystem")
+            "%s can only be provided for Google store filesystem" %
+            cls.GS_BUCKET_NAME_PARAM)
 
   @classmethod
   def init_job(cls, mapreduce_state):

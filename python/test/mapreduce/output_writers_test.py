@@ -179,5 +179,12 @@ class FileOutputWriterTest(testutil.HandlerTestBase):
     m.VerifyAll()
     self.assertTrue(mapreduce_state.writer_state)
 
+  def testValidate_MissingBucketParam(self):
+    self.assertRaises(
+        errors.BadWriterParamsError,
+        output_writers.FileOutputWriter.validate,
+        self.create_mapper_spec(
+            params={"filesystem": "gs", "bucket_name": "foo"}))
+
 if __name__ == "__main__":
   unittest.main()
