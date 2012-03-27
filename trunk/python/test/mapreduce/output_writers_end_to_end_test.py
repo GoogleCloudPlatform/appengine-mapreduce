@@ -66,6 +66,40 @@ class FileOutputWriterEndToEndTest(testutil.HandlerTestBase):
       data = f.read(10000000)
       self.assertEquals(1000, len(data.strip().split("\n")))
 
+  def testDedicatedParams(self):
+    entity_count = 1000
+
+    for _ in range(entity_count):
+      TestEntity().put()
+
+    mapreduce_id = control.start_map(
+        "test_map",
+        __name__ + ".test_handler_yield_key_str",
+        "mapreduce.input_readers.DatastoreInputReader",
+        {
+            "input_reader": {
+                "entity_kind": __name__ + "." + TestEntity.__name__,
+            },
+            "output_writer": {
+                "filesystem": "gs",
+                "gs_bucket_name": "bucket",
+            },
+        },
+        shard_count=4,
+        base_path="/mapreduce_base_path",
+        output_writer_spec=FILE_WRITER_NAME)
+
+    test_support.execute_until_empty(self.taskqueue)
+
+    mapreduce_state = model.MapreduceState.get_by_job_id(mapreduce_id)
+    filenames = output_writers.FileOutputWriter.get_filenames(mapreduce_state)
+    self.assertEqual(1, len(filenames))
+    self.assertTrue(filenames[0].startswith("/gs/bucket/"))
+
+    with files.open(filenames[0], "r") as f:
+      data = f.read(10000000)
+      self.assertEquals(1000, len(data.strip().split("\n")))
+
   def testMultipleShards(self):
     entity_count = 1000
 

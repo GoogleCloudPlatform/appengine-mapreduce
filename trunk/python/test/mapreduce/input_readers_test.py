@@ -1602,15 +1602,18 @@ class ConsistentKeyReaderTest(unittest.TestCase):
     def AddUnappliedEntities(*args):
       namespace_manager.set_namespace("a")
       expected_objects.add(input_readers.ALLOW_CHECKPOINT)
-      expected_objects.add(datastore.Put(datastore.Entity(self.kind_id, name="a")))
+      expected_objects.add(datastore.Put(
+        datastore.Entity(self.kind_id, name="a")))
 
       namespace_manager.set_namespace("d")
       expected_objects.add(input_readers.ALLOW_CHECKPOINT)
-      expected_objects.add(datastore.Put(datastore.Entity(self.kind_id, name="d")))
+      expected_objects.add(datastore.Put(
+        datastore.Entity(self.kind_id, name="d")))
 
       namespace_manager.set_namespace("z")
       expected_objects.add(input_readers.ALLOW_CHECKPOINT)
-      expected_objects.add(datastore.Put(datastore.Entity(self.kind_id, name="z")))
+      expected_objects.add(datastore.Put
+          (datastore.Entity(self.kind_id, name="z")))
       namespace_manager.set_namespace(None)
 
     for c in ["b", "g", "t"]:
@@ -1940,14 +1943,18 @@ class LogInputReaderTest(unittest.TestCase):
     self.mapper_spec = model.MapperSpec(
         "test_handler",
         input_readers.__name__ + ".LogInputReader",
-        {"start_time": 0,
-         "end_time": 128,
-         "offset": self.offset,
-         "version_ids": ["1"],
-         "minimum_log_level": logservice.LOG_LEVEL_INFO,
-         "include_incomplete": True,
-         "include_app_logs": True,
-         "prototype_request": prototype_request.Encode()},
+        {
+          "input_reader": {
+            "start_time": 0,
+            "end_time": 128,
+            "offset": self.offset,
+            "version_ids": ["1"],
+            "minimum_log_level": logservice.LOG_LEVEL_INFO,
+            "include_incomplete": True,
+            "include_app_logs": True,
+            "prototype_request": prototype_request.Encode()
+          },
+        },
         self.num_shards)
 
   def testValidatePasses(self):
@@ -1963,14 +1970,14 @@ class LogInputReaderTest(unittest.TestCase):
 
   def testValidateUnrecognizedParam(self):
     """Test validate with an unrecognized parameter."""
-    self.mapper_spec.params["unrecognized"] = True
+    self.mapper_spec.params["input_reader"]["unrecognized"] = True
     self.assertRaises(errors.BadReaderParamsError,
                       input_readers.LogInputReader.validate,
                       self.mapper_spec)
 
   def testValidateNoVersionIdsParam(self):
     """Test validate without version_ids param."""
-    del self.mapper_spec.params["version_ids"]
+    del self.mapper_spec.params["input_reader"]["version_ids"]
     self.assertRaises(errors.BadReaderParamsError,
                       input_readers.LogInputReader.validate,
                       self.mapper_spec)
@@ -1978,7 +1985,7 @@ class LogInputReaderTest(unittest.TestCase):
   def testValidateTooManyVersionIdsParam(self):
     """Test validate with a malformed version_ids param."""
     # This is really testing the validation that logservice.fetch() itself does.
-    self.mapper_spec.params["version_ids"] = "1"
+    self.mapper_spec.params["input_reader"]["version_ids"] = "1"
     self.assertRaises(errors.BadReaderParamsError,
                       input_readers.LogInputReader.validate,
                       self.mapper_spec)
@@ -1986,51 +1993,53 @@ class LogInputReaderTest(unittest.TestCase):
   def testValidateTimeRangeParams(self):
     """Test validate with bad sets of start/end time params."""
     # start_time must be specified and may not be None.
-    del self.mapper_spec.params["start_time"]
+    del self.mapper_spec.params["input_reader"]["start_time"]
     self.assertRaises(errors.BadReaderParamsError,
                       input_readers.LogInputReader.validate,
                       self.mapper_spec)
 
-    self.mapper_spec.params["start_time"] = None
+    self.mapper_spec.params["input_reader"]["start_time"] = None
     self.assertRaises(errors.BadReaderParamsError,
                       input_readers.LogInputReader.validate,
                       self.mapper_spec)
 
     # It's okay to not specify an end_time; the current time will be assumed.
-    self.mapper_spec.params["start_time"] = time.time() - 1
-    del self.mapper_spec.params["end_time"]
+    self.mapper_spec.params["input_reader"]["start_time"] = time.time() - 1
+    del self.mapper_spec.params["input_reader"]["end_time"]
     input_readers.LogInputReader.validate(self.mapper_spec)
 
     # Start time must be less than end_time, whether implicit or explicit.
-    self.mapper_spec.params["start_time"] = time.time() + 100
+    self.mapper_spec.params["input_reader"]["start_time"] = time.time() + 100
     self.assertRaises(errors.BadReaderParamsError,
                       input_readers.LogInputReader.validate,
                       self.mapper_spec)
 
-    self.mapper_spec.params["end_time"] = time.time() + 50
+    self.mapper_spec.params["input_reader"]["end_time"] = time.time() + 50
     self.assertRaises(errors.BadReaderParamsError,
                       input_readers.LogInputReader.validate,
                       self.mapper_spec)
 
-    self.mapper_spec.params["end_time"] = time.time() + 150  # Success again.
+    # Success again
+    self.mapper_spec.params["input_reader"]["end_time"] = time.time() + 150
     input_readers.LogInputReader.validate(self.mapper_spec)
 
     # start_time must be less than end time.
-    self.mapper_spec.params["start_time"] = self.mapper_spec.params["end_time"]
+    self.mapper_spec.params["input_reader"]["start_time"] = \
+        self.mapper_spec.params["input_reader"]["end_time"]
     self.assertRaises(errors.BadReaderParamsError,
                       input_readers.LogInputReader.validate,
                       self.mapper_spec)
 
   def testValidateInvalidPrototypeRequest(self):
     """Test validate without specifying a prototype request."""
-    self.mapper_spec.params["prototype_request"] = "not parseable"
+    self.mapper_spec.params["input_reader"]["prototype_request"] = "__bad__"
     self.assertRaises(errors.BadReaderParamsError,
                       input_readers.LogInputReader.validate,
                       self.mapper_spec)
 
   def testValidateNoPrototypeRequest(self):
     """Test validate without specifying a prototype request."""
-    del self.mapper_spec.params["prototype_request"]
+    del self.mapper_spec.params["input_reader"]["prototype_request"]
     input_readers.LogInputReader.validate(self.mapper_spec)
 
   def testStr(self):
@@ -2076,8 +2085,8 @@ class LogInputReaderTest(unittest.TestCase):
   def testToJsonFromJson(self):
     """Test to/from json implementations."""
     readers = input_readers.LogInputReader.split_input(self.mapper_spec)
-    start_time = self.mapper_spec.params["start_time"]
-    end_time = self.mapper_spec.params["end_time"]
+    start_time = self.mapper_spec.params["input_reader"]["start_time"]
+    end_time = self.mapper_spec.params["input_reader"]["end_time"]
     seconds_per_shard = (end_time - start_time) / self.mapper_spec.shard_count
     for i, reader in enumerate(readers):
       # Full roundtrip test; this cannot verify that all fields are encoded.

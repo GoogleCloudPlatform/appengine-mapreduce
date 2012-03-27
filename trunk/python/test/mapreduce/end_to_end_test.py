@@ -164,6 +164,28 @@ class EndToEndTest(testutil.HandlerTestBase):
     self.assertEquals(entity_count, len(TestHandler.processed_entites))
     self.assertEquals([], model.ShardState.all().fetch(100))
 
+  def testInputReaderDedicatedParameters(self):
+    entity_count = 100
+
+    for i in range(entity_count):
+      TestEntity().put()
+
+    mapreduce_id = control.start_map(
+        "test_map",
+        __name__ + ".TestHandler",
+        "mapreduce.input_readers.DatastoreInputReader",
+        {
+            "input_reader": {
+                "entity_kind": __name__ + "." + TestEntity.__name__,
+            },
+        },
+        shard_count=4,
+        base_path="/mapreduce_base_path")
+
+    test_support.execute_until_empty(self.taskqueue)
+    self.assertEquals(entity_count, len(TestHandler.processed_entites))
+    self.assertEquals([], model.ShardState.all().fetch(100))
+
   def testOutputWriter(self):
     """End-to-end test with output writer."""
     entity_count = 1000
