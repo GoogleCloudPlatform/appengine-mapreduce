@@ -105,7 +105,7 @@ __all__ = [
     'OrderedDict',
 ]
 
-
+__author__ = 'Bob Ippolito <bob@redivi.com>'
 
 from decimal import Decimal
 
