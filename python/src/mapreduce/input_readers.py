@@ -621,17 +621,28 @@ class DatastoreInputReader(AbstractDatastoreInputReader):
     while True:
       query = k_range.make_ascending_query(
           util.for_name(self._entity_kind))
-      if cursor:
-        query.with_cursor(cursor)
+      if isinstance(query, db.Query):
+        # Old db version.
+        if cursor:
+          query.with_cursor(cursor)
 
-      results = query.fetch(limit=self._batch_size)
-      if not results:
-        break
+        results = query.fetch(limit=self._batch_size)
+        if not results:
+          break
 
-      for model_instance in results:
-        key = model_instance.key()
-        yield key, model_instance
-      cursor = query.cursor()
+        for model_instance in results:
+          key = model_instance.key()
+          yield key, model_instance
+        cursor = query.cursor()
+      else:
+        # NDB version using fetch_page().
+        results, cursor, more = query.fetch_page(self._batch_size,
+                                                 start_cursor=cursor)
+        for model_instance in results:
+          key = model_instance.key
+          yield key, model_instance
+        if not more:
+          break
 
   @classmethod
   def validate(cls, mapper_spec):
