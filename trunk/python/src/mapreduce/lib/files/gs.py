@@ -120,3 +120,12 @@ def create(filename,
             'Expected string for value in user_metadata for key: ', key)
       params[_USER_METADATA_PREFIX + key] = value
   return files._create(_GS_FILESYSTEM, filename=filename, params=params)
+
+
+def default_bucket_name():
+  """Obtain the default Google Storage bucket name for this application.
+
+    Returns:
+      A string that is the name of the default bucket.
+  """
+  return files._default_gs_bucket_name()

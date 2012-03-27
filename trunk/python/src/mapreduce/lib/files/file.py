@@ -597,3 +597,17 @@ class BufferedFile(object):
       self._buffer_pos = 0
     else:
       raise InvalidArgumentError('Whence mode %d is not supported', whence)
+
+
+def _default_gs_bucket_name():
+  """Return the default Google Storage bucket name for the application.
+
+  Returns:
+    A string that is the default bucket name for the application.
+  """
+  request = file_service_pb.GetDefaultGsBucketNameRequest()
+  response = file_service_pb.GetDefaultGsBucketNameResponse()
+
+  _make_call('GetDefaultGsBucketName', request, response)
+
+  return response.default_gs_bucket_name()
