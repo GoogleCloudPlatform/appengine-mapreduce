@@ -371,6 +371,7 @@ class FileOutputWriterBase(OutputWriter):
   OUTPUT_FILESYSTEM_PARAM = "filesystem"
 
   GS_BUCKET_NAME_PARAM = "gs_bucket_name"
+  GS_ACL_PARAM = "gs_acl"
 
   class _State(object):
     """Writer state. Stored in MapreduceState.
@@ -444,6 +445,7 @@ class FileOutputWriterBase(OutputWriter):
     mime_type = mapper_spec.params.get("mime_type", "application/octet-stream")
     filesystem = cls._get_filesystem(mapper_spec=mapper_spec)
     bucket = mapper_spec.params.get(cls.GS_BUCKET_NAME_PARAM)
+    acl = mapper_spec.params.get(cls.GS_ACL_PARAM, "project-private")
 
     if output_sharding == cls.OUTPUT_SHARDING_INPUT_SHARDS:
       number_of_files = mapreduce_state.mapreduce_spec.mapper.shard_count
@@ -460,8 +462,8 @@ class FileOutputWriterBase(OutputWriter):
       if bucket is not None:
         filename = "%s/%s" % (bucket, filename)
       request_filenames.append(filename)
-      filenames.append(cls._create_file(filesystem, filename, mime_type))
-
+      filenames.append(cls._create_file(filesystem, filename, mime_type,
+                                        acl=acl))
     mapreduce_state.writer_state = cls._State(
         filenames, request_filenames).to_json()
 

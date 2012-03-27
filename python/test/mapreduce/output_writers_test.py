@@ -165,6 +165,19 @@ class FileOutputWriterTest(testutil.HandlerTestBase):
     for filename in filenames:
       self.assertTrue(filename.startswith("/blobstore/writable:"))
 
+  def testInitJob_GoogleStorage(self):
+    mapreduce_state = self.create_mapreduce_state(
+        params={"filesystem": "gs", "gs_bucket_name": "foo", "gs_acl": "public"})
+    m = mox.Mox()
+    m.StubOutWithMock(files.gs, "create")
+    files.gs.create(mox.StrContains('/gs/foo'),
+                    mox.IgnoreArg(),
+                    acl="public")
+    m.ReplayAll()
+    output_writers.FileOutputWriter.init_job(mapreduce_state)
+    m.UnsetStubs()
+    m.VerifyAll()
+    self.assertTrue(mapreduce_state.writer_state)
 
 if __name__ == "__main__":
   unittest.main()
