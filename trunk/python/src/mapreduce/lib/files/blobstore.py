@@ -34,7 +34,7 @@ from google.appengine.ext import blobstore
 
 
 
-_BLOBSTORE_FILESYSTEM = 'blobstore'
+_BLOBSTORE_FILESYSTEM = files.BLOBSTORE_FILESYSTEM
 _BLOBSTORE_DIRECTORY = '/' + _BLOBSTORE_FILESYSTEM + '/'
 _BLOBSTORE_NEW_FILE_NAME = 'new'
 _CREATION_HANDLE_PREFIX = 'writable:'

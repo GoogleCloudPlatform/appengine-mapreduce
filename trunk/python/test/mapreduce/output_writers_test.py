@@ -20,8 +20,8 @@ from mapreduce import output_writers
 from testlib import testutil
 
 
-BLOBSTORE_WRITER_NAME = (output_writers.__name__ + "." +
-                         output_writers.BlobstoreOutputWriter.__name__)
+FILE_WRITER_NAME = (output_writers.__name__ + "." +
+                    output_writers.FileOutputWriter.__name__)
 
 
 class FilePoolTest(unittest.TestCase):
@@ -89,10 +89,10 @@ class RecordsPoolTest(unittest.TestCase):
         list(records.RecordsReader(files.open("tempfile", "r"))))
 
 
-class BlobstoreOutputWriterTest(testutil.HandlerTestBase):
+class FileOutputWriterTest(testutil.HandlerTestBase):
 
   def create_mapper_spec(self,
-                         output_writer_spec=BLOBSTORE_WRITER_NAME,
+                         output_writer_spec=FILE_WRITER_NAME,
                          params=None):
     params = params or {}
     mapper_spec = model.MapperSpec(
@@ -113,55 +113,54 @@ class BlobstoreOutputWriterTest(testutil.HandlerTestBase):
     return mapreduce_state
 
   def testValidate_Passes(self):
-    output_writers.BlobstoreOutputWriter.validate(self.create_mapper_spec())
+    output_writers.FileOutputWriter.validate(
+        self.create_mapper_spec(params={"filesystem": "blobstore"}))
 
   def testValidate_WriterNotSet(self):
     self.assertRaises(
         errors.BadWriterParamsError,
-        output_writers.BlobstoreOutputWriter.validate,
+        output_writers.FileOutputWriter.validate,
         self.create_mapper_spec(output_writer_spec=None))
 
   def testValidate_ShardingNone(self):
-    output_writers.BlobstoreOutputWriter.validate(
-        self.create_mapper_spec(params={"output_sharding": "NONE"}))
+    output_writers.FileOutputWriter.validate(self.create_mapper_spec(
+        params={"output_sharding": "NONE", "filesystem": "blobstore"}))
 
   def testValidate_ShardingInput(self):
-    output_writers.BlobstoreOutputWriter.validate(
-        self.create_mapper_spec(params={"output_sharding": "input"}))
+    output_writers.FileOutputWriter.validate(self.create_mapper_spec(
+        params={"output_sharding": "input", "filesystem": "blobstore"}))
 
   def testValidate_ShardingIncorrect(self):
     self.assertRaises(
         errors.BadWriterParamsError,
-        output_writers.BlobstoreOutputWriter.validate,
-        self.create_mapper_spec(params={"output_sharding": "foo"}))
+        output_writers.FileOutputWriter.validate,
+        self.create_mapper_spec(
+            params={"output_sharding": "foo", "filesystem": "blobstore"}))
 
   def testInitJob_NoSharding(self):
-    mapreduce_state = self.create_mapreduce_state()
-    output_writers.BlobstoreOutputWriter.init_job(mapreduce_state)
+    mapreduce_state = self.create_mapreduce_state(
+        params={"filesystem": "blobstore"})
+    output_writers.FileOutputWriter.init_job(mapreduce_state)
     self.assertTrue(mapreduce_state.writer_state)
-    filenames = output_writers.BlobstoreOutputWriter.get_filenames(
-        mapreduce_state)
+    filenames = output_writers.FileOutputWriter.get_filenames(mapreduce_state)
     self.assertEqual(1, len(filenames))
-    self.assertTrue(
-        filenames[0].startswith("/blobstore/writable:"))
+    self.assertTrue(filenames[0].startswith("/blobstore/writable:"))
 
   def testInitJob_ShardingNone(self):
     mapreduce_state = self.create_mapreduce_state(
-        params={"output_sharding": "none"})
-    output_writers.BlobstoreOutputWriter.init_job(mapreduce_state)
+        params={"output_sharding": "none", "filesystem": "blobstore"})
+    output_writers.FileOutputWriter.init_job(mapreduce_state)
     self.assertTrue(mapreduce_state.writer_state)
-    filenames = output_writers.BlobstoreOutputWriter.get_filenames(
-        mapreduce_state)
+    filenames = output_writers.FileOutputWriter.get_filenames(mapreduce_state)
     self.assertEqual(1, len(filenames))
     self.assertTrue(filenames[0].startswith("/blobstore/writable:"))
 
   def testInitJob_ShardingInput(self):
     mapreduce_state = self.create_mapreduce_state(
-        params={"output_sharding": "input"})
-    output_writers.BlobstoreOutputWriter.init_job(mapreduce_state)
+        params={"output_sharding": "input", "filesystem": "blobstore"})
+    output_writers.FileOutputWriter.init_job(mapreduce_state)
     self.assertTrue(mapreduce_state.writer_state)
-    filenames = output_writers.BlobstoreOutputWriter.get_filenames(
-        mapreduce_state)
+    filenames = output_writers.FileOutputWriter.get_filenames(mapreduce_state)
     self.assertEqual(10, len(filenames))
     for filename in filenames:
       self.assertTrue(filename.startswith("/blobstore/writable:"))
