@@ -24,7 +24,11 @@ __all__ = [
     "BlobstoreOutputWriter",
     "BlobstoreOutputWriterBase",
     "BlobstoreRecordsOutputWriter",
+    "FileOutputWriter",
+    "FileOutputWriterBase",
+    "FileRecordsOutputWriter",
     "KeyValueBlobstoreOutputWriter",
+    "KeyValueFileOutputWriter",
     "COUNTER_IO_WRITE_BYTES",
     "COUNTER_IO_WRITE_MSEC",
     "OutputWriter",
@@ -32,8 +36,8 @@ __all__ = [
     ]
 
 import gc
+import itertools
 import logging
-import string
 import time
 
 from mapreduce.lib import files
@@ -161,8 +165,7 @@ class OutputWriter(model.JsonMixin):
       list of filenames this writer writes to or None if writer
       doesn't write to a file.
     """
-    raise NotImplementedError("get_filenames() not implemented in %s" %
-                              self.__class__)
+    raise NotImplementedError("get_filenames() not implemented in %s" % cls)
 
 # Flush size for files api write requests. Approximately one block of data.
 _FILES_API_FLUSH_SIZE = 128*1024
@@ -334,9 +337,7 @@ class RecordsPool(object):
     self.flush()
 
 
-def _get_output_sharding(
-    mapreduce_state=None,
-    mapper_spec=None):
+def _get_output_sharding(mapreduce_state=None, mapper_spec=None):
   """Get output sharding parameter value from mapreduce state or mapper spec.
 
   At least one of the parameters should not be None.
@@ -346,41 +347,56 @@ def _get_output_sharding(
     mapper_spec: mapper specification as model.MapperSpec
   """
   if mapper_spec:
-    return string.lower(mapper_spec.params.get(
-        BlobstoreOutputWriterBase.OUTPUT_SHARDING_PARAM,
-        BlobstoreOutputWriterBase.OUTPUT_SHARDING_NONE))
+    return mapper_spec.params.get(
+        FileOutputWriterBase.OUTPUT_SHARDING_PARAM,
+        FileOutputWriterBase.OUTPUT_SHARDING_NONE).lower()
   if mapreduce_state:
     mapper_spec = mapreduce_state.mapreduce_spec.mapper
     return _get_output_sharding(mapper_spec=mapper_spec)
   raise errors.Error("Neither mapreduce_state nor mapper_spec specified.")
 
 
-class BlobstoreOutputWriterBase(OutputWriter):
-  """Base class for all blobstore output writers."""
+class FileOutputWriterBase(OutputWriter):
+  """Base class for all file output writers."""
 
   # Parameter to specify output sharding strategy.
   OUTPUT_SHARDING_PARAM = "output_sharding"
 
-  # Output should not be sharded and should go into single blob.
+  # Output should not be sharded and should go into single file.
   OUTPUT_SHARDING_NONE = "none"
 
-  # Separate blob should be created for each input reader shard.
+  # Separate file should be created for each input reader shard.
   OUTPUT_SHARDING_INPUT_SHARDS = "input"
+
+  OUTPUT_FILESYSTEM_PARAM = "filesystem"
+
+  GS_BUCKET_NAME_PARAM = "gs_bucket_name"
 
   class _State(object):
     """Writer state. Stored in MapreduceState.
 
     State list all files which were created for the job.
     """
-    def __init__(self, filenames):
+
+    def __init__(self, filenames, request_filenames):
+      """State initializer.
+
+      Args:
+        filenames: writable or finalized filenames as returned by the files api.
+        request_filenames: filenames as given to the files create api.
+      """
       self.filenames = filenames
+      self.request_filenames = request_filenames
 
     def to_json(self):
-      return {"filenames": self.filenames}
+      return {
+          "filenames": self.filenames,
+          "request_filenames": self.request_filenames
+      }
 
     @classmethod
     def from_json(cls, json):
-      return cls(json["filenames"])
+      return cls(json["filenames"], json["request_filenames"])
 
   def __init__(self, filename):
     self._filename = filename
@@ -401,6 +417,20 @@ class BlobstoreOutputWriterBase(OutputWriter):
       raise errors.BadWriterParamsError(
           "Invalid output_sharding value: %s" % output_sharding)
 
+    filesystem = cls._get_filesystem(mapper_spec)
+    if filesystem not in files.FILESYSTEMS:
+      raise errors.BadWriterParamsError(
+          "Filesystem '%s' is not supported. Should be one of %s" %
+          (filesystem, files.FILESYSTEMS))
+    if filesystem == files.GS_FILESYSTEM:
+      if not cls.GS_BUCKET_NAME_PARAM in mapper_spec.params:
+        raise errors.BadWriterParamsError(
+            "bucket_name is required for Google store filesystem")
+    else:
+      if mapper_spec.params.get(cls.GS_BUCKET_NAME_PARAM) is not None:
+        raise errors.BadWriterParamsError(
+            "bucket_name can only be provided for Google store filesystem")
+
   @classmethod
   def init_job(cls, mapreduce_state):
     """Initialize job-level writer state.
@@ -412,25 +442,55 @@ class BlobstoreOutputWriterBase(OutputWriter):
     output_sharding = _get_output_sharding(mapreduce_state=mapreduce_state)
     mapper_spec = mapreduce_state.mapreduce_spec.mapper
     mime_type = mapper_spec.params.get("mime_type", "application/octet-stream")
+    filesystem = cls._get_filesystem(mapper_spec=mapper_spec)
+    bucket = mapper_spec.params.get(cls.GS_BUCKET_NAME_PARAM)
 
-    number_of_files = 1
     if output_sharding == cls.OUTPUT_SHARDING_INPUT_SHARDS:
-      mapper_spec = mapreduce_state.mapreduce_spec.mapper
-      number_of_files = mapper_spec.shard_count
+      number_of_files = mapreduce_state.mapreduce_spec.mapper.shard_count
+    else:
+      number_of_files = 1
 
     filenames = []
+    request_filenames = []
     for i in range(number_of_files):
-      blob_file_name = (mapreduce_state.mapreduce_spec.name +
-                        "-" + mapreduce_state.mapreduce_spec.mapreduce_id +
-                        "-output")
+      filename = (mapreduce_state.mapreduce_spec.name + "-" +
+                  mapreduce_state.mapreduce_spec.mapreduce_id + "-output")
       if number_of_files > 1:
-        blob_file_name += "-" + str(i)
-      filenames.append(files.blobstore.create(
-          mime_type=mime_type,
-          _blobinfo_uploaded_filename=blob_file_name))
+        filename += "-" + str(i)
+      if bucket is not None:
+        filename = "%s/%s" % (bucket, filename)
+      request_filenames.append(filename)
+      filenames.append(cls._create_file(filesystem, filename, mime_type))
 
-    mapreduce_state.writer_state = \
-        cls._State(filenames).to_json()
+    mapreduce_state.writer_state = cls._State(
+        filenames, request_filenames).to_json()
+
+  @classmethod
+  def _get_filesystem(cls, mapper_spec):
+    return mapper_spec.params.get(cls.OUTPUT_FILESYSTEM_PARAM, "").lower()
+
+  @classmethod
+  def _create_file(cls, filesystem, filename, mime_type, **kwargs):
+    """Creates a file and returns its created filename."""
+    if filesystem == files.BLOBSTORE_FILESYSTEM:
+      return files.blobstore.create(mime_type, filename)
+    elif filesystem == files.GS_FILESYSTEM:
+      return files.gs.create("/gs/%s" % filename, mime_type, **kwargs)
+    else:
+      raise errors.BadWriterParamsError(
+          "Filesystem '%s' is not supported" % filesystem)
+
+  @classmethod
+  def _get_finalized_filename(cls, fs, create_filename, request_filename):
+    """Returns the finalized filename for the created filename."""
+    if fs == "blobstore":
+      return files.blobstore.get_file_name(
+          files.blobstore.get_blob_key(create_filename))
+    elif fs == "gs":
+      return "/gs/" + request_filename
+    else:
+      raise errors.BadWriterParamsError(
+          "Filesystem '%s' is not supported" % fs)
 
   @classmethod
   def finalize_job(cls, mapreduce_state):
@@ -440,20 +500,20 @@ class BlobstoreOutputWriterBase(OutputWriter):
       mapreduce_state: an instance of model.MapreduceState describing current
       job.
     """
-    state = cls._State.from_json(
-        mapreduce_state.writer_state)
-
+    state = cls._State.from_json(mapreduce_state.writer_state)
     output_sharding = _get_output_sharding(mapreduce_state=mapreduce_state)
-
+    filesystem = cls._get_filesystem(mapreduce_state.mapreduce_spec.mapper)
     finalized_filenames = []
-    for filename in state.filenames:
+    for create_filename, request_filename in itertools.izip(
+        state.filenames, state.request_filenames):
       if output_sharding != cls.OUTPUT_SHARDING_INPUT_SHARDS:
-        files.finalize(filename)
-      finalized_filenames.append(
-          files.blobstore.get_file_name(
-              files.blobstore.get_blob_key(filename)))
+        files.finalize(create_filename)
+      finalized_filenames.append(cls._get_finalized_filename(filesystem,
+                                                             create_filename,
+                                                             request_filename))
 
     state.filenames = finalized_filenames
+    state.request_filenames = []
     mapreduce_state.writer_state = state.to_json()
 
   @classmethod
@@ -461,7 +521,7 @@ class BlobstoreOutputWriterBase(OutputWriter):
     """Creates an instance of the OutputWriter for the given json state.
 
     Args:
-      state: The OutputWriter state as a dict-like object.
+      state: The OutputWriter state as a json object (dict like).
 
     Returns:
       An instance of the OutputWriter configured using the values of json.
@@ -490,8 +550,7 @@ class BlobstoreOutputWriterBase(OutputWriter):
     if output_sharding == cls.OUTPUT_SHARDING_INPUT_SHARDS:
       file_index = shard_number
 
-    state = cls._State.from_json(
-        mapreduce_state.writer_state)
+    state = cls._State.from_json(mapreduce_state.writer_state)
     return cls(state.filenames[file_index])
 
   def finalize(self, ctx, shard_number):
@@ -519,13 +578,12 @@ class BlobstoreOutputWriterBase(OutputWriter):
     Returns:
       list of filenames this writer writes to.
     """
-    state = cls._State.from_json(
-        mapreduce_state.writer_state)
+    state = cls._State.from_json(mapreduce_state.writer_state)
     return state.filenames
 
 
-class BlobstoreOutputWriter(BlobstoreOutputWriterBase):
-  """An implementation of OutputWriter which outputs data into blobstore."""
+class FileOutputWriter(FileOutputWriterBase):
+  """An implementation of OutputWriter which outputs data into file."""
 
   def write(self, data, ctx):
     """Write data.
@@ -539,8 +597,8 @@ class BlobstoreOutputWriter(BlobstoreOutputWriterBase):
     ctx.get_pool("file_pool").append(self._filename, str(data))
 
 
-class BlobstoreRecordsOutputWriter(BlobstoreOutputWriterBase):
-  """An OutputWriter which outputs data into records format."""
+class FileRecordsOutputWriter(FileOutputWriterBase):
+  """A File OutputWriter which outputs data using leveldb log format."""
 
   @classmethod
   def validate(cls, mapper_spec):
@@ -554,7 +612,7 @@ class BlobstoreRecordsOutputWriter(BlobstoreOutputWriterBase):
           "output_sharding should not be specified for %s" % cls.__name__)
     mapper_spec.params[cls.OUTPUT_SHARDING_PARAM] = (
         cls.OUTPUT_SHARDING_INPUT_SHARDS)
-    super(BlobstoreRecordsOutputWriter, cls).validate(mapper_spec)
+    super(FileRecordsOutputWriter, cls).validate(mapper_spec)
 
   def write(self, data, ctx):
     """Write data.
@@ -571,8 +629,8 @@ class BlobstoreRecordsOutputWriter(BlobstoreOutputWriterBase):
     ctx.get_pool("records_pool").append(str(data))
 
 
-class KeyValueBlobstoreOutputWriter(BlobstoreRecordsOutputWriter):
-  """Output writer for KeyValue records files in blobstore."""
+class KeyValueFileOutputWriter(FileRecordsOutputWriter):
+  """A file output writer for KeyValue records."""
 
   def write(self, data, ctx):
     if len(data) != 2:
@@ -589,5 +647,26 @@ class KeyValueBlobstoreOutputWriter(BlobstoreRecordsOutputWriter):
     proto = file_service_pb.KeyValue()
     proto.set_key(key)
     proto.set_value(value)
-    BlobstoreRecordsOutputWriter.write(self, proto.Encode(), ctx)
+    FileRecordsOutputWriter.write(self, proto.Encode(), ctx)
 
+
+class BlobstoreOutputWriterBase(FileOutputWriterBase):
+  """A base class of OutputWriter which outputs data into blobstore."""
+
+  @classmethod
+  def _get_filesystem(cls, mapper_spec):
+    return "blobstore"
+
+
+class BlobstoreOutputWriter(FileOutputWriter, BlobstoreOutputWriterBase):
+  """An implementation of OutputWriter which outputs data into blobstore."""
+
+
+class BlobstoreRecordsOutputWriter(FileRecordsOutputWriter,
+                                   BlobstoreOutputWriterBase):
+  """An OutputWriter which outputs data into records format."""
+
+
+class KeyValueBlobstoreOutputWriter(KeyValueFileOutputWriter,
+                                    BlobstoreOutputWriterBase):
+  """Output writer for KeyValue records files in blobstore."""

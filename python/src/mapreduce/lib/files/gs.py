@@ -34,8 +34,8 @@ from mapreduce.lib.files import file as files
 
 
 
-_GS_FILESYSTEM = 'gs'
-_GS_PREFIX = '/gs/'
+_GS_FILESYSTEM = files.GS_FILESYSTEM
+_GS_PREFIX = '/' + _GS_FILESYSTEM + '/'
 _MIME_TYPE_PARAMETER = 'content_type'
 _CANNED_ACL_PARAMETER = 'acl'
 _CONTENT_ENCODING_PARAMETER = 'content_encoding'
@@ -51,7 +51,7 @@ def create(filename,
            content_encoding=None,
            content_disposition=None,
            user_metadata=None):
-  """Create a writable blobstore file.
+  """Create a writable googlestore file.
 
   Args:
     filename: Google Storage object name (/gs/bucket/object)
