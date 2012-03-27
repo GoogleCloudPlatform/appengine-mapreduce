@@ -20,6 +20,7 @@ from mapreduce import output_writers
 from mapreduce import test_support
 from testlib import testutil
 from mapreduce import util
+from google.appengine.ext.ndb import ndb
 
 
 def random_string(length):
@@ -30,6 +31,10 @@ def random_string(length):
 
 class TestEntity(db.Model):
   """Test entity class."""
+
+
+class NdbTestEntity(ndb.Model):
+  """Test entity class for NDB."""
 
 
 class TestHandler(object):
@@ -58,6 +63,11 @@ class TestHandler(object):
 def test_handler_yield_key(entity):
   """Test handler which yields entity key."""
   yield entity.key()
+
+
+def test_handler_yield_ndb_key(entity):
+  """Test handler which yields entity key (NDB version)."""
+  yield entity.key
 
 
 class TestOutputWriter(output_writers.OutputWriter):
@@ -134,6 +144,26 @@ class EndToEndTest(testutil.HandlerTestBase):
     self.assertEquals(entity_count, len(TestHandler.processed_entites))
     self.assertEquals([], model.ShardState.all().fetch(100))
 
+  def testLotsOfNdbEntities(self):
+    entity_count = 1000
+
+    for i in range(entity_count):
+      NdbTestEntity().put()
+
+    mapreduce_id = control.start_map(
+        "test_map",
+        __name__ + ".TestHandler",
+        "mapreduce.input_readers.DatastoreInputReader",
+        {
+            "entity_kind": __name__ + "." + NdbTestEntity.__name__,
+        },
+        shard_count=4,
+        base_path="/mapreduce_base_path")
+
+    test_support.execute_until_empty(self.taskqueue)
+    self.assertEquals(entity_count, len(TestHandler.processed_entites))
+    self.assertEquals([], model.ShardState.all().fetch(100))
+
   def testOutputWriter(self):
     """End-to-end test with output writer."""
     entity_count = 1000
@@ -147,6 +177,29 @@ class EndToEndTest(testutil.HandlerTestBase):
         "mapreduce.input_readers.DatastoreInputReader",
         {
             "entity_kind": __name__ + "." + TestEntity.__name__,
+        },
+        shard_count=4,
+        base_path="/mapreduce_base_path",
+        output_writer_spec=__name__ + ".TestOutputWriter")
+
+    test_support.execute_until_empty(self.taskqueue)
+    self.assertEquals(1, len(TestOutputWriter.file_contents))
+    self.assertEquals(entity_count,
+                      len(TestOutputWriter.file_contents.values()[0]))
+
+  def testNdbOutputWriter(self):
+    """End-to-end test with output writer."""
+    entity_count = 1000
+
+    for i in range(entity_count):
+      NdbTestEntity().put()
+
+    mapreduce_id = control.start_map(
+        "test_map",
+        __name__ + ".test_handler_yield_ndb_key",
+        "mapreduce.input_readers.DatastoreInputReader",
+        {
+            "entity_kind": __name__ + "." + NdbTestEntity.__name__,
         },
         shard_count=4,
         base_path="/mapreduce_base_path",
