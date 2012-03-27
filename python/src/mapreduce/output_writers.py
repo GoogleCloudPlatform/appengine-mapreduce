@@ -77,6 +77,12 @@ class OutputWriter(model.JsonMixin):
   def validate(cls, mapper_spec):
     """Validates mapper specification.
 
+    Output writer parameters are expected to be passed as "output_writer"
+    subdictionary of mapper_spec.params. To be compatible with previous
+    API output writer is advised to check mapper_spec.params and issue
+    a warning if "output_writer" subdicationary is not present.
+    _get_params helper method can be used to simplify implementation.
+
     Args:
       mapper_spec: an instance of model.MapperSpec to validate.
     """
@@ -172,6 +178,48 @@ _FILES_API_FLUSH_SIZE = 128*1024
 
 # Maximum size of files api request. Slightly less than 1M.
 _FILES_API_MAX_SIZE = 1000*1024
+
+
+def _get_params(mapper_spec, allowed_keys=None):
+  """Obtain output writer parameters.
+
+  Utility function for output writer implementation. Fetches parameters
+  from mapreduce specification giving appropriate usage warnings.
+
+  Args:
+    mapper_spec: The MapperSpec for the job
+    allowed_keys: set of all allowed keys in parameters as strings. If it is not
+      None, then parameters are expected to be in a separate "output_writer"
+      subdictionary of mapper_spec parameters.
+
+  Returns:
+    mapper parameters as dict
+
+  Raises:
+    BadWriterParamsError: if parameters are invalid/missing or not allowed.
+  """
+  if "output_writer" not in mapper_spec.params:
+    message = (
+        "Output writer's parameters should be specified in "
+        "output_writer subdictionary.")
+    if allowed_keys:
+      raise errors.BadWriterParamsError(message)
+    else:
+      logging.warning(message)
+    params = mapper_spec.params
+    params = dict((str(n), v) for n, v in params.iteritems())
+  else:
+    if not isinstance(mapper_spec.params.get("output_writer"), dict):
+      raise BadWriterParamsError(
+          "Output writer parameters should be a dictionary")
+    params = mapper_spec.params.get("output_writer")
+    params = dict((str(n), v) for n, v in params.iteritems())
+    if allowed_keys:
+      params_diff = set(params.keys()) - allowed_keys
+      if params_diff:
+        raise errors.BadWriterParamsError(
+            "Invalid output_writer parameters: %s" % ",".join(params_diff))
+  return params
 
 
 class _FilePool(object):
@@ -337,25 +385,6 @@ class RecordsPool(object):
     self.flush()
 
 
-def _get_output_sharding(mapreduce_state=None, mapper_spec=None):
-  """Get output sharding parameter value from mapreduce state or mapper spec.
-
-  At least one of the parameters should not be None.
-
-  Args:
-    mapreduce_state: mapreduce state as model.MapreduceState.
-    mapper_spec: mapper specification as model.MapperSpec
-  """
-  if mapper_spec:
-    return mapper_spec.params.get(
-        FileOutputWriterBase.OUTPUT_SHARDING_PARAM,
-        FileOutputWriterBase.OUTPUT_SHARDING_NONE).lower()
-  if mapreduce_state:
-    mapper_spec = mapreduce_state.mapreduce_spec.mapper
-    return _get_output_sharding(mapper_spec=mapper_spec)
-  raise errors.Error("Neither mapreduce_state nor mapper_spec specified.")
-
-
 class FileOutputWriterBase(OutputWriter):
   """Base class for all file output writers."""
 
@@ -403,6 +432,25 @@ class FileOutputWriterBase(OutputWriter):
     self._filename = filename
 
   @classmethod
+  def _get_output_sharding(cls, mapreduce_state=None, mapper_spec=None):
+    """Get output sharding parameter value from mapreduce state or mapper spec.
+
+    At least one of the parameters should not be None.
+
+    Args:
+      mapreduce_state: mapreduce state as model.MapreduceState.
+      mapper_spec: mapper specification as model.MapperSpec
+    """
+    if mapper_spec:
+      return _get_params(mapper_spec).get(
+          FileOutputWriterBase.OUTPUT_SHARDING_PARAM,
+          FileOutputWriterBase.OUTPUT_SHARDING_NONE).lower()
+    if mapreduce_state:
+      mapper_spec = mapreduce_state.mapreduce_spec.mapper
+      return cls._get_output_sharding(mapper_spec=mapper_spec)
+    raise errors.Error("Neither mapreduce_state nor mapper_spec specified.")
+
+  @classmethod
   def validate(cls, mapper_spec):
     """Validates mapper specification.
 
@@ -412,24 +460,25 @@ class FileOutputWriterBase(OutputWriter):
     if mapper_spec.output_writer_class() != cls:
       raise errors.BadWriterParamsError("Output writer class mismatch")
 
-    output_sharding = _get_output_sharding(mapper_spec=mapper_spec)
+    output_sharding = cls._get_output_sharding(mapper_spec=mapper_spec)
     if (output_sharding != cls.OUTPUT_SHARDING_NONE and
         output_sharding != cls.OUTPUT_SHARDING_INPUT_SHARDS):
       raise errors.BadWriterParamsError(
           "Invalid output_sharding value: %s" % output_sharding)
 
+    params = _get_params(mapper_spec)
     filesystem = cls._get_filesystem(mapper_spec)
     if filesystem not in files.FILESYSTEMS:
       raise errors.BadWriterParamsError(
           "Filesystem '%s' is not supported. Should be one of %s" %
           (filesystem, files.FILESYSTEMS))
     if filesystem == files.GS_FILESYSTEM:
-      if not cls.GS_BUCKET_NAME_PARAM in mapper_spec.params:
+      if not cls.GS_BUCKET_NAME_PARAM in params:
         raise errors.BadWriterParamsError(
             "%s is required for Google store filesystem" %
             cls.GS_BUCKET_NAME_PARAM)
     else:
-      if mapper_spec.params.get(cls.GS_BUCKET_NAME_PARAM) is not None:
+      if params.get(cls.GS_BUCKET_NAME_PARAM) is not None:
         raise errors.BadWriterParamsError(
             "%s can only be provided for Google store filesystem" %
             cls.GS_BUCKET_NAME_PARAM)
@@ -442,12 +491,13 @@ class FileOutputWriterBase(OutputWriter):
       mapreduce_state: an instance of model.MapreduceState describing current
       job.
     """
-    output_sharding = _get_output_sharding(mapreduce_state=mapreduce_state)
+    output_sharding = cls._get_output_sharding(mapreduce_state=mapreduce_state)
     mapper_spec = mapreduce_state.mapreduce_spec.mapper
-    mime_type = mapper_spec.params.get("mime_type", "application/octet-stream")
+    params = _get_params(mapper_spec)
+    mime_type = params.get("mime_type", "application/octet-stream")
     filesystem = cls._get_filesystem(mapper_spec=mapper_spec)
-    bucket = mapper_spec.params.get(cls.GS_BUCKET_NAME_PARAM)
-    acl = mapper_spec.params.get(cls.GS_ACL_PARAM, "project-private")
+    bucket = params.get(cls.GS_BUCKET_NAME_PARAM)
+    acl = params.get(cls.GS_ACL_PARAM, "project-private")
 
     if output_sharding == cls.OUTPUT_SHARDING_INPUT_SHARDS:
       number_of_files = mapreduce_state.mapreduce_spec.mapper.shard_count
@@ -471,7 +521,7 @@ class FileOutputWriterBase(OutputWriter):
 
   @classmethod
   def _get_filesystem(cls, mapper_spec):
-    return mapper_spec.params.get(cls.OUTPUT_FILESYSTEM_PARAM, "").lower()
+    return _get_params(mapper_spec).get(cls.OUTPUT_FILESYSTEM_PARAM, "").lower()
 
   @classmethod
   def _create_file(cls, filesystem, filename, mime_type, **kwargs):
@@ -505,7 +555,7 @@ class FileOutputWriterBase(OutputWriter):
       job.
     """
     state = cls._State.from_json(mapreduce_state.writer_state)
-    output_sharding = _get_output_sharding(mapreduce_state=mapreduce_state)
+    output_sharding = cls._get_output_sharding(mapreduce_state=mapreduce_state)
     filesystem = cls._get_filesystem(mapreduce_state.mapreduce_spec.mapper)
     finalized_filenames = []
     for create_filename, request_filename in itertools.izip(
@@ -550,7 +600,7 @@ class FileOutputWriterBase(OutputWriter):
       shard_number: shard number as integer.
     """
     file_index = 0
-    output_sharding = _get_output_sharding(mapreduce_state=mapreduce_state)
+    output_sharding = cls._get_output_sharding(mapreduce_state=mapreduce_state)
     if output_sharding == cls.OUTPUT_SHARDING_INPUT_SHARDS:
       file_index = shard_number
 
@@ -565,7 +615,8 @@ class FileOutputWriterBase(OutputWriter):
       shard_number: shard number as integer.
     """
     mapreduce_spec = ctx.mapreduce_spec
-    output_sharding = _get_output_sharding(mapper_spec=mapreduce_spec.mapper)
+    output_sharding = self.__class__._get_output_sharding(
+        mapper_spec=mapreduce_spec.mapper)
     if output_sharding == self.OUTPUT_SHARDING_INPUT_SHARDS:
       # Finalize our file because we're responsible for it.
       # Do it here and not in finalize_job to spread out finalization
@@ -611,12 +662,14 @@ class FileRecordsOutputWriter(FileOutputWriterBase):
     Args:
       mapper_spec: an instance of model.MapperSpec to validate.
     """
-    if cls.OUTPUT_SHARDING_PARAM in mapper_spec.params:
+    if cls.OUTPUT_SHARDING_PARAM in _get_params(mapper_spec):
       raise errors.BadWriterParamsError(
           "output_sharding should not be specified for %s" % cls.__name__)
-    mapper_spec.params[cls.OUTPUT_SHARDING_PARAM] = (
-        cls.OUTPUT_SHARDING_INPUT_SHARDS)
     super(FileRecordsOutputWriter, cls).validate(mapper_spec)
+
+  @classmethod
+  def _get_output_sharding(cls, mapreduce_state=None, mapper_spec=None):
+    return cls.OUTPUT_SHARDING_INPUT_SHARDS
 
   def write(self, data, ctx):
     """Write data.
