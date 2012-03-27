@@ -33,6 +33,7 @@ import java.lang.reflect.InvocationTargetException;
  * {@link #taskSetup(org.apache.hadoop.mapreduce.Reducer.Context)} and
  * {@link #taskCleanup(org.apache.hadoop.mapreduce.Reducer.Context)}.
  *
+ * @author alex@bedatadriven.com (Alex Bertram)
  */
 public class AppEngineReducer<KEYIN, VALUEIN, KEYOUT, VALUEOUT>
     extends Reducer<KEYIN, VALUEIN, KEYOUT, VALUEOUT> {
@@ -90,21 +91,21 @@ public class AppEngineReducer<KEYIN, VALUEIN, KEYOUT, VALUEOUT>
     public DataInputBuffer getKey() throws IOException {
       throw new UnsupportedOperationException();
     }
-
+  
     @Override
     public DataInputBuffer getValue() throws IOException {
       throw new UnsupportedOperationException();
     }
-
+  
     @Override
     public boolean next() throws IOException {
       return false;
     }
-
+  
     @Override
     public void close() throws IOException {
     }
-
+  
     @Override
     public Progress getProgress() {
       throw new UnsupportedOperationException();
@@ -160,9 +161,9 @@ public class AppEngineReducer<KEYIN, VALUEIN, KEYOUT, VALUEOUT>
               RawComparator.class,
               Class.class,
               Class.class });
-
+      
       Counters counters = new Counters();
-
+  
       return
           contextConstructor.newInstance(
               reducer,
@@ -178,7 +179,7 @@ public class AppEngineReducer<KEYIN, VALUEIN, KEYOUT, VALUEOUT>
               // This will fail if the class is not an instance of Writable.class
               LongWritable.class,
               context.getMapOutputValueClass());
-
+  
     } catch (SecurityException e) {
       // Since we know the class we're calling, this is strictly a programming error.
       throw new RuntimeException("Couldn't initialize Reducer.Context", e);
