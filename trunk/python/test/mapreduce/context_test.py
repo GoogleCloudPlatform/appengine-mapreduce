@@ -27,7 +27,11 @@ from google.appengine.ext import db
 from mapreduce import context
 from testlib import testutil
 from mapreduce import model
-from google.appengine.ext.ndb import ndb
+
+try:
+  from google.appengine.ext.ndb import ndb
+except ImportError:
+  ndb = None
 
 
 class TestEntity(db.Model):
