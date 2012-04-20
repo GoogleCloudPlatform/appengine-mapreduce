@@ -851,9 +851,6 @@ class StartJobHandler(base_handler.PostJsonHandler):
       raise Exception("Parent shouldn't be specfied "
                       "for non-transactional starts.")
 
-    # Check that handler can be instantiated.
-    mapper_spec.get_handler()
-
     # Check that reader can be instantiated and is configured correctly
     mapper_input_reader_class = mapper_spec.input_reader_class()
     mapper_input_reader_class.validate(mapper_spec)
@@ -869,6 +866,14 @@ class StartJobHandler(base_handler.PostJsonHandler):
         mapper_spec.to_json(),
         mapreduce_params,
         hooks_class_name)
+
+    # Check that handler can be instantiated.
+    ctx = context.Context(mapreduce_spec, None)
+    context.Context._set(ctx)
+    try:
+      mapper_spec.get_handler()
+    finally:
+      context.Context._set(None)
 
     kickoff_params = {"mapreduce_spec": mapreduce_spec.to_json_str()}
     if _app:
