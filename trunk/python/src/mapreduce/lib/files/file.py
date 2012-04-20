@@ -383,9 +383,9 @@ class _File(object):
     request.set_exclusive_lock(self._exclusive_lock)
     request.set_content_type(self._content_type)
 
-    if self._mode == 'a':
+    if self._mode == 'a' or self._mode == 'ab':
       request.set_open_mode(file_service_pb.OpenRequest.APPEND)
-    elif self._mode == 'r':
+    elif self._mode == 'r' or self._mode == 'rb':
       request.set_open_mode(file_service_pb.OpenRequest.READ)
     else:
       raise UnsupportedOpenModeError('Unsupported open mode: %s', self._mode)
