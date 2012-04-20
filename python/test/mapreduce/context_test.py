@@ -27,12 +27,19 @@ from google.appengine.ext import db
 from mapreduce import context
 from testlib import testutil
 from mapreduce import model
+from google.appengine.ext.ndb import ndb
 
 
 class TestEntity(db.Model):
   """Test entity class to test db operations."""
 
   tag = db.TextProperty()
+
+
+class NdbTestEntity(ndb.Model):
+  """Test entity class to test ndb operations."""
+
+  tag = ndb.TextProperty()
 
 
 def new_datastore_entity(key_name=None):
@@ -132,6 +139,15 @@ class MutationPoolTest(testutil.HandlerTestBase):
     self.assertEquals([e._populate_internal_entity()], self.pool.puts.items)
     self.assertEquals([], self.pool.deletes.items)
 
+  def testPutNdbEntity(self):
+    """Test put() using an NDB entity."""
+    e = NdbTestEntity()
+    self.pool.put(e)
+    self.assertEquals([e], self.pool.ndb_puts.items)
+    self.assertEquals([], self.pool.ndb_deletes.items)
+    self.assertEquals([], self.pool.puts.items)
+    self.assertEquals([], self.pool.deletes.items)
+
   def testPutEntity(self):
     """Test put method using a datastore Entity directly."""
     e = new_datastore_entity()
@@ -144,11 +160,29 @@ class MutationPoolTest(testutil.HandlerTestBase):
     self.assertEquals([e, e2._populate_internal_entity()], self.pool.puts.items)
 
   def testDelete(self):
-    """Test delete method with a model instance"""
+    """Test delete method with a model instance."""
     e = TestEntity(key_name='goingaway')
     self.pool.delete(e)
     self.assertEquals([], self.pool.puts.items)
     self.assertEquals([e.key()], self.pool.deletes.items)
+
+  def testDeleteNdbEntity(self):
+    """Test delete method with an NDB model instance."""
+    e = NdbTestEntity(id='goingaway')
+    self.pool.delete(e)
+    self.assertEquals([], self.pool.ndb_puts.items)
+    self.assertEquals([e.key], self.pool.ndb_deletes.items)
+    self.assertEquals([], self.pool.puts.items)
+    self.assertEquals([], self.pool.deletes.items)
+
+  def testDeleteNdbKey(self):
+    """Test delete method with an NDB key."""
+    e = NdbTestEntity(id='goingaway')
+    self.pool.delete(e.key)
+    self.assertEquals([], self.pool.ndb_puts.items)
+    self.assertEquals([e.key], self.pool.ndb_deletes.items)
+    self.assertEquals([], self.pool.puts.items)
+    self.assertEquals([], self.pool.deletes.items)
 
   def testDeleteEntity(self):
     """Test delete method with a datastore entity"""
@@ -304,6 +338,28 @@ class MutationPoolTest(testutil.HandlerTestBase):
     finally:
       m.UnsetStubs()
 
+  def testNdbFlush(self):
+    # Combined test for all NDB implicit and explicit flushing.
+    self.pool = context.MutationPool(max_pool_size=500, max_entity_count=3)
+
+    for i in range(8):
+      self.pool.put(NdbTestEntity())
+      self.assertEquals(len(self.pool.ndb_puts.items), (i%3) + 1)
+
+    for i in range(5):
+      self.pool.delete(ndb.Key(NdbTestEntity, 'x%d' % i))
+      self.assertEquals(len(self.pool.ndb_deletes.items), (i%3) + 1)
+
+    self.pool.put(NdbTestEntity(tag='x'*500))
+    self.assertEquals(len(self.pool.ndb_puts.items), 1)  # Down from 2
+
+    self.pool.delete(ndb.Key(NdbTestEntity, 'x'*500))
+    self.assertEquals(len(self.pool.ndb_deletes.items), 1)  # Down from 2
+
+    self.pool.flush()
+    self.assertEquals(len(self.pool.ndb_puts.items), 0)
+    self.assertEquals(len(self.pool.ndb_deletes.items), 0)
+
 
 class CountersTest(unittest.TestCase):
   """Test for context.Counters class."""
@@ -391,6 +447,7 @@ class ContextTest(testutil.HandlerTestBase):
                       ctx.mutation_pool.max_entity_count)
     self.assertEquals(context.MAX_POOL_SIZE / 16,
                       ctx.mutation_pool.max_pool_size)
+
 
 if __name__ == "__main__":
   unittest.main()

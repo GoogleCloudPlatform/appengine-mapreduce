@@ -41,6 +41,7 @@ import threading
 
 from google.appengine.api import datastore
 from google.appengine.ext import db
+from google.appengine.ext.ndb import ndb
 
 
 # Maximum pool size in bytes. Pool will be flushed when reaches this amount.
@@ -64,13 +65,16 @@ COUNTER_MAPPER_WALLTIME_MS = "mapper-walltime-ms"
 
 def _normalize_entity(value):
   """Return an entity from an entity or model instance."""
-  # TODO(user): Consider using datastore.NormalizeAndTypeCheck.
+  if isinstance(value, ndb.Model):
+    return None
   if getattr(value, "_populate_internal_entity", None):
     return value._populate_internal_entity()
   return value
 
 def _normalize_key(value):
   """Return a key from an entity, model instance, key, or key string."""
+  if isinstance(value, (ndb.Model, ndb.Key)):
+    return None
   if getattr(value, "key", None):
     return value.key()
   elif isinstance(value, basestring):
@@ -148,6 +152,8 @@ class MutationPool(object):
     self.force_writes = bool(params.get("force_ops_writes", False))
     self.puts = ItemList()
     self.deletes = ItemList()
+    self.ndb_puts = ItemList()
+    self.ndb_deletes = ItemList()
 
   def put(self, entity):
     """Registers entity to put to datastore.
@@ -156,11 +162,22 @@ class MutationPool(object):
       entity: an entity or model instance to put.
     """
     actual_entity = _normalize_entity(entity)
+    if actual_entity is None:
+      return self.ndb_put(entity)
     entity_size = len(actual_entity._ToPb().Encode())
     if (self.puts.length >= self.max_entity_count or
         (self.puts.size + entity_size) > self.max_pool_size):
       self.__flush_puts()
     self.puts.append(actual_entity, entity_size)
+
+  def ndb_put(self, entity):
+    """Like put(), but for NDB entities."""
+    assert isinstance(entity, ndb.Model)
+    entity_size = len(entity._to_pb().Encode())
+    if (self.ndb_puts.length >= self.max_entity_count or
+        (self.ndb_puts.size + entity_size) > self.max_pool_size):
+      self.__flush_ndb_puts()
+    self.ndb_puts.append(entity, entity_size)
 
   def delete(self, entity):
     """Registers entity to delete from datastore.
@@ -170,17 +187,33 @@ class MutationPool(object):
     """
     # This is not very nice: we're calling two protected methods here...
     key = _normalize_key(entity)
+    if key is None:
+      return self.ndb_delete(entity)
     key_size = len(key._ToPb().Encode())
     if (self.deletes.length >= self.max_entity_count or
         (self.deletes.size + key_size) > self.max_pool_size):
       self.__flush_deletes()
     self.deletes.append(key, key_size)
 
+  def ndb_delete(self, entity_or_key):
+    """Like delete(), but for NDB entities/keys."""
+    if isinstance(entity_or_key, ndb.Model):
+      key = entity_or_key.key
+    else:
+      key = entity_or_key
+    key_size = len(key.reference().Encode())
+    if (self.ndb_deletes.length >= self.max_entity_count or
+        (self.ndb_deletes.size + key_size) > self.max_pool_size):
+      self.__flush_ndb_deletes()
+    self.ndb_deletes.append(key, key_size)
+
   # TODO(user): some kind of error handling/retries is needed here.
   def flush(self):
     """Flush(apply) all changed to datastore."""
     self.__flush_puts()
     self.__flush_deletes()
+    self.__flush_ndb_puts()
+    self.__flush_ndb_deletes()
 
   def __flush_puts(self):
     """Flush all puts to datastore."""
@@ -193,6 +226,18 @@ class MutationPool(object):
     if self.deletes.length:
       datastore.Delete(self.deletes.items, config=self.__create_config())
     self.deletes.clear()
+
+  def __flush_ndb_puts(self):
+    """Flush all NDB puts to datastore."""
+    if self.ndb_puts.length:
+      ndb.put_multi(self.ndb_puts.items, config=self.__create_config())
+    self.ndb_puts.clear()
+
+  def __flush_ndb_deletes(self):
+    """Flush all deletes to datastore."""
+    if self.ndb_deletes.length:
+      ndb.delete_multi(self.ndb_deletes.items, config=self.__create_config())
+    self.ndb_deletes.clear()
 
   def __create_config(self):
     """Creates datastore Config.
