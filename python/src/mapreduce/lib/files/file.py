@@ -52,6 +52,7 @@ __all__ = [
            'delete',
            'finalize',
            'open',
+           'stat',
 
            'BufferedFile',
            ]
@@ -458,6 +459,58 @@ def finalize(filename, content_type=RAW):
   except FinalizationError:
 
     pass
+
+
+class _FileStat(object):
+  """_FileStat contains file attributes.
+
+  Attributes:
+    filename: the uploaded filename of the file;
+    finalized: whether the file is finalized. This is always true by now;
+    st_size: number of bytes of the file;
+    st_ctime: creation time. Currently not set;
+    st_mtime: modification time. Currently not set.;
+  """
+  def __init__(self):
+    self.filename = None
+    self.finlized = True
+    self.st_size = None
+    self.st_ctime = None
+    self.st_mtime = None
+
+
+def stat(filename):
+  """Get status of a finalized file given it's full path filename.
+
+  Returns:
+    a _FileStat object similar to that returned by python's os.stat(path).
+
+  Throws:
+    FinalizationError if file is not finalized.
+  """
+  if not filename:
+    raise InvalidArgumentError('Filename is empty')
+  if not isinstance(filename, basestring):
+    raise InvalidArgumentError('Filename should be a string')
+
+  request = file_service_pb.StatRequest()
+  response = file_service_pb.StatResponse()
+  request.set_filename(filename)
+
+  with open(filename, 'r'):
+    _make_call('Stat', request, response)
+
+  if response.stat_size() != 1:
+    raise ValueError(
+        "Requested stat for one file. Got zero or more than one responses")
+
+  file_stat_pb = response.stat(0)
+  file_stat = _FileStat()
+  file_stat.filename = file_stat_pb.filename()
+  file_stat.finalized = file_stat_pb.finalized()
+  file_stat.st_size = file_stat_pb.length()
+
+  return file_stat
 
 
 def _create(filesystem, content_type=RAW, filename=None, params=None):
