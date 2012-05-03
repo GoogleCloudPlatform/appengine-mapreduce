@@ -75,6 +75,13 @@ class TestEntity(db.Model):
   json_property_default_value = model.JsonProperty(
       TestJsonType, default=TestJsonType())
 
+class TestEntityWithDot(db.Model):
+  """Test entity class with dot in its kind."""
+
+  @classmethod
+  def kind(cls):
+    return "Test.Entity.With.Dot"
+
 
 ENTITY_KIND = "__main__.TestEntity"
 
@@ -692,7 +699,7 @@ class DatastoreInputReaderTest(unittest.TestCase):
                                   namespace="google")]
 
     query_range = input_readers.DatastoreEntityInputReader(
-        ENTITY_KIND, key_ranges=kranges, ns_range=None, batch_size=50)
+        TestEntity.kind(), key_ranges=kranges, ns_range=None, batch_size=50)
 
     entities = []
     for entity in query_range:
@@ -762,15 +769,35 @@ class DatastoreKeyInputReaderTest(unittest.TestCase):
                                   include_end=True,
                                   namespace="google")]
     query_range = input_readers.DatastoreKeyInputReader(
-        ENTITY_KIND, key_ranges=kranges, ns_range=None, batch_size=50)
+        TestEntity.kind(), key_ranges=kranges, ns_range=None, batch_size=50)
 
     keys = []
-
     for k in query_range:
       keys.append(k)
 
     self.assertEquals(65, len(keys))
     self.assertEquals(expected_keys[25:50] + expected_keys[110:150], keys)
+
+  def testEntityKindWithDot(self):
+    """Test generator functionality."""
+    expected_keys = []
+    for _ in range(0, 5):
+      expected_keys.append(TestEntityWithDot().put())
+
+    params = {}
+    params["entity_kind"] = TestEntityWithDot.kind()
+    mapper_spec = model.MapperSpec(
+        "FooHandler",
+        "mapreduce.input_readers.DatastoreInputReader",
+        params, 1)
+    readers = input_readers.DatastoreKeyInputReader.split_input(
+        mapper_spec)
+    self.assertEquals(1, len(readers))
+
+    keys = []
+    for k in readers[0]:
+      keys.append(k)
+    self.assertEquals(expected_keys, keys)
 
   def tesGeneratorNoModelOtherApp(self):
     """Test DatastoreKeyInputReader when raw kind is given, not a Model path."""

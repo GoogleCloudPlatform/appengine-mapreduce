@@ -279,6 +279,17 @@ class AbstractDatastoreInputReader(InputReader):
     self._batch_size = int(batch_size)
     self._current_key_range = current_key_range
 
+
+  @classmethod
+  def _get_raw_entity_kind(cls, entity_kind):
+    if "." in entity_kind:
+      logging.warning(
+          ". detected in entity kind %s specified for reader %s."
+          "Assuming entity kind contains the dot.",
+          entity_kind, cls.__name__)
+    return entity_kind
+
+
   def __iter__(self):
     """Iterates over the given KeyRanges or NamespaceRange.
 
@@ -381,7 +392,7 @@ class AbstractDatastoreInputReader(InputReader):
   # TODO(user): use query splitting functionality when it becomes available
   # instead.
   @classmethod
-  def _split_input_from_namespace(cls, app, namespace, entity_kind_name,
+  def _split_input_from_namespace(cls, app, namespace, entity_kind,
                                   shard_count):
     """Return KeyRange objects. Helper for _split_input_from_params.
 
@@ -391,8 +402,7 @@ class AbstractDatastoreInputReader(InputReader):
     end.
     """
 
-    raw_entity_kind = util.get_short_name(entity_kind_name)
-
+    raw_entity_kind = cls._get_raw_entity_kind(entity_kind)
     if shard_count == 1:
       # With one shard we don't need to calculate any splitpoints at all.
       return [key_range.KeyRange(namespace=namespace, _app=app)]
@@ -716,12 +726,21 @@ class DatastoreInputReader(AbstractDatastoreInputReader):
     except ImportError, e:
       raise BadReaderParamsError("Bad entity kind: %s" % e)
 
+  @classmethod
+  def _get_raw_entity_kind(cls, entity_kind):
+    """Returns an entity kind to use with datastore calls."""
+    entity_type = util.for_name(entity_kind)
+    if isinstance(entity_kind, db.Model):
+      return entity_type.kind()
+    else:
+      return util.get_short_name(entity_kind)
+
 
 class DatastoreKeyInputReader(AbstractDatastoreInputReader):
   """An input reader which takes a Kind and yields Keys for that kind."""
 
   def _iter_key_range(self, k_range):
-    raw_entity_kind = util.get_short_name(self._entity_kind)
+    raw_entity_kind = self._get_raw_entity_kind(self._entity_kind)
     query = k_range.make_ascending_datastore_query(
         raw_entity_kind, keys_only=True)
     for key in query.Run(
@@ -733,7 +752,7 @@ class DatastoreEntityInputReader(AbstractDatastoreInputReader):
   """An input reader which yields low level datastore entities for a kind."""
 
   def _iter_key_range(self, k_range):
-    raw_entity_kind = util.get_short_name(self._entity_kind)
+    raw_entity_kind = self._get_raw_entity_kind(self._entity_kind)
     query = k_range.make_ascending_datastore_query(
         raw_entity_kind)
     for entity in query.Run(
@@ -1802,7 +1821,7 @@ class LogInputReader(InputReader):
       An instance of the InputReader configured using the given JSON parameters.
     """
     # Strip out unrecognized parameters, as introduced by b/5960884.
-    params = dict((str(k), v) for k, v in json.iteritems() 
+    params = dict((str(k), v) for k, v in json.iteritems()
                   if k in cls._PARAMS)
 
     # This is not symmetric with to_json() wrt. PROTOTYPE_REQUEST_PARAM because
