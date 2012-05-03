@@ -43,7 +43,7 @@ from google.appengine.api import datastore
 from google.appengine.ext import db
 
 try:
-  from google.appengine.ext.ndb import ndb
+  from google.appengine.ext import ndb
 except ImportError:
   ndb = None
 #EXT It is acceptable to set key_range.ndb to the ndb module,
