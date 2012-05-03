@@ -29,7 +29,7 @@ from testlib import testutil
 from mapreduce import model
 
 try:
-  from google.appengine.ext.ndb import ndb
+  from google.appengine.ext import ndb
 except ImportError:
   ndb = None
 

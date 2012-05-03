@@ -20,7 +20,7 @@ from mapreduce import output_writers
 from mapreduce import test_support
 from testlib import testutil
 from mapreduce import util
-from google.appengine.ext.ndb import ndb
+from google.appengine.ext import ndb
 
 
 def random_string(length):
