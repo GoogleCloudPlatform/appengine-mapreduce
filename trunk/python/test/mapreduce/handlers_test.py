@@ -581,7 +581,7 @@ class StartJobHandlerTest(MapreduceHandlerTestBase):
     # Only kickoff task should be there.
     tasks = self.taskqueue.GetTasks("default")
     self.assertEquals(1, len(tasks))
-    payload = test_support.decode_task_payload(tasks[0]) 
+    payload = test_support.decode_task_payload(tasks[0])
     self.assertEquals("otherapp", payload["app"])
     self.assertTrue(self.get_mapreduce_spec(tasks[0]))
 
@@ -1073,7 +1073,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
     self.init(__name__ + ".test_handler_yield_keys",
               output_writer_spec=__name__ + ".TestOutputWriter")
 
-    model.MapreduceControl.abort(self.mapreduce_id)
+    model.MapreduceControl.abort(self.mapreduce_id, force_writes=True)
     self.handler.post()
     self.verify_shard_state(
         model.ShardState.get_by_shard_id(self.shard_id),
