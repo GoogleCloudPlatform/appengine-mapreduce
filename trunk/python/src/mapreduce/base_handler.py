@@ -21,10 +21,7 @@
 
 
 import logging
-try:
-  import json as simplejson
-except ImportError:
-  from mapreduce.lib import simplejson
+from mapreduce.lib import simplejson
 
 try:
   from mapreduce.lib import pipeline
