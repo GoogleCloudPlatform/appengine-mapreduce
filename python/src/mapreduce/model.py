@@ -36,10 +36,7 @@ import logging
 import math
 import os
 import random
-try:
-  import json as simplejson
-except ImportError:
-  from mapreduce.lib import simplejson
+from mapreduce.lib import simplejson
 import time
 
 from google.appengine.api import datastore_errors
