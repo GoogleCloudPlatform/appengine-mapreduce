@@ -1145,7 +1145,7 @@ class BlobstoreZipLineInputReader(InputReader):
       raise BadReaderParamsError("Mapper input reader class mismatch")
     params = _get_params(mapper_spec)
     if cls.BLOB_KEYS_PARAM not in params:
-      raise BadReaderParamsError("Must specify 'blob_key' for mapper input")
+      raise BadReaderParamsError("Must specify 'blob_keys' for mapper input")
 
     blob_keys = params[cls.BLOB_KEYS_PARAM]
     if isinstance(blob_keys, basestring):
