@@ -224,30 +224,6 @@ class UnexpectedMockCreationError(Error):
     return error
 
 
-class SwallowedExceptionError(Error):
-  """Raised when Verify() is called after something already threw an exception.
-
-  This means that the exception that was thrown was somehow swallowed, allowing
-  the test to continue when it should not have.
-  """
-
-  def __init__(self, previous_exceptions):
-    """Init exception.
-
-    Args:
-      # previous_exceptions: A sequence of Error objects that were raised.
-      previous_exceptions: [Error]
-    """
-
-    Error.__init__(self)
-    self._previous_exceptions = previous_exceptions
-
-  def __str__(self):
-    exceptions = "\n".join(["%3d.  %s: %s" % (i, e.__class__.__name__, e)
-                            for i, e in enumerate(self._previous_exceptions)])
-    return "Previous exceptions thrown:\n%s" % (exceptions,)
-
-
 class Mox(object):
   """Mox: a factory for creating mock objects."""
 
@@ -450,17 +426,7 @@ class MockAnything:
         created, for debugging output purposes.
     """
     self._description = description
-    self._exceptions_thrown = []
     self._Reset()
-
-  def __bases__(self):
-    pass
-
-  def __members__(self):
-    pass
-
-  def __methods__(self):
-    pass
 
   def __repr__(self):
     if self._description:
@@ -501,8 +467,7 @@ class MockAnything:
     """
 
     return MockMethod(method_name, self._expected_calls_queue,
-                      self._exceptions_thrown, self._replay_mode,
-                      method_to_mock=method_to_mock,
+                      self._replay_mode, method_to_mock=method_to_mock,
                       description=self._description)
 
   def __nonzero__(self):
@@ -533,15 +498,8 @@ class MockAnything:
     Raises:
       ExpectedMethodCallsError: if there are still more method calls in the
         expected queue.
-      any exception previously raised by this object: if _Verify was called
-      afterwards anyway.  (This detects tests passing erroneously.)
     """
 
-    # If any exceptions were thrown, re-raise them.  (This should only happen
-    # if the original exception was swallowed, in which case it's necessary to
-    # re-raise it so that the test will fail.  See Issue #16.)
-    if self._exceptions_thrown:
-      raise SwallowedExceptionError(self._exceptions_thrown)
     # If the list of expected calls is not empty, raise an exception
     if self._expected_calls_queue:
       # The last MultipleTimesGroup is not popped from the queue.
@@ -652,9 +610,7 @@ class MockObject(MockAnything, object):
           name,
           method_to_mock=getattr(self._class_to_mock, name))
 
-    exception = UnknownMethodCallError(name)
-    self._exceptions_thrown.append(exception)
-    raise exception
+    raise UnknownMethodCallError(name)
 
   def __eq__(self, rhs):
     """Provide custom logic to compare objects."""
@@ -688,7 +644,7 @@ class MockObject(MockAnything, object):
     # If we are in replay mode then simply call the mock __setitem__ method.
     if self._replay_mode:
       return MockMethod('__setitem__', self._expected_calls_queue,
-                        self._exceptions_thrown, self._replay_mode)(key, value)
+                        self._replay_mode)(key, value)
 
 
     # Otherwise, create a mock method __setitem__.
@@ -717,7 +673,7 @@ class MockObject(MockAnything, object):
     # If we are in replay mode then simply call the mock __getitem__ method.
     if self._replay_mode:
       return MockMethod('__getitem__', self._expected_calls_queue,
-                        self._exceptions_thrown, self._replay_mode)(key)
+                        self._replay_mode)(key)
 
 
     # Otherwise, create a mock method __getitem__.
@@ -757,7 +713,7 @@ class MockObject(MockAnything, object):
     # If we are in replay mode then simply call the mock __iter__ method.
     if self._replay_mode:
       return MockMethod('__iter__', self._expected_calls_queue,
-                        self._exceptions_thrown, self._replay_mode)()
+                        self._replay_mode)()
 
 
     # Otherwise, create a mock method __iter__.
@@ -787,7 +743,7 @@ class MockObject(MockAnything, object):
 
     if self._replay_mode:
       return MockMethod('__contains__', self._expected_calls_queue,
-                        self._exceptions_thrown, self._replay_mode)(key)
+                        self._replay_mode)(key)
 
     return self._CreateMockMethod('__contains__')(key)
 
@@ -853,10 +809,8 @@ class _MockObjectFactory(MockObject):
 
     if self._replay_mode:
       if not self._instance_queue:
-        exception = UnexpectedMockCreationError(self._class_to_mock, *params,
-                                                **named_params)
-        self._exceptions_thrown.append(exception)
-        raise exception
+        raise UnexpectedMockCreationError(self._class_to_mock, *params,
+                                          **named_params)
 
       mock_method(*params, **named_params)
 
@@ -1013,7 +967,7 @@ class MockMethod(object):
   signature) matches the expected method.
   """
 
-  def __init__(self, method_name, call_queue, exception_list, replay_mode,
+  def __init__(self, method_name, call_queue, replay_mode,
                method_to_mock=None, description=None):
     """Construct a new mock method.
 
@@ -1021,8 +975,6 @@ class MockMethod(object):
       # method_name: the name of the method
       # call_queue: deque of calls, verify this call against the head, or add
       #     this call to the queue.
-      # exception_list: list of exceptions; any exceptions thrown by this
-      #     instance are appended to this list.
       # replay_mode: False if we are recording, True if we are verifying calls
       #     against the call queue.
       # method_to_mock: The actual method being mocked, used for introspection.
@@ -1030,7 +982,6 @@ class MockMethod(object):
       #     this is equal to the descriptive name of the method's class.
       method_name: str
       call_queue: list or deque
-      exception_list: list
       replay_mode: bool
       method_to_mock: a method object
       description: str or None
@@ -1041,7 +992,6 @@ class MockMethod(object):
     self._call_queue = call_queue
     if not isinstance(call_queue, deque):
       self._call_queue = deque(self._call_queue)
-    self._exception_list = exception_list
     self._replay_mode = replay_mode
     self._description = description
 
@@ -1111,9 +1061,7 @@ class MockMethod(object):
     try:
       return self._call_queue.popleft()
     except IndexError:
-      exception = UnexpectedMethodCallError(self, None)
-      self._exception_list.append(exception)
-      raise exception
+      raise UnexpectedMethodCallError(self, None)
 
   def _VerifyMethodCall(self):
     """Verify the called method is expected.
@@ -1138,9 +1086,7 @@ class MockMethod(object):
 
     # This is a mock method, so just check equality.
     if expected != self:
-      exception = UnexpectedMethodCallError(self, expected)
-      self._exception_list.append(exception)
-      raise exception
+      raise UnexpectedMethodCallError(self, expected)
 
     return expected
 
@@ -1212,7 +1158,7 @@ class MockMethod(object):
       return self
 
     # Create a new group and add the method.
-    new_group = group_class(group_name, self._exception_list)
+    new_group = group_class(group_name)
     new_group.AddMethod(self)
     self._call_queue.append(new_group)
     return self
@@ -1885,18 +1831,8 @@ class Remember(Comparator):
 class MethodGroup(object):
   """Base class containing common behaviour for MethodGroups."""
 
-  def __init__(self, group_name, exception_list):
-    """Construct a new method group.
-
-    Args:
-      # group_name: the name of the method group
-      # exception_list: list of exceptions; any exceptions thrown by this
-      #     instance are appended to this list.
-      group_name: str
-      exception_list: list
-    """
+  def __init__(self, group_name):
     self._group_name = group_name
-    self._exception_list = exception_list
 
   def group_name(self):
     return self._group_name
@@ -1920,8 +1856,8 @@ class UnorderedGroup(MethodGroup):
   over the keys of a dict.
   """
 
-  def __init__(self, group_name, exception_list):
-    super(UnorderedGroup, self).__init__(group_name, exception_list)
+  def __init__(self, group_name):
+    super(UnorderedGroup, self).__init__(group_name)
     self._methods = []
 
   def __str__(self):
@@ -1971,9 +1907,7 @@ class UnorderedGroup(MethodGroup):
 
         return self, method
 
-    exception = UnexpectedMethodCallError(mock_method, self)
-    self._exception_list.append(exception)
-    raise exception
+    raise UnexpectedMethodCallError(mock_method, self)
 
   def IsSatisfied(self):
     """Return True if there are not any methods in this group."""
@@ -1989,8 +1923,8 @@ class MultipleTimesGroup(MethodGroup):
   This is helpful, if you don't know or care how many times a method is called.
   """
 
-  def __init__(self, group_name, exception_list):
-    super(MultipleTimesGroup, self).__init__(group_name, exception_list)
+  def __init__(self, group_name):
+    super(MultipleTimesGroup, self).__init__(group_name)
     self._methods = set()
     self._methods_left = set()
 
@@ -2034,9 +1968,7 @@ class MultipleTimesGroup(MethodGroup):
       next_method = mock_method._PopNextMethod();
       return next_method, None
     else:
-      exception = UnexpectedMethodCallError(mock_method, self)
-      self._exception_list.append(exception)
-      raise exception
+      raise UnexpectedMethodCallError(mock_method, self)
 
   def IsSatisfied(self):
     """Return True if all methods in this group are called at least once."""
@@ -2054,7 +1986,6 @@ class MoxMetaTestBase(type):
   """
 
   def __init__(cls, name, bases, d):
-    super(MoxMetaTestBase, cls).__init__(name, bases, d)
     type.__init__(cls, name, bases, d)
 
     # also get all the attributes from the base classes to account
