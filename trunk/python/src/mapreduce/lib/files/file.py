@@ -48,6 +48,7 @@ __all__ = [
            'WrongOpenModeError',
 
            'RAW',
+           'READ_BLOCK_SIZE',
 
            'delete',
            'finalize',
@@ -59,6 +60,8 @@ __all__ = [
 
 import gc
 import os
+import sys
+import StringIO
 
 from google.appengine.api import apiproxy_stub_map
 from mapreduce.lib.files import file_service_pb
@@ -68,6 +71,7 @@ from google.appengine.runtime import apiproxy_errors
 BLOBSTORE_FILESYSTEM = 'blobstore'
 GS_FILESYSTEM = 'gs'
 FILESYSTEMS = (BLOBSTORE_FILESYSTEM, GS_FILESYSTEM)
+READ_BLOCK_SIZE = 1024 * 512
 
 
 class Error(Exception):
@@ -336,23 +340,28 @@ class _File(object):
     Args:
       offset: seek offset as number.
       whence: seek mode. Supported modes are os.SEEK_SET (absolute seek),
-        and os.SEEK_CUR (seek relative to the current position).
+        and os.SEEK_CUR (seek relative to the current position) and os.SEEK_END
+        (seek relative to the end, offset should be negative).
     """
     self._verify_read_mode()
     if whence == os.SEEK_SET:
       self._offset = offset
     elif whence == os.SEEK_CUR:
       self._offset += offset
+    elif whence == os.SEEK_END:
+      file_stat = self.stat()
+      self._offset = file_stat.st_size + offset
     else:
       raise InvalidArgumentError('Whence mode %d is not supported', whence)
 
-  def read(self, size):
+  def read(self, size=None):
     """Read data from RAW file.
 
     Args:
       size: Number of bytes to read as integer. Actual number of bytes
         read might be less than specified, but it's never 0 unless current
-        offset is at the end of the file.
+        offset is at the end of the file. If it is None, then file is read
+        until the end.
 
     Returns:
       A string with data read.
@@ -362,15 +371,33 @@ class _File(object):
       raise UnsupportedContentTypeError(
           'Unsupported content type: %s' % self._content_type)
 
-    request = file_service_pb.ReadRequest()
-    response = file_service_pb.ReadResponse()
-    request.set_filename(self._filename)
-    request.set_pos(self._offset)
-    request.set_max_bytes(size)
-    self._make_rpc_call_with_retry('Read', request, response)
-    result = response.data()
-    self._offset += len(result)
-    return result
+    buf = StringIO.StringIO()
+    original_offset = self._offset
+
+    try:
+      if size is None:
+        size = sys.maxint
+
+      while size > 0:
+        request = file_service_pb.ReadRequest()
+        response = file_service_pb.ReadResponse()
+        request.set_filename(self._filename)
+        request.set_pos(self._offset)
+        request.set_max_bytes(min(READ_BLOCK_SIZE, size))
+        self._make_rpc_call_with_retry('Read', request, response)
+        chunk = response.data()
+        self._offset += len(chunk)
+        if len(chunk) == 0:
+          break
+        buf.write(chunk)
+        size -= len(chunk)
+
+      return buf.getvalue()
+    except:
+      self._offset = original_offset
+      raise
+    finally:
+      buf.close()
 
   def _verify_read_mode(self):
     if self._mode != 'r':
@@ -407,6 +434,38 @@ class _File(object):
 
       self._open()
       _make_call(method, request, response)
+
+  def stat(self):
+    """Get status of a finalized file.
+
+    Returns:
+      a _FileStat object similar to that returned by python's os.stat(path).
+
+    Throws:
+      FinalizationError if file is not finalized.
+    """
+    self._verify_read_mode()
+
+    request = file_service_pb.StatRequest()
+    response = file_service_pb.StatResponse()
+    request.set_filename(self._filename)
+
+    _make_call('Stat', request, response)
+
+    if response.stat_size() == 0:
+      raise ExistenceError("File %s not found." % self._filename)
+
+    if response.stat_size() > 1:
+      raise ValueError(
+          "Requested stat for one file. Got more than one response.")
+
+    file_stat_pb = response.stat(0)
+    file_stat = _FileStat()
+    file_stat.filename = file_stat_pb.filename()
+    file_stat.finalized = file_stat_pb.finalized()
+    file_stat.st_size = file_stat_pb.length()
+
+    return file_stat
 
 
 def open(filename, mode='r', content_type=RAW, exclusive_lock=False):
@@ -493,24 +552,8 @@ def stat(filename):
   if not isinstance(filename, basestring):
     raise InvalidArgumentError('Filename should be a string')
 
-  request = file_service_pb.StatRequest()
-  response = file_service_pb.StatResponse()
-  request.set_filename(filename)
-
-  with open(filename, 'r'):
-    _make_call('Stat', request, response)
-
-  if response.stat_size() != 1:
-    raise ValueError(
-        "Requested stat for one file. Got zero or more than one responses")
-
-  file_stat_pb = response.stat(0)
-  file_stat = _FileStat()
-  file_stat.filename = file_stat_pb.filename()
-  file_stat.finalized = file_stat_pb.finalized()
-  file_stat.st_size = file_stat_pb.length()
-
-  return file_stat
+  with open(filename, 'r') as f:
+    return f.stat()
 
 
 def _create(filesystem, content_type=RAW, filename=None, params=None):
