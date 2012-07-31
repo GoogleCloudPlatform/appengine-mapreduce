@@ -73,6 +73,7 @@ BLOBSTORE_FILESYSTEM = 'blobstore'
 GS_FILESYSTEM = 'gs'
 FILESYSTEMS = (BLOBSTORE_FILESYSTEM, GS_FILESYSTEM)
 READ_BLOCK_SIZE = 1024 * 512
+_CREATION_HANDLE_PREFIX = 'writable:'
 
 
 class Error(Exception):
@@ -625,21 +626,67 @@ def _create(filesystem, content_type=RAW, filename=None, params=None):
   return response.filename()
 
 
-def delete(filename):
-  """Permanently delete a file.
+def __checkIsFinalizedName(filename):
+  """Check if a filename is finalized.
+
+  A filename is finalized when it has creation handle prefix, which is the same
+  for both blobstore and gs files.
 
   Args:
-    filename: finalized file name as string.
-  """
-  from mapreduce.lib.files import blobstore as files_blobstore
+    filename: a gs or blobstore filename that starts with '/gs/' or
+      '/blobstore/'
 
-  if not isinstance(filename, basestring):
-    raise InvalidArgumentError('Filename should be a string, but is %s(%r)' %
-                               (filename.__class__.__name__, filename))
-  if filename.startswith(files_blobstore._BLOBSTORE_DIRECTORY):
-    files_blobstore._delete(filename)
-  else:
-    raise InvalidFileNameError( 'Unsupported file name: %s' % filename)
+  Raises:
+    InvalidFileNameError: raised when filename is finalized.
+  """
+  if filename.split('/')[2].startswith(_CREATION_HANDLE_PREFIX):
+    raise InvalidFileNameError('File %s should have finalized filename' %
+                               filename)
+
+
+def delete(*filenames):
+  """Permanently delete files.
+
+  Delete on non-finalized/non-existent files is a no-op.
+
+  Args:
+    filenames: finalized file names as strings. filename should has format
+      "/gs/bucket/filename" or "/blobstore/blobkey".
+
+  Raises:
+    InvalidFileNameError: Raised when any filename is not of valid format or
+      not a finalized name.
+    IOError: Raised if any problem occurs contacting the backend system.
+  """
+
+  from mapreduce.lib.files import blobstore as files_blobstore
+  from mapreduce.lib.files import gs
+  from google.appengine.ext import blobstore
+
+  blobkeys = []
+
+  for filename in filenames:
+    if not isinstance(filename, basestring):
+      raise InvalidArgumentError('Filename should be a string, but is %s(%r)' %
+                                 (filename.__class__.__name__, filename))
+    if filename.startswith(files_blobstore._BLOBSTORE_DIRECTORY):
+      __checkIsFinalizedName(filename)
+      blobkey = files_blobstore.get_blob_key(filename)
+      if blobkey:
+        blobkeys.append(blobkey)
+    elif filename.startswith(gs._GS_PREFIX):
+
+      __checkIsFinalizedName(filename)
+      blobkeys.append(blobstore.create_gs_key(filename))
+    else:
+      raise InvalidFileNameError('Filename should start with /%s or /%s' %
+                                 (files_blobstore._BLOBSTORE_DIRECTORY,
+                                 gs._GS_PREFIX))
+
+  try:
+    blobstore.delete(blobkeys)
+  except Exception, e:
+    raise IOError('Blobstore failure.', e)
 
 
 def _get_capabilities():
