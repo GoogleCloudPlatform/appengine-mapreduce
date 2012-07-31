@@ -25,6 +25,7 @@ __all__ = [
     "BadWriterParamsError",
     "BadYamlError",
     "Error",
+    "FailJobError",
     "MissingYamlError",
     "MultipleDocumentsInMrYaml",
     "ShuffleServiceError",
@@ -65,3 +66,6 @@ class ShuffleServiceError(Error):
 class BadCombinerOutputError(Error):
   """Combiner outputs data instead of yielding it."""
 
+
+class FailJobError(Error):
+  """The job will be failed if this exception is thrown anywhere."""

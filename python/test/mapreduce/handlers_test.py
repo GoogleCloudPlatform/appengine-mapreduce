@@ -45,6 +45,7 @@ from google.appengine.ext import db
 from mapreduce.lib import key_range
 from mapreduce import context
 from mapreduce import control
+from mapreduce import errors
 from mapreduce import handlers
 from mapreduce import hooks
 from mapreduce import input_readers
@@ -170,6 +171,16 @@ def test_handler_raise_exception(entity):
     TestException: always.
   """
   raise TestException()
+
+
+def test_handler_raise_fail_job_exception(entity):
+  """Test handler function which always raises exception.
+
+  Raises:
+    FailJobError: always.
+  """
+  raise errors.FailJobError()
+
 
 
 def test_handler_yield_op(entity):
@@ -1386,6 +1397,46 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
     finally:
       m.UnsetStubs()
 
+  def testFailJobExceptionInHandler(self):
+    """Test behavior when handler throws exception."""
+    self.init(__name__ + ".test_handler_raise_fail_job_exception")
+    TestEntity().put()
+
+    # Stub out context._set
+    m = mox.Mox()
+    m.StubOutWithMock(context.Context, "_set", use_mock_anything=True)
+
+    # Record calls
+    context.Context._set(mox.IsA(context.Context))
+    # Context should not be flushed on error
+    context.Context._set(None)
+
+    m.ReplayAll()
+    try: # test, verify
+      self.handler.post()
+
+      # quota should be still consumed
+      self.assertEquals(self.initial_quota - 1,
+                        self.quota_manager.get(self.shard_id))
+
+      # slice should not be active
+      shard_state = model.ShardState.get_by_shard_id(self.shard_id)
+      self.verify_shard_state(
+          shard_state,
+          processed=1,
+          active=False,
+          result_status = model.ShardState.RESULT_FAILED)
+      self.assertEquals(1, shard_state.counters_map.get(
+          context.COUNTER_MAPPER_CALLS))
+
+      # new task should not be spawned
+      tasks = self.taskqueue.GetTasks("default")
+      self.assertEquals(0, len(tasks))
+
+      m.VerifyAll()
+    finally:
+      m.UnsetStubs()
+
   def testContext(self):
     """Test proper context initialization."""
     self.handler.request.headers["X-AppEngine-TaskRetryCount"] = 5
@@ -1627,8 +1678,8 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
     self.assertEquals('crazy-queue', queue_name)
     self.assertEquals('/fin', task.url)
 
-  def testShardFailureContinue(self):
-    """Tests that when one shard fails the whole job continues."""
+  def testShardFailure(self):
+    """Tests that when one shard fails the job will be aborted."""
     for i in range(3):
       shard_state = self.create_shard_state(self.mapreduce_id, i)
       if i == 0:
@@ -1651,6 +1702,12 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
     tasks = self.taskqueue.GetTasks("default")
     self.assertEquals(1, len(tasks))
     self.verify_controller_task(tasks[0], shard_count=3)
+
+    # Abort signal should be present.
+    self.assertEquals(
+        model.MapreduceControl.ABORT,
+        db.get(model.MapreduceControl.get_key_by_job_id(
+            self.mapreduce_id)).command)
 
   def testShardFailureAllDone(self):
     """Tests that individual shard failure affects the job outcome."""
