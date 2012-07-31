@@ -540,7 +540,7 @@ def listdir(path, **kwargs):
                                (path.__class__.__name__, path))
 
   if path.startswith(gs._GS_PREFIX):
-    gs.listdir(path, kwargs)
+    return gs.listdir(path, kwargs)
   else:
     raise InvalidFileNameError('Unsupported path: %s' % path)
 
