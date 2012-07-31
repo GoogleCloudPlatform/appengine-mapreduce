@@ -59,6 +59,89 @@ _GS_RESTFUL_SCOPE_READ_ONLY = (
     'https://www.googleapis.com/auth/devstorage.read_only')
 _GS_RESTFUL_API_VERSION = '2'
 _GS_BUCKETPATH_REGEX = re.compile(r'/gs/[a-z0-9\.\-_]{3,}$')
+_GS_FILEPATH_REGEX = re.compile(r'/gs/[a-z0-9\.\-_]{3,}')
+
+
+def parseGlob(filename):
+  """Parse a Gs filename or a filename pattern. Handle escape of '*' and '/'.
+
+  Args:
+    filename: a filename or filename pattern.
+      filename must be a valid gs filepath in the format of
+      '/gs/bucket/filename'. filename pattern has format '/gs/bucket/prefix*'.
+      filename pattern represents filenames with the given prefix in the bucket.
+      Please escape '*' and '\' with '\' if your filename contains them. We
+      recommend using Python raw string to simplify escape expressions.
+
+  Returns:
+    A (string, string) tuple if filename is a pattern. The first string is
+    the bucket name, second is the prefix or '' if prefix doesn't exist.
+    Properly escaped filename if filename is not a pattern.
+
+    example
+      '/gs/bucket1/file1' => '/gs/bucket1/file1'
+      '/gs/bucket2/*' => ('gs/bucket2', '') all files under bucket2
+      '/gs/bucket3/p*' => ('gs/bucket2', 'p') files under bucket3 with
+          a prefix 'p' in its name
+      r'/gs/bucket/file\*' => '/gs/bucket/file*'
+      r'/gs/bucket/file\\*' => ('/gs/bucket', r'file\') all files under bucket
+          with prefix r'file\'
+      r'/gs/bucket/file\\\*' => '/gs/bucket/file\*'
+      r'/gs/bucket/file\**' => ('/gs/bucket', 'file*') all files under bucket
+          with prefix 'file*'
+
+  Raises:
+    mapreduce.lib.files.InvalidFileNameError if filename is illegal.
+  """
+  if not filename:
+    raise files.InvalidFileNameError('filename is None.')
+  if not isinstance(filename, basestring):
+    raise files.InvalidFileNameError('filename %s should be of type string' %
+                                     filename)
+  match = _GS_FILEPATH_REGEX.match(filename)
+  if not match:
+    raise files.InvalidFileNameError(
+        'filename %s should start with/gs/bucketname', filename)
+
+  bucketname = match.group(0)
+  rest = filename[len(bucketname):]
+
+  if not rest or (len(rest) == 1 and rest[0] == '/'):
+
+    return bucketname, ''
+
+  if not rest.startswith('/'):
+    raise files.InvalidFileNameError(
+        'Expect / to separate bucketname and filename in %s' % filename)
+
+  i = 1
+
+  prefix = False
+
+  processed = ''
+  while i < len(rest):
+    char = rest[i]
+    if char == '\\':
+      if i + 1 == len(rest):
+
+        processed += char
+      else:
+
+        processed += rest[i + 1]
+        i += 1
+    elif char == '*':
+
+      if i + 1 != len(rest):
+        raise files.InvalidFileNameError('* as a wildcard is not the last.')
+      prefix = True
+    else:
+      processed += char
+    i += 1
+
+  if prefix:
+    return bucketname, processed
+  else:
+    return bucketname + '/' + processed
 
 
 def listdir(path, kwargs=None):

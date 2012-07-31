@@ -747,6 +747,11 @@ class BufferedFile(object):
   def __exit__(self, atype, value, traceback):
     self.close()
 
+  def close(self):
+    self._buffer = ''
+    self._eof = True
+    self._buffer_pos = 0
+
   def tell(self):
     """Return file's current position."""
     return self._position
