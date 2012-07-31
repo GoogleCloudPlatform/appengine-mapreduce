@@ -257,7 +257,7 @@ class _FilePool(object):
     if len(data) > _FILES_API_MAX_SIZE:
       raise errors.Error(
           "Can't write more than %s bytes in one request: "
-          "risk of writes interleaving." % self._flush_size)
+          "risk of writes interleaving." % _FILES_API_MAX_SIZE)
     else:
       self.__append(filename, data)
 
@@ -269,8 +269,8 @@ class _FilePool(object):
     start_time = time.time()
     for filename, data in self._append_buffer.iteritems():
       with files.open(filename, "a") as f:
-        if len(data) > self._flush_size:
-          raise errors.Error("Bad data: %s" % len(data))
+        if len(data) > _FILES_API_MAX_SIZE:
+          raise errors.Error("Bad data of length: %s" % len(data))
         if self._ctx:
           operation.counters.Increment(
               COUNTER_IO_WRITE_BYTES, len(data))(self._ctx)

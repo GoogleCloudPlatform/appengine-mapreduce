@@ -1349,9 +1349,6 @@ class RandomStringInputReader(InputReader):
   # Length of the generated strings.
   STRING_LENGTH = "string_length"
 
-  # Maximum number of shards to allow.
-  _MAX_SHARD_COUNT = 256
-
   DEFAULT_STRING_LENGTH = 10
 
   def __init__(self, count, string_length):
@@ -1386,7 +1383,7 @@ class RandomStringInputReader(InputReader):
     if cls.STRING_LENGTH in params:
       string_length = params[cls.STRING_LENGTH]
 
-    shard_count = min(cls._MAX_SHARD_COUNT, mapper_spec.shard_count)
+    shard_count = mapper_spec.shard_count
     count_per_shard = count // shard_count
 
     mr_input_readers = [
