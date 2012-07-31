@@ -407,8 +407,6 @@ class AbstractDatastoreInputReader(InputReader):
       # With one shard we don't need to calculate any splitpoints at all.
       return [key_range.KeyRange(namespace=namespace, _app=app)]
 
-    # we use datastore.Query instead of ext.db.Query here, because we can't
-    # erase ordering on db.Query once we set it.
     ds_query = datastore.Query(kind=raw_entity_kind,
                                namespace=namespace,
                                _app=app,
