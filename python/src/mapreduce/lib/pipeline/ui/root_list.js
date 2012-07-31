@@ -19,7 +19,7 @@
 
 
 function initRootList() {
-  setButter('Loading...');
+  setButter('Loading root jobs...');
   $.ajax({
     type: 'GET',
     url: 'rpc/list' + window.location.search,
@@ -57,8 +57,13 @@ function initRootListDone(response) {
       sinceSpan.timeago();
       $('<td class="start-time">').append(sinceSpan).appendTo(row);
 
-      $('<td class="run-time">').text(getElapsedTimeString(
-          infoMap.startTimeMs, infoMap.endTimeMs)).appendTo(row);
+      if (infoMap.endTimeMs) {
+        $('<td class="run-time">').text(getElapsedTimeString(
+            infoMap.startTimeMs, infoMap.endTimeMs)).appendTo(row);
+      } else {
+        $('<td class="run-time">').text('-').appendTo(row);
+      }
+
       $('<td class="links">')
           .append(
             $('<a>')
@@ -69,5 +74,47 @@ function initRootListDone(response) {
     });
   } else {
     $('#empty-list-message').text('No pipelines found.').show();
+  }
+
+  initRootNames();
+}
+
+
+function initRootNames() {
+  setButter('Loading names...');
+  $.ajax({
+    type: 'GET',
+    url: 'rpc/class_paths',
+    dataType: 'text',
+    error: function(request, textStatus) {
+      getResponseDataJson(textStatus);
+    },
+    success: function(data, textStatus, request) {
+      var response = getResponseDataJson(null, data);
+      if (response) {
+        clearButter();
+        initRootNamesDone(response);
+      }
+    }
+  });
+}
+
+
+function initRootNamesDone(response) {
+  if (response.classPaths) {
+    var filterMenu = $('#filter_menu');
+
+    $.each(response.classPaths, function(index, path) {
+      // Ignore internal pipelines.
+      if (path.match(/^pipeline\./)) {
+        return;
+      }
+
+      var option = $('<option>').val(path).text(path);
+      if (window.location.search.indexOf(path) != -1) {
+        option.attr('selected', 'selected');
+      }
+      option.appendTo(filterMenu);
+    });
   }
 }

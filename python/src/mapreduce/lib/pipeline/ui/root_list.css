@@ -29,6 +29,9 @@
 #root-list tbody td {
   border-top: 1px solid #ccc;
 }
+#filter_form {
+  margin: 0 0 1em 0;
+}
 .status {
   text-transform: capitalize;
 }
