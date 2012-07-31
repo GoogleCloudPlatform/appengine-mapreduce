@@ -50,12 +50,16 @@ function initRootListDone(response) {
       $('<td class="class-path">').text(infoMap.classPath).appendTo(row);
       $('<td class="status">').text(infoMap.status).appendTo(row);
 
-      var sinceSpan = $('<abbr class="timeago">');
-      var isoDate = getIso8601String(infoMap.startTimeMs);
-      sinceSpan.attr('title', isoDate);
-      sinceSpan.text(isoDate);
-      sinceSpan.timeago();
-      $('<td class="start-time">').append(sinceSpan).appendTo(row);
+      if (infoMap.startTimeMs) {
+        var sinceSpan = $('<abbr class="timeago">');
+        var isoDate = getIso8601String(infoMap.startTimeMs);
+        sinceSpan.attr('title', isoDate);
+        sinceSpan.text(isoDate);
+        sinceSpan.timeago();
+        $('<td class="start-time">').append(sinceSpan).appendTo(row);
+      } else {
+        $('<td class="start-time">').text('-').appendTo(row);
+      }
 
       if (infoMap.endTimeMs) {
         $('<td class="run-time">').text(getElapsedTimeString(
@@ -106,7 +110,7 @@ function initRootNamesDone(response) {
 
     $.each(response.classPaths, function(index, path) {
       // Ignore internal pipelines.
-      if (path.match(/^pipeline\./)) {
+      if (path.match(/\.?pipeline\./)) {
         return;
       }
 

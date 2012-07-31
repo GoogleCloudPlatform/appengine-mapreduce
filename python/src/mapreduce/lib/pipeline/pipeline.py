@@ -987,7 +987,9 @@ The Pipeline API
     Args:
       module_dict: Used for testing.
     """
-    if cls._class_path is not None:
+    # Do not traverse the class hierarchy fetching the class path attribute.
+    found = cls.__dict__.get('_class_path')
+    if found is not None:
       return
 
     # Do not set the _class_path for the base-class, otherwise all children's
