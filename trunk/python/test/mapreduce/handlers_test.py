@@ -38,6 +38,7 @@ import unittest
 
 from google.appengine.api import apiproxy_stub_map
 from google.appengine.api import datastore_file_stub
+from mapreduce.lib import files
 from google.appengine.api import memcache
 from google.appengine.api.memcache import memcache_stub
 from google.appengine.api.taskqueue import taskqueue_stub
@@ -182,6 +183,14 @@ def test_handler_raise_fail_job_exception(entity):
   raise errors.FailJobError()
 
 
+def test_handler_raise_fatal_exception(entity):
+  """Test handler function that always raises a fatal error.
+
+  Raises:
+    files.ExistenceError: always.
+  """
+  raise errors.RetrySliceError("")
+
 
 def test_handler_yield_op(entity):
   """Test handler function which yields test operation twice for entity."""
@@ -265,6 +274,13 @@ class TestOutputWriter(output_writers.OutputWriter):
   def finalize(self, ctx, shard_number):
     assert isinstance(ctx, context.Context)
     self.events.append("finalize-" + str(shard_number))
+
+
+class UnfinalizableTestOutputWriter(TestOutputWriter):
+  """An output writer where all calls to finalize fail."""
+
+  def finalize(self, ctx, shard_number):
+    raise Exception("This will always break")
 
 
 class MatchesContext(mox.Comparator):
@@ -602,17 +618,17 @@ class StartJobHandlerTest(MapreduceHandlerTestBase):
     self.handler.post()
 
     self.handler.request.set("name", None)
-    self.assertRaises(handlers.NotEnoughArgumentsError, self.handler.handle)
+    self.assertRaises(errors.NotEnoughArgumentsError, self.handler.handle)
 
     self.handler.request.set("name", "my job")
     self.handler.request.set("mapper_input_reader", None)
-    self.assertRaises(handlers.NotEnoughArgumentsError, self.handler.handle)
+    self.assertRaises(errors.NotEnoughArgumentsError, self.handler.handle)
 
     self.handler.request.set(
         "mapper_input_reader",
         "mapreduce.input_readers.DatastoreInputReader")
     self.handler.request.set("mapper_handler", None)
-    self.assertRaises(handlers.NotEnoughArgumentsError, self.handler.handle)
+    self.assertRaises(errors.NotEnoughArgumentsError, self.handler.handle)
 
     self.handler.request.set("mapper_handler", MAPPER_HANDLER_SPEC)
     self.handler.request.set("mapper_params.entity_kind", None)
@@ -836,7 +852,7 @@ class KickOffJobHandlerTest(MapreduceHandlerTestBase):
     self.handler.post()
 
     self.handler.request.set("mapreduce_spec", None)
-    self.assertRaises(handlers.NotEnoughArgumentsError, self.handler.post)
+    self.assertRaises(errors.NotEnoughArgumentsError, self.handler.post)
 
   def testInputReaderUnknown(self):
     """Tests when the input reader function cannot be found."""
@@ -1080,9 +1096,9 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
   def testUserAbort(self):
     """Tests a user-initiated abort of the shard."""
     # Be sure to have an output writer for the abort step so we can confirm
-    # that the context is properly passed to the finalize() method.
+    # that the finalize() method is never called.
     self.init(__name__ + ".test_handler_yield_keys",
-              output_writer_spec=__name__ + ".TestOutputWriter")
+              output_writer_spec=__name__ + ".UnfinalizableTestOutputWriter")
 
     model.MapreduceControl.abort(self.mapreduce_id, force_writes=True)
     self.handler.post()
@@ -1359,6 +1375,31 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
     tasks = self.taskqueue.GetTasks("default")
     self.assertEquals(1, len(tasks))
     self.verify_shard_task(tasks[0], self.shard_id, self.slice_id + 1)
+
+  def testFatalExceptionInHandler(self):
+    """Test when a handler throws a fatal exception."""
+    self.init(__name__ + ".test_handler_raise_fatal_exception")
+    TestEntity().put()
+
+    # First time, it gets re-raised.
+    self.assertRaises(errors.RetrySliceError, self.handler.post)
+    self.verify_shard_state(
+        model.ShardState.get_by_shard_id(self.shard_id),
+        active=True,
+        processed=0)
+
+    # After the Nth attempt, we abort the whole job.
+    os.environ["HTTP_X_APPENGINE_TASKRETRYCOUNT"] = "25"
+    try:
+      self.handler.post()
+    finally:
+      del os.environ['HTTP_X_APPENGINE_TASKRETRYCOUNT']
+
+    self.verify_shard_state(
+        model.ShardState.get_by_shard_id(self.shard_id),
+        active=False,
+        result_status=model.ShardState.RESULT_FAILED,
+        processed=1)
 
   def testExceptionInHandler(self):
     """Test behavior when handler throws exception."""
