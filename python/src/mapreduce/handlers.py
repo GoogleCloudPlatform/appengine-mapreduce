@@ -52,20 +52,12 @@ _SLICE_DURATION_SEC = 15
 # Delay between consecutive controller callback invocations.
 _CONTROLLER_PERIOD_SEC = 2
 
+# How many times to cope with a RetrySliceError before totally
+# giving up and aborting the whole job.
+_RETRY_SLICE_ERROR_MAX_RETRIES = 10
+
 # Set of strings of various test-injected faults.
 _TEST_INJECTED_FAULTS = set()
-
-
-class Error(Exception):
-  """Base class for exceptions in this module."""
-
-
-class NotEnoughArgumentsError(Error):
-  """Required argument is missing."""
-
-
-class NoDataError(Error):
-  """There is no data present for a desired input."""
 
 
 def _run_task_hook(hooks, method, task, queue_name):
@@ -134,10 +126,8 @@ class MapperWorkerCallbackHandler(util.HugeTaskHandler):
     if control and control.command == model.MapreduceControl.ABORT:
       logging.info("Abort command received by shard %d of job '%s'",
                    shard_state.shard_number, shard_state.mapreduce_id)
-      if tstate.output_writer:
-        tstate.output_writer.finalize(ctx, shard_state.shard_number)
-      # We recieved a command to abort. We don't care if we override
-      # some data.
+      # NOTE: When aborting, specifically do not finalize the output writer
+      # because it might be in a bad state.
       shard_state.active = False
       shard_state.result_status = model.ShardState.RESULT_ABORTED
       shard_state.put(config=util.create_datastore_write_config(spec))
@@ -201,6 +191,16 @@ class MapperWorkerCallbackHandler(util.HugeTaskHandler):
           # TODO(user): Mike said we don't want this happen in case of
           # exception while scanning. Figure out when it's appropriate to skip.
           ctx.flush()
+        except errors.RetrySliceError, e:
+          logging.error("Slice error: %s", e)
+          retry_count = int(
+              os.environ.get("HTTP_X_APPENGINE_TASKRETRYCOUNT") or 0)
+          if retry_count <= _RETRY_SLICE_ERROR_MAX_RETRIES:
+            raise
+          logging.error("Too many retries: %d, failing the job", retry_count)
+          scan_aborted = True
+          shard_state.active = False
+          shard_state.result_status = model.ShardState.RESULT_FAILED
         except errors.FailJobError, e:
           logging.error("Job failed: %s", e)
           scan_aborted = True
@@ -208,8 +208,11 @@ class MapperWorkerCallbackHandler(util.HugeTaskHandler):
           shard_state.result_status = model.ShardState.RESULT_FAILED
 
       if not shard_state.active:
-        # shard is going to stop. Finalize output writer if any.
-        if tstate.output_writer:
+        # shard is going to stop. Don't finalize output writer unless the job is
+        # going to be successful, because writer might be stuck in some bad state
+        # otherwise.
+        if (shard_state.result_status == model.ShardState.RESULT_SUCCESS and
+            tstate.output_writer):
           tstate.output_writer.finalize(ctx, shard_state.shard_number)
 
       config = util.create_datastore_write_config(spec)
@@ -224,6 +227,8 @@ class MapperWorkerCallbackHandler(util.HugeTaskHandler):
       def tx():
         fresh_shard_state = db.get(
             model.ShardState.get_key_by_shard_id(shard_id))
+        if not fresh_shard_state:
+          raise db.Rollback()
         if (not fresh_shard_state.active or
             "worker_active_state_collision" in _TEST_INJECTED_FAULTS):
           shard_state.active = False
@@ -278,8 +283,6 @@ class MapperWorkerCallbackHandler(util.HugeTaskHandler):
               output_writer.write(output, ctx)
 
     if self._time() - self._start_time > _SLICE_DURATION_SEC:
-      logging.debug("Spent %s seconds. Rescheduling",
-                    self._time() - self._start_time)
       return False
     return True
 
@@ -376,11 +379,6 @@ class ControllerCallbackHandler(util.HugeTaskHandler):
     """Handle request."""
     spec = model.MapreduceSpec.from_json_str(
         self.request.get("mapreduce_spec"))
-
-    # TODO(user): Make this logging prettier.
-    logging.debug("post: id=%s headers=%s spec=%s",
-                  spec.mapreduce_id, self.request.headers,
-                  self.request.get("mapreduce_spec"))
 
     state, control = db.get([
         model.MapreduceState.get_key_by_job_id(spec.mapreduce_id),
@@ -519,9 +517,13 @@ class ControllerCallbackHandler(util.HugeTaskHandler):
       base_path: handler base path.
     """
     config = util.create_datastore_write_config(mapreduce_spec)
-    # Enqueue done_callback if needed.
-    if mapreduce_spec.mapper.output_writer_class():
+
+    # Only finalize the output writers if we the job is successful.
+    if (mapreduce_spec.mapper.output_writer_class() and
+        mapreduce_state.result_status == model.MapreduceState.RESULT_SUCCESS):
       mapreduce_spec.mapper.output_writer_class().finalize_job(mapreduce_state)
+
+    # Enqueue done_callback if needed.
     def put_state(state):
       state.put(config=config)
       done_callback = mapreduce_spec.params.get(
@@ -687,11 +689,11 @@ class KickOffJobHandler(util.HugeTaskHandler):
       parameter value
 
     Raises:
-      NotEnoughArgumentsError: if parameter is not specified.
+      errors.NotEnoughArgumentsError: if parameter is not specified.
     """
     value = self.request.get(param_name)
     if not value:
-      raise NotEnoughArgumentsError(param_name + " not specified")
+      raise errors.NotEnoughArgumentsError(param_name + " not specified")
     return value
 
   @classmethod
@@ -828,11 +830,11 @@ class StartJobHandler(base_handler.PostJsonHandler):
       parameter value
 
     Raises:
-      NotEnoughArgumentsError: if parameter is not specified.
+      errors.NotEnoughArgumentsError: if parameter is not specified.
     """
     value = self.request.get(param_name)
     if not value:
-      raise NotEnoughArgumentsError(param_name + " not specified")
+      raise errors.NotEnoughArgumentsError(param_name + " not specified")
     return value
 
   @classmethod

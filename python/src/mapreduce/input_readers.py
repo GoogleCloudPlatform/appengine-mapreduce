@@ -1755,6 +1755,10 @@ class RecordsReader(InputReader):
               COUNTER_IO_READ_MSEC, int((time.time() - start_time) * 1000))(ctx)
           operation.counters.Increment(COUNTER_IO_READ_BYTES, len(record))(ctx)
         yield record
+      except (files.ExistenceError), e:
+        raise errors.FailJobError("ExistenceError: %s" % e)
+      except (files.UnknownError), e:
+        raise errors.RetrySliceError("UnknownError: %s" % e)
       except EOFError:
         self._filenames.pop(0)
         if not self._filenames:

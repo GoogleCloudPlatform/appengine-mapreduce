@@ -347,36 +347,43 @@ class RecordsPool(object):
 
   def flush(self):
     """Flush pool contents."""
-    # Write data to in-memory buffer first.
-    buf = _StringWriter()
-    with records.RecordsWriter(buf) as w:
-      for record in self._buffer:
-        w.write(record)
+    try:
+      # Write data to in-memory buffer first.
+      buf = _StringWriter()
+      with records.RecordsWriter(buf) as w:
+        for record in self._buffer:
+          w.write(record)
 
-    str_buf = buf.to_string()
-    if not self._exclusive and len(str_buf) > _FILES_API_MAX_SIZE:
-      # Shouldn't really happen because of flush size.
-      raise errors.Error(
-          "Buffer too big. Can't write more than %s bytes in one request: "
-          "risk of writes interleaving. Got: %s" %
-          (_FILES_API_MAX_SIZE, len(str_buf)))
+      str_buf = buf.to_string()
+      if not self._exclusive and len(str_buf) > _FILES_API_MAX_SIZE:
+        # Shouldn't really happen because of flush size.
+        raise errors.Error(
+            "Buffer too big. Can't write more than %s bytes in one request: "
+            "risk of writes interleaving. Got: %s" %
+            (_FILES_API_MAX_SIZE, len(str_buf)))
 
-    # Write data to file.
-    start_time = time.time()
-    with files.open(self._filename, "a", exclusive_lock=self._exclusive) as f:
-      f.write(str_buf)
+      # Write data to file.
+      start_time = time.time()
+      with files.open(self._filename, "a", exclusive_lock=self._exclusive) as f:
+        f.write(str_buf)
+        if self._ctx:
+          operation.counters.Increment(
+              COUNTER_IO_WRITE_BYTES, len(str_buf))(self._ctx)
       if self._ctx:
         operation.counters.Increment(
-            COUNTER_IO_WRITE_BYTES, len(str_buf))(self._ctx)
-    if self._ctx:
-      operation.counters.Increment(
-          COUNTER_IO_WRITE_MSEC,
-          int((time.time() - start_time) * 1000))(self._ctx)
+            COUNTER_IO_WRITE_MSEC,
+            int((time.time() - start_time) * 1000))(self._ctx)
 
-    # reset buffer
-    self._buffer = []
-    self._size = 0
-    gc.collect()
+      # reset buffer
+      self._buffer = []
+      self._size = 0
+      gc.collect()
+    except (files.UnknownError), e:
+      logging.warning("UnknownError: %s", e)
+      raise errors.RetrySliceError()
+    except (files.ExistenceError), e:
+      logging.warning("ExistenceError: %s", e)
+      raise errors.FailJobError("Existence error: %s" % (e))
 
   def __enter__(self):
     return self
