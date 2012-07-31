@@ -1492,6 +1492,56 @@ class MockUnappliedQuery(datastore.Query):
     return self.results
 
 
+class RandomStringInputReaderTest(unittest.TestCase):
+  """Tests for RandomStringInputReader."""
+
+  def testIter(self):
+    input_reader = input_readers.RandomStringInputReader(10, 9)
+    i = 0
+    for content in input_reader:
+      i += 1
+      self.assertEquals(9, len(content))
+    self.assertEquals(10, i)
+
+  def testEndToEnd(self):
+    mapper_spec = model.MapperSpec(
+        "test_handler",
+        input_readers.__name__ + ".RandomStringInputReader",
+        {
+            "input_reader": {
+                "count": 1000
+            },
+        },
+        99)
+    readers = input_readers.RandomStringInputReader.split_input(mapper_spec)
+    i = 0
+    for reader in readers:
+      for _ in reader:
+        i += 1
+    self.assertEquals(1000, i)
+
+  def testValidate(self):
+    mapper_spec = model.MapperSpec(
+        "test_handler",
+        input_readers.__name__ + ".RandomStringInputReader",
+        {
+            "input_reader": {
+                "count": "1000"
+            },
+        },
+        99)
+    self.assertRaises(input_readers.BadReaderParamsError,
+                      input_readers.RandomStringInputReader.validate,
+                      mapper_spec)
+
+  def testToFromJson(self):
+    input_reader = input_readers.RandomStringInputReader(10, 9)
+    reader_in_json = input_reader.to_json()
+    self.assertEquals({"count": 10, "string_length": 9}, reader_in_json)
+    input_readers.RandomStringInputReader.from_json(reader_in_json)
+    self.assertEquals(10, input_reader._count)
+
+
 class ConsistentKeyReaderTest(unittest.TestCase):
   """Tests for the ConsistentKeyReader."""
 
