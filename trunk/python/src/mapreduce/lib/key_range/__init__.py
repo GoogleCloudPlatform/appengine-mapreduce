@@ -157,19 +157,28 @@ class KeyRange(object):
         key = key.to_old_key()
     self.key_start = key
 
-  def filter_query(self, query):
+  def filter_query(self, query, filters=None):
     """Add query filter to restrict to this key range.
 
     Args:
       query: A db.Query or ndb.Query instance.
+      filters: optional list of filters to apply to the query. Each filter is
+        a tuple: (<property_name_as_str>, <query_operation_as_str>, <value>).
+        User filters are applied first.
 
     Returns:
       The input query restricted to this key range.
     """
     if ndb is not None:
       if _IsNdbQuery(query):
-        return self.filter_ndb_query(query)
+        return self.filter_ndb_query(query, filters=filters)
     assert not _IsNdbQuery(query)
+
+
+    if filters:
+      for f in filters:
+        query.filter("%s %s" % (f[0], f[1]), f[2])
+
     if self.include_start:
       start_comparator = ">="
     else:
@@ -184,16 +193,25 @@ class KeyRange(object):
       query.filter("__key__ %s" % end_comparator, self.key_end)
     return query
 
-  def filter_ndb_query(self, query):
+  def filter_ndb_query(self, query, filters=None):
     """Add query filter to restrict to this key range.
 
     Args:
       query: An ndb.Query instance.
+      filters: optional list of filters to apply to the query. Each filter is
+        a tuple: (<property_name_as_str>, <query_operation_as_str>, <value>).
+        User filters are applied first.
 
     Returns:
       The input query restricted to this key range.
     """
     assert _IsNdbQuery(query)
+
+
+    if filters:
+      for f in filters:
+        query = query.filter(ndb.FilterNode(*f))
+
     if self.include_start:
       start_comparator = ">="
     else:
@@ -212,16 +230,24 @@ class KeyRange(object):
                                           self.key_end))
     return query
 
-  def filter_datastore_query(self, query):
+  def filter_datastore_query(self, query, filters=None):
     """Add query filter to restrict to this key range.
 
     Args:
       query: A datastore.Query instance.
+      filters: optional list of filters to apply to the query. Each filter is
+        a tuple: (<property_name_as_str>, <query_operation_as_str>, <value>).
+        User filters are applied first.
 
     Returns:
       The input query restricted to this key range.
     """
     assert isinstance(query, datastore.Query)
+
+    if filters:
+      for f in filters:
+        query.update({"%s %s" % (f[0], f[1]): f[2]})
+
     if self.include_start:
       start_comparator = ">="
     else:
@@ -330,28 +356,32 @@ class KeyRange(object):
     query = self.filter_datastore_query(query)
     return query
 
-  def make_ascending_query(self, kind_class, keys_only=False):
+  def make_ascending_query(self, kind_class, keys_only=False, filters=None):
     """Construct a query for this key range without setting the scan direction.
 
     Args:
       kind_class: A kind implementation class (a subclass of either
         db.Model or ndb.Model).
       keys_only: bool, default False, query only for keys.
+      filters: optional list of filters to apply to the query. Each filter is
+        a tuple: (<property_name_as_str>, <query_operation_as_str>, <value>).
+        User filters are applied first.
 
     Returns:
       A db.Query or ndb.Query instance (corresponding to kind_class).
     """
     if ndb is not None:
       if issubclass(kind_class, ndb.Model):
-        return self.make_ascending_ndb_query(kind_class, keys_only=keys_only)
+        return self.make_ascending_ndb_query(
+            kind_class, keys_only=keys_only, filters=filters)
     assert self._app is None, '_app is not supported for db.Query'
     query = db.Query(kind_class, namespace=self.namespace, keys_only=keys_only)
     query.order("__key__")
 
-    query = self.filter_query(query)
+    query = self.filter_query(query, filters=filters)
     return query
 
-  def make_ascending_ndb_query(self, kind_class, keys_only=False):
+  def make_ascending_ndb_query(self, kind_class, keys_only=False, filters=None):
     """Construct an NDB query for this key range, without the scan direction.
 
     Args:
@@ -369,16 +399,19 @@ class KeyRange(object):
     query = kind_class.query(app=self._app,
                              namespace=self.namespace,
                              default_options=default_options)
-    query = self.filter_ndb_query(query)
+    query = self.filter_ndb_query(query, filters=filters)
     query = query.order(kind_class._key)
     return query
 
-  def make_ascending_datastore_query(self, kind, keys_only=False):
+  def make_ascending_datastore_query(self, kind, keys_only=False, filters=None):
     """Construct a query for this key range without setting the scan direction.
 
     Args:
       kind: A string.
       keys_only: bool, default False, use keys_only on Query?
+      filters: optional list of filters to apply to the query. Each filter is
+        a tuple: (<property_name_as_str>, <query_operation_as_str>, <value>).
+        User filters are applied first.
 
     Returns:
       A datastore.Query instance.
@@ -389,7 +422,7 @@ class KeyRange(object):
                             keys_only=keys_only)
     query.Order(("__key__", datastore.Query.ASCENDING))
 
-    query = self.filter_datastore_query(query)
+    query = self.filter_datastore_query(query, filters=filters)
     return query
 
   def split_range(self, batch_size=0):

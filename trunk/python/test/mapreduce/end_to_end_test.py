@@ -31,6 +31,7 @@ def random_string(length):
 
 class TestEntity(db.Model):
   """Test entity class."""
+  int_property = db.IntegerProperty()
 
 
 class NdbTestEntity(ndb.Model):
@@ -142,6 +143,27 @@ class EndToEndTest(testutil.HandlerTestBase):
 
     test_support.execute_until_empty(self.taskqueue)
     self.assertEquals(entity_count, len(TestHandler.processed_entites))
+    self.assertEquals([], model.ShardState.all().fetch(100))
+
+  def testEntityQuery(self):
+    entity_count = 1000
+
+    for i in range(entity_count):
+      TestEntity(int_property=i % 5).put()
+
+    control.start_map(
+        "test_map",
+        __name__ + ".TestHandler",
+        "mapreduce.input_readers.DatastoreInputReader",
+        {
+            "entity_kind": __name__ + "." + TestEntity.__name__,
+            "filters": [("int_property", "=", 3)],
+        },
+        shard_count=4,
+        base_path="/mapreduce_base_path")
+
+    test_support.execute_until_empty(self.taskqueue)
+    self.assertEquals(200, len(TestHandler.processed_entites))
     self.assertEquals([], model.ShardState.all().fetch(100))
 
   def testLotsOfNdbEntities(self):
