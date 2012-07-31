@@ -1534,6 +1534,46 @@ class RandomStringInputReaderTest(unittest.TestCase):
                       input_readers.RandomStringInputReader.validate,
                       mapper_spec)
 
+    mapper_spec = model.MapperSpec(
+        "test_handler",
+        input_readers.__name__ + ".RandomStringInputReader",
+        {
+            "input_reader": {
+                "count": -1
+            },
+        },
+        99)
+    self.assertRaises(input_readers.BadReaderParamsError,
+                      input_readers.RandomStringInputReader.validate,
+                      mapper_spec)
+
+    mapper_spec = model.MapperSpec(
+        "test_handler",
+        input_readers.__name__ + ".RandomStringInputReader",
+        {
+            "input_reader": {
+                "count": 100
+            },
+        },
+        -1)
+    self.assertRaises(input_readers.BadReaderParamsError,
+                      input_readers.RandomStringInputReader.validate,
+                      mapper_spec)
+
+    mapper_spec = model.MapperSpec(
+        "test_handler",
+        input_readers.__name__ + ".RandomStringInputReader",
+        {
+            "input_reader": {
+                "count": 100,
+                "string_length": 1.5
+            },
+        },
+        99)
+    self.assertRaises(input_readers.BadReaderParamsError,
+                      input_readers.RandomStringInputReader.validate,
+                      mapper_spec)
+
   def testToFromJson(self):
     input_reader = input_readers.RandomStringInputReader(10, 9)
     reader_in_json = input_reader.to_json()
