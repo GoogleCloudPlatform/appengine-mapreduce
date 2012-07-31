@@ -22,6 +22,7 @@ html, body {
 }
 #butter {
   position: absolute;
+  top: 0;
   min-width: 300px;
   background-color: #C5D7EF;
   text-align: center;
