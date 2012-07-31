@@ -242,6 +242,7 @@ class AbstractDatastoreInputReader(InputReader):
   KEY_RANGE_PARAM = "key_range"
   NAMESPACE_RANGE_PARAM = "namespace_range"
   CURRENT_KEY_RANGE_PARAM = "current_key_range"
+  FILTERS_PARAM = "filters"
 
   # TODO(user): Add support for arbitrary queries. It's not possible to
   # support them without cursors since right now you can't even serialize query
@@ -251,7 +252,8 @@ class AbstractDatastoreInputReader(InputReader):
                key_ranges=None,
                ns_range=None,
                batch_size=_BATCH_SIZE,
-               current_key_range=None):
+               current_key_range=None,
+               filters=None):
     """Create new AbstractDatastoreInputReader object.
 
     This is internal constructor. Use split_query in a concrete class instead.
@@ -264,6 +266,9 @@ class AbstractDatastoreInputReader(InputReader):
           key_ranges or ns_range can be non-None.
       batch_size: size of read batch as int.
       current_key_range: the current key_range.KeyRange being processed.
+      filters: optional list of filters to apply to the query. Each filter is
+        a tuple: (<property_name_as_str>, <query_operation_as_str>, <value>).
+        User filters are applied first.
     """
     assert key_ranges is not None or ns_range is not None, (
         "must specify one of 'key_ranges' or 'ns_range'")
@@ -278,7 +283,7 @@ class AbstractDatastoreInputReader(InputReader):
     self._ns_range = ns_range
     self._batch_size = int(batch_size)
     self._current_key_range = current_key_range
-
+    self._filters = filters
 
   @classmethod
   def _get_raw_entity_kind(cls, entity_kind):
@@ -288,7 +293,6 @@ class AbstractDatastoreInputReader(InputReader):
           "Assuming entity kind contains the dot.",
           entity_kind, cls.__name__)
     return entity_kind
-
 
   def __iter__(self):
     """Iterates over the given KeyRanges or NamespaceRange.
@@ -517,6 +521,20 @@ class AbstractDatastoreInputReader(InputReader):
             "Expected a single namespace string")
     if cls.NAMESPACES_PARAM in params:
       raise BadReaderParamsError("Multiple namespaces are no longer supported")
+    if cls.FILTERS_PARAM in params:
+      filters = params[cls.FILTERS_PARAM]
+      if not isinstance(filters, list):
+        raise BadReaderParamsError("Expected list for filters parameter")
+      for f in filters:
+        if not isinstance(f, tuple):
+          raise BadReaderParamsError("Filter should be a tuple: %s", f)
+        if len(f) != 3:
+          raise BadReaderParamsError("Filter should be a 3-tuple: %s", f)
+        if not isinstance(f[0], basestring):
+          raise BadReaderParamsError("First element should be string: %s", f)
+        if f[1] != "=":
+          raise BadReaderParamsError(
+              "Only equality filters are supported: %s", f)
 
   @classmethod
   def split_input(cls, mapper_spec):
@@ -546,6 +564,7 @@ class AbstractDatastoreInputReader(InputReader):
     shard_count = mapper_spec.shard_count
     namespace = params.get(cls.NAMESPACE_PARAM)
     app = params.get(cls._APP_PARAM)
+    filters = params.get(cls.FILTERS_PARAM)
 
     if namespace is None:
       # It is difficult to efficiently shard large numbers of namespaces because
@@ -572,21 +591,27 @@ class AbstractDatastoreInputReader(InputReader):
         return [cls(entity_kind_name,
                     key_ranges=None,
                     ns_range=ns_range,
-                    batch_size=batch_size)
+                    batch_size=batch_size,
+                    filters=filters)
                 for ns_range in ns_ranges]
       elif not namespace_keys:
         return [cls(entity_kind_name,
                     key_ranges=None,
                     ns_range=namespace_range.NamespaceRange(),
-                    batch_size=shard_count)]
+                    batch_size=shard_count,
+                    filters=filters)]
       else:
         namespaces = [namespace_key.name() or ""
                       for namespace_key in namespace_keys]
     else:
       namespaces = [namespace]
 
-    return cls._split_input_from_params(
+    readers = cls._split_input_from_params(
         app, namespaces, entity_kind_name, params, shard_count)
+    if filters:
+      for reader in readers:
+        reader._filters = filters
+    return readers
 
   def to_json(self):
     """Serializes all the data in this query range into json form.
@@ -618,7 +643,8 @@ class AbstractDatastoreInputReader(InputReader):
                  self.NAMESPACE_RANGE_PARAM: namespace_range_json,
                  self.CURRENT_KEY_RANGE_PARAM: current_key_range_json,
                  self.ENTITY_KIND_PARAM: self._entity_kind,
-                 self.BATCH_SIZE_PARAM: self._batch_size}
+                 self.BATCH_SIZE_PARAM: self._batch_size,
+                 self.FILTERS_PARAM: self._filters}
     return json_dict
 
   @classmethod
@@ -658,7 +684,8 @@ class AbstractDatastoreInputReader(InputReader):
         key_ranges,
         ns_range,
         json[cls.BATCH_SIZE_PARAM],
-        current_key_range)
+        current_key_range,
+        filters=json.get(cls.FILTERS_PARAM))
 
 
 class DatastoreInputReader(AbstractDatastoreInputReader):
@@ -676,7 +703,8 @@ class DatastoreInputReader(AbstractDatastoreInputReader):
     cursor = None
     while True:
       query = k_range.make_ascending_query(
-          util.for_name(self._entity_kind))
+          util.for_name(self._entity_kind),
+          filters=self._filters)
       if isinstance(query, db.Query):
         # Old db version.
         if cursor:
@@ -740,7 +768,7 @@ class DatastoreKeyInputReader(AbstractDatastoreInputReader):
   def _iter_key_range(self, k_range):
     raw_entity_kind = self._get_raw_entity_kind(self._entity_kind)
     query = k_range.make_ascending_datastore_query(
-        raw_entity_kind, keys_only=True)
+        raw_entity_kind, keys_only=True, filters=self._filters)
     for key in query.Run(
         config=datastore_query.QueryOptions(batch_size=self._batch_size)):
       yield key, key
@@ -752,7 +780,7 @@ class DatastoreEntityInputReader(AbstractDatastoreInputReader):
   def _iter_key_range(self, k_range):
     raw_entity_kind = self._get_raw_entity_kind(self._entity_kind)
     query = k_range.make_ascending_datastore_query(
-        raw_entity_kind)
+        raw_entity_kind, self._filters)
     for entity in query.Run(
         config=datastore_query.QueryOptions(batch_size=self._batch_size)):
       yield entity.key(), entity

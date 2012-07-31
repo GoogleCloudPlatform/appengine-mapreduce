@@ -74,6 +74,7 @@ class TestEntity(db.Model):
   json_property = model.JsonProperty(TestJsonType)
   json_property_default_value = model.JsonProperty(
       TestJsonType, default=TestJsonType())
+  int_property = db.IntegerProperty()
 
 class TestEntityWithDot(db.Model):
   """Test entity class with dot in its kind."""
@@ -302,6 +303,33 @@ class DatastoreInputReaderTest(unittest.TestCase):
         "FooHandler",
         "mapreduce.input_readers.DatastoreInputReader",
         params, 1)
+    self.assertRaises(input_readers.BadReaderParamsError,
+                      input_readers.DatastoreInputReader.validate,
+                      mapper_spec)
+
+  def testValidate_Filters(self):
+    """Tests validating filters parameter."""
+    params = {
+        "entity_kind": ENTITY_KIND,
+        "filters": [("a", "=", 1), ("b", "=", 2)],
+        }
+    mapper_spec = model.MapperSpec(
+        "FooHandler",
+        "mapreduce.input_readers.DatastoreInputReader",
+        params, 1)
+    input_readers.DatastoreInputReader.validate(mapper_spec)
+
+    params["filters"] = {"a": "1"}
+    self.assertRaises(input_readers.BadReaderParamsError,
+                      input_readers.DatastoreInputReader.validate,
+                      mapper_spec)
+
+    params["filters"] = [("a", "<=", 1)]
+    self.assertRaises(input_readers.BadReaderParamsError,
+                      input_readers.DatastoreInputReader.validate,
+                      mapper_spec)
+
+    params["filters"] = [(1, "=", 1)]
     self.assertRaises(input_readers.BadReaderParamsError,
                       input_readers.DatastoreInputReader.validate,
                       mapper_spec)
@@ -723,6 +751,32 @@ class DatastoreInputReaderTest(unittest.TestCase):
          "datastore_types.Key.from_path(u'TestEntity', 6L, _app=u'testapp')"
          " to None)"],
         stringified)
+
+  def testFilterIter(self):
+    """Tests iterating over input with filter set."""
+    for i in range(0, 100):
+      TestEntity(int_property=(i % 5)).put()
+
+    reader = input_readers.DatastoreInputReader(
+        ENTITY_KIND,
+        key_ranges=[
+          key_range.KeyRange(
+            key_start=None,
+            key_end=None,
+            direction="ASC",
+            include_start=False,
+            include_end=False,
+            namespace="")],
+          ns_range=None,
+          batch_size=50,
+        filters=[("int_property", "=", 0)])
+
+    entities = []
+    for entity in reader:
+      self.assertEquals(0, entity.int_property)
+      entities.append(entity)
+    self.assertEquals(20, len(entities))
+
 
 class DatastoreKeyInputReaderTest(unittest.TestCase):
   """Tests for DatastoreKeyInputReader."""
