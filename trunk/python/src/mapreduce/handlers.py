@@ -40,7 +40,11 @@ from mapreduce import model
 from mapreduce import operation
 from mapreduce import quota
 from mapreduce import util
-from google.appengine.ext import ndb
+
+try:
+  from google.appengine.ext import ndb
+except ImportError:
+  ndb = None
 
 
 # TODO(user): Make this a product of the reader or in quotas.py
@@ -150,9 +154,10 @@ class MapperWorkerCallbackHandler(util.HugeTaskHandler):
     # up the request memory size and Datastore Puts will avoid doing calls
     # to memcache. Without this you get soft memory limit exits, which hurts
     # overall throughput.
-    ndb_ctx = ndb.get_context()
-    ndb_ctx.set_cache_policy(lambda key: False)
-    ndb_ctx.set_memcache_policy(lambda key: False)
+    if ndb is not None:
+      ndb_ctx = ndb.get_context()
+      ndb_ctx.set_cache_policy(lambda key: False)
+      ndb_ctx.set_memcache_policy(lambda key: False)
 
     context.Context._set(ctx)
     try:
