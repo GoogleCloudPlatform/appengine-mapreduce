@@ -466,6 +466,8 @@ class _File(object):
     file_stat.filename = file_stat_pb.filename()
     file_stat.finalized = file_stat_pb.finalized()
     file_stat.st_size = file_stat_pb.length()
+    file_stat.st_mtime = file_stat_pb.mtime()
+    file_stat.st_ctime = file_stat_pb.ctime()
 
     return file_stat
 
@@ -576,12 +578,12 @@ class _FileStat(object):
     filename: the uploaded filename of the file;
     finalized: whether the file is finalized. This is always true by now;
     st_size: number of bytes of the file;
-    st_ctime: creation time. Currently not set;
-    st_mtime: modification time. Currently not set.;
+    st_ctime: creation time;
+    st_mtime: modification time.
   """
   def __init__(self):
     self.filename = None
-    self.finlized = True
+    self.finalized = True
     self.st_size = None
     self.st_ctime = None
     self.st_mtime = None
