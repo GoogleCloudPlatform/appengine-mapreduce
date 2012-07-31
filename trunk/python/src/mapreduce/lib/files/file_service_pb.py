@@ -5099,7 +5099,313 @@ class GetDefaultGsBucketNameResponse(ProtocolBuffer.ProtocolMessage):
   _STYLE = """"""
   _STYLE_CONTENT_TYPE = """"""
   _PROTO_DESCRIPTOR_NAME = 'apphosting.files.GetDefaultGsBucketNameResponse'
+class ListDirRequest(ProtocolBuffer.ProtocolMessage):
+  has_path_ = 0
+  path_ = ""
+  has_marker_ = 0
+  marker_ = ""
+  has_max_keys_ = 0
+  max_keys_ = 0
+  has_prefix_ = 0
+  prefix_ = ""
+
+  def __init__(self, contents=None):
+    if contents is not None: self.MergeFromString(contents)
+
+  def path(self): return self.path_
+
+  def set_path(self, x):
+    self.has_path_ = 1
+    self.path_ = x
+
+  def clear_path(self):
+    if self.has_path_:
+      self.has_path_ = 0
+      self.path_ = ""
+
+  def has_path(self): return self.has_path_
+
+  def marker(self): return self.marker_
+
+  def set_marker(self, x):
+    self.has_marker_ = 1
+    self.marker_ = x
+
+  def clear_marker(self):
+    if self.has_marker_:
+      self.has_marker_ = 0
+      self.marker_ = ""
+
+  def has_marker(self): return self.has_marker_
+
+  def max_keys(self): return self.max_keys_
+
+  def set_max_keys(self, x):
+    self.has_max_keys_ = 1
+    self.max_keys_ = x
+
+  def clear_max_keys(self):
+    if self.has_max_keys_:
+      self.has_max_keys_ = 0
+      self.max_keys_ = 0
+
+  def has_max_keys(self): return self.has_max_keys_
+
+  def prefix(self): return self.prefix_
+
+  def set_prefix(self, x):
+    self.has_prefix_ = 1
+    self.prefix_ = x
+
+  def clear_prefix(self):
+    if self.has_prefix_:
+      self.has_prefix_ = 0
+      self.prefix_ = ""
+
+  def has_prefix(self): return self.has_prefix_
+
+
+  def MergeFrom(self, x):
+    assert x is not self
+    if (x.has_path()): self.set_path(x.path())
+    if (x.has_marker()): self.set_marker(x.marker())
+    if (x.has_max_keys()): self.set_max_keys(x.max_keys())
+    if (x.has_prefix()): self.set_prefix(x.prefix())
+
+  def Equals(self, x):
+    if x is self: return 1
+    if self.has_path_ != x.has_path_: return 0
+    if self.has_path_ and self.path_ != x.path_: return 0
+    if self.has_marker_ != x.has_marker_: return 0
+    if self.has_marker_ and self.marker_ != x.marker_: return 0
+    if self.has_max_keys_ != x.has_max_keys_: return 0
+    if self.has_max_keys_ and self.max_keys_ != x.max_keys_: return 0
+    if self.has_prefix_ != x.has_prefix_: return 0
+    if self.has_prefix_ and self.prefix_ != x.prefix_: return 0
+    return 1
+
+  def IsInitialized(self, debug_strs=None):
+    initialized = 1
+    if (not self.has_path_):
+      initialized = 0
+      if debug_strs is not None:
+        debug_strs.append('Required field: path not set.')
+    return initialized
+
+  def ByteSize(self):
+    n = 0
+    n += self.lengthString(len(self.path_))
+    if (self.has_marker_): n += 1 + self.lengthString(len(self.marker_))
+    if (self.has_max_keys_): n += 1 + self.lengthVarInt64(self.max_keys_)
+    if (self.has_prefix_): n += 1 + self.lengthString(len(self.prefix_))
+    return n + 1
+
+  def ByteSizePartial(self):
+    n = 0
+    if (self.has_path_):
+      n += 1
+      n += self.lengthString(len(self.path_))
+    if (self.has_marker_): n += 1 + self.lengthString(len(self.marker_))
+    if (self.has_max_keys_): n += 1 + self.lengthVarInt64(self.max_keys_)
+    if (self.has_prefix_): n += 1 + self.lengthString(len(self.prefix_))
+    return n
+
+  def Clear(self):
+    self.clear_path()
+    self.clear_marker()
+    self.clear_max_keys()
+    self.clear_prefix()
+
+  def OutputUnchecked(self, out):
+    out.putVarInt32(10)
+    out.putPrefixedString(self.path_)
+    if (self.has_marker_):
+      out.putVarInt32(18)
+      out.putPrefixedString(self.marker_)
+    if (self.has_max_keys_):
+      out.putVarInt32(24)
+      out.putVarInt64(self.max_keys_)
+    if (self.has_prefix_):
+      out.putVarInt32(34)
+      out.putPrefixedString(self.prefix_)
+
+  def OutputPartial(self, out):
+    if (self.has_path_):
+      out.putVarInt32(10)
+      out.putPrefixedString(self.path_)
+    if (self.has_marker_):
+      out.putVarInt32(18)
+      out.putPrefixedString(self.marker_)
+    if (self.has_max_keys_):
+      out.putVarInt32(24)
+      out.putVarInt64(self.max_keys_)
+    if (self.has_prefix_):
+      out.putVarInt32(34)
+      out.putPrefixedString(self.prefix_)
+
+  def TryMerge(self, d):
+    while d.avail() > 0:
+      tt = d.getVarInt32()
+      if tt == 10:
+        self.set_path(d.getPrefixedString())
+        continue
+      if tt == 18:
+        self.set_marker(d.getPrefixedString())
+        continue
+      if tt == 24:
+        self.set_max_keys(d.getVarInt64())
+        continue
+      if tt == 34:
+        self.set_prefix(d.getPrefixedString())
+        continue
+
+
+      if (tt == 0): raise ProtocolBuffer.ProtocolBufferDecodeError
+      d.skipData(tt)
+
+
+  def __str__(self, prefix="", printElemNumber=0):
+    res=""
+    if self.has_path_: res+=prefix+("path: %s\n" % self.DebugFormatString(self.path_))
+    if self.has_marker_: res+=prefix+("marker: %s\n" % self.DebugFormatString(self.marker_))
+    if self.has_max_keys_: res+=prefix+("max_keys: %s\n" % self.DebugFormatInt64(self.max_keys_))
+    if self.has_prefix_: res+=prefix+("prefix: %s\n" % self.DebugFormatString(self.prefix_))
+    return res
+
+
+  def _BuildTagLookupTable(sparse, maxtag, default=None):
+    return tuple([sparse.get(i, default) for i in xrange(0, 1+maxtag)])
+
+  kpath = 1
+  kmarker = 2
+  kmax_keys = 3
+  kprefix = 4
+
+  _TEXT = _BuildTagLookupTable({
+    0: "ErrorCode",
+    1: "path",
+    2: "marker",
+    3: "max_keys",
+    4: "prefix",
+  }, 4)
+
+  _TYPES = _BuildTagLookupTable({
+    0: ProtocolBuffer.Encoder.NUMERIC,
+    1: ProtocolBuffer.Encoder.STRING,
+    2: ProtocolBuffer.Encoder.STRING,
+    3: ProtocolBuffer.Encoder.NUMERIC,
+    4: ProtocolBuffer.Encoder.STRING,
+  }, 4, ProtocolBuffer.Encoder.MAX_TYPE)
+
+
+  _STYLE = """"""
+  _STYLE_CONTENT_TYPE = """"""
+  _PROTO_DESCRIPTOR_NAME = 'apphosting.files.ListDirRequest'
+class ListDirResponse(ProtocolBuffer.ProtocolMessage):
+
+  def __init__(self, contents=None):
+    self.filenames_ = []
+    if contents is not None: self.MergeFromString(contents)
+
+  def filenames_size(self): return len(self.filenames_)
+  def filenames_list(self): return self.filenames_
+
+  def filenames(self, i):
+    return self.filenames_[i]
+
+  def set_filenames(self, i, x):
+    self.filenames_[i] = x
+
+  def add_filenames(self, x):
+    self.filenames_.append(x)
+
+  def clear_filenames(self):
+    self.filenames_ = []
+
+
+  def MergeFrom(self, x):
+    assert x is not self
+    for i in xrange(x.filenames_size()): self.add_filenames(x.filenames(i))
+
+  def Equals(self, x):
+    if x is self: return 1
+    if len(self.filenames_) != len(x.filenames_): return 0
+    for e1, e2 in zip(self.filenames_, x.filenames_):
+      if e1 != e2: return 0
+    return 1
+
+  def IsInitialized(self, debug_strs=None):
+    initialized = 1
+    return initialized
+
+  def ByteSize(self):
+    n = 0
+    n += 1 * len(self.filenames_)
+    for i in xrange(len(self.filenames_)): n += self.lengthString(len(self.filenames_[i]))
+    return n
+
+  def ByteSizePartial(self):
+    n = 0
+    n += 1 * len(self.filenames_)
+    for i in xrange(len(self.filenames_)): n += self.lengthString(len(self.filenames_[i]))
+    return n
+
+  def Clear(self):
+    self.clear_filenames()
+
+  def OutputUnchecked(self, out):
+    for i in xrange(len(self.filenames_)):
+      out.putVarInt32(10)
+      out.putPrefixedString(self.filenames_[i])
+
+  def OutputPartial(self, out):
+    for i in xrange(len(self.filenames_)):
+      out.putVarInt32(10)
+      out.putPrefixedString(self.filenames_[i])
+
+  def TryMerge(self, d):
+    while d.avail() > 0:
+      tt = d.getVarInt32()
+      if tt == 10:
+        self.add_filenames(d.getPrefixedString())
+        continue
+
+
+      if (tt == 0): raise ProtocolBuffer.ProtocolBufferDecodeError
+      d.skipData(tt)
+
+
+  def __str__(self, prefix="", printElemNumber=0):
+    res=""
+    cnt=0
+    for e in self.filenames_:
+      elm=""
+      if printElemNumber: elm="(%d)" % cnt
+      res+=prefix+("filenames%s: %s\n" % (elm, self.DebugFormatString(e)))
+      cnt+=1
+    return res
+
+
+  def _BuildTagLookupTable(sparse, maxtag, default=None):
+    return tuple([sparse.get(i, default) for i in xrange(0, 1+maxtag)])
+
+  kfilenames = 1
+
+  _TEXT = _BuildTagLookupTable({
+    0: "ErrorCode",
+    1: "filenames",
+  }, 1)
+
+  _TYPES = _BuildTagLookupTable({
+    0: ProtocolBuffer.Encoder.NUMERIC,
+    1: ProtocolBuffer.Encoder.STRING,
+  }, 1, ProtocolBuffer.Encoder.MAX_TYPE)
+
+
+  _STYLE = """"""
+  _STYLE_CONTENT_TYPE = """"""
+  _PROTO_DESCRIPTOR_NAME = 'apphosting.files.ListDirResponse'
 if _extension_runtime:
   pass
 
-__all__ = ['FileServiceErrors','KeyValue','KeyValues','FileContentType','CreateRequest_Parameter','CreateRequest','CreateResponse','OpenRequest','OpenResponse','CloseRequest','CloseResponse','FileStat','StatRequest','StatResponse','AppendRequest','AppendResponse','DeleteRequest','DeleteResponse','ReadRequest','ReadResponse','ReadKeyValueRequest','ReadKeyValueResponse_KeyValue','ReadKeyValueResponse','ShuffleEnums','ShuffleInputSpecification','ShuffleOutputSpecification','ShuffleRequest_Callback','ShuffleRequest','ShuffleResponse','GetShuffleStatusRequest','GetShuffleStatusResponse','GetCapabilitiesRequest','GetCapabilitiesResponse','FinalizeRequest','FinalizeResponse','GetDefaultGsBucketNameRequest','GetDefaultGsBucketNameResponse']
+__all__ = ['FileServiceErrors','KeyValue','KeyValues','FileContentType','CreateRequest_Parameter','CreateRequest','CreateResponse','OpenRequest','OpenResponse','CloseRequest','CloseResponse','FileStat','StatRequest','StatResponse','AppendRequest','AppendResponse','DeleteRequest','DeleteResponse','ReadRequest','ReadResponse','ReadKeyValueRequest','ReadKeyValueResponse_KeyValue','ReadKeyValueResponse','ShuffleEnums','ShuffleInputSpecification','ShuffleOutputSpecification','ShuffleRequest_Callback','ShuffleRequest','ShuffleResponse','GetShuffleStatusRequest','GetShuffleStatusResponse','GetCapabilitiesRequest','GetCapabilitiesResponse','FinalizeRequest','FinalizeResponse','GetDefaultGsBucketNameRequest','GetDefaultGsBucketNameResponse','ListDirRequest','ListDirResponse']

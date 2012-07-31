@@ -533,6 +533,7 @@ def listdir(path, **kwargs):
     a list containing filenames (matching a pattern) from the given path.
     Sorted by Python String.
   """
+
   from mapreduce.lib.files import gs
 
   if not isinstance(path, basestring):

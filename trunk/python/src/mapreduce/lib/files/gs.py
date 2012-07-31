@@ -30,6 +30,7 @@ from __future__ import with_statement
 
 __all__ = ['create']
 
+import os
 import re
 from urllib import urlencode
 from xml.dom import minidom
@@ -37,6 +38,7 @@ from xml.dom import minidom
 from google.appengine.api import app_identity
 from google.appengine.api import urlfetch
 from mapreduce.lib.files import file as files
+from mapreduce.lib.files import file_service_pb
 
 
 
@@ -71,7 +73,7 @@ def listdir(path, kwargs=None):
 
       Supported keywords:
       marker: a string after which (exclusive) to start listing.
-      max-keys: the maximum number of filenames to return.
+      max_keys: the maximum number of filenames to return.
       prefix: limits the returned filenames to those with this prefix. no regex.
 
       See Google Cloud Storage documentation for more details and examples.
@@ -89,6 +91,16 @@ def listdir(path, kwargs=None):
   elif not _GS_BUCKETPATH_REGEX.match(path):
     raise files.InvalidFileNameError(
         'Google storage path must have the form /gs/bucketname')
+
+
+
+  if kwargs and kwargs.has_key('max_keys'):
+    kwargs['max-keys'] = kwargs['max_keys']
+    kwargs.pop('max_keys')
+
+
+  if not os.environ.get('DATACENTER'):
+    return _listdir_local(path, kwargs)
 
   bucketname = path[len(_GS_PREFIX):]
 
@@ -131,6 +143,25 @@ def listdir(path, kwargs=None):
 
   return ['/'.join([path, __textValue(key)]) for key in
       dom.getElementsByTagName('Key')]
+
+
+def _listdir_local(path, kwargs):
+  """Dev app server version of listdir.
+
+  See listdir for doc.
+  """
+  request = file_service_pb.ListDirRequest()
+  response = file_service_pb.ListDirResponse()
+  request.set_path(path)
+
+  if kwargs and kwargs.has_key('marker'):
+    request.set_marker(kwargs['marker'])
+  if kwargs and kwargs.has_key('max-keys'):
+    request.set_max_keys(kwargs['max-keys'])
+  if kwargs and kwargs.has_key('prefix'):
+    request.set_prefix(kwargs['prefix'])
+  files._make_call('ListDir', request, response)
+  return response.filenames_list()
 
 
 def create(filename,
