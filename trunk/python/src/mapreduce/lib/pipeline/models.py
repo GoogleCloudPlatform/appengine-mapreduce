@@ -59,7 +59,7 @@ class _PipelineRecord(db.Model):
   root_pipeline = db.SelfReferenceProperty(
                       collection_name='child_pipelines_set')
   fanned_out = db.ListProperty(db.Key, indexed=False)
-  start_time = db.DateTimeProperty(indexed=False)
+  start_time = db.DateTimeProperty(indexed=True)
   finalized_time = db.DateTimeProperty(indexed=False)
 
   # One of these two will be set, depending on the size of the params.

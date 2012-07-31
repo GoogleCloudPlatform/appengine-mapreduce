@@ -22,10 +22,12 @@ __all__ = [
     'PipelineRuntimeError', 'SlotNotFilledError', 'SlotNotDeclaredError',
     'UnexpectedPipelineError', 'PipelineStatusError', 'Slot', 'Pipeline',
     'PipelineFuture', 'After', 'InOrder', 'Retry', 'Abort', 'get_status_tree',
-    'create_handlers_map', 'set_enforce_auth',
+    'get_pipeline_names', 'get_root_list', 'create_handlers_map',
+    'set_enforce_auth',
 ]
 
 import datetime
+import hashlib
 import itertools
 import logging
 import os
@@ -47,6 +49,7 @@ from google.appengine.ext import webapp
 # Relative imports
 import models
 from mapreduce.lib import simplejson
+import status_ui
 import util as mr_util
 
 
@@ -62,12 +65,9 @@ _StatusRecord = models._StatusRecord
 # - Consider using sha1 of the UUID for user-supplied pipeline keys to ensure
 #   that they keys are definitely not sequential or guessable (Python's uuid1
 #   method generates roughly sequential IDs).
-# - Ability to list all root pipelines that are live on simple page.
 
 # Potential TODOs:
 # - Add support for ANY N barriers.
-# - Add a global 'flags' value passed in to start() that all pipelines have
-#   access to; makes it easy to pass along Channel API IDs and such.
 # - Allow Pipelines to declare they are "short" and optimize the evaluate()
 #   function to run as many of them in quick succession.
 # - Add support in all Pipelines for hold/release where up-stream
@@ -113,7 +113,6 @@ class Retry(PipelineUserError):
 
 class Abort(PipelineUserError):
   """The currently running pipeline should be aborted up to the root."""
-
 
 class PipelineStatusError(Error):
   """Exceptions raised when trying to collect pipeline status."""
@@ -342,6 +341,29 @@ class PipelineFuture(object):
     return slot
 
 
+class _PipelineMeta(type):
+  """Meta-class for recording all Pipelines that have been defined."""
+
+  # List of all Pipeline classes that have been seen.
+  _all_classes = []
+
+  def __new__(meta, name, bases, cls_dict):
+    """Initializes the class path of a Pipeline and saves it."""
+    cls = type.__new__(meta, name, bases, cls_dict)
+    meta._all_classes.append(cls)
+    return cls
+
+
+class ClassProperty(object):
+  """Descriptor that lets us have read-only class properties."""
+
+  def __init__(self, method):
+    self.method = method
+
+  def __get__(self, cls, obj):
+    return self.method(obj)
+
+
 class Pipeline(object):
   """A Pipeline function-object that performs operations and has a life cycle.
 
@@ -354,6 +376,8 @@ class Pipeline(object):
       accessible by all external requests regardless of login or task queue.
     admin_callbacks: If the callback URLs generated for this class should be
       accessible by the task queue ane externally by users logged in as admins.
+    class_path: String identifier for this Pipeline, which is derived from
+      its path in the global system modules dictionary.
 
   Modifiable instance properties:
     backoff_seconds: How many seconds to use as the constant factor in
@@ -372,6 +396,9 @@ class Pipeline(object):
     current_attempt: The current attempt being tried for this pipeline.
   """
 
+  __metaclass__ = _PipelineMeta
+
+  # To be set by sub-classes
   async = False
   output_names = []
   public_callbacks = False
@@ -464,6 +491,15 @@ class Pipeline(object):
     """Returns True if the pipeline is running in test mode."""
     return _TEST_MODE
 
+  @ClassProperty
+  def class_path(cls):
+    """Returns the unique string identifier for this Pipeline class.
+
+    Refers to how to find the Pipeline in the global modules dictionary.
+    """
+    cls._set_class_path()
+    return cls._class_path
+
   @classmethod
   def from_id(cls, pipeline_id, resolve_outputs=True, _pipeline_record=None):
     """Returns an instance corresponding to an existing Pipeline.
@@ -480,8 +516,19 @@ class Pipeline(object):
       _pipeline_record: Internal-only. The _PipelineRecord instance to use
         to instantiate this instance instead of fetching it from
         the datastore.
+
+    Returns:
+      Pipeline sub-class instances or None if it could not be found.
     """
     pipeline_record = _pipeline_record
+
+    # Support pipeline IDs and idempotence_keys that are not unicode.
+    if not isinstance(pipeline_id, unicode):
+      try:
+        pipeline_id = pipeline_id.encode('utf-8')
+      except UnicodeDecodeError:
+        pipeline_id = hashlib.sha1(pipeline_id).hexdigest()
+
     pipeline_key = db.Key.from_path(_PipelineRecord.kind(), pipeline_id)
 
     if pipeline_record is None:
@@ -489,16 +536,24 @@ class Pipeline(object):
     if pipeline_record is None:
       return None
 
+    try:
+      pipeline_func_class = mr_util.for_name(pipeline_record.class_path)
+    except ImportError, e:
+      logging.warning('Tried to find Pipeline %s#%s, but class could '
+                      'not be found. Using default Pipeline class instead.',
+                      pipeline_record.class_path, pipeline_id)
+      pipeline_func_class = cls
+
     params = pipeline_record.params
     arg_list, kwarg_dict = _dereference_args(
         pipeline_record.class_path, params['args'], params['kwargs'])
-    outputs = PipelineFuture(cls.output_names)
+    outputs = PipelineFuture(pipeline_func_class.output_names)
     outputs._inherit_outputs(
         pipeline_record.class_path,
         params['output_slots'],
         resolve_outputs=resolve_outputs)
 
-    stage = cls(*arg_list, **kwarg_dict)
+    stage = pipeline_func_class(*arg_list, **kwarg_dict)
     stage.backoff_seconds = params['backoff_seconds']
     stage.backoff_factor = params['backoff_factor']
     stage.max_attempts = params['max_attempts']
@@ -524,7 +579,7 @@ class Pipeline(object):
 
     Args:
       idempotence_key: The ID to use for this Pipeline and throughout its
-        asynchronous workflow to ensure the operations are idempotnent. If
+        asynchronous workflow to ensure the operations are idempotent. If
         empty a starting key will be automatically assigned.
       queue_name: What queue this Pipeline's workflow should execute on.
       base_path: The relative URL path to where the Pipeline API is
@@ -546,6 +601,12 @@ class Pipeline(object):
     """
     if not idempotence_key:
       idempotence_key = uuid.uuid1().hex
+    elif not isinstance(idempotence_key, unicode):
+      try:
+        idempotence_key.encode('utf-8')
+      except UnicodeDecodeError:
+        idempotence_key = hashlib.sha1(idempotence_key).hexdigest()
+
     pipeline_key = db.Key.from_path(_PipelineRecord.kind(), idempotence_key)
     context = _PipelineContext('', queue_name, base_path)
     future = PipelineFuture(self.output_names, force_strict=True)
@@ -1041,12 +1102,12 @@ class After(object):
     """Initializer.
 
     Args:
-      *futures: One or more PipelineFutures that all subsequent pipelines
-        should follow.
+      *futures: PipelineFutures that all subsequent pipelines should follow.
+        May be empty, in which case this statement does nothing.
     """
-    if len(futures) == 0:
-      raise TypeError(
-          'Must pass one or more PipelineFuture instances to After()')
+    for f in futures:
+      if not isinstance(f, PipelineFuture):
+        raise TypeError('May only pass PipelineFuture instances to After()')
     self._futures = set(futures)
 
   def __enter__(self):
@@ -1395,11 +1456,6 @@ class _PipelineContext(object):
     """
     if not isinstance(slot_key, db.Key):
       slot_key = db.Key(slot_key)
-    # TODO: This query may suffer from lag in the high-replication Datastore.
-    # Consider re-running notify_barriers a second time 10 seconds in the
-    # future to pick up the stragglers, or add child entities to the
-    # _SlotRecords that point back at dependent _BarrierRecord within a
-    # single entity group.
     query = (
         _BarrierRecord.all(cursor=cursor)
         .filter('blocking_slots =', slot_key))
@@ -1979,7 +2035,24 @@ class _PipelineContext(object):
       return
 
     if not pipeline_generator:
-      self.fill_slot(pipeline_key, caller_output.default, result)
+      # Catch any exceptions that are thrown when the pipeline's return
+      # value is being serialized. This ensures that serialization errors
+      # will cause normal abort/retry behavior.
+      try:
+        self.fill_slot(pipeline_key, caller_output.default, result)
+      except Exception, e:
+        retry_message = 'Bad return value. %s: %s' % (
+            e.__class__.__name__, str(e))
+        logging.exception(
+            'Generator %r#%s caused exception while serializing return '
+            'value %r. %s', pipeline_func, pipeline_key.name(), result,
+            retry_message)
+        self.transition_retry(pipeline_key, retry_message)
+        if pipeline_func.task_retry:
+          raise
+        else:
+          return
+
       expected_outputs = set(caller_output._output_dict.iterkeys())
       found_outputs = self.session_filled_output_names
       if expected_outputs != found_outputs:
@@ -2072,8 +2145,26 @@ class _PipelineContext(object):
     all_output_slots = set()
     for sub_stage in sub_stage_ordering:
       future = sub_stage_dict[sub_stage]
-      dependent_slots, output_slots, params_text, params_blob = _generate_args(
-          sub_stage, future, self.queue_name, self.base_path)
+
+      # Catch any exceptions that are thrown when the pipeline's parameters
+      # are being serialized. This ensures that serialization errors will
+      # cause normal retry/abort behavior.
+      try:
+        dependent_slots, output_slots, params_text, params_blob = \
+            _generate_args(sub_stage, future, self.queue_name, self.base_path)
+      except Exception, e:
+        retry_message = 'Bad child arguments. %s: %s' % (
+            e.__class__.__name__, str(e))
+        logging.exception(
+            'Generator %r#%s caused exception while serializing args for '
+            'child pipeline %r. %s', pipeline_func, pipeline_key.name(),
+            sub_stage, retry_message)
+        self.transition_retry(pipeline_key, retry_message)
+        if pipeline_func.task_retry:
+          raise
+        else:
+          return
+
       child_pipeline_key = db.Key.from_path(
           _PipelineRecord.kind(), uuid.uuid1().hex)
       all_output_slots.update(output_slots)
@@ -2540,6 +2631,7 @@ class _CallbackHandler(webapp.RequestHandler):
       self.response.headers['Content-Type'] = content_type
       self.response.out.write(content)
 
+
 ################################################################################
 
 def _get_timestamp_ms(when):
@@ -2861,112 +2953,84 @@ def get_status_tree(root_pipeline_id):
   return output
 
 
-class _StatusUiHandler(webapp.RequestHandler):
-  """Render the status UI."""
-
-  _RESOURCE_MAP = {
-    '/status': ('ui/status.html', 'text/html'),
-    '/status.css': ('ui/status.css', 'text/css'),
-    '/status.js': ('ui/status.js', 'text/javascript'),
-    '/common.js': ('ui/common.js', 'text/javascript'),
-    '/common.css': ('ui/common.css', 'text/css'),
-    '/jquery-1.4.2.min.js': ('ui/jquery-1.4.2.min.js', 'text/javascript'),
-    '/jquery.treeview.min.js': ('ui/jquery.treeview.min.js', 'text/javascript'),
-    '/jquery.cookie.js': ('ui/jquery.cookie.js', 'text/javascript'),
-    '/jquery.timeago.js': ('ui/jquery.timeago.js', 'text/javascript'),
-    '/jquery.ba-hashchange.min.js': (
-        'ui/jquery.ba-hashchange.min.js', 'text/javascript'),
-    '/jquery.json.min.js': ('ui/jquery.json.min.js', 'text/javascript'),
-    '/jquery.treeview.css': ('ui/jquery.treeview.css', 'text/css'),
-    '/treeview-default.gif': ('ui/images/treeview-default.gif', 'image/gif'),
-    '/treeview-default-line.gif': (
-        'ui/images/treeview-default-line.gif', 'image/gif'),
-    '/treeview-black.gif': ('ui/images/treeview-black.gif', 'image/gif'),
-    '/treeview-black-line.gif': (
-        'ui/images/treeview-black-line.gif', 'image/gif'),
-    '/images/treeview-default.gif': (
-        'ui/images/treeview-default.gif', 'image/gif'),
-    '/images/treeview-default-line.gif': (
-        'ui/images/treeview-default-line.gif', 'image/gif'),
-    '/images/treeview-black.gif': (
-        'ui/images/treeview-black.gif', 'image/gif'),
-    '/images/treeview-black-line.gif': (
-        'ui/images/treeview-black-line.gif', 'image/gif'),
-  }
-
-  def get(self, resource=''):
-    if _ENFORCE_AUTH:
-      if users.get_current_user() is None:
-        self.redirect(users.create_login_url(self.request.url))
-        return
-
-      if not users.is_current_user_admin():
-        self.response.out.write('Forbidden')
-        self.response.set_status(403)
-        return
-
-    if resource not in self._RESOURCE_MAP:
-      logging.info('Could not find: %s', resource)
-      self.response.set_status(404)
-      self.response.out.write("Resource not found.")
-      self.response.headers['Content-Type'] = 'text/plain'
-      return
-
-    relative_path, content_type = self._RESOURCE_MAP[resource]
-    path = os.path.join(os.path.dirname(__file__), relative_path)
-    if not _DEBUG:
-      self.response.headers["Cache-Control"] = "public, max-age=300"
-    self.response.headers["Content-Type"] = content_type
-    self.response.out.write(open(path, 'rb').read())
+def get_pipeline_names():
+  """Returns the class paths of all Pipelines defined in alphabetical order."""
+  class_path_set = set()
+  for cls in _PipelineMeta._all_classes:
+    if cls._class_path is None:
+      cls._set_class_path()
+    if cls._class_path is not None:
+      class_path_set.add(cls._class_path)
+  return sorted(class_path_set)
 
 
-class _BaseRpcHandler(webapp.RequestHandler):
-  """Base handler for JSON-RPC responses.
+def get_root_list(class_path=None, cursor=None, count=50):
+  """Gets a list root Pipelines.
 
-  Sub-classes should fill in the 'json_response' property. All exceptions will
-  be rturne
+  Args:
+    class_path: Optional. If supplied, only return root Pipelines with the
+      given class_path. By default all root pipelines are returned.
+    cursor: Optional. When supplied, the cursor returned from the last call to
+      get_root_list which indicates where to pick up.
+    count: How many pipeline returns to return.
+
+  Returns:
+    Dictionary with the keys:
+      pipelines: The list of Pipeline records in the same format as
+        returned by get_status_tree, but with only the roots listed.
+      cursor: Cursor to pass back to this function to resume the query. Will
+        only be present if there is another page of results.
+
+  Raises:
+    PipelineStatusError if any input is bad.
   """
+  query = _PipelineRecord.all(cursor=cursor)
+  if class_path:
+    query.filter('class_path =', class_path)
+  query.filter('is_root_pipeline =', True)
+  query.order('-start_time')
 
-  def get(self):
-    if _ENFORCE_AUTH:
-      if not users.is_current_user_admin():
-        self.response.out.write('Forbidden')
-        self.response.set_status(403)
-        return
+  root_list = query.fetch(count)
 
-    # XSRF protection
-    if (not _DEBUG and
-        self.request.headers.get('X-Requested-With') != 'XMLHttpRequest'):
-      self.response.out.write('Request missing X-Requested-With header')
-      self.response.set_status(403)
-      return
+  fetch_list = []
+  for pipeline_record in root_list:
+    fetch_list.append(db.Key(pipeline_record.params['output_slots']['default']))
+    fetch_list.append(db.Key.from_path(
+        _BarrierRecord.kind(), _BarrierRecord.FINALIZE,
+        parent=pipeline_record.key()))
+    fetch_list.append(db.Key.from_path(
+        _StatusRecord.kind(), pipeline_record.key().name()))
 
-    self.json_response = {}
-    try:
-      self.handle()
-      output = simplejson.dumps(self.json_response)
-    except Exception, e:
-      self.json_response.clear()
-      self.json_response['error_class'] = e.__class__.__name__
-      self.json_response['error_message'] = str(e)
-      self.json_response['error_traceback'] = traceback.format_exc()
-      output = simplejson.dumps(self.json_response)
+  pipeline_dict = dict((stage.key(), stage) for stage in root_list)
+  slot_dict = {}
+  barrier_dict = {}
+  status_dict = {}
+  for entity in db.get(fetch_list):
+    if isinstance(entity, _BarrierRecord):
+      barrier_dict[entity.key()] = entity
+    elif isinstance(entity, _SlotRecord):
+      slot_dict[entity.key()] = entity
+    elif isinstance(entity, _StatusRecord):
+      status_dict[entity.key()] = entity
 
-    self.response.set_status(200)
-    self.response.headers['Content-Type'] = 'text/javascript'
-    self.response.headers['Cache-Control'] = 'no-cache'
-    self.response.out.write(output)
+  results = []
+  for pipeline_record in root_list:
+    output = _get_internal_status(
+        pipeline_record.key(),
+        pipeline_dict=pipeline_dict,
+        slot_dict=slot_dict,
+        barrier_dict=barrier_dict,
+        status_dict=status_dict)
+    output['pipelineId'] = pipeline_record.key().name()
+    results.append(output)
 
-  def handle(self):
-    raise NotImplementedError('To be implemented by sub-classes.')
-
-
-class _TreeStatusHandler(_BaseRpcHandler):
-  """RPC handler for getting the status of all children of root pipeline."""
-
-  def handle(self):
-    self.json_response.update(
-        get_status_tree(self.request.get('root_pipeline_id')))
+  result_dict = {}
+  cursor = query.cursor()
+  query.with_cursor(cursor)
+  if query.get(keys_only=True):
+    result_dict.update(cursor=cursor)
+  result_dict.update(pipelines=results)
+  return result_dict
 
 ################################################################################
 
@@ -3000,6 +3064,8 @@ def create_handlers_map(prefix='.*'):
       (prefix + '/fanout', _FanoutHandler),
       (prefix + '/fanout_abort', _FanoutAbortHandler),
       (prefix + '/callback', _CallbackHandler),
-      (prefix + '/rpc/tree', _TreeStatusHandler),
-      (prefix + '(/.+)', _StatusUiHandler),
+      (prefix + '/rpc/tree', status_ui._TreeStatusHandler),
+      (prefix + '/rpc/class_paths', status_ui._ClassPathListHandler),
+      (prefix + '/rpc/list', status_ui._RootListHandler),
+      (prefix + '(/.+)', status_ui._StatusUiHandler),
       ]
