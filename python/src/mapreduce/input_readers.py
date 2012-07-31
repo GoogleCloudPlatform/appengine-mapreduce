@@ -1386,7 +1386,7 @@ class RandomStringInputReader(InputReader):
     if cls.STRING_LENGTH in params:
       string_length = params[cls.STRING_LENGTH]
 
-    shard_count = min(cls._MAX_SHARD_COUNT, mapper_spec.shard_count, 1)
+    shard_count = min(cls._MAX_SHARD_COUNT, mapper_spec.shard_count)
     count_per_shard = count // shard_count
 
     mr_input_readers = [
@@ -1409,11 +1409,18 @@ class RandomStringInputReader(InputReader):
     if not isinstance(params[cls.COUNT], int):
       raise BadReaderParamsError("%s should be an int but is %s" %
                                  (cls.COUNT, type(params[cls.COUNT])))
-    if (cls.STRING_LENGTH in params and
-        not isinstance(params[cls.STRING_LENGTH], int)):
-      raise BadReaderParamsError("%s should be an int but is %s" %
-                                 (cls.STRING_LENGTH,
-                                  type(params[cls.STRING_LENGTH])))
+    if params[cls.COUNT] <= 0:
+      raise BadReaderParamsError("%s should be a positive int")
+    if cls.STRING_LENGTH in params and not (
+        isinstance(params[cls.STRING_LENGTH], int) and
+        params[cls.STRING_LENGTH] > 0):
+      raise BadReaderParamsError("%s should be a positive int but is %s" %
+                                 (cls.STRING_LENGTH, params[cls.STRING_LENGTH]))
+    if (not isinstance(mapper_spec.shard_count, int) or
+        mapper_spec.shard_count <= 0):
+      raise BadReaderParamsError(
+          "shard_count should be a positive int but is %s" %
+          mapper_spec.shard_count)
 
   @classmethod
   def from_json(cls, json):
