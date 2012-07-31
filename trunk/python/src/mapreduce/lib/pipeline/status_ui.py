@@ -155,4 +155,6 @@ class _RootListHandler(_BaseRpcHandler):
   def handle(self):
     import pipeline  # Break circular dependency
     self.json_response.update(
-        pipeline.get_root_list(cursor=self.request.get('cursor')))
+        pipeline.get_root_list(
+            class_path=self.request.get('class_path'),
+            cursor=self.request.get('cursor')))

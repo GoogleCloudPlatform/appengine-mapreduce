@@ -26,6 +26,13 @@
 
   <h1 class="page-title">Root Pipelines</h1>
 
+  <form method="get" id="filter_form">
+    Filter:
+    <select name="class_path" id="filter_menu" onchange="form.submit()" autocomplete="off">
+      <option value="">All</option>
+    </select>
+  </form>
+
   <table id="root-list" style="display: none">
     <thead>
       <tr>
