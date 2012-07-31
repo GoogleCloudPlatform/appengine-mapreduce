@@ -31,6 +31,7 @@ __all__ = [
     "DatastoreEntityInputReader",
     "DatastoreInputReader",
     "DatastoreKeyInputReader",
+    "RandomStringInputReader",
     "Error",
     "InputReader",
     "LogInputReader",
@@ -43,6 +44,8 @@ __all__ = [
 import base64
 import copy
 import logging
+import random
+import string
 import StringIO
 import time
 import zipfile
@@ -1333,6 +1336,91 @@ class BlobstoreZipLineInputReader(InputReader):
     return "blobstore.BlobKey(%r):[%d, %d]:%d" % (
         self._blob_key, self._start_file_index, self._end_file_index,
         self._next_offset())
+
+
+class RandomStringInputReader(InputReader):
+  """RandomStringInputReader generates random strings as output.
+
+  Primary usage is to populate output with testing entries.
+  """
+
+  # Total number of entries this reader should generate.
+  COUNT = "count"
+  # Length of the generated strings.
+  STRING_LENGTH = "string_length"
+
+  # Maximum number of shards to allow.
+  _MAX_SHARD_COUNT = 256
+
+  DEFAULT_STRING_LENGTH = 10
+
+  def __init__(self, count, string_length):
+    """Initialize input reader.
+
+    Args:
+      count: number of entries this shard should generate.
+      string_length: the length of generated random strings.
+    """
+    self._count = count
+    self._string_length = string_length
+
+  def __iter__(self):
+    ctx = context.get()
+
+    while self._count:
+      self._count -= 1
+      start_time = time.time()
+      content = "".join(random.choice(string.ascii_lowercase)
+                        for _ in range(self._string_length))
+      if ctx:
+        operation.counters.Increment(
+            COUNTER_IO_READ_MSEC, int((time.time() - start_time) * 1000))(ctx)
+        operation.counters.Increment(COUNTER_IO_READ_BYTES, len(content))(ctx)
+      yield content
+
+  @classmethod
+  def split_input(cls, mapper_spec):
+    params = _get_params(mapper_spec)
+    count = params[cls.COUNT]
+    string_length = cls.DEFAULT_STRING_LENGTH
+    if cls.STRING_LENGTH in params:
+      string_length = params[cls.STRING_LENGTH]
+
+    shard_count = min(cls._MAX_SHARD_COUNT, mapper_spec.shard_count, 1)
+    count_per_shard = count // shard_count
+
+    mr_input_readers = [
+        cls(count_per_shard, string_length) for _ in range(shard_count)]
+
+    left = count - count_per_shard*shard_count
+    if left > 0:
+      mr_input_readers.append(cls(left, string_length))
+
+    return mr_input_readers
+
+  @classmethod
+  def validate(cls, mapper_spec):
+    if mapper_spec.input_reader_class() != cls:
+      raise BadReaderParamsError("Mapper input reader class mismatch")
+
+    params = _get_params(mapper_spec)
+    if cls.COUNT not in params:
+      raise BadReaderParamsError("Must specify %s" % cls.COUNT)
+    if not isinstance(params[cls.COUNT], int):
+      raise BadReaderParamsError("%s should be an int but is %s" %
+                                 (cls.COUNT, type(params[cls.COUNT])))
+    if (cls.STRING_LENGTH in params and
+        not isinstance(params[cls.STRING_LENGTH], int)):
+      raise BadReaderParamsError("%s should be an int but is %s" %
+                                 (cls.STRING_LENGTH,
+                                  type(params[cls.STRING_LENGTH])))
+
+  @classmethod
+  def from_json(cls, json):
+    return cls(json[cls.COUNT], json[cls.STRING_LENGTH])
+
+  def to_json(self):
+    return {self.COUNT: self._count, self.STRING_LENGTH: self._string_length}
 
 
 class ConsistentKeyReader(DatastoreKeyInputReader):
