@@ -111,7 +111,41 @@ class MapreducePipelineTest(testutil.HandlerTestBase):
 class ReducerReaderTest(testutil.HandlerTestBase):
   """Tests for _ReducerReader."""
 
-  def testReadPartial(self):
+  def testMultipleRequests(self):
+    """Tests restoring the reader state across multiple requests."""
+    input_file = files.blobstore.create()
+
+    # Create a file with two records.
+    with files.open(input_file, "a") as f:
+      with records.RecordsWriter(f) as w:
+        proto = file_service_pb.KeyValues()
+        proto.set_key("key2")
+        proto.value_list().extend(["a", "b"])
+        proto.set_partial(True)
+        w.write(proto.Encode())
+
+        proto = file_service_pb.KeyValues()
+        proto.set_key("key2")
+        proto.value_list().extend(["c", "d"])
+        w.write(proto.Encode())
+
+    files.finalize(input_file)
+    input_file = files.blobstore.get_file_name(
+        files.blobstore.get_blob_key(input_file))
+
+    # Now read the records in two attempts, serializing and recreating the
+    # input reader as if it's a separate request.
+    reader = mapreduce_pipeline._ReducerReader([input_file], 0)
+    it = iter(reader)
+    self.assertEquals(input_readers.ALLOW_CHECKPOINT, it.next())
+
+    reader_state = reader.to_json()
+    other_reader = mapreduce_pipeline._ReducerReader.from_json(reader_state)
+    it = iter(reader)
+    self.assertEquals(("key2", ["a", "b", "c", "d"]), it.next())
+
+  def testSingleRequest(self):
+    """Tests when a key can be handled during a single request."""
     input_file = files.blobstore.create()
 
     with files.open(input_file, "a") as f:
@@ -148,32 +182,32 @@ class ReducerReaderTest(testutil.HandlerTestBase):
     i = reader.__iter__()
     self.assertEquals(
         {"position": 0,
-         "current_values": None,
-         "current_key": None,
+         "current_values": "Ti4=",
+         "current_key": "Ti4=",
          "filenames": [input_file]},
         reader.to_json())
 
     self.assertEquals(("key1", ["a", "b"]), i.next())
     self.assertEquals(
         {"position": 19,
-         "current_values": None,
-         "current_key": None,
+         "current_values": "Ti4=",
+         "current_key": "Ti4=",
          "filenames": [input_file]},
         reader.to_json())
 
     self.assertEquals(input_readers.ALLOW_CHECKPOINT, i.next())
     self.assertEquals(
         {"position": 40,
-         "current_values": ["a", "b"],
-         "current_key": "key2",
+         "current_values": "KGxwMApTJ2EnCnAxCmFTJ2InCnAyCmEu",
+         "current_key": "UydrZXkyJwpwMAou",
          "filenames": [input_file]},
         reader.to_json())
 
     self.assertEquals(("key2", ["a", "b", "c", "d"]), i.next())
     self.assertEquals(
         {"position": 59,
-         "current_values": None,
-         "current_key": None,
+         "current_values": "Ti4=",
+         "current_key": "Ti4=",
          "filenames": [input_file]},
         reader.to_json())
 
