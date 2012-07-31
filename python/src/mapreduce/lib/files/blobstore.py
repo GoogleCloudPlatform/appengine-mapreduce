@@ -37,7 +37,6 @@ from google.appengine.ext import blobstore
 _BLOBSTORE_FILESYSTEM = files.BLOBSTORE_FILESYSTEM
 _BLOBSTORE_DIRECTORY = '/' + _BLOBSTORE_FILESYSTEM + '/'
 _BLOBSTORE_NEW_FILE_NAME = 'new'
-_CREATION_HANDLE_PREFIX = 'writable:'
 _MIME_TYPE_PARAMETER = 'content_type'
 _BLOBINFO_UPLOADED_FILENAME_PARAMETER = 'file_name'
 
@@ -102,7 +101,7 @@ def get_blob_key(create_file_name):
         (create_file_name, _BLOBSTORE_DIRECTORY))
   ticket = create_file_name[len(_BLOBSTORE_DIRECTORY):]
 
-  if not ticket.startswith(_CREATION_HANDLE_PREFIX):
+  if not ticket.startswith(files._CREATION_HANDLE_PREFIX):
 
     return blobstore.BlobKey(ticket)
 
@@ -153,19 +152,3 @@ def get_file_name(blob_key):
   if not isinstance(blob_key, (blobstore.BlobKey, basestring)):
     raise files.InvalidArgumentError('Expected string or blobstore.BlobKey')
   return '%s%s' % (_BLOBSTORE_DIRECTORY, blob_key)
-
-
-def _delete(filename):
-  """Permanently delete a file.
-
-  Args:
-    filename: finalized file name as string.
-  """
-
-  blob_key = get_blob_key(filename)
-  if blob_key is None:
-    return
-  blob_info = blobstore.BlobInfo.get(blob_key)
-  if blob_info is None:
-    return
-  blob_info.delete()
