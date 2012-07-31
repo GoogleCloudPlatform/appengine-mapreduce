@@ -1,5 +1,5 @@
 /*
- * Copyright 2010 Google Inc.
+ * Copyright 2012 Google Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,32 +13,26 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-html, body {
-  padding: 0;
-  margin: 0;
-  width: 100%;
-  overflow: hidden;
-  font-family: helvetica, sans-serif;
-  font-size: 14px;
+#content {
+  margin: 10px 20px;
 }
-#butter {
-  position: absolute;
-  min-width: 300px;
-  background-color: #C5D7EF;
-  text-align: center;
-  padding: 5px;
-  border-left: 1px solid #3366CC;
-  border-right: 1px solid #3366CC;
-  border-bottom: 1px solid #3366CC;
+#root-list {
+  border-collapse: collapse;
+  width: 80%;
 }
-#butter.error {
-  /* Make stack traces legible. */
+#root-list th,
+#root-list td {
   text-align: left;
+  padding: 4px 8px;
+  min-width: 75px;
 }
-
-#butter a:visited,
-#butter a:active,
-#butter a:link,
-#butter a:hover {
-  color: #3366CC;
+#root-list tbody td {
+  border-top: 1px solid #ccc;
+}
+.status {
+  text-transform: capitalize;
+}
+abbr {
+  cursor: help;
+  border: 0;
 }

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <link rel="stylesheet" href="common.css" type="text/css" charset="utf-8">
-  <link rel="stylesheet" href="status.css" type="text/css" charset="utf-8">
+  <link rel="stylesheet" href="list.css" type="text/css" charset="utf-8">
   <link rel="stylesheet" href="jquery.treeview.css" type="text/css" charset="utf-8">
   <script type="text/javascript" src="jquery-1.4.2.min.js"></script>
   <script type="text/javascript" src="jquery.cookie.js"></script>
@@ -12,38 +12,41 @@
   <script type="text/javascript" src="jquery.ba-hashchange.min.js"></script>
   <script type="text/javascript" src="jquery.json.min.js"></script>
   <script type="text/javascript" src="common.js"></script>
-  <script type="text/javascript" src="status.js"></script>
+  <script type="text/javascript" src="list.js"></script>
   <script type="text/javascript">
-    $(document).ready(initStatus);
+    $(document).ready(initRootList);
   </script>
+  <title>Root Pipelines</title>
 </head>
 <body>
 
 <div id="butter" style="display: none;"></div>
 
-<div id="sidebar" style="display: none;">
-<!-- Tree will go here -->
-</div>
-
 <div id="content">
 
-  <div id="control" style="display: none;">
-    <table id="control-table" border="0" cellpadding="0" cellspacing="0">
+  <h1 class="page-title">Root Pipelines</h1>
+
+  <table id="root-list" style="display: none">
+    <thead>
       <tr>
-        <td class="control-cell">
-          <a class="refresh-link" href="#">Refresh</a>
-        </td>
-        <td class="control-cell">
-          <label for="auto-refresh">Auto-pilot</label>
-          <input type="checkbox" id="auto-refresh" checked="checked">
+        <th>Class Path</th>
+        <th>Status</th>
+        <th>Start Time</th>
+        <th>Run Time</th>
+        <th>Links</th>
+      </tr>
+    </thead>
+    <tfoot>
+      <tr>
+        <td colspan="5">
+          <a href="#" id="next-link" style="display: none">Next &raquo;</a>
         </td>
       </tr>
-    </table>
-  </div>
+    </tfoot>
+    <tbody></tbody>
+  </table>
 
-  <div id="detail"><!-- Pipeline detail goes here --></div>
-
-  <iframe id="status-console" src="javascript:''" style="display: none;" frameborder="0" border="0"></iframe>
+  <div id="empty-list-message" style="display: none"></div>
 
 </div>
 
