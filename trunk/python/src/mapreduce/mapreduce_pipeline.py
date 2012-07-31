@@ -21,12 +21,16 @@ from __future__ import with_statement
 
 
 __all__ = [
+    "CleanupPipeline",
     "MapPipeline",
     "MapperPipeline",
     "MapreducePipeline",
     "ReducePipeline",
     "ShufflePipeline",
     ]
+
+import base64
+import pickle
 
 
 from mapreduce.lib import pipeline
@@ -49,6 +53,8 @@ from mapreduce import util
 MapperPipeline = mapper_pipeline.MapperPipeline
 
 ShufflePipeline = shuffler.ShufflePipeline
+
+CleanupPipeline = mapper_pipeline._CleanupPipeline
 
 
 class MapPipeline(base_handler.PipelineBase):
@@ -103,9 +109,6 @@ class _ReducerReader(input_readers.RecordsReader):
       if combiner_spec:
         combiner = util.handler_for_name(combiner_spec)
 
-    self.current_key = None
-    self.current_values = None
-
     for binary_record in super(_ReducerReader, self).__iter__():
       proto = file_service_pb.KeyValues()
       proto.ParseFromString(binary_record)
@@ -148,6 +151,20 @@ class _ReducerReader(input_readers.RecordsReader):
       else:
         yield input_readers.ALLOW_CHECKPOINT
 
+  @staticmethod
+  def encode_data(data):
+    """Encodes the given data, which may have include raw bytes.
+
+    Works around limitations in JSON encoding, which cannot handle raw bytes.
+    """
+    # TODO(user): Use something less slow/ugly.
+    return base64.b64encode(pickle.dumps(data))
+
+  @staticmethod
+  def decode_data(data):
+    """Decodes data encoded with the encode_data function."""
+    return pickle.loads(base64.b64decode(data))
+
   def to_json(self):
     """Returns an input shard state for the remaining inputs.
 
@@ -155,8 +172,8 @@ class _ReducerReader(input_readers.RecordsReader):
       A json-izable version of the remaining InputReader.
     """
     result = super(_ReducerReader, self).to_json()
-    result["current_key"] = self.current_key
-    result["current_values"] = self.current_values
+    result["current_key"] = _ReducerReader.encode_data(self.current_key)
+    result["current_values"] = _ReducerReader.encode_data(self.current_values)
     return result
 
   @classmethod
@@ -170,8 +187,8 @@ class _ReducerReader(input_readers.RecordsReader):
       An instance of the InputReader configured using the values of json.
     """
     result = super(_ReducerReader, cls).from_json(json)
-    result.current_key = json["current_key"]
-    result.current_values = json["current_values"]
+    result.current_key = _ReducerReader.decode_data(json["current_key"])
+    result.current_values = _ReducerReader.decode_data(json["current_values"])
     return result
 
 
@@ -193,6 +210,8 @@ class ReducePipeline(base_handler.PipelineBase):
       combined values that might be processed by another combiner call, but will
       eventually end up in reducer. The combiner output key is assumed to be the
       same as the input key.
+    shards: Optional. Number of output shards. Defaults to the number of
+      input files.
 
   Returns:
     filenames from output writer.
@@ -204,7 +223,8 @@ class ReducePipeline(base_handler.PipelineBase):
           output_writer_spec,
           params,
           filenames,
-          combiner_spec=None):
+          combiner_spec=None,
+          shards=None):
     new_params = dict(params or {})
     new_params.update({
         "files": filenames
@@ -214,12 +234,17 @@ class ReducePipeline(base_handler.PipelineBase):
           "combiner_spec": combiner_spec,
           })
 
+    # TODO(user): Test this
+    if shards is None:
+      shards = len(filenames)
+
     yield mapper_pipeline.MapperPipeline(
         job_name + "-reduce",
         reducer_spec,
         __name__ + "._ReducerReader",
         output_writer_spec,
-        new_params)
+        new_params,
+        shards=shards)
 
 
 class MapreducePipeline(base_handler.PipelineBase):
@@ -272,5 +297,5 @@ class MapreducePipeline(base_handler.PipelineBase):
     with pipeline.After(reducer_pipeline):
       all_temp_files = yield pipeline_common.Extend(
           map_pipeline, shuffler_pipeline)
-      yield mapper_pipeline._CleanupPipeline(all_temp_files)
+      yield CleanupPipeline(all_temp_files)
     yield pipeline_common.Return(reducer_pipeline)
