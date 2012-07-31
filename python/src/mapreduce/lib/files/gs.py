@@ -30,7 +30,14 @@ from __future__ import with_statement
 
 __all__ = ['create']
 
+import re
+from urllib import urlencode
+from xml.dom import minidom
+
+from google.appengine.api import app_identity
+from google.appengine.api import urlfetch
 from mapreduce.lib.files import file as files
+
 
 
 
@@ -42,6 +49,87 @@ _CONTENT_ENCODING_PARAMETER = 'content_encoding'
 _CONTENT_DISPOSITION_PARAMETER = 'content_disposition'
 _CACHE_CONTROL_PARAMETER = 'cache_control'
 _USER_METADATA_PREFIX = 'x-goog-meta-'
+
+
+
+_GS_RESTFUL_URL = 'commondatastorage.googleapis.com'
+_GS_RESTFUL_SCOPE_READ_ONLY = (
+    'https://www.googleapis.com/auth/devstorage.read_only')
+_GS_RESTFUL_API_VERSION = '2'
+_GS_BUCKETPATH_REGEX = re.compile(r'/gs/[a-z0-9\.\-]{3,}$')
+
+
+def listdir(path, kwargs=None):
+  """Return a sorted list of filenames (matching a pattern) in the given path.
+
+  Sorting (decrease by string) is done automatically by Google Cloud Storage.
+
+  Args:
+    path: a Google Cloud Storage path of "/gs/bucketname" form.
+    kwargs: other keyword arguments to be relayed to Google Cloud Storage.
+      This can be used to select certain files with names matching a pattern.
+
+      Supported keywords:
+      marker: a string after which (exclusive) to start listing.
+      max-keys: the maximum number of filenames to return.
+      prefix: limits the returned filenames to those with this prefix. no regex.
+
+      See Google Cloud Storage documentation for more details and examples.
+      https://developers.google.com/storage/docs/reference-methods#getbucket
+
+  Returns:
+    a sorted list containing filenames (matching a pattern) from
+    the given path. The last filename can be used as a marker for another
+    request for more files.
+  """
+  if not path:
+    raise files.InvalidFileNameError('Empty path')
+  elif not isinstance(path, basestring):
+    raise files.InvalidFileNameError('Expected string for path %s' % path)
+  elif not _GS_BUCKETPATH_REGEX.match(path):
+    raise files.InvalidFileNameError(
+        'Google storage path must have the form /gs/bucketname')
+
+  bucketname = path[len(_GS_PREFIX):]
+
+  request_headers = {
+      'Authorization': 'OAuth %s' % app_identity.get_access_token(
+                       _GS_RESTFUL_SCOPE_READ_ONLY)[0],
+      'x-goog-api-version': _GS_RESTFUL_API_VERSION
+      }
+
+  url = 'https://%s/%s' % (_GS_RESTFUL_URL, bucketname)
+
+  if kwargs:
+    url += '/?' + urlencode(kwargs)
+
+  response = urlfetch.fetch(url=url,
+                            headers=request_headers,
+                            deadline=60)
+
+  if response.status_code == 404:
+    raise files.InvalidFileNameError('Bucket %s does not exist.' % bucketname)
+  elif response.status_code == 401:
+    raise files.PermissionDeniedError('Permission denied to read bucket %s.' %
+                                      bucketname)
+
+  dom = minidom.parseString(response.content)
+
+  def __textValue(node):
+    return node.firstChild.nodeValue
+
+
+  error = dom.getElementsByTagName('Error')
+  if len(error) == 1:
+    details = error[0].getElementsByTagName('Details')
+    if len(details) == 1:
+      raise files.InvalidParameterError(__textValue(details[0]))
+    else:
+      code = __textValue(error[0].getElementsByTagName('Code')[0])
+      msg = __textValue(error[0].getElementsByTagName('Message')[0])
+      raise files.InvalidParameterError('%s: %s' % (code, msg))
+
+  return [__textValue(key) for key in dom.getElementsByTagName('Key')]
 
 
 def create(filename,

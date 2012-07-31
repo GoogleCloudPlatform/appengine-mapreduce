@@ -52,6 +52,7 @@ __all__ = [
 
            'delete',
            'finalize',
+           'listdir',
            'open',
            'stat',
 
@@ -495,6 +496,33 @@ def open(filename, mode='r', content_type=RAW, exclusive_lock=False):
             content_type=content_type,
             exclusive_lock=exclusive_lock)
   return f
+
+
+def listdir(path, **kwargs):
+  """Return a sorted list of filenames (matching a pattern) in the given path.
+
+  Only Google Cloud Storage paths are supported in current implementation.
+
+  Args:
+    path: a Google Cloud Storage path of "/gs/bucketname" form.
+    kwargs: other keyword arguments to be relayed to Google Cloud Storage.
+      This can be used to select certain files with names matching a pattern.
+      See mapreduce.lib.files.gs.listdir for details.
+
+  Returns:
+    a list containing filenames (matching a pattern) from the given path.
+    Sorted by Python String.
+  """
+  from mapreduce.lib.files import gs
+
+  if not isinstance(path, basestring):
+    raise InvalidArgumentError('path should be a string, but is %s(%r)' %
+                               (path.__class__.__name__, path))
+
+  if path.startswith(gs._GS_PREFIX):
+    gs.listdir(path, kwargs)
+  else:
+    raise InvalidFileNameError('Unsupported path: %s' % path)
 
 
 def finalize(filename, content_type=RAW):
