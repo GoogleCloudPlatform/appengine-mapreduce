@@ -56,7 +56,7 @@ _GS_RESTFUL_URL = 'commondatastorage.googleapis.com'
 _GS_RESTFUL_SCOPE_READ_ONLY = (
     'https://www.googleapis.com/auth/devstorage.read_only')
 _GS_RESTFUL_API_VERSION = '2'
-_GS_BUCKETPATH_REGEX = re.compile(r'/gs/[a-z0-9\.\-]{3,}$')
+_GS_BUCKETPATH_REGEX = re.compile(r'/gs/[a-z0-9\.\-_]{3,}$')
 
 
 def listdir(path, kwargs=None):
@@ -129,7 +129,8 @@ def listdir(path, kwargs=None):
       msg = __textValue(error[0].getElementsByTagName('Message')[0])
       raise files.InvalidParameterError('%s: %s' % (code, msg))
 
-  return [__textValue(key) for key in dom.getElementsByTagName('Key')]
+  return ['/'.join([path, __textValue(key)]) for key in
+      dom.getElementsByTagName('Key')]
 
 
 def create(filename,
