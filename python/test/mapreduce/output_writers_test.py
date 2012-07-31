@@ -54,6 +54,15 @@ class FilePoolTest(unittest.TestCase):
     """Test appending too much data."""
     self.assertRaises(errors.Error, self.pool.append, "foo", "a"*1024*1024*2)
 
+  def testAppendLargeData(self):
+    """Test appending large amount of data.
+
+    See b/6827293.
+    """
+    self.pool.append("foo", "a"*output_writers._FILES_API_FLUSH_SIZE + "a")
+    self.assertEquals("a"*output_writers._FILES_API_FLUSH_SIZE + "a",
+                      self.file_service.get_content("foo"))
+
   def testAppendMultipleFiles(self):
     self.pool.append("foo", "a")
     self.pool.append("bar", "b")
