@@ -6,11 +6,11 @@ package com.google.appengine.tools.mapreduce.impl;
 /**
  * A factory for producing instances of {@link ShuffleService}.
  */
-class ShuffleServiceFactory {
+public class ShuffleServiceFactory {
   /**
    * Returns an instance of {@link ShuffleService}.
    */
-  static ShuffleService getShuffleService() {
+  public static ShuffleService getShuffleService() {
     return new ShuffleServiceImpl();
   }
 }
