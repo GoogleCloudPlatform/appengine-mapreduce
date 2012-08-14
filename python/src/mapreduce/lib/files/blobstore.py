@@ -25,6 +25,7 @@ from __future__ import with_statement
 
 __all__ = ['create', 'get_blob_key', 'get_file_name']
 
+import hashlib
 import urllib
 
 from google.appengine.api import datastore
@@ -76,6 +77,16 @@ _BLOB_FILE_INDEX_KIND = '__BlobFileIndex__'
 _BLOB_KEY_PROPERTY_NAME = 'blob_key'
 
 
+def _get_blob_file_index_key_name(creation_handle):
+  """Get key name for a __BlobFileIndex__ entity.
+
+  Returns creation_handle if it is < 500 symbols and its sha512 otherwise.
+  """
+  if len(creation_handle) < 500:
+    return creation_handle
+  return hashlib.sha512(creation_handle).hexdigest()
+
+
 def get_blob_key(create_file_name):
   """Get a blob key for finalized blobstore file.
 
@@ -108,7 +119,9 @@ def get_blob_key(create_file_name):
 
 
   blob_file_index = datastore.Get([datastore.Key.from_path(
-      _BLOB_FILE_INDEX_KIND, ticket, namespace='')])[0]
+      _BLOB_FILE_INDEX_KIND,
+      _get_blob_file_index_key_name(ticket),
+      namespace='')])[0]
   if blob_file_index:
     blob_key_str = blob_file_index[_BLOB_KEY_PROPERTY_NAME]
 
