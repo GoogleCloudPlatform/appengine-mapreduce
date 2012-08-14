@@ -95,6 +95,9 @@
     <copy todir="${build}/com/google/appengine/tools/mapreduce">
       <fileset dir="${static}" />
     </copy>
+    <copy todir="${build}/com/google/appengine/tools/pipeline/impl/servlets/ui">
+      <fileset dir="pipeline-ui" />
+    </copy>
     <copy todir="${build}">
       <fileset dir="${src}" />
     </copy>

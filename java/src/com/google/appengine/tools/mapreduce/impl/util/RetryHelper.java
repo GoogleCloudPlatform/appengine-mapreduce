@@ -20,13 +20,6 @@ public class RetryHelper<V> {
   @SuppressWarnings("unused")
   private static final Logger log = Logger.getLogger(RetryHelper.class.getName());
 
-  // TODO(ohler): move into a RetryParameters/RetryStrategy object
-  private static final int RETRY_MIN_ATTEMPTS = 5;
-  private static final int RETRY_MAX_ATTEMPTS = 200;
-  private static final long INITIAL_RETRY_DELAY_MILLIS = 10;
-  private static final long MAX_RETRY_DELAY_MILLIS = 10 * 1000;
-  private static final double RETRY_DELAY_BACKOFF_FACTOR = 2;
-  private static final long RETRY_PERIOD_MILLIS = 4 * 60 * 1000;
 
   public static String messageChain(Throwable t) {
     StringBuilder b = new StringBuilder("" + t);
@@ -46,14 +39,17 @@ public class RetryHelper<V> {
   private final Stopwatch stopwatch = new Stopwatch();
   private int attemptsSoFar = 0;
   private final Body<V> body;
+  private final RetryParams params;
 
-  private RetryHelper(Body<V> body) {
+  private RetryHelper(Body<V> body, RetryParams parms) {
     this.body = body;
+    this.params = parms;
   }
 
-  @Override public String toString() {
-    return getClass().getSimpleName() + "(" + stopwatch + ", "
-        + attemptsSoFar + " attempts, " + body + ")";
+  @Override
+  public String toString() {
+    return getClass().getSimpleName() + "(" + stopwatch + ", " + attemptsSoFar + " attempts, "
+        + body + ")";
   }
 
   private V doRetry() {
@@ -71,20 +67,19 @@ public class RetryHelper<V> {
         exception = e;
       } catch (ApiProxyException e) {
         // TODO(ohler): retry only the subclasses that make sense, such as
-        // ApiDeadlineExceededException.  (Which should arguably be wrapped in
+        // ApiDeadlineExceededException. (Which should arguably be wrapped in
         // an IOException for calls like open()...)
         exception = e;
       }
-      long sleepDurationMillis =
-          (long) (Math.random()
-              * (Math.min(MAX_RETRY_DELAY_MILLIS,
-                      Math.pow(RETRY_DELAY_BACKOFF_FACTOR, attemptsSoFar - 1)
-                          * INITIAL_RETRY_DELAY_MILLIS)));
+      long sleepDurationMillis = (long) ((Math.random() / 2.0 + .5) * (Math.min(
+          params.getMaxRetryDelayMillis(),
+              Math.pow(params.getRetryDelayBackoffFactor(), attemptsSoFar - 1)
+              * params.getInitialRetryDelayMillis())));
       log.warning(this + ": Attempt " + attemptsSoFar + " failed, sleeping for "
           + sleepDurationMillis + " ms: " + messageChain(exception));
-      if (attemptsSoFar >= RETRY_MAX_ATTEMPTS
-          || (attemptsSoFar >= RETRY_MIN_ATTEMPTS
-              && stopwatch.elapsedMillis() >= RETRY_PERIOD_MILLIS)) {
+      if (attemptsSoFar >= params.getRetryMaxAttempts() 
+          || (attemptsSoFar >= params.getRetryMinAttempts()
+              && stopwatch.elapsedMillis() >= params.getRetryPeriodMillis())) {
         throw new RuntimeException(this + ": Too many failures, giving up", exception);
       }
       try {
@@ -98,7 +93,11 @@ public class RetryHelper<V> {
   }
 
   public static <V> V runWithRetries(Body<V> body) {
-    return new RetryHelper<V>(body).doRetry();
+    return new RetryHelper<V>(body, new RetryParams()).doRetry();
+  }
+
+  public static <V> V runWithRetries(Body<V> body, RetryParams parms) {
+    return new RetryHelper<V>(body, parms).doRetry();
   }
 
 }

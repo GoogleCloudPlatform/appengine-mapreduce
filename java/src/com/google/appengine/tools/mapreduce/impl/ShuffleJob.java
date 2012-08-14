@@ -92,12 +92,13 @@ public class ShuffleJob<K, V, O>
             new IntermediateInput<K, V>(reduceInputs,
                 mrSpec.getIntermediateKeyMarshaller(),
                 mrSpec.getIntermediateValueMarshaller())));
-    if (new ShuffleService().isAvailable()) {
+    ShuffleService shuffleService = ShuffleServiceFactory.getShuffleService();
+    if (shuffleService.isAvailable()) {
       PromisedValue<String> shuffleError = newPromise(String.class);
-      new ShuffleService().shuffle("Shuffle-for-MR-" + mrJobId,
+      shuffleService.shuffle("Shuffle-for-MR-" + mrJobId,
           mapOutputs,
           reduceInputs,
-          new ShuffleService.ShuffleCallback(
+          new ShuffleCallback(
               settings.getBaseUrl() + MapReduceServletImpl.SHUFFLE_CALLBACK_PATH
               + "?promiseHandle=" + shuffleError.getHandle()
           )
@@ -110,7 +111,7 @@ public class ShuffleJob<K, V, O>
     } else {
       // Do shuffling as a separate job to make it visible in the Pipeline UI
       // that shuffling is in-memory.
-      return futureCall(new InMemoryShuffleJob<K, V, O>(mrJobId, mrSpec),
+      return futureCall(new InMemoryShuffleJob<K, V, O>(mrSpec),
           immediate(mapOutputs),
           immediate(reduceInputs), immediate(shuffleResult),
           Util.jobSettings(settings));
