@@ -1,185 +1,379 @@
 // Copyright 2011 Google Inc. All Rights Reserved.
 package com.google.appengine.tools.mapreduce;
 
-import static org.easymock.EasyMock.createMock;
-import static org.easymock.EasyMock.expect;
-import static org.easymock.EasyMock.replay;
+import com.google.appengine.api.datastore.DatastoreService;
+import com.google.appengine.api.datastore.DatastoreServiceFactory;
+import com.google.appengine.api.datastore.Entity;
+import com.google.appengine.api.datastore.KeyFactory;
+import com.google.appengine.api.datastore.Query;
+import com.google.appengine.api.files.AppEngineFile;
+import com.google.appengine.api.files.FileReadChannel;
+import com.google.appengine.api.files.FileServiceFactory;
+import com.google.appengine.tools.mapreduce.impl.InProcessMapReduce;
+import com.google.appengine.tools.mapreduce.impl.Shuffling;
+import com.google.appengine.tools.mapreduce.inputs.ConsecutiveLongInput;
+import com.google.appengine.tools.mapreduce.inputs.DatastoreInput;
+import com.google.appengine.tools.mapreduce.outputs.BlobFileOutputWriter;
+import com.google.appengine.tools.mapreduce.outputs.InMemoryOutput;
+import com.google.appengine.tools.mapreduce.outputs.NoOutput;
+import com.google.appengine.tools.mapreduce.reducers.KeyProjectionReducer;
+import com.google.appengine.tools.mapreduce.reducers.NoReducer;
+import com.google.appengine.tools.pipeline.JobInfo;
+import com.google.appengine.tools.pipeline.PipelineService;
+import com.google.appengine.tools.pipeline.PipelineServiceFactory;
+import com.google.common.collect.ArrayListMultimap;
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Iterables;
+import com.google.common.collect.Lists;
+import com.google.common.collect.Sets;
 
-import com.google.appengine.api.taskqueue.dev.LocalTaskQueue;
-import com.google.appengine.api.taskqueue.dev.QueueStateInfo.TaskStateInfo;
-import com.google.appengine.tools.development.testing.LocalDatastoreServiceTestConfig;
-import com.google.appengine.tools.development.testing.LocalMemcacheServiceTestConfig;
-import com.google.appengine.tools.development.testing.LocalServiceTestHelper;
-import com.google.appengine.tools.development.testing.LocalTaskQueueTestConfig;
-
-import junit.framework.TestCase;
-
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.io.IntWritable;
-import org.apache.hadoop.mapreduce.InputFormat;
-
-import java.io.UnsupportedEncodingException;
-import java.net.URLDecoder;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.HashSet;
+import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.List;
-import java.util.Map;
+import java.util.Set;
 import java.util.logging.Logger;
 
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-
 /**
- * An end-to-end test for Hadoop interfaces of mapreduce framework.
- *
  */
-public class EndToEndTest extends TestCase {
- private static final Logger logger = Logger.getLogger(EndToEndTest.class.getName());
+public class EndToEndTest extends EndToEndTestCase {
 
-  private final LocalServiceTestHelper helper =
-      new LocalServiceTestHelper(
-          new LocalDatastoreServiceTestConfig(),
-          new LocalTaskQueueTestConfig().setDisableAutoTaskExecution(true),
-          new LocalMemcacheServiceTestConfig());
+  @SuppressWarnings("unused")
+  private static final Logger log = Logger.getLogger(EndToEndTest.class.getName());
 
-  MapReduceServlet servlet = new MapReduceServlet();
-  private LocalTaskQueue taskQueue;
+  private PipelineService pipelineService;
 
   @Override
   protected void setUp() throws Exception {
     super.setUp();
-    helper.setUp();
-    taskQueue = LocalTaskQueueTestConfig.getLocalTaskQueue();
-    StubMapper.fakeSetUp();
+    pipelineService = PipelineServiceFactory.newPipelineService();
   }
 
-  @Override
-  protected void tearDown() throws Exception {
-    StubMapper.fakeTearDown();
-    helper.tearDown();
-    super.tearDown();
+  private interface Preparer {
+    void prepare() throws Exception;
   }
 
-  public void testStubInput() throws Exception {
-    String queueName = "default";
-
-    Configuration configuration = new Configuration(false);
-    configuration.set(AppEngineJobContext.CONTROLLER_QUEUE_KEY, queueName);
-    configuration.set(AppEngineJobContext.WORKER_QUEUE_KEY, queueName);
-    configuration.set(AppEngineJobContext.MAPPER_SHARD_COUNT_KEY, "2");
-    configuration.set(AppEngineJobContext.MAPPER_INPUT_PROCESSING_RATE_KEY, "1000");
-    configuration.setClass("mapreduce.inputformat.class", StubInputFormat.class, InputFormat.class);
-    configuration.setClass("mapreduce.map.class", StubMapper.class, AppEngineMapper.class);
-
-    AppEngineMapreduce.INSTANCE.start(configuration, "test", "/mapreduce/");
-
-    executeTasksUntilEmpty(queueName);
-
-    assertTrue(StubMapper.cleanupCalled);
-    assertTrue(StubMapper.setupCalled);
-    assertTrue(StubMapper.taskCleanupCalled);
-    assertTrue(StubMapper.taskSetupCalled);
-
-    Collection<IntWritable> expectedKeys = new HashSet<IntWritable>();
-    expectedKeys.addAll(StubInputSplit.KEYS);
-    expectedKeys.addAll(StubInputSplit.KEYS);
-    assertEquals(expectedKeys, new HashSet<IntWritable>(StubMapper.invocationKeys));
+  private interface Verifier<R> {
+    void verify(MapReduceResult<R> result) throws Exception;
   }
 
-  private static HttpServletRequest createMockRequest(
-      String handler, boolean taskQueueRequest, boolean ajaxRequest) {
-    HttpServletRequest request = createMock(HttpServletRequest.class);
-    if (taskQueueRequest) {
-      expect(request.getHeader("X-AppEngine-QueueName"))
-        .andReturn("default")
-        .anyTimes();
-    } else {
-      expect(request.getHeader("X-AppEngine-QueueName"))
-        .andReturn(null)
-        .anyTimes();
+  // (runWithPipeline is also in-process in our test setup, so this is a misnomer.)
+  private <I, K, V, O, R> void runInProcess(Preparer preparer,
+      MapReduceSpecification<I, K, V, O, R> mrSpec, Verifier<R> verifier) throws Exception {
+    preparer.prepare();
+    verifier.verify(InProcessMapReduce.runMapReduce(mrSpec));
+  }
+
+  private <I, K, V, O, R> void runWithPipeline(Preparer preparer,
+      MapReduceSpecification<I, K, V, O, R> mrSpec, Verifier<R> verifier) throws Exception {
+    preparer.prepare();
+    String jobId = pipelineService.startNewPipeline(new MapReduceJob<I, K, V, O, R>(),
+        mrSpec, new MapReduceSettings());
+    assertFalse(jobId.isEmpty());
+    executeTasksUntilEmpty("default");
+    JobInfo info = pipelineService.getJobInfo(jobId);
+    @SuppressWarnings("unchecked")
+    MapReduceResult<R> result = (MapReduceResult) info.getOutput();
+    assertNotNull(result);
+    verifier.verify(result);
+  }
+
+  private <I, K, V, O, R> void runTest(Preparer preparer,
+      MapReduceSpecification<I, K, V, O, R> mrSpec, Verifier<R> verifier) throws Exception {
+    runInProcess(preparer, mrSpec, verifier);
+    runWithPipeline(preparer, mrSpec, verifier);
+  }
+
+  public void testEmpty() throws Exception {
+    runTest(
+        new Preparer() {
+          @Override public void prepare() throws Exception {
+          }
+        },
+        MapReduceSpecification.of("Empty test MR",
+            new ConsecutiveLongInput(0, 0, 1),
+            new Mod37Mapper(),
+            Marshallers.getStringMarshaller(),
+            Marshallers.getLongMarshaller(),
+            new TestReducer(),
+            new InMemoryOutput<KeyValue<String, List<Long>>>(1)),
+        new Verifier<List<List<KeyValue<String, List<Long>>>>>() {
+          @Override public void verify(
+              MapReduceResult<List<List<KeyValue<String, List<Long>>>>> result)
+              throws Exception {
+            List<KeyValue<String, List<Long>>> output = Iterables.getOnlyElement(
+                result.getOutputResult());
+            assertEquals(ImmutableList.of(), output);
+          }
+        });
+  }
+
+  public void testDatastoreData() throws Exception {
+    final DatastoreService datastoreService = DatastoreServiceFactory.getDatastoreService();
+    runTest(
+        new Preparer() {
+          @Override public void prepare() throws Exception {
+            // Datastore restriction: id cannot be zero.
+            for (long i = 1; i <= 100; ++i) {
+              datastoreService.put(new Entity(KeyFactory.createKey("Test", i)));
+            }
+          }
+        },
+        MapReduceSpecification.of("Test MR",
+            new DatastoreInput("Test", 5),
+            new TestMapper(),
+            Marshallers.getStringMarshaller(),
+            Marshallers.getLongMarshaller(),
+            new TestReducer(),
+            new InMemoryOutput<KeyValue<String, List<Long>>>(1)),
+        new Verifier<List<List<KeyValue<String, List<Long>>>>>() {
+          @Override public void verify(
+              MapReduceResult<List<List<KeyValue<String, List<Long>>>>> result)
+              throws Exception {
+            Counters counters = result.getCounters();
+            log.info("counters=" + counters);
+            assertNotNull(counters);
+
+            assertEquals(100, counters.getCounter("map").getValue());
+            assertEquals(5, counters.getCounter("beginShard").getValue());
+            assertEquals(5, counters.getCounter("endShard").getValue());
+            assertEquals(5, counters.getCounter("beginSlice").getValue());
+            assertEquals(5, counters.getCounter("endSlice").getValue());
+
+            assertEquals(100, counters.getCounter(CounterNames.MAPPER_CALLS).getValue());
+            assertTrue(counters.getCounter(CounterNames.MAPPER_WALLTIME_MILLIS).getValue() > 0);
+
+            Query query = new Query("Test");
+            for (Entity e : datastoreService.prepare(query).asIterable()) {
+              Object mark = e.getProperty("mark");
+              assertNotNull(mark);
+            }
+
+            List<KeyValue<String, List<Long>>> output = Iterables.getOnlyElement(
+                result.getOutputResult());
+            List<KeyValue<String, ImmutableList<Long>>> expectedOutput = ImmutableList.of(
+                KeyValue.of("even",
+                    ImmutableList.of(
+                        2L, 4L, 6L, 8L,
+                        10L, 12L, 14L, 16L, 18L,
+                        20L, 22L, 24L, 26L, 28L,
+                        30L, 32L, 34L, 36L, 38L,
+                        40L, 42L, 44L, 46L, 48L,
+                        50L, 52L, 54L, 56L, 58L,
+                        60L, 62L, 64L, 66L, 68L,
+                        70L, 72L, 74L, 76L, 78L,
+                        80L, 82L, 84L, 86L, 88L,
+                        90L, 92L, 94L, 96L, 98L,
+                        100L)),
+                KeyValue.of("multiple-of-ten",
+                    ImmutableList.of(10L, 20L, 30L, 40L, 50L, 60L, 70L, 80L, 90L, 100L)));
+            assertEquals(expectedOutput, output);
+          }
+        });
+  }
+
+  public void testNoData() throws Exception {
+    runTest(
+        new Preparer() {
+          @Override public void prepare() throws Exception {
+          }
+        },
+        MapReduceSpecification.of("Test MR",
+            new DatastoreInput("Test", 2),
+            new TestMapper(),
+            Marshallers.getStringMarshaller(),
+            Marshallers.getLongMarshaller(),
+            NoReducer.<String, Long, Void>create(),
+            NoOutput.<Void, Void>create(1)),
+        new Verifier<Void>() {
+          @Override public void verify(MapReduceResult<Void> result) throws Exception {
+            Counters counters = result.getCounters();
+            assertNotNull(counters);
+
+            assertEquals(0, counters.getCounter("map").getValue());
+            assertEquals(0, counters.getCounter("beginShard").getValue());
+            assertEquals(0, counters.getCounter("endShard").getValue());
+            assertEquals(0, counters.getCounter("beginSlice").getValue());
+            assertEquals(0, counters.getCounter("endSlice").getValue());
+
+            assertEquals(0, counters.getCounter(CounterNames.MAPPER_CALLS).getValue());
+            assertEquals(0, counters.getCounter(CounterNames.MAPPER_WALLTIME_MILLIS).getValue());
+          }
+        });
+  }
+
+  private static class Mod37Mapper extends Mapper<Long, String, Long> {
+    @Override public void map(Long input) {
+      String mod37 = "" + (Math.abs(input) % 37);
+      getContext().emit(mod37, input);
     }
-    if (ajaxRequest) {
-      expect(request.getHeader("X-Requested-With"))
-        .andReturn("XMLHttpRequest")
-        .anyTimes();
-    } else {
-      expect(request.getHeader("X-Requested-With"))
-        .andReturn(null)
-        .anyTimes();
+  }
+
+  public void testSomeNumbers() throws Exception {
+    runTest(
+        new Preparer() {
+          @Override public void prepare() throws Exception {
+          }
+        },
+        MapReduceSpecification.of("Test MR",
+            new ConsecutiveLongInput(-1000, 1000, 10),
+            new Mod37Mapper(),
+            Marshallers.getStringMarshaller(),
+            Marshallers.getLongMarshaller(),
+            new TestReducer(),
+            new InMemoryOutput<KeyValue<String, List<Long>>>(5)),
+        new Verifier<List<List<KeyValue<String, List<Long>>>>>() {
+          @Override public void verify(
+              MapReduceResult<List<List<KeyValue<String, List<Long>>>>> result)
+              throws Exception {
+            Counters counters = result.getCounters();
+            assertEquals(2000, counters.getCounter(CounterNames.MAPPER_CALLS).getValue());
+            assertEquals(37, counters.getCounter(CounterNames.REDUCER_CALLS).getValue());
+
+            List<List<KeyValue<String, List<Long>>>> actualOutput = result.getOutputResult();
+            List<ArrayListMultimap<String, Long>> expectedOutput = Lists.newArrayList();
+            for (int i = 0; i < 5; i++) {
+              expectedOutput.add(ArrayListMultimap.<String, Long>create());
+            }
+            Marshaller<String> marshaller = Marshallers.getStringMarshaller();
+            for (long l = -1000; l < 1000; l++) {
+              String mod37 = "" + (Math.abs(l) % 37);
+              expectedOutput.get(Shuffling.reduceShardFor(marshaller.toBytes(mod37), 5))
+                  .put(mod37, l);
+            }
+            for (int i = 0; i < 5; i++) {
+              assertEquals(expectedOutput.get(i).keySet().size(), actualOutput.get(i).size());
+              for (KeyValue<String, List<Long>> actual : actualOutput.get(i)) {
+                assertEquals(
+                    "shard " + i + ", key " + actual.getKey(),
+                    expectedOutput.get(i).get(actual.getKey()), actual.getValue());
+              }
+            }
+          }
+        });
+  }
+
+  static class SideOutputMapper extends Mapper<Long, String, Void> {
+    transient BlobFileOutputWriter sideOutput;
+
+    @Override public void beginShard() {
+      sideOutput = BlobFileOutputWriter.forWorker(this, "test file", "application/octet-stream");
     }
-    expect(request.getRequestURI())
-      .andReturn("/mapreduce/" + handler)
-      .anyTimes();
-    return request;
-  }
 
-  private static HttpServletRequest createMockStartRequest(Configuration configuration) {
-    HttpServletRequest request = createMockRequest(MapReduceServlet.START_PATH, false, false);
-    expect(request.getParameter(AppEngineJobContext.CONFIGURATION_PARAMETER_NAME))
-      .andReturn(ConfigurationXmlUtil.convertConfigurationToXml(configuration))
-      .anyTimes();
-    return request;
-  }
-
-  private void executeTasksUntilEmpty(String queueName) throws Exception {
-    while (true) {
-      // We have to reacquire task list every time, because local implementation returns a copy.
-      List<TaskStateInfo> taskInfo = taskQueue.getQueueStateInfo().get(queueName).getTaskInfo();
-      if (taskInfo.isEmpty()) {
-        break;
+    @Override public void map(Long input) {
+      log.info("map(" + input + ") in shard " + getContext().getShardNumber());
+      try {
+        sideOutput.write(Marshallers.getLongMarshaller().toBytes(input));
+      } catch (IOException e) {
+        throw new RuntimeException(e);
       }
-      TaskStateInfo taskStateInfo = taskInfo.get(0);
-      taskQueue.deleteTask(queueName, taskStateInfo.getTaskName());
-      executeTask(queueName, taskStateInfo);
-    }
-  }
-
-  private void executeTask(String queueName, TaskStateInfo taskStateInfo) throws Exception {
-    logger.info("Executing " + taskStateInfo.getTaskName());
-
-    HttpServletRequest request = createMock(HttpServletRequest.class);
-    HttpServletResponse response = createMock(HttpServletResponse.class);
-
-    expect(request.getRequestURI())
-        .andReturn(taskStateInfo.getUrl())
-        .anyTimes();
-    expect(request.getHeader("X-AppEngine-QueueName"))
-      .andReturn(queueName)
-      .anyTimes();
-
-    Map<String, String> parameters = decodeParameters(taskStateInfo.getBody());
-    for (String name : parameters.keySet()) {
-      expect(request.getParameter(name))
-          .andReturn(parameters.get(name))
-          .anyTimes();
     }
 
-    replay(request, response);
-
-    if (taskStateInfo.getMethod().equals("POST")) {
-      servlet.doPost(request, response);
-    } else {
-      throw new UnsupportedOperationException();
-    }
-  }
-
-  // Sadly there's no way to parse query string with JDK. This is a good enough approximation.
-  private static Map<String, String> decodeParameters(String requestBody)
-      throws UnsupportedEncodingException {
-    Map<String, String> result = new HashMap<String, String>();
-
-    String[] params = requestBody.split("&");
-    for (String param : params) {
-      String[] pair = param.split("=");
-      String name = pair[0];
-      String value = URLDecoder.decode(pair[1], "UTF-8");
-      if (result.containsKey(name)) {
-        throw new IllegalArgumentException("Duplicate parameter: " + requestBody);
+    @Override public void endShard() {
+      log.info("endShard() in shard " + getContext().getShardNumber());
+      try {
+        sideOutput.close();
+      } catch (IOException e) {
+        throw new RuntimeException(e);
       }
-      result.put(name, value);
+      getContext().emit(sideOutput.getFile().getFullPath(), null);
+    }
+  }
+
+  public void testSideOutput() throws Exception {
+    runTest(
+        new Preparer() {
+          @Override public void prepare() throws Exception {
+          }
+        },
+        MapReduceSpecification.of("Test MR",
+            new ConsecutiveLongInput(0, 6, 6),
+            new SideOutputMapper(),
+            Marshallers.getStringMarshaller(),
+            Marshallers.getVoidMarshaller(),
+            KeyProjectionReducer.<String, Void>create(),
+            new InMemoryOutput<String>(1)),
+        new Verifier<List<List<String>>>() {
+          @Override public void verify(MapReduceResult<List<List<String>>> result)
+              throws Exception {
+            List<List<String>> outputResult = result.getOutputResult();
+            Set<Long> expected = Sets.newHashSet();
+            for (long i = 0; i < 6; i++) {
+              expected.add(i);
+            }
+            assertEquals(1, outputResult.size());
+            for (List<String> files : outputResult) {
+              assertEquals(6, files.size());
+              for (String file : files) {
+                ByteBuffer buf = ByteBuffer.allocate(8);
+                FileReadChannel ch =
+                    FileServiceFactory.getFileService().openReadChannel(
+                        new AppEngineFile(file), false);
+                assertEquals(8, ch.read(buf));
+                assertEquals(-1, ch.read(ByteBuffer.allocate(1)));
+                ch.close();
+                buf.flip();
+                assertTrue(expected.remove(Marshallers.getLongMarshaller().fromBytes(buf)));
+              }
+            }
+            assertTrue(expected.isEmpty());
+          }
+        });
+  }
+
+  static class TestMapper extends Mapper<Entity, String, Long> {
+    private transient DatastoreMutationPool pool;
+
+    @Override public void map(Entity entity) {
+      getContext().incrementCounter("map");
+      try {
+        Thread.sleep(1);
+      } catch (InterruptedException e) {
+        throw new RuntimeException(e);
+      }
+
+      long key = entity.getKey().getId();
+      log.info("map(" + key + ")");
+      if (key % 2 == 0) {
+        getContext().emit("even", key);
+      }
+      if (key % 10 == 0) {
+        getContext().emit("multiple-of-ten", key);
+      }
+
+      DatastoreMutationPool pool = DatastoreMutationPool.forWorker(this);
+      entity.setProperty("mark", Boolean.TRUE);
+      pool.put(entity);
     }
 
-    return result;
+    @Override public void beginShard() {
+      getContext().incrementCounter("beginShard");
+    }
+
+    @Override public void endShard() {
+      getContext().incrementCounter("endShard");
+    }
+
+    @Override public void beginSlice() {
+      getContext().incrementCounter("beginSlice");
+      pool = DatastoreMutationPool.forWorker(this);
+    }
+
+    @Override public void endSlice() {
+      getContext().incrementCounter("endSlice");
+    }
   }
+
+  static class TestReducer extends Reducer<String, Long, KeyValue<String, List<Long>>> {
+    @Override public void reduce(String property, ReducerInput<Long> matchingValues) {
+      ImmutableList.Builder<Long> out = ImmutableList.builder();
+      while (matchingValues.hasNext()) {
+        long value = matchingValues.next();
+        getContext().incrementCounter(property);
+        out.add(value);
+      }
+      List<Long> values = out.build();
+      getContext().emit(KeyValue.of(property, values));
+    }
+  }
+
 }
