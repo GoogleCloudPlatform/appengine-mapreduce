@@ -111,8 +111,8 @@ class SequenceKeyOutOfOrderError(Error):
     last_sequence_key: last sequence key which was written to the file.
   """
 
-  def __init__(self, last_sequence_key):
-    Error.__init__(self)
+  def __init__(self, last_sequence_key, cause=None):
+    Error.__init__(self, cause)
     self.last_sequence_key = last_sequence_key
 
 
@@ -174,50 +174,50 @@ def _raise_app_error(e):
        file_service_pb.FileServiceErrors.EXISTENCE_ERROR_OBJECT_NOT_FOUND,
        file_service_pb.FileServiceErrors.EXISTENCE_ERROR_BUCKET_NOT_FOUND,
        ]):
-    raise ExistenceError()
+    raise ExistenceError(e)
   elif (e.application_error ==
         file_service_pb.FileServiceErrors.API_TEMPORARILY_UNAVAILABLE):
-    raise ApiTemporaryUnavailableError()
+    raise ApiTemporaryUnavailableError(e)
   elif (e.application_error ==
         file_service_pb.FileServiceErrors.FINALIZATION_ERROR):
-    raise FinalizationError()
+    raise FinalizationError(e)
   elif (e.application_error ==
         file_service_pb.FileServiceErrors.IO_ERROR):
-    raise UnknownError()
+    raise UnknownError(e)
   elif (e.application_error ==
         file_service_pb.FileServiceErrors.SEQUENCE_KEY_OUT_OF_ORDER):
-    raise SequenceKeyOutOfOrderError(e.error_detail)
+    raise SequenceKeyOutOfOrderError(e.error_detail, e)
   elif (e.application_error ==
         file_service_pb.FileServiceErrors.INVALID_FILE_NAME):
-    raise InvalidFileNameError()
+    raise InvalidFileNameError(e)
   elif (e.application_error ==
         file_service_pb.FileServiceErrors.FILE_NOT_OPENED):
-    raise FileNotOpenedError()
+    raise FileNotOpenedError(e)
   elif (e.application_error ==
         file_service_pb.FileServiceErrors.READ_ONLY):
-    raise ReadOnlyError()
+    raise ReadOnlyError(e)
   elif (e.application_error ==
         file_service_pb.FileServiceErrors.WRONG_CONTENT_TYPE):
-    raise WrongContentTypeError()
+    raise WrongContentTypeError(e)
   elif (e.application_error ==
         file_service_pb.FileServiceErrors.WRONG_OPEN_MODE):
-    raise WrongOpenModeError()
+    raise WrongOpenModeError(e)
   elif (e.application_error ==
         file_service_pb.FileServiceErrors.OPERATION_NOT_SUPPORTED):
-    raise OperationNotSupportedError()
+    raise OperationNotSupportedError(e)
   elif (e.application_error ==
         file_service_pb.FileServiceErrors.PERMISSION_DENIED):
-    raise PermissionDeniedError()
+    raise PermissionDeniedError(e)
   elif (e.application_error ==
         file_service_pb.FileServiceErrors.FILE_TEMPORARILY_UNAVAILABLE):
-    raise FileTemporaryUnavailableError()
+    raise FileTemporaryUnavailableError(e)
   elif (e.application_error ==
         file_service_pb.FileServiceErrors.INVALID_PARAMETER):
-    raise InvalidParameterError()
+    raise InvalidParameterError(e)
   elif (e.application_error ==
         file_service_pb.FileServiceErrors.EXCLUSIVE_LOCK_FAILED):
-    raise ExclusiveLockFailedError()
-  raise Error(str(e))
+    raise ExclusiveLockFailedError(e)
+  raise Error(e)
 
 
 def _create_rpc(deadline):
