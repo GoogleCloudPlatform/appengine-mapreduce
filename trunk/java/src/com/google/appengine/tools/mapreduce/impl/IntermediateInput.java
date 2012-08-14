@@ -102,8 +102,7 @@ public class IntermediateInput<K, V> extends Input<KeyValue<K, ReducerInput<V>>>
 
     /*VisibleForTesting*/ RecordReadChannel openChannel() {
       try {
-        return new NonSpammingRecordReadChannel(
-            FILE_SERVICE.openReadChannel(file, false));
+        return FILE_SERVICE.openRecordReadChannel(file, false);
       } catch (IOException e) {
         throw new RuntimeException(this + ": opening read channel failed", e);
       }

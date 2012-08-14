@@ -2,19 +2,18 @@
 
 package com.google.appengine.tools.mapreduce.impl;
 
-import com.google.common.base.Function;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.appengine.tools.mapreduce.KeyValue;
 import com.google.appengine.tools.mapreduce.Marshaller;
 import com.google.appengine.tools.mapreduce.impl.util.SerializationUtil;
+import com.google.common.base.Function;
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.ListMultimap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Ordering;
-import com.google.common.primitives.Bytes;
 import com.google.common.primitives.UnsignedBytes;
 
 import java.io.IOException;

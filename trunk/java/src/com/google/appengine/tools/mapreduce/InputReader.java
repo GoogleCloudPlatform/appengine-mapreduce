@@ -33,7 +33,9 @@ public abstract class InputReader<I> implements Serializable {
 
   /**
    * Returns the next input value, or throws {@link NoSuchElementException}
-   * when there is no more input data.
+   * when there is no more input data. This is done rather than providing a
+   * hasNext() function, to allow the implementation to deal with streams and
+   * remain serializable, even if the item being read is not.
    */
   public abstract I next() throws IOException, NoSuchElementException;
 
