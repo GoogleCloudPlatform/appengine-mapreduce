@@ -1,6 +1,6 @@
-<project name="AppEngineMapper" default="dist" basedir=".">
+<project name="AppEngineMapReduce" default="dist" basedir=".">
   <description>
-    A user space mapper library for AppEngine.
+    A user space MapReduce library for AppEngine.
   </description>
   <property name="src" location="src" />
   <property name="build" location="build" />
@@ -13,7 +13,7 @@
   <property name="testlib" location="test_lib" />
 
   <property name="sdk" location="sdk" />
-  <property name="version" value="1.5.5" />
+  <property name="version" value="1.6.3" />
   <property name="sdkdirname" value="appengine-java-sdk-${version}" />
   <property name="sdkfilename" value="${sdkdirname}.zip" />
   <property name="sdklibdir" location="${sdk}/${sdkdirname}/lib" />
@@ -28,8 +28,8 @@
     </fileset>
   </path>
 
-  <!-- We plan to move to downloading all of these on the fly, but for now
-       hadoop is modified, json is jar'ed up, and the other two are released
+  <!-- We plan to move to downloading all of these on the fly, but for
+       now json is jar'ed up, and the other two are released
        relatively infrequently. -->
   <path id="thirdpartyjars">
     <fileset dir="${lib}">
@@ -52,6 +52,8 @@
 
   <target name="compile" depends="init,download_sdk">
     <javac srcdir="${src}" destdir="${build}" debug="on" debuglevel="lines,source">
+      <compilerarg value="-Xlint:all"/>
+      <compilerarg value="-Xlint:-sunapi"/>
       <classpath>
         <path refid="sdkjars" />
         <path refid="thirdpartyjars" />
@@ -134,6 +136,8 @@
   <target name="compile_example" depends="copy_libs_to_example">
     <mkdir dir="example/war/WEB-INF/classes" />
     <javac srcdir="example" destdir="example/war/WEB-INF/classes">
+      <compilerarg value="-Xlint:all"/>
+      <compilerarg value="-Xlint:-sunapi"/>
       <classpath>
         <fileset dir="example/war/WEB-INF/lib" />
         <path refid="sdkjars" />

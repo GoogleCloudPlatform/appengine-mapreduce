@@ -1,43 +1,49 @@
 <?xml version="1.0" encoding="utf-8"?>
 <web-app xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-xmlns="http://java.sun.com/xml/ns/javaee"
-xmlns:web="http://java.sun.com/xml/ns/javaee/web-app_2_5.xsd"
-xsi:schemaLocation="http://java.sun.com/xml/ns/javaee
-http://java.sun.com/xml/ns/javaee/web-app_2_5.xsd" version="2.5">
+         xmlns="http://java.sun.com/xml/ns/javaee"
+         xmlns:web="http://java.sun.com/xml/ns/javaee/web-app_2_5.xsd"
+         xsi:schemaLocation=
+         "http://java.sun.com/xml/ns/javaee
+          http://java.sun.com/xml/ns/javaee/web-app_2_5.xsd" version="2.5">
+
   <servlet>
     <servlet-name>mapreduce</servlet-name>
     <servlet-class>
       com.google.appengine.tools.mapreduce.MapReduceServlet
     </servlet-class>
   </servlet>
-  <servlet>
-    <servlet-name>test</servlet-name>
-    <servlet-class>
-      com.google.appengine.demos.mapreduce.TestServlet
-    </servlet-class>
-  </servlet>
-  <servlet>
-    <servlet-name>init</servlet-name>
-    <servlet-class>
-      com.google.appengine.demos.mapreduce.InitServlet
-    </servlet-class>
-  </servlet>
   <servlet-mapping>
     <servlet-name>mapreduce</servlet-name>
     <url-pattern>/mapreduce/*</url-pattern>
   </servlet-mapping>
+
+  <servlet>
+    <servlet-name>PipelineServlet</servlet-name>
+    <servlet-class>
+      com.google.appengine.tools.pipeline.impl.servlets.PipelineServlet
+    </servlet-class>
+  </servlet>
   <servlet-mapping>
-    <servlet-name>test</servlet-name>
-    <url-pattern>/test/*</url-pattern>
-  </servlet-mapping>
-  <servlet-mapping>
-    <servlet-name>init</servlet-name>
-    <url-pattern>/init/*</url-pattern>
+    <servlet-name>PipelineServlet</servlet-name>
+    <url-pattern>/_ah/pipeline/*</url-pattern>
   </servlet-mapping>
 
-  <!-- We put an admin constraint on everything, since MapReduce can use a
-       significant amount of resources. In practice, you'll probably want
-       to restrict just /mapreduce/* -->
+  <servlet>
+    <servlet-name>demo</servlet-name>
+    <servlet-class>
+      com.google.appengine.demos.mapreduce.entitycount.Servlet
+    </servlet-class>
+  </servlet>
+  <servlet-mapping>
+    <servlet-name>demo</servlet-name>
+    <url-pattern>/</url-pattern>
+  </servlet-mapping>
+
+  <!-- We put an admin constraint on everything, since MapReduce can
+       use a significant amount of resources.  In practice, you'll
+       probably want to restrict just /mapreduce/* and any other paths
+       that are admin-only.  TODO(ohler): figure out what to recommend
+       about /_ah/pipeline/* . -->
   <security-constraint>
     <web-resource-collection>
       <url-pattern>/*</url-pattern>
@@ -46,4 +52,5 @@ http://java.sun.com/xml/ns/javaee/web-app_2_5.xsd" version="2.5">
       <role-name>admin</role-name>
     </auth-constraint>
   </security-constraint>
+
 </web-app>

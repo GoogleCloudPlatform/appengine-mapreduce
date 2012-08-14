@@ -16,7 +16,6 @@
 
 package com.google.appengine.tools.mapreduce;
 
-
 import com.google.appengine.api.datastore.DatastoreService;
 import com.google.appengine.api.datastore.DatastoreServiceFactory;
 import com.google.appengine.api.datastore.Entity;
@@ -29,14 +28,20 @@ import com.google.appengine.tools.development.testing.LocalServiceTestHelper;
 import junit.framework.TestCase;
 
 /**
- * Tests the {@link DatastoreMutationPool} class.
+ * Tests {@link DatastoreMutationPool}.
  *
  */
 public class DatastoreMutationPoolTest extends TestCase {
+// ------------------------------ FIELDS ------------------------------
+
   private final LocalServiceTestHelper helper =
     new LocalServiceTestHelper(new LocalDatastoreServiceTestConfig());
 
   private DatastoreService ds;
+
+  private Entity[] entities;
+
+// ------------------------ OVERRIDING METHODS ------------------------
 
   @Override
   public void setUp() throws Exception {
@@ -52,7 +57,95 @@ public class DatastoreMutationPoolTest extends TestCase {
     super.tearDown();
   }
 
-  private Entity[] entities;
+// -------------------------- TEST METHODS --------------------------
+
+  public void testCountFlush() {
+    DatastoreMutationPool pool = makeMutationPool(2, 1 << 18);
+    // Check last put so we can isolate problems with manual flush() from problems with
+    // put.
+    checkFlushOnNthPutOutOfThree(pool, 1, 0);
+    pool.flush();
+    checkFlushOnNthDeleteOutOfThree(pool, 1, 0);
+  }
+
+  public void testCountFlush_allAutomatic() {
+    DatastoreMutationPool pool = makeMutationPool(3, 1 << 18);
+    // Check last put so we can isolate problems with manual flush() from problems with
+    // put.
+    checkFlushOnNthPutOutOfThree(pool, 2, 0);
+    checkFlushOnNthDeleteOutOfThree(pool, 2, 0);
+  }
+
+  public void testManualFlush() {
+    DatastoreMutationPool pool = makeMutationPool(1000, 1000);
+    pool.put(entities[0]);
+    pool.flush();
+    try {
+      ds.get(entities[0].getKey());
+    } catch (EntityNotFoundException e) {
+      fail("Put wasn't flushed when expected.");
+    }
+
+    pool.delete(entities[0].getKey());
+    pool.flush();
+
+    try {
+      ds.get(entities[0].getKey());
+      fail("Delete wasn't flushed when expected.");
+    } catch (EntityNotFoundException expected) {
+    }
+  }
+
+  public void testSizeFlush() {
+    DatastoreMutationPool putPool = makeMutationPool(1000,
+        EntityTranslator.convertToPb(entities[0]).getSerializedSize() + 1);
+    checkFlushOnNthPutOutOfThree(putPool, 1, -1);
+    putPool.flush();
+    DatastoreMutationPool deletePool = makeMutationPool(1000,
+        KeyFactory.keyToString(entities[0].getKey()).length() + 1);
+    checkFlushOnNthDeleteOutOfThree(deletePool, 1, -1);
+  }
+
+// -------------------------- INSTANCE METHODS --------------------------
+
+  private DatastoreMutationPool makeMutationPool(int countLimit, int bytesLimit) {
+    return DatastoreMutationPool.forManualFlushing(ds, countLimit, bytesLimit);
+  }
+
+  /**
+   * Attempts to add and then remove three entities, asserting that the
+   * mutation pool is flushed when the nth entity is added.
+   */
+  private void checkFlushOnNthDeleteOutOfThree(
+      DatastoreMutationPool pool, int n, int offsetToCheck) {
+    int i;
+    for (i = 0; i < n; i++) {
+      pool.delete(entities[i].getKey());
+      try {
+        ds.get(entities[i].getKey());
+      } catch (EntityNotFoundException e) {
+        fail("Deletes were flushed prematurely.");
+      }
+    }
+
+    pool.delete(entities[i].getKey());
+    try {
+      ds.get(entities[i + offsetToCheck].getKey());
+      fail("Deletes didn't get flushed on cue.");
+    } catch (EntityNotFoundException expected) {
+    }
+
+    i++;
+
+    for (; i < entities.length; i++) {
+      pool.delete(entities[i].getKey());
+      try {
+        ds.get(entities[i].getKey());
+      } catch (EntityNotFoundException e) {
+        fail("Deletes got flushed prematurely.");
+      }
+    }
+  }
 
   /**
    * Attempts to add and then remove three entities, asserting that the
@@ -92,89 +185,6 @@ public class DatastoreMutationPoolTest extends TestCase {
       } catch (EntityNotFoundException expected) {
       } catch (IllegalArgumentException expected) {
       }
-    }
-  }
-
-  /**
-   * Attempts to add and then remove three entities, asserting that the
-   * mutation pool is flushed when the nth entity is added.
-   */
-  private void checkFlushOnNthDeleteOutOfThree(
-      DatastoreMutationPool pool, int n, int offsetToCheck) {
-    int i;
-    for (i = 0; i < n; i++) {
-      pool.delete(entities[i].getKey());
-      try {
-        ds.get(entities[i].getKey());
-      } catch (EntityNotFoundException e) {
-        fail("Deletes were flushed prematurely.");
-      }
-    }
-
-    pool.delete(entities[i].getKey());
-    try {
-      ds.get(entities[i + offsetToCheck].getKey());
-      fail("Deletes didn't get flushed on cue.");
-    } catch (EntityNotFoundException expected) {
-    }
-
-    i++;
-
-    for (; i < entities.length; i++) {
-      pool.delete(entities[i].getKey());
-      try {
-        ds.get(entities[i].getKey());
-      } catch (EntityNotFoundException e) {
-        fail("Deletes got flushed prematurely.");
-      }
-    }
-  }
-
-
-  public void testCountFlush() {
-    DatastoreMutationPool pool = new DatastoreMutationPool(ds, 2, 1 << 18);
-    // Check last put so we can isolate problems with manual flush() from problems with
-    // put.
-    checkFlushOnNthPutOutOfThree(pool, 1, 0);
-    pool.flush();
-    checkFlushOnNthDeleteOutOfThree(pool, 1, 0);
-  }
-
-  public void testCountFlush_allAutomatic() {
-    DatastoreMutationPool pool = new DatastoreMutationPool(ds, 3, 1 << 18);
-    // Check last put so we can isolate problems with manual flush() from problems with
-    // put.
-    checkFlushOnNthPutOutOfThree(pool, 2, 0);
-    checkFlushOnNthDeleteOutOfThree(pool, 2, 0);
-  }
-
-  public void testSizeFlush() {
-    DatastoreMutationPool putPool = new DatastoreMutationPool(ds, 1000,
-        EntityTranslator.convertToPb(entities[0]).getSerializedSize() + 1);
-    checkFlushOnNthPutOutOfThree(putPool, 1, -1);
-    putPool.flush();
-    DatastoreMutationPool deletePool = new DatastoreMutationPool(ds, 1000,
-        KeyFactory.keyToString(entities[0].getKey()).length() + 1);
-    checkFlushOnNthDeleteOutOfThree(deletePool, 1, -1);
-  }
-
-  public void testManualFlush() {
-    DatastoreMutationPool pool = new DatastoreMutationPool(ds, 1000, 1000);
-    pool.put(entities[0]);
-    pool.flush();
-    try {
-      ds.get(entities[0].getKey());
-    } catch (EntityNotFoundException e) {
-      fail("Put wasn't flushed when expected.");
-    }
-
-    pool.delete(entities[0].getKey());
-    pool.flush();
-
-    try {
-      ds.get(entities[0].getKey());
-      fail("Delete wasn't flushed when expected.");
-    } catch (EntityNotFoundException expected) {
     }
   }
 }
