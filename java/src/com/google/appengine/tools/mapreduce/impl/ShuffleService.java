@@ -10,7 +10,7 @@ import java.util.List;
 /**
  *
  */
-interface ShuffleService {
+public interface ShuffleService {
 
   void shuffle(String shuffleId, List<AppEngineFile> inputFiles,
       List<AppEngineFile> outputFiles, ShuffleCallback callback);

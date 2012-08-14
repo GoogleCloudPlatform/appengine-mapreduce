@@ -18,7 +18,7 @@ import com.google.appengine.tools.mapreduce.MapReduceSettings;
 import com.google.appengine.tools.mapreduce.MapReduceSpecification;
 import com.google.appengine.tools.mapreduce.Marshallers;
 import com.google.appengine.tools.mapreduce.impl.MapReduceConstants;
-import com.google.appengine.tools.mapreduce.impl.ShuffleService;
+import com.google.appengine.tools.mapreduce.impl.ShuffleServiceFactory;
 import com.google.appengine.tools.mapreduce.inputs.ConsecutiveLongInput;
 import com.google.appengine.tools.mapreduce.inputs.DatastoreInput;
 import com.google.appengine.tools.mapreduce.outputs.InMemoryOutput;
@@ -238,7 +238,8 @@ public class Servlet extends HttpServlet {
       pw.close();
     } else if ("viewShuffleStatus".equals(action)) {
       PrintWriter pw = new PrintWriter(resp.getOutputStream());
-      pw.println("" + new ShuffleService().getStatus(req.getParameter("shuffleJobId")));
+      pw.println("" + ShuffleServiceFactory.getShuffleService()
+          .getStatus(req.getParameter("shuffleJobId")));
       pw.close();
     } else if ("getBlob".equals(action)) {
       BlobKey blobKey = findBlob(req.getParameter("keyOrFilePath"));
