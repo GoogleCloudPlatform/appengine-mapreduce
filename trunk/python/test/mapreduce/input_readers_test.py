@@ -319,6 +319,9 @@ class DatastoreInputReaderTest(unittest.TestCase):
         params, 1)
     input_readers.DatastoreInputReader.validate(mapper_spec)
 
+    params["filters"] = [["a", "=", 1]]
+    input_readers.DatastoreInputReader.validate(mapper_spec)
+
     params["filters"] = {"a": "1"}
     self.assertRaises(input_readers.BadReaderParamsError,
                       input_readers.DatastoreInputReader.validate,
