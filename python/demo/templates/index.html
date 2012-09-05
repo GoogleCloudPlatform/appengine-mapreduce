@@ -23,7 +23,7 @@
         </tr>
         {% for item in items %}
         <tr>
-          <td><input type="radio" onclick="updateForm('{{ item.key }}',
+          <td><input type="radio" onclick="updateForm('{{ item.key() }}',
             '{{ item.blobkey }}', '{{ item.filename }}');"></td>
           <td><a href="/blobstore/{{ item.blobkey }}">{{ item.filename }}</a></td>
           <td>{{ item.uploadedOn }}</td>

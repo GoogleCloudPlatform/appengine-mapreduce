@@ -28,17 +28,16 @@ __author__ = """aizatsky@google.com (Mike Aizatsky), cbunch@google.com (Chris
 Bunch)"""
 
 import datetime
+import jinja2
 import logging
 import re
 import urllib
+import webapp2
 
 from google.appengine.ext import blobstore
 from google.appengine.ext import db
-from google.appengine.ext import webapp
 
 from google.appengine.ext.webapp import blobstore_handlers
-from google.appengine.ext.webapp import util
-from google.appengine.ext.webapp import template
 
 from mapreduce.lib import files
 from google.appengine.api import taskqueue
@@ -129,10 +128,13 @@ class FileMetadata(db.Model):
     return str(username + sep + str(date) + sep + blob_key)
 
 
-class IndexHandler(webapp.RequestHandler):
+class IndexHandler(webapp2.RequestHandler):
   """The main page that users will interact with, which presents users with
   the ability to upload new data or run MapReduce jobs on their existing data.
   """
+
+  template_env = jinja2.Environment(loader=jinja2.FileSystemLoader("templates"),
+                                    autoescape=True)
 
   def get(self):
     user = users.get_current_user()
@@ -151,11 +153,11 @@ class IndexHandler(webapp.RequestHandler):
 
     upload_url = blobstore.create_upload_url("/upload")
 
-    self.response.out.write(template.render("templates/index.html",
-                                            {"username" : username,
-                                             "items" : items,
-                                             "length" : length,
-                                             "upload_url" : upload_url}))
+    self.response.out.write(self.template_env.get_template("index.html").render(
+        {"username": username,
+         "items": items,
+         "length": length,
+         "upload_url": upload_url}))
 
   def post(self):
     filekey = self.request.get("filekey")
@@ -388,17 +390,10 @@ class DownloadHandler(blobstore_handlers.BlobstoreDownloadHandler):
     self.send_blob(blob_info)
 
 
-APP = webapp.WSGIApplication(
+app = webapp2.WSGIApplication(
     [
         ('/', IndexHandler),
         ('/upload', UploadHandler),
         (r'/blobstore/(.*)', DownloadHandler),
     ],
     debug=True)
-
-def main():
-  util.run_wsgi_app(APP)
-
-
-if __name__ == '__main__':
-  main()
