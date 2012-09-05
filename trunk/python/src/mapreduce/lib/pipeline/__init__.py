@@ -21,7 +21,22 @@ except ImportError, e:
   logging.warning(
       'Could not load Pipeline API. Will fix path for testing. %s: %s',
       e.__class__.__name__, str(e))
-  import testutil
-  testutil.fix_path()
+  _fix_path()
   del logging
   from pipeline import *
+
+
+def _fix_path():
+  """Finds the google_appengine directory and fixes Python imports to use it."""
+  import os, sys
+  all_paths = os.environ.get('PATH').split(os.pathsep)
+  for path_dir in all_paths:
+    dev_appserver_path = os.path.join(path_dir, 'dev_appserver.py')
+    if os.path.exists(dev_appserver_path):
+      google_appengine = os.path.dirname(os.path.realpath(dev_appserver_path))
+      sys.path.append(google_appengine)
+      # Use the next import will fix up sys.path even further to bring in
+      # any dependent lib directories that the SDK needs.
+      dev_appserver = __import__('dev_appserver')
+      sys.path.extend(dev_appserver.EXTRA_PATHS)
+      return
