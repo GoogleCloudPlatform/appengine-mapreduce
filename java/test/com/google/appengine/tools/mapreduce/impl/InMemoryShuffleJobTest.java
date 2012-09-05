@@ -363,6 +363,11 @@ public class InMemoryShuffleJobTest extends TestCase {
     public FileStat stat(AppEngineFile arg0) throws IOException {
       return FILE_SERVICE.stat(arg0);
     }
+
+    @Override
+    public void delete(AppEngineFile... arg0) throws IOException {
+      FILE_SERVICE.delete(arg0);
+    }
   }
 
 
