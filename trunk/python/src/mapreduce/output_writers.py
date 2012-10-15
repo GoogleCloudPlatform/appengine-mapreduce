@@ -504,7 +504,7 @@ class FileOutputWriterBase(OutputWriter):
     mime_type = params.get("mime_type", "application/octet-stream")
     filesystem = cls._get_filesystem(mapper_spec=mapper_spec)
     bucket = params.get(cls.GS_BUCKET_NAME_PARAM)
-    acl = params.get(cls.GS_ACL_PARAM, "project-private")
+    acl = params.get(cls.GS_ACL_PARAM)  # When None using default object ACLs.
 
     if output_sharding == cls.OUTPUT_SHARDING_INPUT_SHARDS:
       number_of_files = mapreduce_state.mapreduce_spec.mapper.shard_count
