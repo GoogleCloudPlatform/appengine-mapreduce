@@ -24,6 +24,7 @@ import datetime
 import os
 import types
 import unittest
+import urlparse
 
 from google.appengine.api import apiproxy_stub_map
 from google.appengine.api import datastore_errors
@@ -334,11 +335,18 @@ class MapreduceStateTest(unittest.TestCase):
     """Test set_processed_counts method."""
     mapreduce_state = model.MapreduceState.create_new()
     mapreduce_state.set_processed_counts([1, 2])
+    self.assertTrue(mapreduce_state.chart_url.startswith(
+        "http://chart.apis.google.com/chart?"))
     self.assertEquals(
-        "http://chart.apis.google.com/chart?chxt=y%2Cx&"
-        "chd=s%3Ad6&chxr=0%2C0%2C2.1&chco=0000ff&chbh=a&chs=300x200"
-         "&cht=bvg&chxl=0%3A%7C0%7C2%7C1%3A%7C0%7C1",
-         mapreduce_state.chart_url)
+        {u"cht": [u"bvg"],
+         u"chs": [u"300x200"],
+         u"chxr": [u"0,0,2.1"],
+         u"chxt": [u"y,x"],
+         u"chd": [u"s:d6"],
+         u"chbh": [u"a"],
+         u"chxl": [u"0:|0|2|1:|0|1"],
+         u"chco": [u"0000ff"]},
+        urlparse.parse_qs(urlparse.urlparse(mapreduce_state.chart_url).query))
 
 
 class ShardStateTest(unittest.TestCase):

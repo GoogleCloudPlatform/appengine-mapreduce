@@ -2048,7 +2048,8 @@ class LogInputReader(InputReader):
   def __str__(self):
     """Returns the string representation of this LogInputReader."""
     params = []
-    for key, value in self.__params.iteritems():
+    for key in sorted(self.__params.keys()):
+      value = self.__params[key]
       if key is self._PROTOTYPE_REQUEST_PARAM:
         params.append("%s='%s'" % (key, value))
       elif key is self._OFFSET_PARAM:

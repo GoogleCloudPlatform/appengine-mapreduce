@@ -2220,10 +2220,16 @@ class LogInputReaderTest(unittest.TestCase):
     """Simplistic test for stringification of LogInputReader."""
     readers = input_readers.LogInputReader.split_input(self.mapper_spec)
     self.assertEqual(
-        "LogInputReader(include_incomplete=True, minimum_log_level=1, "
-        "start_time=96, prototype_request='app_id: \"app1\"\n', "
-        "version_ids=['1'], end_time=128, offset='%s', "
-        "include_app_logs=True)" % self.offset, str(readers[-1]))
+        "LogInputReader"
+        "(end_time=128,"
+        " include_app_logs=True,"
+        " include_incomplete=True,"
+        " minimum_log_level=1,"
+        " offset=\'%s',"
+        " prototype_request=\'app_id: \"app1\"\n\',"
+        " start_time=96,"
+        " version_ids=[\'1\']"
+        ")" % self.offset, str(readers[-1]))
 
   def testEvenLogSplit(self):
     readers = input_readers.LogInputReader.split_input(self.mapper_spec)
