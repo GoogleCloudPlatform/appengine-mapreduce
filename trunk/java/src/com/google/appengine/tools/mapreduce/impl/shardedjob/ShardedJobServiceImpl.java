@@ -25,11 +25,13 @@ class ShardedJobServiceImpl implements ShardedJobService {
   }
 
   @SuppressWarnings("unchecked")
-  @Override public ShardedJobState<?, Serializable> getJobState(String jobId) {
+  @Override
+  public <R extends Serializable> ShardedJobState<?, R> getJobState(String jobId) {
     return new ShardedJobRunner().getJobState(jobId);
   }
 
-  @Override public void abortJob(String jobId) {
+  @Override
+  public void abortJob(String jobId) {
     new ShardedJobRunner().abortJob(jobId);
   }
 

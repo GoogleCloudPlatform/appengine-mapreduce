@@ -102,4 +102,78 @@ public final class ShardedJobSettings implements Serializable {
         + ")";
   }
 
+  @Override
+  public int hashCode() {
+    final int prime = 31;
+    int result = 1;
+    result = prime * result + ((controllerBackend == null) ? 0 : controllerBackend.hashCode());
+    result = prime * result + ((controllerPath == null) ? 0 : controllerPath.hashCode());
+    result = prime * result + ((controllerQueueName == null) ? 0 : controllerQueueName.hashCode());
+    result = prime * result + millisBetweenPolls;
+    result = prime * result + ((workerBackend == null) ? 0 : workerBackend.hashCode());
+    result = prime * result + ((workerPath == null) ? 0 : workerPath.hashCode());
+    result = prime * result + ((workerQueueName == null) ? 0 : workerQueueName.hashCode());
+    return result;
+  }
+
+  @Override
+  public boolean equals(Object obj) {
+    if (this == obj) {
+      return true;
+    }
+    if (obj == null) {
+      return false;
+    }
+    if (getClass() != obj.getClass()) {
+      return false;
+    }
+    ShardedJobSettings other = (ShardedJobSettings) obj;
+    if (controllerBackend == null) {
+      if (other.controllerBackend != null) {
+        return false;
+      }
+    } else if (!controllerBackend.equals(other.controllerBackend)) {
+      return false;
+    }
+    if (controllerPath == null) {
+      if (other.controllerPath != null) {
+        return false;
+      }
+    } else if (!controllerPath.equals(other.controllerPath)) {
+      return false;
+    }
+    if (controllerQueueName == null) {
+      if (other.controllerQueueName != null) {
+        return false;
+      }
+    } else if (!controllerQueueName.equals(other.controllerQueueName)) {
+      return false;
+    }
+    if (millisBetweenPolls != other.millisBetweenPolls) {
+      return false;
+    }
+    if (workerBackend == null) {
+      if (other.workerBackend != null) {
+        return false;
+      }
+    } else if (!workerBackend.equals(other.workerBackend)) {
+      return false;
+    }
+    if (workerPath == null) {
+      if (other.workerPath != null) {
+        return false;
+      }
+    } else if (!workerPath.equals(other.workerPath)) {
+      return false;
+    }
+    if (workerQueueName == null) {
+      if (other.workerQueueName != null) {
+        return false;
+      }
+    } else if (!workerQueueName.equals(other.workerQueueName)) {
+      return false;
+    }
+    return true;
+  }
+
 }

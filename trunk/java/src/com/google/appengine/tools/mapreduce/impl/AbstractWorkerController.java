@@ -5,7 +5,7 @@ package com.google.appengine.tools.mapreduce.impl;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.appengine.tools.mapreduce.OutputWriter;
-import com.google.appengine.tools.mapreduce.WorkerContext;
+import com.google.appengine.tools.mapreduce.impl.shardedjob.IncrementalTask;
 import com.google.appengine.tools.mapreduce.impl.shardedjob.ShardedJobController;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Maps;
@@ -19,10 +19,10 @@ import java.util.logging.Logger;
  *
  * @param <I> type of input values consumed by this worker
  * @param <O> type of output values produced by this worker
- * @param <C> type of context required by this worker
  */
-public abstract class AbstractWorkerController<I, O, C extends WorkerContext>
-    implements ShardedJobController<WorkerShardTask<I, O, C>, WorkerResult<O>> {
+public abstract class AbstractWorkerController<
+    I extends IncrementalTask<I, WorkerResult<O>>, O>
+    implements ShardedJobController<I, WorkerResult<O>> {
   private static final long serialVersionUID = 887646042087205202L;
 
   @SuppressWarnings("unused")
@@ -34,7 +34,7 @@ public abstract class AbstractWorkerController<I, O, C extends WorkerContext>
     this.shardedJobName = checkNotNull(shardedJobName, "Null shardedJobName");
   }
 
-  public String getShardedJobName() {
+  public String getName() {
     return shardedJobName;
   }
 
