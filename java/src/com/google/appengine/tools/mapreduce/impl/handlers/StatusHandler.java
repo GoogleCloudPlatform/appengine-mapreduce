@@ -9,7 +9,9 @@ import com.google.appengine.tools.mapreduce.impl.WorkerResult;
 import com.google.appengine.tools.mapreduce.impl.WorkerShardState;
 import com.google.appengine.tools.mapreduce.impl.shardedjob.ShardedJobServiceFactory;
 import com.google.appengine.tools.mapreduce.impl.shardedjob.ShardedJobState;
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.Lists;
+
 import com.googlecode.charts4j.AxisLabelsFactory;
 import com.googlecode.charts4j.BarChart;
 import com.googlecode.charts4j.Data;
@@ -23,6 +25,7 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.IOException;
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -153,17 +156,16 @@ final class StatusHandler {
   /**
    * Handle the get_job_detail AJAX command.
    */
-  private static JSONObject handleGetJobDetail(String jobId) {
-    @SuppressWarnings("unchecked")
-    ShardedJobState<?, WorkerResult<?>> state =
-        (ShardedJobState) ShardedJobServiceFactory.getShardedJobService()
-        .getJobState(jobId);
-    @SuppressWarnings("unchecked")
-    AbstractWorkerController<?, ?, ?> controller = (AbstractWorkerController) state.getController();
+  @VisibleForTesting
+  static JSONObject handleGetJobDetail(String jobId) {
+    ShardedJobState<?, WorkerResult<? extends Serializable>> state =
+        ShardedJobServiceFactory.getShardedJobService().getJobState(jobId);
+    AbstractWorkerController<?, ?> controller =
+       (AbstractWorkerController) state.getController();
 
     JSONObject jobObject = new JSONObject();
     try {
-      jobObject.put("name", controller.getShardedJobName());
+      jobObject.put("name", controller.getName());
       jobObject.put("mapreduce_id", jobId);
       jobObject.put("updated_timestamp_ms", state.getMostRecentUpdateTimeMillis());
       jobObject.put("start_timestamp_ms", state.getStartTimeMillis());
@@ -178,10 +180,11 @@ final class StatusHandler {
       jobObject.put("active_shards", state.getActiveTaskCount());
 
       if (true /* detailed */) {
-        jobObject.put("counters", toJson(state.getAggregateResult().getCounters()));
+        WorkerResult<?> aggregateResult = state.getAggregateResult();
+        jobObject.put("counters", toJson(aggregateResult.getCounters()));
         jobObject.put("chart_url",
             getChartUrl(state.getTotalTaskCount(),
-                state.getAggregateResult().getWorkerShardStates()));
+                aggregateResult.getWorkerShardStates()));
 
         // HACK(ohler): We don't put the actual mapper parameters in here since
         // the Pipeline UI already shows them (in the toString() of the
@@ -200,7 +203,7 @@ final class StatusHandler {
         JSONArray shardArray = new JSONArray();
         // Iterate in ascending order rather than the map's entrySet() order.
         for (int i = 0; i < state.getTotalTaskCount(); i++) {
-          WorkerShardState shard = state.getAggregateResult().getWorkerShardStates().get(i);
+          WorkerShardState shard = aggregateResult.getWorkerShardStates().get(i);
           JSONObject shardObject = new JSONObject();
           shardObject.put("shard_number", i);
           if (shard == null) {
@@ -208,7 +211,7 @@ final class StatusHandler {
             shardObject.put("result_status", "initializing");
             shardObject.put("shard_description", ""); // TODO
           } else {
-            boolean done = state.getAggregateResult().getClosedWriters().get(i) != null;
+            boolean done = aggregateResult.getClosedWriters().get(i) != null;
             if (done) {
               shardObject.put("active", false);
               // result_status is only displayed if active is false.
