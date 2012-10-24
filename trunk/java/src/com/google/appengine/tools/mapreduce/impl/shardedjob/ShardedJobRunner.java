@@ -92,11 +92,11 @@ class ShardedJobRunner<T extends IncrementalTask<T, R>, R extends Serializable> 
   private ShardedJobStateImpl<T, R> lookupJobState(Transaction tx, String jobId) {
     Entity entity;
     try {
-      entity = DATASTORE.get(tx, ShardedJobStateImpl.Serializer.makeKey(jobId));
+      entity = DATASTORE.get(tx, ShardedJobStateImpl.ShardedJobSerializer.makeKey(jobId));
     } catch (EntityNotFoundException e) {
       return null;
     }
-    return ShardedJobStateImpl.Serializer.<T, R>fromEntity(entity);
+    return ShardedJobStateImpl.ShardedJobSerializer.<T, R>fromEntity(entity);
   }
 
   private IncrementalTaskState<T, R> lookupTaskState(Transaction tx, String taskId) {
@@ -223,7 +223,7 @@ class ShardedJobRunner<T extends IncrementalTask<T, R>, R extends Serializable> 
             + ", now " + existing.getNextSequenceNumber());
         return;
       }
-      DATASTORE.put(tx, ShardedJobStateImpl.Serializer.toEntity(jobState));
+      DATASTORE.put(tx, ShardedJobStateImpl.ShardedJobSerializer.toEntity(jobState));
       if (jobState.getStatus().isActive()) {
         scheduleControllerTask(tx, jobState);
       }
@@ -340,7 +340,7 @@ class ShardedJobRunner<T extends IncrementalTask<T, R>, R extends Serializable> 
     try {
       ShardedJobState<T, R> existing = lookupJobState(tx, jobId);
       if (existing == null) {
-        DATASTORE.put(tx, ShardedJobStateImpl.Serializer.toEntity(jobState));
+        DATASTORE.put(tx, ShardedJobStateImpl.ShardedJobSerializer.toEntity(jobState));
         tx.commit();
       } else {
         if (!existing.getStatus().isActive()) {
@@ -376,7 +376,7 @@ class ShardedJobRunner<T extends IncrementalTask<T, R>, R extends Serializable> 
         log.info(jobId + ": Job changed status while initializing: " + jobState);
         return;
       }
-      DATASTORE.put(tx, ShardedJobStateImpl.Serializer.toEntity(jobState));
+      DATASTORE.put(tx, ShardedJobStateImpl.ShardedJobSerializer.toEntity(jobState));
       scheduleControllerTask(tx, jobState);
       tx.commit();
     } finally {
@@ -400,7 +400,7 @@ class ShardedJobRunner<T extends IncrementalTask<T, R>, R extends Serializable> 
     if (initialTasks.isEmpty()) {
       log.info(jobId + ": No tasks, immediately complete: " + controller);
       jobState.setStatus(Status.DONE);
-      DATASTORE.put(ShardedJobStateImpl.Serializer.toEntity(jobState));
+      DATASTORE.put(ShardedJobStateImpl.ShardedJobSerializer.toEntity(jobState));
       controller.completed(controller.combineResults(ImmutableList.<R>of()));
       return;
     }
@@ -437,7 +437,7 @@ class ShardedJobRunner<T extends IncrementalTask<T, R>, R extends Serializable> 
         return;
       }
       jobState.setStatus(Status.ABORTED);
-      DATASTORE.put(tx, ShardedJobStateImpl.Serializer.toEntity(jobState));
+      DATASTORE.put(tx, ShardedJobStateImpl.ShardedJobSerializer.toEntity(jobState));
       tx.commit();
     } finally {
       if (tx.isActive()) {

@@ -98,7 +98,8 @@ public class InProcessMapReduce<I, K, V, O, R> {
     }
     final CountersImpl counters[] = new CountersImpl[1];
     WorkerResult<KeyValue<K, V>> result = InProcessShardedJobRunner.runJob(
-        tasks.build(), new AbstractWorkerController<I, KeyValue<K, V>, MapperContext<K, V>>(
+        tasks.build(), new AbstractWorkerController<
+            WorkerShardTask<I, KeyValue<K, V>, MapperContext<K, V>>, KeyValue<K, V>>(
             mrSpec.getJobName() + "-map") {
           // Not really meant to be serialized, but avoid warning.
           private static final long serialVersionUID = 661198005749484951L;
@@ -164,7 +165,8 @@ public class InProcessMapReduce<I, K, V, O, R> {
     final CountersImpl[] counters = new CountersImpl[1];
     WorkerResult<O> result = InProcessShardedJobRunner.runJob(
         tasks.build(), new AbstractWorkerController<
-            KeyValue<K, ReducerInput<V>>, O, ReducerContext<O>>(mrSpec.getJobName() + "-reduce") {
+            WorkerShardTask<KeyValue<K, ReducerInput<V>>, O, ReducerContext<O>>, O>(
+            mrSpec.getJobName() + "-reduce") {
           // Not really meant to be serialized, but avoid warning.
           private static final long serialVersionUID = 575338448598450119L;
 

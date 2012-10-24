@@ -108,7 +108,7 @@ public class MapReduceJob<I, K, V, O, R>
   }
 
   private static class WorkerController<I, O, R, C extends WorkerContext>
-      extends AbstractWorkerController<I, O, C> {
+      extends AbstractWorkerController<WorkerShardTask<I, O, C>, O> {
     private static final long serialVersionUID = 931651840864967980L;
 
     private final CountersImpl initialCounters;
