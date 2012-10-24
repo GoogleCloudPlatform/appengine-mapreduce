@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# coding: utf-8
 # Copyright 2012 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -42,10 +41,10 @@ class _FileFormatParser(object):
   """Parses a format string according to the following grammar.
 
   In Python's modified BNF notation.
-  format_string ::= parameterized_format ( “[“ parameterized_format “]” )*
+  format_string ::= parameterized_format ( "[" parameterized_format "]" )*
   parameterized_format ::= format [ format_parameters ]
-  format_parameters ::= “(“ format_paramter (“,” format_parameter )* “)”
-  format_parameter ::= format_specific_parameter “=” parameter_value
+  format_parameters ::= "(" format_paramter ("," format_parameter )* ")"
+  format_parameter ::= format_specific_parameter "=" parameter_value
   format ::= (<letter>|<number>)+
   parameter_value ::= (<letter>|<number>|<punctuation>)+
   format_specific_parameter ::= (<letter>|<number>)+
