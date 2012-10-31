@@ -22,6 +22,7 @@ __author__ = ("aizatsky@google.com (Mike Aizatsky)",
 import os
 import pkgutil
 import time
+import zipfile
 
 from google.appengine.api import validation
 from google.appengine.api import yaml_builder
@@ -282,13 +283,22 @@ class ResourceHandler(webapp.RequestHandler):
 
     real_path, content_type = self._RESOURCE_MAP[relative]
     path = os.path.join(os.path.dirname(__file__), "static", real_path)
+
+    # It's possible we're inside a zipfile (zipimport).  If so,
+    # __file__ will start with 'something.zip'.
+    (possible_zipfile, zip_path) = os.path.relpath(path).split(os.sep, 1)
+    try:
+      content = zipfile.ZipFile(possible_zipfile).read(zip_path)
+    except (IOError, OSError, zipfile.BadZipfile):
+      try:
+        data = pkgutil.get_data(__name__, "static/" + real_path)
+      except AttributeError:  # Python < 2.6.
+        data = None
+      content = data or open(path, 'rb').read()
+
     self.response.headers["Cache-Control"] = "public; max-age=300"
     self.response.headers["Content-Type"] = content_type
-    try:
-      data = pkgutil.get_data(__name__, "static/" + real_path)
-    except AttributeError:  # Python < 2.6.
-      data = None
-    self.response.out.write(data or open(path).read())
+    self.response.out.write(content)
 
 
 class ListConfigsHandler(base_handler.GetJsonHandler):
