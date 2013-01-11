@@ -17,7 +17,8 @@
 
 
 
-__all__ = ['FileFormat']
+__all__ = ['FileFormat',
+           'FORMATS']
 
 import StringIO
 import zipfile

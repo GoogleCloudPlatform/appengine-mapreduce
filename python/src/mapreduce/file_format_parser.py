@@ -22,7 +22,7 @@ __all__ = ['parse']
 import re
 import tokenize
 
-from mapreduce.file_formats import FORMATS
+from mapreduce import file_formats
 
 
 def parse(format_string):
@@ -55,9 +55,9 @@ class _FileFormatParser(object):
     self._tokenizer = tokenizer
 
   def _add_format(self, format_name, arguments):
-    if format_name not in FORMATS:
+    if format_name not in file_formats.FORMATS:
       raise ValueError('Invalid format %s.' % format_name)
-    format_cls = FORMATS[format_name]
+    format_cls = file_formats.FORMATS[format_name]
     for k in arguments:
       if k not in format_cls.ARGUMENTS:
         raise ValueError('Invalid argument %s for format %s' %
