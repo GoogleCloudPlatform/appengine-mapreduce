@@ -21,7 +21,7 @@ from __future__ import with_statement
 
 
 __all__ = ['FileFormatRoot',
-           'FileFormatRootFactory']
+           'split']
 
 import copy
 import mapreduce.file_format_parser as parser
@@ -48,6 +48,7 @@ def split(filenames, format_string, shards):
   parsed_formats = parser.parse(format_string)
 
   sizes = [files.stat(filename).st_size for filename in filenames]
+  # TODO(user): add min shard size protection if needed.
   size_per_shard = float(sum(sizes)) / shards
   if not size_per_shard:
     return
