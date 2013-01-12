@@ -3,6 +3,7 @@
 package com.google.appengine.tools.mapreduce.impl;
 
 import static com.google.common.base.Preconditions.checkNotNull;
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
 
 import com.google.appengine.tools.mapreduce.Counters;
 import com.google.appengine.tools.mapreduce.InputReader;
@@ -134,10 +135,10 @@ public abstract class WorkerShardTask<I, O, C extends WorkerContext>
       workerStopwatch.start();
       callWorker(next);
       workerStopwatch.stop();
-    } while (overallStopwatch.elapsedMillis() < millisPerSlice);
+    } while (overallStopwatch.elapsed(MILLISECONDS) < millisPerSlice);
     overallStopwatch.stop();
     counters.getCounter(workerCallsCounterName).increment(workerCalls);
-    counters.getCounter(workerMillisCounterName).increment(workerStopwatch.elapsedMillis());
+    counters.getCounter(workerMillisCounterName).increment(workerStopwatch.elapsed(MILLISECONDS));
 
     log.info("Ending slice, inputExhausted=" + inputExhausted
         + ", overallStopwatch=" + overallStopwatch + ", workerStopwatch=" + workerStopwatch);
