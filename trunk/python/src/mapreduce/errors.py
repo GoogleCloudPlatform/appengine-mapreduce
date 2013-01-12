@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-#
 # Copyright 2011 Google Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -33,6 +32,7 @@ __all__ = [
     "ShuffleServiceError",
     ]
 
+
 class Error(Exception):
   """Base-class for exceptions in this module."""
 
@@ -61,16 +61,20 @@ class BadWriterParamsError(BadParamsError):
   """The input parameters to a reader were invalid."""
 
 
-class ShuffleServiceError(Error):
-  """Error doing shuffle through shuffle service."""
+class FailJobError(Error):
+  """The job will be failed if this exception is thrown anywhere."""
+
+
+class NotEnoughArgumentsError(Error):
+  """Required argument is missing."""
 
 
 class BadCombinerOutputError(Error):
   """Combiner outputs data instead of yielding it."""
 
 
-class FailJobError(Error):
-  """The job will be failed if this exception is thrown anywhere."""
+class ShuffleServiceError(Error):
+  """Error doing shuffle through shuffle service."""
 
 
 class RetrySliceError(Error):
@@ -79,8 +83,3 @@ class RetrySliceError(Error):
   The job will be failed if the slice can't progress before maximum
   number of retries.
   """
-
-
-class NotEnoughArgumentsError(Error):
-  """Required argument is missing."""
-
