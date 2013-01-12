@@ -64,7 +64,8 @@ class _PipelineRecord(db.Model):
 
   # One of these two will be set, depending on the size of the params.
   params_text = db.TextProperty(name='params')
-  params_blob = blobstore.BlobReferenceProperty(indexed=False)
+  params_blob = blobstore.BlobReferenceProperty(
+      name='params_blob', indexed=False)
 
   status = db.StringProperty(choices=(WAITING, RUN, DONE, ABORTED),
                              default=WAITING)
@@ -129,7 +130,8 @@ class _SlotRecord(db.Model):
 
   # One of these two will be set, depending on the size of the value.
   value_text = db.TextProperty(name='value')
-  value_blob = blobstore.BlobReferenceProperty(indexed=False)
+  value_blob = blobstore.BlobReferenceProperty(
+      name='value_blob', indexed=False)
 
   status = db.StringProperty(choices=(FILLED, WAITING), default=WAITING,
                              indexed=False)
