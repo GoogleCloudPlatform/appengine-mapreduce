@@ -2307,6 +2307,7 @@ class LogInputReaderTest(unittest.TestCase):
     expected = []
     for i in xrange(count):
       stub.start_request(request_id=i,
+                         user_request_id="",
                          ip="127.0.0.1",
                          app_id=self.app_id,
                          version_id=self.version_id,
