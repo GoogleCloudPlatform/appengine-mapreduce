@@ -2,6 +2,8 @@
 
 package com.google.appengine.tools.mapreduce.impl.util;
 
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
+
 import com.google.apphosting.api.ApiProxy.ApiProxyException;
 import com.google.common.base.Stopwatch;
 
@@ -79,7 +81,7 @@ public class RetryHelper<V> {
           + sleepDurationMillis + " ms: " + messageChain(exception));
       if (attemptsSoFar >= params.getRetryMaxAttempts() 
           || (attemptsSoFar >= params.getRetryMinAttempts()
-              && stopwatch.elapsedMillis() >= params.getRetryPeriodMillis())) {
+              && stopwatch.elapsed(MILLISECONDS) >= params.getRetryPeriodMillis())) {
         throw new RuntimeException(this + ": Too many failures, giving up", exception);
       }
       try {
