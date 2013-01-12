@@ -2300,31 +2300,25 @@ class LogInputReaderTest(unittest.TestCase):
     """Create a set of test log records."""
     # Prepare the data.
     apiproxy_stub_map.apiproxy = apiproxy_stub_map.APIProxyStubMap()
-    apiproxy_stub_map.apiproxy.RegisterStub(
-        "datastore_v3",
-        datastore_file_stub.DatastoreFileStub(self.app_id, None))
-    apiproxy_stub_map.apiproxy.RegisterStub(
-        "logservice", logservice_stub.LogServiceStub(persist=False))
+    stub = logservice_stub.LogServiceStub()
+    apiproxy_stub_map.apiproxy.RegisterStub("logservice", stub)
 
     # Write test data.
-    writer = logservice_stub.RequestLogWriter(persist=True)
     expected = []
     for i in xrange(count):
-      os.environ["REQUEST_ID_HASH"] = str(i)  # Required by logservice_stub.
-      writer.write_request_info(ip="127.0.0.1",
-                                app_id=self.app_id,
-                                version_id=self.version_id,
-                                nickname="test@example.com",
-                                user_agent="Chrome/15.0.874.106",
-                                host="127.0.0.1:8080",
-                                start_time=i * 1000000,
-                                end_time=i * 1000000 + 500)
-      writer.write("GET", "/", 200, 0, "HTTP/1.1")
+      stub.start_request(request_id=i,
+                         ip="127.0.0.1",
+                         app_id=self.app_id,
+                         version_id=self.version_id,
+                         nickname="test@example.com",
+                         user_agent="Chrome/15.0.874.106",
+                         host="127.0.0.1:8080",
+                         method="GET",
+                         resource="/",
+                         http_version="HTTP/1.1",
+                         start_time=i * 1000000)
+      stub.end_request(i, 200, 0, end_time=i * 1000000 + 500)
       expected.append({"start_time": i, "end_time": i + .0005})
-    # NOTE(user): write_request_info() calls set_namespace(), and has a long
-    # comment on why it can't restore the previous namespace, but I don't
-    # understand it.  Manually resetting here to avoid test state leakage.
-    namespace_manager.set_namespace(None)
     expected.reverse()  # Results come back in most-recent-first order.
 
     return expected
