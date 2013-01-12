@@ -62,7 +62,7 @@ public class DatastoreInputTest extends TestCase {
 
 // -------------------------- TEST METHODS --------------------------
 
-  public void testSplitLotsOfData() throws Exception {
+  public void testCreateReadersLotsOfData() throws Exception {
     Collection<Entity> entities = new ArrayList<Entity>();
     for (int i = 0; i < 300; i++) {
       entities.add(new Entity(ENTITY_KIND_NAME));
@@ -71,42 +71,56 @@ public class DatastoreInputTest extends TestCase {
     List<Key> keys = ds.put(entities);
     Collections.sort(keys);
 
-    List<? extends InputReader<Entity>> splits = split(5);
+    List<? extends InputReader<Entity>> splits = createReaders(5);
     assertEquals(5, splits.size());
+    // Sizes are not expected to be equal due to scatter sampling
+    // Expected sizes for this dataset are: 62, 69, 65, 52, and 52
     assertStartAndEndKeys(splits.get(0), keys.get(0), keys.get(62));
-    assertStartAndEndKeys(splits.get(1), keys.get(62), keys.get(129));
-    assertStartAndEndKeys(splits.get(2), keys.get(129), keys.get(194));
-    assertStartAndEndKeys(splits.get(3), keys.get(194), keys.get(242));
-    assertStartAndEndKeys(splits.get(4), keys.get(242), null);
+    assertStartAndEndKeys(splits.get(1), keys.get(62), keys.get(131));
+    assertStartAndEndKeys(splits.get(2), keys.get(131), keys.get(196));
+    assertStartAndEndKeys(splits.get(3), keys.get(196), keys.get(248));
+    assertStartAndEndKeys(splits.get(4), keys.get(248), null);
   }
 
-  public void testSplitNotEnoughData() throws Exception {
+  public void testCreateReadersNotEnoughData() throws Exception {
     Collection<Entity> entities = new ArrayList<Entity>();
-    for (int i = 0; i < 10; i++) {
+    for (int i = 0; i < 9; i++) {
       entities.add(new Entity(ENTITY_KIND_NAME));
     }
 
     List<Key> keys = ds.put(entities);
 
-    List<? extends InputReader<Entity>> splits = split(5);
+    List<? extends InputReader<Entity>> splits = createReaders(5);
     assertEquals(4, splits.size());
-    assertStartAndEndKeys(splits.get(0), keys.get(0), keys.get(7));
-    assertStartAndEndKeys(splits.get(1), keys.get(7), keys.get(8));
-    assertStartAndEndKeys(splits.get(2), keys.get(8), keys.get(9));
-    assertStartAndEndKeys(splits.get(3), keys.get(9), null);
+    assertStartAndEndKeys(splits.get(0), keys.get(0), keys.get(6));
+    assertStartAndEndKeys(splits.get(1), keys.get(6), keys.get(7));
+    assertStartAndEndKeys(splits.get(2), keys.get(7), keys.get(8));
+    assertStartAndEndKeys(splits.get(3), keys.get(8), null);
   }
 
-  public void testSplitWithNoData() throws Exception {
-    List<? extends InputReader<Entity>> splits = split(10);
+  public void testCreateReadersWithNoData() throws Exception {
+    List<? extends InputReader<Entity>> splits = createReaders(10);
     assertEquals(0, splits.size());
   }
 
-  public void testSplitWithSingleKey() throws Exception {
+  public void testCreateReadersWithSingleKey() throws Exception {
     Key key = ds.put(new Entity(ENTITY_KIND_NAME));
-    List<? extends InputReader<Entity>> splits = split(1);
+    List<? extends InputReader<Entity>> splits = createReaders(1);
 
     assertEquals(1, splits.size());
     assertStartAndEndKeys(splits.get(0), key, null);
+  }
+
+  public void testSplitFairness() throws Exception {
+    assertRegionSizeBounds(0, 1);
+    assertRegionSizeBounds(1, 2);
+    assertRegionSizeBounds(2, 2);
+    assertRegionSizeBounds(7, 2);
+    assertRegionSizeBounds(999, 2);
+    assertRegionSizeBounds(999, 10);
+    assertRegionSizeBounds(999, 75);
+    assertRegionSizeBounds(999, 100);
+    assertRegionSizeBounds(999, 1000);
   }
 
 // -------------------------- STATIC METHODS --------------------------
@@ -117,8 +131,35 @@ public class DatastoreInputTest extends TestCase {
     assertEquals("End key doesn't match", endKey, datastoreInputSource.endKey);
   }
 
-  private static List<? extends InputReader<Entity>> split(int shardCount) {
+  private static List<? extends InputReader<Entity>> createReaders(int shardCount) {
     DatastoreInput input = new DatastoreInput(ENTITY_KIND_NAME, shardCount);
     return input.createReaders();
+  }
+
+  private static void assertRegionSizeBounds(int scatterKeys, int numShards) {
+    // Each shard should have the same number of regions, however since we round to the nearest
+    // whole number the max size may be one larger than the min if the optimal number of regions
+    // is a decimal value. The number of regions is 1 larger than the number of scatter keys.
+    int min = (scatterKeys + 1) / numShards;
+    int max = min + ((((scatterKeys + 1) % numShards) > 0) ? 1 : 0);
+
+    ArrayList<Entity> entities = new ArrayList<Entity>(scatterKeys);
+    for (int i = 1; i <= scatterKeys; i++) {
+      entities.add(new Entity(ENTITY_KIND_NAME, i));
+    }
+    Iterable<Key> splitKeys = DatastoreInput.chooseSplitPoints(entities, numShards);
+    // We start with 0 since the first shard includes the region before the first scatter key
+    long lastId = 0;
+    for (Key key : splitKeys) {
+      int shardSize = (int) (key.getId() - lastId);
+      lastId = key.getId();
+      assertTrue("Too many regions " + shardSize + ">" + max, shardSize <= max);
+      assertTrue("Too few regions " + shardSize + "<" + min, shardSize >= min);
+    }
+    // The last shard includes the region beyond that the last scatter key
+    int lastShardSize = (int) ((scatterKeys + 1) - lastId);
+    assertTrue("Last shard has too many regions " + lastShardSize + ">" + max,
+        lastShardSize <= max);
+    assertTrue("Last shard has too few regions " + lastShardSize + "<" + min, lastShardSize >= min);
   }
 }
