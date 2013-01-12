@@ -14,6 +14,7 @@ import com.google.appengine.api.files.GSFileOptions;
 import com.google.appengine.api.files.LockException;
 import com.google.appengine.api.files.RecordReadChannel;
 import com.google.appengine.api.files.RecordWriteChannel;
+import com.google.appengine.tools.development.testing.LocalBlobstoreServiceTestConfig;
 import com.google.appengine.tools.development.testing.LocalFileServiceTestConfig;
 import com.google.appengine.tools.development.testing.LocalServiceTestHelper;
 import com.google.appengine.tools.mapreduce.InputReader;
@@ -30,8 +31,6 @@ import com.google.appengine.tools.mapreduce.outputs.NoOutput;
 import com.google.appengine.tools.mapreduce.reducers.KeyProjectionReducer;
 
 import junit.framework.TestCase;
-
-import org.junit.Test;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -52,10 +51,10 @@ public class InMemoryShuffleJobTest extends TestCase {
   @SuppressWarnings("unused")
   private static final Logger log = Logger.getLogger(InMemoryShuffleJobTest.class.getName());
 
-  private static final FileService FILE_SERVICE = FileServiceFactory.getFileService();
-
   private final LocalServiceTestHelper helper =
-      new LocalServiceTestHelper(new LocalFileServiceTestConfig());
+      new LocalServiceTestHelper(
+          new LocalFileServiceTestConfig(),
+          new LocalBlobstoreServiceTestConfig());
 
   private final Marshaller<Integer> intMarshaller = Marshallers.getIntegerMarshaller();
 
@@ -64,6 +63,7 @@ public class InMemoryShuffleJobTest extends TestCase {
   private final int valueRange = 100;
   private final int numShards = 10;
 
+  private FileService fileService;
 
   private final Mapper<Long, Integer, Integer> mapper = new Mapper<Long, Integer, Integer>() {
     private static final long serialVersionUID = -7327871496359562255L;
@@ -88,6 +88,7 @@ public class InMemoryShuffleJobTest extends TestCase {
         KeyProjectionReducer.<Integer, Integer>create(),
         NoOutput.<Integer, Void>create(numShards));
     helper.setUp();
+    fileService = FileServiceFactory.getFileService();
   }
 
   @Override
@@ -303,70 +304,70 @@ public class InMemoryShuffleJobTest extends TestCase {
 
     @Override
     public AppEngineFile createNewBlobFile(String arg0) throws IOException {
-      return FILE_SERVICE.createNewBlobFile(arg0);
+      return fileService.createNewBlobFile(arg0);
     }
 
     @Override
     public AppEngineFile createNewBlobFile(String arg0, String arg1) throws IOException {
-      return FILE_SERVICE.createNewBlobFile(arg0, arg1);
+      return fileService.createNewBlobFile(arg0, arg1);
     }
 
     @Override
     public AppEngineFile createNewGSFile(GSFileOptions arg0) throws IOException {
-      return FILE_SERVICE.createNewGSFile(arg0);
+      return fileService.createNewGSFile(arg0);
     }
 
     @Override
     public AppEngineFile getBlobFile(BlobKey arg0) {
-      return FILE_SERVICE.getBlobFile(arg0);
+      return fileService.getBlobFile(arg0);
     }
 
     @Override
     public BlobKey getBlobKey(AppEngineFile arg0) {
-      return FILE_SERVICE.getBlobKey(arg0);
+      return fileService.getBlobKey(arg0);
     }
 
     @Override
     public String getDefaultGsBucketName() throws IOException {
-      return FILE_SERVICE.getDefaultGsBucketName();
+      return fileService.getDefaultGsBucketName();
     }
 
     @Override
     public FileReadChannel openReadChannel(AppEngineFile arg0, boolean arg1)
         throws FileNotFoundException, LockException, IOException {
       return new ThrowingFileReadChannel(
-          this, FILE_SERVICE.openReadChannel(arg0, arg1), throwOnRead);
+          this, fileService.openReadChannel(arg0, arg1), throwOnRead);
     }
 
     @Override
     public RecordReadChannel openRecordReadChannel(AppEngineFile arg0, boolean arg1)
         throws FileNotFoundException, LockException, IOException {
       return new ThrowingRecordReadChannel(
-          this, FILE_SERVICE.openRecordReadChannel(arg0, arg1), throwOnRead);
+          this, fileService.openRecordReadChannel(arg0, arg1), throwOnRead);
     }
 
     @Override
     public RecordWriteChannel openRecordWriteChannel(AppEngineFile arg0, boolean arg1)
         throws FileNotFoundException, FinalizationException, LockException, IOException {
       return new ThrowingRecordWriteChannel(
-          this, FILE_SERVICE.openRecordWriteChannel(arg0, arg1), throwOnWrite);
+          this, fileService.openRecordWriteChannel(arg0, arg1), throwOnWrite);
     }
 
     @Override
     public FileWriteChannel openWriteChannel(AppEngineFile arg0, boolean arg1)
         throws FileNotFoundException, FinalizationException, LockException, IOException {
       return new ThrowingFileWriteChannel(
-          this, FILE_SERVICE.openWriteChannel(arg0, arg1), throwOnWrite);
+          this, fileService.openWriteChannel(arg0, arg1), throwOnWrite);
     }
 
     @Override
     public FileStat stat(AppEngineFile arg0) throws IOException {
-      return FILE_SERVICE.stat(arg0);
+      return fileService.stat(arg0);
     }
 
     @Override
     public void delete(AppEngineFile... arg0) throws IOException {
-      FILE_SERVICE.delete(arg0);
+      fileService.delete(arg0);
     }
   }
 
@@ -415,18 +416,16 @@ public class InMemoryShuffleJobTest extends TestCase {
   private ArrayList<AppEngineFile> createInputFiles() throws IOException {
     ArrayList<AppEngineFile> reduceInputFiles = new ArrayList<AppEngineFile>();
     for (int i = 0; i < numShards; i++) {
-      reduceInputFiles.add(FILE_SERVICE.createNewBlobFile(
+      reduceInputFiles.add(fileService.createNewBlobFile(
           MapReduceConstants.REDUCE_INPUT_MIME_TYPE, mrJobId + ": reduce input, shard " + i));
     }
     return reduceInputFiles;
   }
 
-  @Test
   public void testShuffler() throws IOException {
     testShuffler(0, 0);
   }
 
-  @Test
   public void testAllReadsFail() throws IOException {
     try {
       testShuffler(1, 0);
@@ -437,22 +436,18 @@ public class InMemoryShuffleJobTest extends TestCase {
     }
   }
 
-  @Test
   public void testReadFailOften() throws IOException {
     testShuffler(.1, 0);
   }
 
-  @Test
   public void testReadFailSometimes() throws IOException {
     testShuffler(.05, 0);
   }
 
-  @Test
   public void testReadFailRarely() throws IOException {
     testShuffler(.025, 0);
   }
 
-  @Test
   public void testAllWritesFail() throws IOException {
     try {
       testShuffler(0, 1);
@@ -463,17 +458,14 @@ public class InMemoryShuffleJobTest extends TestCase {
     }
   }
 
-  @Test
   public void testWritesFailOften() throws IOException {
     testShuffler(0, 0.5);
   }
 
-  @Test
   public void testWritesFailSometimes() throws IOException {
     testShuffler(0, .2);
   }
 
-  @Test
   public void testWritesFailRarely() throws IOException {
     testShuffler(0, .05);
   }

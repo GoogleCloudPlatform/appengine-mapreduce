@@ -13,7 +13,7 @@
   <property name="testlib" location="test_lib" />
 
   <property name="sdk" location="sdk" />
-  <property name="version" value="1.7.0" />
+  <property name="version" value="1.7.4" />
   <property name="sdkdirname" value="appengine-java-sdk-${version}" />
   <property name="sdkfilename" value="${sdkdirname}.zip" />
   <property name="sdklibdir" location="${sdk}/${sdkdirname}/lib" />
@@ -23,7 +23,6 @@
       <include name="appengine-api-1.0-sdk-${version}.jar" />
     </fileset>
     <fileset dir="${sdklibdir}/shared">
-      <include name="geronimo-servlet_2.5_spec-1.2.jar" />
       <include name="servlet-api.jar" />
     </fileset>
   </path>
@@ -78,7 +77,19 @@
 
   <target name="test" depends="test_compile">
     <junit filtertrace="off">
-      <test name="com.google.appengine.tools.mapreduce.AllTests" />
+      <batchtest>
+        <fileset dir="${testsrc}">
+          <include name="**/*Test*.java" />
+          <!-- We must exclude class that has "Test" in the name AND does not have tests (i.e. a 
+               test helper or abstract class) to prevent spurious JUnit errors -->
+          <exclude name="com/google/appengine/tools/mapreduce/EndToEndTestCase.java" />
+          <exclude name="com/google/appengine/tools/mapreduce/impl/TestWorkerTask.java" />
+          <exclude name="com/google/appengine/tools/mapreduce/impl/shardedjob/EndToEndTestCase.java" />
+          <exclude name="com/google/appengine/tools/mapreduce/impl/shardedjob/TestController.java" />
+          <exclude name="com/google/appengine/tools/mapreduce/impl/shardedjob/TestTask.java" />
+          <exclude name="com/google/appengine/tools/mapreduce/inputs/BlobstoreInputTestCase.java" />
+        </fileset>
+      </batchtest>
       <classpath>
         <path refid="sdkjars" />
         <path refid="thirdpartyjars" />
