@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-#
 # Copyright 2010 Google Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -160,72 +159,14 @@ class MapperWorkerCallbackHandler(util.HugeTaskHandler):
       ndb_ctx.set_memcache_policy(lambda key: False)
 
     context.Context._set(ctx)
+
     try:
-      # consume quota ahead, because we do not want to run a datastore
-      # query if there's not enough quota for the shard.
-      if not quota_consumer or quota_consumer.check():
-        scan_aborted = False
-        entity = None
-
-        try:
-          # We shouldn't fetch an entity from the reader if there's not enough
-          # quota to process it. Perform all quota checks proactively.
-          if not quota_consumer or quota_consumer.consume():
-            for entity in input_reader:
-              if isinstance(entity, db.Model):
-                shard_state.last_work_item = repr(entity.key())
-              else:
-                shard_state.last_work_item = repr(entity)[:100]
-
-              scan_aborted = not self.process_data(
-                  entity, input_reader, ctx, tstate)
-
-              # Check if we've got enough quota for the next entity.
-              if (quota_consumer and not scan_aborted and
-                  not quota_consumer.consume()):
-                scan_aborted = True
-              if scan_aborted:
-                break
-          else:
-            scan_aborted = True
-
-          if not scan_aborted:
-            logging.info("Processing done for shard %d of job '%s'",
-                         shard_state.shard_number, shard_state.mapreduce_id)
-            # We consumed extra quota item at the end of for loop.
-            # Just be nice here and give it back :)
-            if quota_consumer:
-              quota_consumer.put(1)
-            shard_state.active = False
-            shard_state.result_status = model.ShardState.RESULT_SUCCESS
-
-          operation.counters.Increment(
-              context.COUNTER_MAPPER_WALLTIME_MS,
-              int((time.time() - self._start_time)*1000))(ctx)
-
-          # TODO(user): Mike said we don't want this happen in case of
-          # exception while scanning. Figure out when it's appropriate to skip.
-          ctx.flush()
-        except errors.RetrySliceError, e:
-          logging.error("Slice error: %s", e)
-          retry_count = int(
-              os.environ.get("HTTP_X_APPENGINE_TASKRETRYCOUNT") or 0)
-          if retry_count <= _RETRY_SLICE_ERROR_MAX_RETRIES:
-            raise
-          logging.error("Too many retries: %d, failing the job", retry_count)
-          scan_aborted = True
-          shard_state.active = False
-          shard_state.result_status = model.ShardState.RESULT_FAILED
-        except errors.FailJobError, e:
-          logging.error("Job failed: %s", e)
-          scan_aborted = True
-          shard_state.active = False
-          shard_state.result_status = model.ShardState.RESULT_FAILED
+      self.process_inputs(
+          input_reader, shard_state, tstate, quota_consumer, ctx)
 
       if not shard_state.active:
-        # shard is going to stop. Don't finalize output writer unless the job is
-        # going to be successful, because writer might be stuck in some bad state
-        # otherwise.
+        # shard is going to stop. Finalize output writer only when shard is
+        # successful because writer might be stuck in some bad state otherwise.
         if (shard_state.result_status == model.ShardState.RESULT_SUCCESS and
             tstate.output_writer):
           tstate.output_writer.finalize(ctx, shard_state.shard_number)
@@ -263,6 +204,85 @@ class MapperWorkerCallbackHandler(util.HugeTaskHandler):
       self.reschedule(shard_state, tstate)
     gc.collect()
 
+  def process_inputs(self,
+                     input_reader,
+                     shard_state,
+                     transient_shard_state,
+                     quota_consumer,
+                     ctx):
+    """Read inputs, process them, and write out outputs.
+
+    This is the core logic of MapReduce. It reads inputs from input reader,
+    invokes user specified mapper function, and writes output with
+    output writer. It also updates shard_state accordingly.
+    e.g. if shard processing is done, set shard_state.active to False.
+
+    If errors.FailJobError is caught, it will fail this MR job.
+    All other exceptions will be logged and raised to taskqueue for retry
+    until the number of retries exceeds a limit.
+
+    Args:
+      input_reader: input reader.
+      shard_state: shard state.
+      transient_shard_state: transient shard state.
+      quota_consumer: quota consumer to limit processing rate.
+      ctx: mapreduce context.
+    """
+    # We shouldn't fetch an entity from the reader if there's not enough
+    # quota to process it. Perform all quota checks proactively.
+    if not quota_consumer or quota_consumer.consume():
+      finished_shard = True
+      try:
+        for entity in input_reader:
+          if isinstance(entity, db.Model):
+            shard_state.last_work_item = repr(entity.key())
+          else:
+            shard_state.last_work_item = repr(entity)[:100]
+
+          if not self.process_data(
+              entity, input_reader, ctx, transient_shard_state):
+            finished_shard = False
+            break
+          elif quota_consumer and not quota_consumer.consume():
+            # not enough quota to keep processing.
+            finished_shard = False
+            break
+
+        # Flush context and its pools.
+        operation.counters.Increment(
+            context.COUNTER_MAPPER_WALLTIME_MS,
+            int((time.time() - self._start_time)*1000))(ctx)
+        ctx.flush()
+
+      except errors.FailJobError, e:
+        logging.error("Job failed: %s", e)
+        shard_state.active = False
+        shard_state.result_status = model.ShardState.RESULT_FAILED
+        return
+      # Any other exception during this data processing period should
+      # be handled by mapreduce's retry instead of taskqueue's.
+      except Exception, e:
+        logging.error("Slice error: %s", e)
+        retry_count = int(
+            os.environ.get("HTTP_X_APPENGINE_TASKRETRYCOUNT") or 0)
+        if retry_count <= _RETRY_SLICE_ERROR_MAX_RETRIES:
+          raise
+        logging.error("Too many retries: %d, failing the job", retry_count)
+        shard_state.active = False
+        shard_state.result_status = model.ShardState.RESULT_FAILED
+        return
+
+      # Will not reach this point if any exception happened.
+      if finished_shard:
+        logging.info("Processing done for shard %d of job '%s'",
+                     shard_state.shard_number, shard_state.mapreduce_id)
+        # We consumed extra quota item at the end of the for loop.
+        # Just be nice here and give it back :)
+        if quota_consumer:
+          quota_consumer.put(1)
+        shard_state.active = False
+        shard_state.result_status = model.ShardState.RESULT_SUCCESS
+
   def process_data(self, data, input_reader, ctx, transient_shard_state):
     """Process a single data piece.
 
@@ -271,7 +291,8 @@ class MapperWorkerCallbackHandler(util.HugeTaskHandler):
     Args:
       data: a datum to process.
       input_reader: input reader.
-      ctx: current execution context.
+      ctx: mapreduce context
+      transient_shard_state: transient shard state.
 
     Returns:
       True if scan should be continued, False if scan should be aborted.

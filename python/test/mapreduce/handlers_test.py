@@ -161,7 +161,7 @@ class TestOperation(operation.Operation):
     TestOperation.processed_keys.append(str(self.entity.key()))
 
   @classmethod
-  def rest(cls):
+  def reset(cls):
     cls.processed_keys = []
 
 
@@ -300,7 +300,7 @@ class MatchesContext(mox.Comparator):
 
 
 class FixedShardSizeInputReader(input_readers.DatastoreInputReader):
-  """Test rider which trucates the list of readers to specified size."""
+  """Test reader which truncates the list of readers to specified size."""
   readers_size = 3
 
   @classmethod
