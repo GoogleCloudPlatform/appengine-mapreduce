@@ -9,7 +9,7 @@
 import unittest
 
 
-from mapreduce.lib import files
+from google.appengine.api import files
 from google.appengine.ext import db
 from mapreduce import control
 from mapreduce import model

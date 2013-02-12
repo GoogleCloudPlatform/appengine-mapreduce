@@ -33,7 +33,7 @@ __all__ = [
     "ShuffleServiceError",
     ]
 
-from mapreduce.lib import files
+from google.appengine.api import files
 
 
 # Errors that should trigger shard retry.

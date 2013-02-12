@@ -26,7 +26,7 @@ __all__ = ['FileFormatRoot',
 import copy
 import mapreduce.file_format_parser as parser
 
-from mapreduce.lib.files import file as files
+from google.appengine.api.files import file as files
 from mapreduce import model
 from mapreduce import file_formats
 
@@ -333,7 +333,7 @@ class _RootFilesStream(_FilesStream):
       first_format._range = file_input.range
     self.__previous_input_index = self.__input_index
     self.__input_index += 1
-    return files.open(file_input.filename, 'r')
+    return files.open(file_input.filename, 'r', buffering=-1)
 
   def to_json(self):
     result = super(_RootFilesStream, self).to_json()

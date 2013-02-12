@@ -23,7 +23,7 @@ import tempfile
 import unittest
 import zipfile
 
-from mapreduce.lib.files import file as files
+from google.appengine.api.files import file as files
 from mapreduce import file_format_root
 
 

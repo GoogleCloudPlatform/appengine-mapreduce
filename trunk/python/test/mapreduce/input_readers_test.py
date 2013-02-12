@@ -40,8 +40,8 @@ from google.appengine.api.blobstore import blobstore_stub
 from google.appengine.api.blobstore import dict_blob_storage
 from google.appengine.api import datastore
 from google.appengine.api import datastore_file_stub
-from mapreduce.lib import files
-from mapreduce.lib.files import records
+from google.appengine.api import files
+from google.appengine.api.files import records
 from google.appengine.api import logservice
 from google.appengine.api.logservice import log_service_pb
 from google.appengine.api.logservice import logservice_stub

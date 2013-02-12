@@ -11,9 +11,9 @@ from testlib import mox
 import unittest
 
 from google.appengine.api import apiproxy_stub_map
-from mapreduce.lib import files
-from mapreduce.lib.files import testutil as files_testutil
-from mapreduce.lib.files import records
+from google.appengine.api import files
+from google.appengine.api.files import testutil as files_testutil
+from google.appengine.api.files import records
 from mapreduce import errors
 from mapreduce import model
 from mapreduce import output_writers
