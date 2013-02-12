@@ -52,6 +52,10 @@ import time
 import zipfile
 
 from google.net.proto import ProtocolBuffer
+try:
+  from google.appengine.ext import ndb
+except ImportError:
+  ndb = None
 from google.appengine.api import datastore
 from mapreduce.lib import files
 from google.appengine.api import logservice
@@ -859,8 +863,10 @@ class DatastoreInputReader(AbstractDatastoreInputReader):
   def _get_raw_entity_kind(cls, entity_kind):
     """Returns an entity kind to use with datastore calls."""
     entity_type = util.for_name(entity_kind)
-    if isinstance(entity_kind, db.Model):
+    if isinstance(entity_type, db.Model):
       return entity_type.kind()
+    elif ndb and isinstance(entity_type, (ndb.Model, ndb.MetaModel)):
+      return entity_type._get_kind()
     else:
       return util.get_short_name(entity_kind)
 

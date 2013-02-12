@@ -236,6 +236,8 @@ class MapperWorkerCallbackHandler(util.HugeTaskHandler):
         for entity in input_reader:
           if isinstance(entity, db.Model):
             shard_state.last_work_item = repr(entity.key())
+          elif ndb and isinstance(entity, ndb.Model):
+            shard_state.last_work_item = repr(entity.key)
           else:
             shard_state.last_work_item = repr(entity)[:100]
 
