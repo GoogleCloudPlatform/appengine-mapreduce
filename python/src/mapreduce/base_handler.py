@@ -74,7 +74,7 @@ class TaskQueueHandler(BaseHandler):
 
   def task_retry_count(self):
     """Number of times this task has been retried."""
-    return int(self.request.headers.get("X-AppEngine-TaskRetryCount", 0))
+    return int(self.request.headers.get("X-AppEngine-TaskExecutionCount", 0))
 
 
 class JsonHandler(BaseHandler):

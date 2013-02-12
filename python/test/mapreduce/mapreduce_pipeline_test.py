@@ -5,6 +5,8 @@
 
 
 
+# pylint: disable=g-bad-name
+
 import re
 import unittest
 
@@ -24,27 +26,42 @@ from testlib import testutil
 
 class TestEntity(db.Model):
   """Test entity class."""
-  data = db.TextProperty()
+  data = db.StringProperty()
 
 
-def test_handler_yield_key(entity):
-  """Test handler that yields entity key."""
-  yield entity.key()
+class TestOutputEntity(db.Model):
+  """TestOutput entity class."""
+  data = db.StringProperty()
 
 
-def test_handler_yield_str(o):
-  """Test handler that yields parameter converted to string."""
-  yield str(o)
+class RetryCount(db.Model):
+  """Use to keep track of slice/shard retries."""
+  retries = db.IntegerProperty()
 
 
-def test_map(entity):
+# Map or reduce functions.
+def test_mapreduce_map(entity):
   """Test map handler."""
   yield (entity.data, "")
 
 
-def test_reduce(key, values):
+def test_mapreduce_reduce(key, values):
   """Test reduce handler."""
   yield str((key, values))
+
+
+class TestFileRecordsOutputWriter(output_writers.FileRecordsOutputWriter):
+
+  def finalize(self, ctx, shard_number):
+    """Simulate output writer finalization Error."""
+    retry_count = RetryCount.get_by_key_name(__name__)
+    if not retry_count:
+      retry_count = RetryCount(key_name=__name__, retries=0)
+    if retry_count.retries < 3:
+      retry_count.retries += 1
+      retry_count.put()
+      raise files.FinalizationError("output writer finalize failed.")
+    super(TestFileRecordsOutputWriter, self).finalize(ctx, shard_number)
 
 
 class MapreducePipelineTest(testutil.HandlerTestBase):
@@ -70,8 +87,8 @@ class MapreducePipelineTest(testutil.HandlerTestBase):
     # Run Mapreduce
     p = mapreduce_pipeline.MapreducePipeline(
         "test",
-        __name__ + ".test_map",
-        __name__ + ".test_reduce",
+        __name__ + ".test_mapreduce_map",
+        __name__ + ".test_mapreduce_reduce",
         input_reader_spec=input_readers.__name__ + ".DatastoreInputReader",
         output_writer_spec=
             output_writers.__name__ + ".BlobstoreRecordsOutputWriter",
@@ -106,6 +123,56 @@ class MapreducePipelineTest(testutil.HandlerTestBase):
       self.assertTrue(
           "Bad filename: %s" % blobinfo.filename,
           re.match("test-reduce-.*-output-\d+", blobinfo.filename))
+
+  def testMapReduceWithShardRetry(self):
+    # Prepare test data
+    entity_count = 200
+    db.delete(RetryCount.all())
+
+    for i in range(entity_count):
+      TestEntity(data=str(i)).put()
+      TestEntity(data=str(i)).put()
+
+    # Run Mapreduce
+    p = mapreduce_pipeline.MapreducePipeline(
+        "test",
+        __name__ + ".test_mapreduce_map",
+        __name__ + ".test_mapreduce_reduce",
+        input_reader_spec=input_readers.__name__ + ".DatastoreInputReader",
+        output_writer_spec=(
+            __name__ + ".TestFileRecordsOutputWriter"),
+        mapper_params={
+            "input_reader": {
+                "entity_kind": __name__ + "." + TestEntity.__name__,
+            },
+        },
+        reducer_params={
+            "output_writer": {
+                "filesystem": "gs",
+                "gs_bucket_name": "bucket"
+            },
+        },
+        shards=16)
+    p.start()
+    test_support.execute_until_empty(self.taskqueue)
+
+    self.assertEquals(1, len(self.emails))
+    self.assertTrue(self.emails[0][1].startswith(
+        "Pipeline successful:"))
+
+    # Verify reduce output.
+    p = mapreduce_pipeline.MapreducePipeline.from_id(p.pipeline_id)
+    output_data = []
+    for output_file in p.outputs.default.value:
+      with files.open(output_file, "r") as f:
+        for record in records.RecordsReader(f):
+          output_data.append(record)
+
+    expected_data = [
+        str((str(d), ["", ""])) for d in range(entity_count)]
+    expected_data.sort()
+    output_data.sort()
+    self.assertEquals(expected_data, output_data)
 
 
 class ReducerReaderTest(testutil.HandlerTestBase):

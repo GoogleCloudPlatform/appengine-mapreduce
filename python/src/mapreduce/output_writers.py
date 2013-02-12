@@ -35,8 +35,9 @@ __all__ = [
     "RecordsPool",
     ]
 
+# pylint: disable=g-bad-name
+
 import gc
-import itertools
 import logging
 import time
 
@@ -130,13 +131,13 @@ class OutputWriter(model.JsonMixin):
                               self.__class__)
 
   @classmethod
-  def create(cls, mapreduce_state, shard_number):
+  def create(cls, mapreduce_state, shard_state):
     """Create new writer for a shard.
 
     Args:
       mapreduce_state: an instance of model.MapreduceState describing current
       job. State can be modified.
-      shard_number: shard number as integer.
+      shard_state: shard state.
     """
     raise NotImplementedError("create() not implemented in %s" % cls)
 
@@ -150,12 +151,12 @@ class OutputWriter(model.JsonMixin):
     raise NotImplementedError("write() not implemented in %s" %
                               self.__class__)
 
-  def finalize(self, ctx, shard_number):
+  def finalize(self, ctx, shard_state):
     """Finalize writer shard-level state.
 
     Args:
       ctx: an instance of context.Context.
-      shard_number: shard number as integer.
+      shard_state: shard state.
     """
     raise NotImplementedError("finalize() not implemented in %s" %
                               self.__class__)
@@ -172,6 +173,18 @@ class OutputWriter(model.JsonMixin):
       doesn't write to a file.
     """
     raise NotImplementedError("get_filenames() not implemented in %s" % cls)
+
+  # pylint: disable=unused-argument
+  def _can_be_retried(self, tstate):
+    """Whether this output writer instance supports shard retry.
+
+    Args:
+      tstate: model.TransientShardState for current shard.
+
+    Returns:
+      boolean. Whether this output writer instance supports shard retry.
+    """
+    return False
 
 # Flush size for files api write requests. Approximately one block of data.
 _FILES_API_FLUSH_SIZE = 128*1024
@@ -204,13 +217,11 @@ def _get_params(mapper_spec, allowed_keys=None):
         "output_writer subdictionary.")
     if allowed_keys:
       raise errors.BadWriterParamsError(message)
-    else:
-      logging.warning(message)
     params = mapper_spec.params
     params = dict((str(n), v) for n, v in params.iteritems())
   else:
     if not isinstance(mapper_spec.params.get("output_writer"), dict):
-      raise BadWriterParamsError(
+      raise errors.BadWriterParamsError(
           "Output writer parameters should be a dictionary")
     params = mapper_spec.params.get("output_writer")
     params = dict((str(n), v) for n, v in params.iteritems())
@@ -499,6 +510,15 @@ class FileOutputWriterBase(OutputWriter):
       job.
     """
     output_sharding = cls._get_output_sharding(mapreduce_state=mapreduce_state)
+    if output_sharding == cls.OUTPUT_SHARDING_INPUT_SHARDS:
+      shard_count = mapreduce_state.mapreduce_spec.mapper.shard_count
+      # Each shard creates its own file to support shard retry.
+      # Just create placeholder here.
+      mapreduce_state.writer_state = cls._State(
+          [None] * shard_count,
+          [None] * shard_count).to_json()
+      return
+
     mapper_spec = mapreduce_state.mapreduce_spec.mapper
     params = _get_params(mapper_spec)
     mime_type = params.get("mime_type", "application/octet-stream")
@@ -506,23 +526,12 @@ class FileOutputWriterBase(OutputWriter):
     bucket = params.get(cls.GS_BUCKET_NAME_PARAM)
     acl = params.get(cls.GS_ACL_PARAM)  # When None using default object ACLs.
 
-    if output_sharding == cls.OUTPUT_SHARDING_INPUT_SHARDS:
-      number_of_files = mapreduce_state.mapreduce_spec.mapper.shard_count
-    else:
-      number_of_files = 1
-
-    filenames = []
-    request_filenames = []
-    for i in range(number_of_files):
-      filename = (mapreduce_state.mapreduce_spec.name + "-" +
-                  mapreduce_state.mapreduce_spec.mapreduce_id + "-output")
-      if number_of_files > 1:
-        filename += "-" + str(i)
-      if bucket is not None:
-        filename = "%s/%s" % (bucket, filename)
-      request_filenames.append(filename)
-      filenames.append(cls._create_file(filesystem, filename, mime_type,
-                                        acl=acl))
+    filename = (mapreduce_state.mapreduce_spec.name + "-" +
+                mapreduce_state.mapreduce_spec.mapreduce_id + "-output")
+    if bucket is not None:
+      filename = "%s/%s" % (bucket, filename)
+    request_filenames = [filename]
+    filenames = [cls._create_file(filesystem, filename, mime_type, acl=acl)]
     mapreduce_state.writer_state = cls._State(
         filenames, request_filenames).to_json()
 
@@ -557,6 +566,8 @@ class FileOutputWriterBase(OutputWriter):
   def finalize_job(cls, mapreduce_state):
     """Finalize job-level writer state.
 
+    Collect from model.ShardState if this job has output per shard.
+
     Args:
       mapreduce_state: an instance of model.MapreduceState describing current
       job.
@@ -564,14 +575,16 @@ class FileOutputWriterBase(OutputWriter):
     state = cls._State.from_json(mapreduce_state.writer_state)
     output_sharding = cls._get_output_sharding(mapreduce_state=mapreduce_state)
     filesystem = cls._get_filesystem(mapreduce_state.mapreduce_spec.mapper)
-    finalized_filenames = []
-    for create_filename, request_filename in itertools.izip(
-        state.filenames, state.request_filenames):
-      if output_sharding != cls.OUTPUT_SHARDING_INPUT_SHARDS:
-        files.finalize(create_filename)
-      finalized_filenames.append(cls._get_finalized_filename(filesystem,
-                                                             create_filename,
-                                                             request_filename))
+    if output_sharding != cls.OUTPUT_SHARDING_INPUT_SHARDS:
+      files.finalize(state.filenames[0])
+      finalized_filenames = [cls._get_finalized_filename(
+          filesystem, state.filenames[0], state.request_filenames[0])]
+    else:
+      shards = model.ShardState.find_by_mapreduce_state(mapreduce_state)
+      finalized_filenames = []
+      for shard in shards:
+        state = cls._State.from_json(shard.writer_state)
+        finalized_filenames.append(state.filenames[0])
 
     state.filenames = finalized_filenames
     state.request_filenames = []
@@ -597,38 +610,79 @@ class FileOutputWriterBase(OutputWriter):
     """
     return {"filename": self._filename}
 
+  def _can_be_retried(self, tstate):
+    """Inherit doc.
+
+    Only shard with output per shard can be retried.
+    """
+    output_sharding = self._get_output_sharding(
+        mapper_spec=tstate.mapreduce_spec.mapper)
+    if output_sharding == self.OUTPUT_SHARDING_INPUT_SHARDS:
+      return True
+    return False
+
   @classmethod
-  def create(cls, mapreduce_state, shard_number):
+  def create(cls, mapreduce_state, shard_state):
     """Create new writer for a shard.
 
     Args:
       mapreduce_state: an instance of model.MapreduceState describing current
-      job.
-      shard_number: shard number as integer.
+        job.
+      shard_state: an instance of mode.ShardState describing the shard
+        outputing this file.
+
+    Returns:
+      an output writer instance for this shard.
     """
-    file_index = 0
     output_sharding = cls._get_output_sharding(mapreduce_state=mapreduce_state)
+    shard_number = shard_state.shard_number
     if output_sharding == cls.OUTPUT_SHARDING_INPUT_SHARDS:
-      file_index = shard_number
+      mapper_spec = mapreduce_state.mapreduce_spec.mapper
+      params = _get_params(mapper_spec)
+      mime_type = params.get("mime_type", "application/octet-stream")
+      filesystem = cls._get_filesystem(mapper_spec=mapper_spec)
+      bucket = params.get(cls.GS_BUCKET_NAME_PARAM)
+      acl = params.get(cls.GS_ACL_PARAM)  # When None using default object ACLs.
+      retries = 0
+      if shard_state:
+        retries = shard_state.retries
 
-    state = cls._State.from_json(mapreduce_state.writer_state)
-    return cls(state.filenames[file_index])
+      request_filename = (
+          mapreduce_state.mapreduce_spec.name + "-" +
+          mapreduce_state.mapreduce_spec.mapreduce_id + "-output-" +
+          str(shard_number) + "-retry-" + str(retries))
+      if bucket is not None:
+        request_filename = "%s/%s" % (bucket, request_filename)
+      filename = cls._create_file(filesystem,
+                                  request_filename,
+                                  mime_type,
+                                  acl=acl)
+      state = cls._State([filename], [request_filename])
+      shard_state.writer_state = state.to_json()
+    else:
+      state = cls._State.from_json(mapreduce_state.writer_state)
+      filename = state.filenames[0]
+    return cls(filename)
 
-  def finalize(self, ctx, shard_number):
+  def finalize(self, ctx, shard_state):
     """Finalize writer shard-level state.
 
     Args:
       ctx: an instance of context.Context.
-      shard_number: shard number as integer.
+      shard_state: shard state.
     """
     mapreduce_spec = ctx.mapreduce_spec
     output_sharding = self.__class__._get_output_sharding(
         mapper_spec=mapreduce_spec.mapper)
     if output_sharding == self.OUTPUT_SHARDING_INPUT_SHARDS:
-      # Finalize our file because we're responsible for it.
-      # Do it here and not in finalize_job to spread out finalization
-      # into multiple tasks.
-      files.finalize(self._filename)
+      filesystem = self._get_filesystem(mapreduce_spec.mapper)
+      state = self._State.from_json(shard_state.writer_state)
+      files.finalize(state.filenames[0])
+      finalized_filenames = [self._get_finalized_filename(
+          filesystem, state.filenames[0], state.request_filenames[0])]
+      state.filenames = finalized_filenames
+      state.request_filenames = []
+      shard_state.writer_state = state.to_json()
 
   @classmethod
   def get_filenames(cls, mapreduce_state):

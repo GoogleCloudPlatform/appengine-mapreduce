@@ -538,6 +538,7 @@ class MapreduceState(db.Model):
     active_shards: How many shards are still processing.
     start_time: When the job started.
     writer_state: Json property to be used by writer to store its state.
+      This is filled when single output per job. Will be dprecated.
   """
 
   RESULT_SUCCESS = "success"
@@ -664,12 +665,36 @@ class TransientShardState(object):
                shard_id,
                slice_id,
                input_reader,
-               output_writer=None):
+               initial_input_reader,
+               output_writer=None,
+               retries=0):
+    """Init.
+
+    Args:
+      base_path: base path of this mapreduce job.
+      mapreduce_spec: an instance of MapReduceSpec.
+      shard_id: shard id.
+      slice_id: slice id.
+      input_reader: input reader instance for this shard.
+      initial_input_reader: the input reader instance before any iteration.
+        Used by shard retry.
+      output_writer: output writer instance for this shard, if exists.
+      retries: the number of retries of the current shard. Used to drop
+        tasks from old retries.
+    """
     self.base_path = base_path
     self.mapreduce_spec = mapreduce_spec
     self.shard_id = shard_id
     self.slice_id = slice_id
     self.input_reader = input_reader
+    self.initial_input_reader = initial_input_reader
+    self.output_writer = output_writer
+    self.retries = retries
+
+  def reset_for_retry(self, output_writer):
+    self.input_reader = self.initial_input_reader
+    self.slice_id = 0
+    self.retries += 1
     self.output_writer = output_writer
 
   def to_dict(self):
@@ -677,7 +702,10 @@ class TransientShardState(object):
     result = {"mapreduce_spec": self.mapreduce_spec.to_json_str(),
               "shard_id": self.shard_id,
               "slice_id": str(self.slice_id),
-              "input_reader_state": self.input_reader.to_json_str()}
+              "input_reader_state": self.input_reader.to_json_str(),
+              "initial_input_reader_state":
+              self.initial_input_reader.to_json_str(),
+              "retries": str(self.retries)}
     if self.output_writer:
       result["output_writer_state"] = self.output_writer.to_json_str()
     return result
@@ -690,6 +718,10 @@ class TransientShardState(object):
     input_reader_spec_dict = simplejson.loads(request.get("input_reader_state"))
     input_reader = mapper_spec.input_reader_class().from_json(
         input_reader_spec_dict)
+    initial_input_reader_spec_dict = simplejson.loads(
+        request.get("initial_input_reader_state"))
+    initial_input_reader = mapper_spec.input_reader_class().from_json(
+        initial_input_reader_spec_dict)
 
     output_writer = None
     if mapper_spec.output_writer_class():
@@ -708,7 +740,9 @@ class TransientShardState(object):
                str(request.get("shard_id")),
                int(request.get("slice_id")),
                input_reader,
-               output_writer=output_writer)
+               initial_input_reader,
+               output_writer=output_writer,
+               retries=int(request.get("retries")))
 
 
 class ShardState(db.Model):
@@ -728,6 +762,8 @@ class ShardState(db.Model):
     update_time: The last time this shard state was updated.
     shard_description: A string description of the work this shard will do.
     last_work_item: A string description of the last work item processed.
+    writer_state: writer state for this shard. This is filled when output
+      per input.
   """
 
   RESULT_SUCCESS = "success"
@@ -740,12 +776,22 @@ class ShardState(db.Model):
   active = db.BooleanProperty(default=True, indexed=False)
   counters_map = JsonProperty(CountersMap, default=CountersMap(), indexed=False)
   result_status = db.StringProperty(choices=_RESULTS, indexed=False)
+  retries = db.IntegerProperty(default=0, indexed=False)
+  writer_state = JsonProperty(dict, indexed=False)
 
   # For UI purposes only.
   mapreduce_id = db.StringProperty(required=True)
   update_time = db.DateTimeProperty(auto_now=True, indexed=False)
   shard_description = db.TextProperty(default="")
   last_work_item = db.TextProperty(default="")
+
+  def reset_for_retry(self):
+    """Reset self for shard retry."""
+    self.retries += 1
+    self.last_work_item = ""
+    self.active = True
+    self.result_status = None
+    self.counters_map = CountersMap()
 
   def copy_from(self, other_state):
     """Copy data from another shard state entity to self."""
