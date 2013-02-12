@@ -111,7 +111,7 @@ public class InMemoryShuffleJobTest extends TestCase {
 
     @Override
     public int write(ByteBuffer src) throws IOException {
-      throwMaybe();
+      throwMaybe(src);
       mockFileService.writeCounter.incrementAndGet();
       return wrapped.write(src);
     }
@@ -119,6 +119,14 @@ public class InMemoryShuffleJobTest extends TestCase {
     private void throwMaybe() throws IOException {
       if (mockFileService.r.nextDouble() < throwProb) {
         mockFileService.throwCounter.incrementAndGet();
+        throw new IOException();
+      }
+    }
+
+    private void throwMaybe(ByteBuffer src) throws IOException {
+      if (mockFileService.r.nextDouble() < throwProb) {
+        mockFileService.throwCounter.incrementAndGet();
+        src.position(src.limit());
         throw new IOException();
       }
     }
@@ -141,9 +149,9 @@ public class InMemoryShuffleJobTest extends TestCase {
     }
 
     @Override
-    public int write(ByteBuffer arg0, String arg1) throws IOException {
-      throwMaybe();
-      return wrapped.write(arg0, arg1);
+    public int write(ByteBuffer src, String arg1) throws IOException {
+      throwMaybe(src);
+      return wrapped.write(src, arg1);
     }
 
   }
@@ -212,7 +220,7 @@ public class InMemoryShuffleJobTest extends TestCase {
 
     @Override
     public int write(ByteBuffer src) throws IOException {
-      throwMaybe();
+      throwMaybe(src);
       mockFileService.writeCounter.incrementAndGet();
       return wrapped.write(src);
     }
@@ -220,6 +228,14 @@ public class InMemoryShuffleJobTest extends TestCase {
     private void throwMaybe() throws IOException {
       if (mockFileService.r.nextDouble() < throwProb) {
         mockFileService.throwCounter.incrementAndGet();
+        throw new IOException();
+      }
+    }
+
+    private void throwMaybe(ByteBuffer src) throws IOException {
+      if (mockFileService.r.nextDouble() < throwProb) {
+        mockFileService.throwCounter.incrementAndGet();
+        src.position(src.limit());
         throw new IOException();
       }
     }
@@ -242,10 +258,10 @@ public class InMemoryShuffleJobTest extends TestCase {
     }
 
     @Override
-    public int write(ByteBuffer arg0, String arg1) throws IOException {
-      throwMaybe();
+    public int write(ByteBuffer src, String arg1) throws IOException {
+      throwMaybe(src);
       mockFileService.writeCounter.incrementAndGet();
-      return wrapped.write(arg0, arg1);
+      return wrapped.write(src, arg1);
     }
   }
 

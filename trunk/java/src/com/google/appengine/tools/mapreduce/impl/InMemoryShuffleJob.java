@@ -181,6 +181,8 @@ public class InMemoryShuffleJob<K, V, O> extends
       } catch (IOException e) {
         out = null;
         throw e;
+      } finally {
+        data.rewind();
       }
     }
   }
