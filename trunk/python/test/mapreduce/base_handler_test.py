@@ -60,7 +60,7 @@ class TaskQueueHandlerTest(unittest.TestCase):
 
   def testTaskRetryCount(self):
     self.assertEquals(0, self.handler.task_retry_count())
-    self.handler.request.headers["X-AppEngine-TaskRetryCount"] = 5
+    self.handler.request.headers["X-AppEngine-TaskExecutionCount"] = 5
     self.assertEquals(5, self.handler.task_retry_count())
 
 

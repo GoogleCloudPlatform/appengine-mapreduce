@@ -203,13 +203,11 @@ def _get_params(mapper_spec, allowed_keys=None):
         "input_reader subdictionary.")
     if allowed_keys:
       raise errors.BadReaderParamsError(message)
-    else:
-      logging.warning(message)
     params = mapper_spec.params
     params = dict((str(n), v) for n, v in params.iteritems())
   else:
     if not isinstance(mapper_spec.params.get("input_reader"), dict):
-      raise BadReaderParamsError(
+      raise errors.BadReaderParamsError(
           "Input reader parameters should be a dictionary")
     params = mapper_spec.params.get("input_reader")
     params = dict((str(n), v) for n, v in params.iteritems())

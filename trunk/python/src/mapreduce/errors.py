@@ -29,7 +29,20 @@ __all__ = [
     "MultipleDocumentsInMrYaml",
     "NotEnoughArgumentsError",
     "RetrySliceError",
+    "SHARD_RETRY_ERRORS",
     "ShuffleServiceError",
+    ]
+
+from mapreduce.lib import files
+
+
+# Errors that should trigger shard retry.
+SHARD_RETRY_ERRORS = [
+    files.ApiTemporaryUnavailableError,
+    files.ExistenceError,
+    files.FileTemporaryUnavailableError,
+    files.FinalizationError,
+    files.UnknownError,
     ]
 
 

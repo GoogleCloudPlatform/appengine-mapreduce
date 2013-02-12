@@ -172,7 +172,7 @@ class FileOutputWriterTest(testutil.HandlerTestBase):
     filenames = output_writers.FileOutputWriter.get_filenames(mapreduce_state)
     self.assertEqual(10, len(filenames))
     for filename in filenames:
-      self.assertTrue(filename.startswith("/blobstore/writable:"))
+      self.assertEqual(None, filename)
 
   def testInitJob_GoogleStorage(self):
     mapreduce_state = self.create_mapreduce_state(

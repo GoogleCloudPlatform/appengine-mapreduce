@@ -441,13 +441,13 @@ class _HashingBlobstoreOutputWriter(output_writers.BlobstoreOutputWriterBase):
     return {"filenames": self._filenames}
 
   @classmethod
-  def create(cls, mapreduce_state, shard_number):
+  def create(cls, mapreduce_state, shard_state):
     """Create new writer for a shard.
 
     Args:
       mapreduce_state: an instance of model.MapreduceState describing current
       job. State can be modified.
-      shard_number: shard number as integer.
+      shard_state: shard state.
     """
     return cls(mapreduce_state.writer_state["filenames"])
 

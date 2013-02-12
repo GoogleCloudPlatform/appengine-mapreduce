@@ -25,6 +25,7 @@
 # pylint: disable-msg=W0611
 from google.appengine.tools import os_compat
 # pylint: enable-msg=W0611
+# pylint: disable=unused-argument
 
 import base64
 import cgi
@@ -183,13 +184,22 @@ def test_handler_raise_fail_job_exception(entity):
   raise errors.FailJobError()
 
 
-def test_handler_raise_fatal_exception(entity):
+def test_handler_raise_slice_retry_exception(entity):
+  """Test handler function that always raises a fatal error.
+
+  Raises:
+    errors.RetrySliceError: always.
+  """
+  raise errors.RetrySliceError("")
+
+
+def test_handler_raise_shard_retry_exception(entity):
   """Test handler function that always raises a fatal error.
 
   Raises:
     files.ExistenceError: always.
   """
-  raise errors.RetrySliceError("")
+  raise files.ExistenceError("")
 
 
 def test_handler_yield_op(entity):
@@ -255,9 +265,9 @@ class TestOutputWriter(output_writers.OutputWriter):
     cls.events.append("finalize_job")
 
   @classmethod
-  def create(cls, mapreduce_state, shard_number):
+  def create(cls, mapreduce_state, shard_state):
     assert isinstance(mapreduce_state, model.MapreduceState)
-    cls.events.append("create-" + str(shard_number))
+    cls.events.append("create-" + str(shard_state.shard_number))
     return cls()
 
   def to_json(self):
@@ -271,15 +281,15 @@ class TestOutputWriter(output_writers.OutputWriter):
     assert isinstance(ctx, context.Context)
     self.events.append("write-" + str(data))
 
-  def finalize(self, ctx, shard_number):
+  def finalize(self, ctx, shard_state):
     assert isinstance(ctx, context.Context)
-    self.events.append("finalize-" + str(shard_number))
+    self.events.append("finalize-" + str(shard_state.shard_number))
 
 
 class UnfinalizableTestOutputWriter(TestOutputWriter):
   """An output writer where all calls to finalize fail."""
 
-  def finalize(self, ctx, shard_number):
+  def finalize(self, ctx, shard_state):
     raise Exception("This will always break")
 
 
@@ -995,6 +1005,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
         self.shard_id,
         self.slice_id,
         InputReader(ENTITY_KIND, [key_range.KeyRange()]),
+        InputReader(ENTITY_KIND, [key_range.KeyRange()]),
         output_writer=output_writer
         )
 
@@ -1161,7 +1172,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
         self.shard_state,
         model.TransientShardState(
             "/mapreduce", self.mapreduce_spec,
-            self.shard_id, 123, input_reader))
+            self.shard_id, 123, input_reader, input_reader))
 
     tasks = self.taskqueue.GetTasks("default")
     self.assertEquals(1, len(tasks))
@@ -1181,7 +1192,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
         self.shard_state,
         model.TransientShardState(
             "/mapreduce", self.mapreduce_spec,
-            self.shard_id, 123, input_reader),
+            self.shard_id, 123, input_reader, input_reader),
         eta=eta)
 
     tasks = self.taskqueue.GetTasks("default")
@@ -1202,7 +1213,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
         self.shard_state,
         model.TransientShardState(
             "/mapreduce", self.mapreduce_spec,
-            self.shard_id, 123, input_reader),
+            self.shard_id, 123, input_reader, input_reader),
         countdown=countdown)
 
     tasks = self.taskqueue.GetTasks("default")
@@ -1224,7 +1235,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
           self.shard_state,
           model.TransientShardState(
               "/mapreduce", self.mapreduce_spec,
-              self.shard_id, 123, query_range))
+              self.shard_id, 123, query_range, query_range))
 
       tasks = self.taskqueue.GetTasks("crazy-queue")
       self.assertEquals(1, len(tasks))
@@ -1276,7 +1287,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
         self.shard_state,
         model.TransientShardState(
             "/mapreduce", self.mapreduce_spec,
-            self.shard_id, 123, input_reader))
+            self.shard_id, 123, input_reader, input_reader))
 
     tasks = self.taskqueue.GetTasks("default")
     self.assertEquals(1, len(tasks))
@@ -1376,9 +1387,9 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
     self.assertEquals(1, len(tasks))
     self.verify_shard_task(tasks[0], self.shard_id, self.slice_id + 1)
 
-  def testFatalExceptionInHandler(self):
+  def testSlicRetryExceptionInHandler(self):
     """Test when a handler throws a fatal exception."""
-    self.init(__name__ + ".test_handler_raise_fatal_exception")
+    self.init(__name__ + ".test_handler_raise_slice_retry_exception")
     TestEntity().put()
 
     # First time, it gets re-raised.
@@ -1389,17 +1400,28 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
         processed=0)
 
     # After the Nth attempt, we abort the whole job.
-    os.environ["HTTP_X_APPENGINE_TASKRETRYCOUNT"] = "25"
+    self.handler.task_retry_count = lambda: 25
     try:
       self.handler.post()
     finally:
-      del os.environ['HTTP_X_APPENGINE_TASKRETRYCOUNT']
+      pass
 
     self.verify_shard_state(
         model.ShardState.get_by_shard_id(self.shard_id),
         active=False,
         result_status=model.ShardState.RESULT_FAILED,
         processed=1)
+
+  def testShardRetryExceptionInHandler(self):
+    """Test when a handler throws a fatal exception."""
+    self.init(__name__ + ".test_handler_raise_shard_retry_exception")
+    TestEntity().put()
+
+    self.handler.post()
+    shard_state = model.ShardState.get_by_shard_id(self.shard_id)
+    self.verify_shard_state(shard_state)
+    self.assertEquals(1, shard_state.retries)
+    self.assertEquals("", shard_state.last_work_item)
 
   def testExceptionInHandler(self):
     """Test behavior when handler throws exception."""
@@ -1480,7 +1502,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
 
   def testContext(self):
     """Test proper context initialization."""
-    self.handler.request.headers["X-AppEngine-TaskRetryCount"] = 5
+    self.handler.request.headers["X-AppEngine-TaskExecutionCount"] = 5
     TestEntity().put()
 
     m = mox.Mox()
