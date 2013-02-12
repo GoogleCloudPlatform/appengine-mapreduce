@@ -23,7 +23,7 @@ __all__ = [
     ]
 
 
-from mapreduce.lib import files
+from google.appengine.api import files
 from mapreduce import base_handler
 from mapreduce import control
 from mapreduce import model

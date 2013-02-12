@@ -35,8 +35,8 @@ import pickle
 
 from mapreduce.lib import pipeline
 from mapreduce.lib.pipeline import common as pipeline_common
-from mapreduce.lib import files
-from mapreduce.lib.files import file_service_pb
+from google.appengine.api import files
+from google.appengine.api.files import file_service_pb
 from mapreduce import base_handler
 from mapreduce import context
 from mapreduce import errors

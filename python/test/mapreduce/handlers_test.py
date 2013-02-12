@@ -39,7 +39,7 @@ import unittest
 
 from google.appengine.api import apiproxy_stub_map
 from google.appengine.api import datastore_file_stub
-from mapreduce.lib import files
+from google.appengine.api import files
 from google.appengine.api import memcache
 from google.appengine.api.memcache import memcache_stub
 from google.appengine.api.taskqueue import taskqueue_stub

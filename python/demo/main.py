@@ -39,7 +39,7 @@ from google.appengine.ext import db
 
 from google.appengine.ext.webapp import blobstore_handlers
 
-from mapreduce.lib import files
+from google.appengine.api import files
 from google.appengine.api import taskqueue
 from google.appengine.api import users
 

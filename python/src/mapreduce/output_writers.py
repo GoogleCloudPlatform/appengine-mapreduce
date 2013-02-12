@@ -41,9 +41,9 @@ import gc
 import logging
 import time
 
-from mapreduce.lib import files
-from mapreduce.lib.files import file_service_pb
-from mapreduce.lib.files import records
+from google.appengine.api import files
+from google.appengine.api.files import file_service_pb
+from google.appengine.api.files import records
 from mapreduce import errors
 from mapreduce import model
 from mapreduce import operation
@@ -643,9 +643,7 @@ class FileOutputWriterBase(OutputWriter):
       filesystem = cls._get_filesystem(mapper_spec=mapper_spec)
       bucket = params.get(cls.GS_BUCKET_NAME_PARAM)
       acl = params.get(cls.GS_ACL_PARAM)  # When None using default object ACLs.
-      retries = 0
-      if shard_state:
-        retries = shard_state.retries
+      retries = shard_state.retries
 
       request_filename = (
           mapreduce_state.mapreduce_spec.name + "-" +

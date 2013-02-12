@@ -57,9 +57,9 @@ try:
 except ImportError:
   ndb = None
 from google.appengine.api import datastore
-from mapreduce.lib import files
+from google.appengine.api import files
 from google.appengine.api import logservice
-from mapreduce.lib.files import records
+from google.appengine.api.files import records
 from google.appengine.api.logservice import log_service_pb
 from google.appengine.datastore import datastore_query
 from google.appengine.datastore import datastore_rpc

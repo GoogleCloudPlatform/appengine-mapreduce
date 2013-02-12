@@ -38,7 +38,7 @@ import zlib
 import types
 import urllib
 
-from mapreduce.lib import files
+from google.appengine.api import files
 from google.appengine.api import taskqueue
 from google.appengine.ext import db
 from google.appengine.datastore import datastore_rpc

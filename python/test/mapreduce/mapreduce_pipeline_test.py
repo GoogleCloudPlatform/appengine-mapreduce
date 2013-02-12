@@ -12,9 +12,9 @@ import unittest
 
 
 from mapreduce.lib import pipeline
-from mapreduce.lib import files
-from mapreduce.lib.files import file_service_pb
-from mapreduce.lib.files import records
+from google.appengine.api import files
+from google.appengine.api.files import file_service_pb
+from google.appengine.api.files import records
 from google.appengine.ext import blobstore
 from google.appengine.ext import db
 from mapreduce import input_readers
@@ -52,12 +52,14 @@ def test_mapreduce_reduce(key, values):
 
 class TestFileRecordsOutputWriter(output_writers.FileRecordsOutputWriter):
 
+  RETRIES = 3
+
   def finalize(self, ctx, shard_number):
     """Simulate output writer finalization Error."""
     retry_count = RetryCount.get_by_key_name(__name__)
     if not retry_count:
       retry_count = RetryCount(key_name=__name__, retries=0)
-    if retry_count.retries < 3:
+    if retry_count.retries < self.RETRIES:
       retry_count.retries += 1
       retry_count.put()
       raise files.FinalizationError("output writer finalize failed.")
@@ -163,11 +165,15 @@ class MapreducePipelineTest(testutil.HandlerTestBase):
     # Verify reduce output.
     p = mapreduce_pipeline.MapreducePipeline.from_id(p.pipeline_id)
     output_data = []
+    retries = 0
     for output_file in p.outputs.default.value:
+      retries += int(output_file[-1])
       with files.open(output_file, "r") as f:
         for record in records.RecordsReader(f):
           output_data.append(record)
 
+    # Assert file names also suggest the right number of retries.
+    self.assertEquals(TestFileRecordsOutputWriter.RETRIES, retries)
     expected_data = [
         str((str(d), ["", ""])) for d in range(entity_count)]
     expected_data.sort()

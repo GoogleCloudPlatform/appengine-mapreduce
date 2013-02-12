@@ -41,7 +41,7 @@ import urllib
 import uuid
 
 from google.appengine.api import mail
-from mapreduce.lib import files
+from google.appengine.api import files
 from google.appengine.api import users
 from google.appengine.api import taskqueue
 from google.appengine.ext import db

@@ -345,18 +345,19 @@ class MapperWorkerCallbackHandler(util.HugeTaskHandler):
     if type(e) in errors.SHARD_RETRY_ERRORS:
       shard_retry = shard_state.retries
       if shard_retry < parameters.DEFAULT_SHARD_RETRY_LIMIT:
+        if tstate.output_writer and (
+            not tstate.output_writer._can_be_retried(tstate)):
+          logging.error("Shard %s failed permanently.", shard_state.shard_id)
+          shard_state.active = False
+          shard_state.result_status = model.ShardState.RESULT_FAILED
+          return False
+
+        shard_state.reset_for_retry()
         output_writer = None
         if tstate.output_writer:
-          if tstate.output_writer._can_be_retried(tstate):
-            mr_state = model.MapreduceState.get_by_job_id(mr_id)
-            output_writer = tstate.output_writer.create(
-                mr_state, shard_state)
-          else:
-            logging.error("Shard %s failed permanently.", shard_state.shard_id)
-            shard_state.active = False
-            shard_state.result_status = model.ShardState.RESULT_FAILED
-            return False
-        shard_state.reset_for_retry()
+          mr_state = model.MapreduceState.get_by_job_id(mr_id)
+          output_writer = tstate.output_writer.create(
+              mr_state, shard_state)
         tstate.reset_for_retry(output_writer)
         return True
     # Slice retry.
