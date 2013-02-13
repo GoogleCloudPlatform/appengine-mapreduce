@@ -220,6 +220,46 @@ def _get_params(mapper_spec, allowed_keys=None):
 
 
 class FileInputReader(InputReader):
+  """Reader to read Files API files of user specified format.
+
+  This class currently only supports Google Storage files. It will be extended
+  to support blobstore files in the future.
+
+  Reader Parameters:
+  files: a list of filenames or filename patterns.
+    filename must be of format '/gs/bucket/filename'.
+    filename pattern has format '/gs/bucket/prefix*'.
+    filename pattern will be expanded to filenames with the given prefix.
+    Please see parseGlob in the file api.files.gs.py which is included in the
+    App Engine SDK for supported patterns.
+
+    Example:
+      ["/gs/bucket1/file1", "/gs/bucket2/*", "/gs/bucket3/p*"]
+      includes "file1", all files under bucket2, and files under bucket3 with
+      a prefix "p" in its name.
+
+  format: format string determines what your map function gets as its input.
+    format string can be "lines", "bytes", "zip", or a cascade of them plus
+    optional parameters. See file_formats.FORMATS for all supported formats.
+    See file_format_parser._FileFormatParser for format string syntax.
+
+    Example:
+      "lines": your map function gets files' contents line by line.
+      "bytes": your map function gets files' contents entirely.
+      "zip": InputReader unzips files and feeds your map function each of
+        the archive's member files as a whole.
+      "zip[bytes]: same as above.
+      "zip[lines]": InputReader unzips files and feeds your map function
+        files' contents line by line.
+      "zip[lines(encoding=utf32)]": InputReader unzips files, reads each
+        file with utf32 encoding and feeds your map function line by line.
+      "base64[zip[lines(encoding=utf32)]]: InputReader decodes files with
+        base64 encoding, unzips each file, reads each of them with utf32
+        encoding and feeds your map function line by line.
+
+    Note that "encoding" only teaches InputReader how to interpret files.
+    The input your map function gets is always a Python str.
+  """
 
   # Reader Parameters
   FILES_PARAM = "files"
