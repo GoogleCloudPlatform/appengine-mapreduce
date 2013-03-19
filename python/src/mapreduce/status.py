@@ -284,12 +284,12 @@ class ResourceHandler(webapp.RequestHandler):
     real_path, content_type = self._RESOURCE_MAP[relative]
     path = os.path.join(os.path.dirname(__file__), "static", real_path)
 
-    # It's possible we're inside a zipfile (zipimport).  If so,
-    # __file__ will start with 'something.zip'.
-    (possible_zipfile, zip_path) = os.path.relpath(path).split(os.sep, 1)
-    try:
-      content = zipfile.ZipFile(possible_zipfile).read(zip_path)
-    except (IOError, OSError, zipfile.BadZipfile):
+    # It's possible we're inside a zipfile (zipimport).  If so, path
+    # will include 'something.zip'.
+    if ('.zip' + os.sep) in path:
+      (zip_file, zip_path) = os.path.relpath(path).split('.zip' + os.sep, 1)
+      content = zipfile.ZipFile(zip_file + '.zip').read(zip_path)
+    else:
       try:
         data = pkgutil.get_data(__name__, "static/" + real_path)
       except AttributeError:  # Python < 2.6.
