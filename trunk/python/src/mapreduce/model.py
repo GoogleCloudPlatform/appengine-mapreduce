@@ -26,9 +26,19 @@ serialized to/from json and passed around with other means.
 
 
 
-__all__ = ["JsonMixin", "JsonProperty", "MapreduceState", "MapperSpec",
-           "MapreduceControl", "MapreduceSpec", "ShardState", "CountersMap",
-           "TransientShardState", "QuerySpec"]
+__all__ = ["JsonEncoder",
+           "JsonDecoder",
+           "JSON_DEFAULTS",
+           "JsonMixin",
+           "JsonProperty",
+           "MapreduceState",
+           "MapperSpec",
+           "MapreduceControl",
+           "MapreduceSpec",
+           "ShardState",
+           "CountersMap",
+           "TransientShardState",
+           "QuerySpec"]
 
 import copy
 import datetime
@@ -55,6 +65,73 @@ _DEFAULT_PROCESSING_RATE_PER_SEC = 1000000
 _DEFAULT_SHARD_COUNT = 8
 
 
+class JsonEncoder(simplejson.JSONEncoder):
+  """MR customized json encoder."""
+
+  TYPE_ID = "__mr_json_type"
+
+  def default(self, o):
+    """Inherit docs."""
+    if type(o) in JSON_DEFAULTS:
+      encoder = JSON_DEFAULTS[type(o)][0]
+      json_struct = encoder(o)
+      json_struct[self.TYPE_ID] = type(o).__name__
+      return json_struct
+    return super(JsonEncoder, self).default(o)
+
+
+class JsonDecoder(simplejson.JSONDecoder):
+  """MR customized json decoder."""
+
+  def __init__(self, **kwargs):
+    if "object_hook" not in kwargs:
+      kwargs["object_hook"] = self._dict_to_obj
+    super(JsonDecoder, self).__init__(**kwargs)
+
+  def _dict_to_obj(self, d):
+    """Converts a dictionary of json object to a Python object."""
+    if JsonEncoder.TYPE_ID not in d:
+      return d
+
+    obj_type = d.pop(JsonEncoder.TYPE_ID)
+    if obj_type in _TYPE_IDS:
+      decoder = JSON_DEFAULTS[_TYPE_IDS[obj_type]][1]
+      return decoder(d)
+    else:
+      raise TypeError("Invalid type %s.", obj_type)
+
+
+_DATETIME_FORMAT = "%Y-%m-%d %H:%M:%S.%f"
+
+
+def _json_encode_datetime(o):
+  """Json encode a datetime object.
+
+  Args:
+    o: a datetime object.
+
+  Returns:
+    A dict of json primitives.
+  """
+  return {"isostr": o.strftime(_DATETIME_FORMAT)}
+
+
+def _json_decode_datetime(d):
+  """Converts a dict of json primitives to a datetime object."""
+  return datetime.datetime.strptime(d["isostr"], _DATETIME_FORMAT)
+
+
+# To extend what Pipeline can json serialize, add to this where
+# key is the type and value is a tuple of encoder and decoder function.
+JSON_DEFAULTS = {
+    datetime.datetime: (_json_encode_datetime, _json_decode_datetime),
+}
+
+
+_TYPE_IDS = dict(zip([_cls.__name__ for _cls in JSON_DEFAULTS],
+                     JSON_DEFAULTS.keys()))
+
+
 class JsonMixin(object):
   """Simple, stateless json utilities mixin.
 
@@ -72,7 +149,7 @@ class JsonMixin(object):
     """
     json = self.to_json()
     try:
-      return simplejson.dumps(json, sort_keys=True)
+      return simplejson.dumps(json, sort_keys=True, cls=JsonEncoder)
     except:
       logging.exception("Could not serialize JSON: %r", json)
       raise
@@ -87,7 +164,7 @@ class JsonMixin(object):
     Returns:
       New instance of the class with data loaded from json string.
     """
-    return cls.from_json(simplejson.loads(json_str))
+    return cls.from_json(simplejson.loads(json_str, cls=JsonDecoder))
 
 
 class JsonProperty(db.UnindexedProperty):
@@ -130,7 +207,7 @@ class JsonProperty(db.UnindexedProperty):
     if not json_value:
       return None
     return datastore_types.Text(simplejson.dumps(
-        json_value, sort_keys=True))
+        json_value, sort_keys=True, cls=JsonEncoder))
 
   def make_value_from_datastore(self, value):
     """Convert value from datastore representation.
@@ -144,7 +221,7 @@ class JsonProperty(db.UnindexedProperty):
 
     if value is None:
       return None
-    json = simplejson.loads(value)
+    json = simplejson.loads(value, cls=JsonDecoder)
     if self.data_type == dict:
       return json
     return self.data_type.from_json(json)
@@ -191,7 +268,6 @@ class JsonProperty(db.UnindexedProperty):
       return copy.deepcopy(self.default)
     else:
       return None
-
 
 
 # Ridiculous future UNIX epoch time, 500 years from now.
@@ -714,18 +790,20 @@ class TransientShardState(object):
     """Create new TransientShardState from webapp request."""
     mapreduce_spec = MapreduceSpec.from_json_str(request.get("mapreduce_spec"))
     mapper_spec = mapreduce_spec.mapper
-    input_reader_spec_dict = simplejson.loads(request.get("input_reader_state"))
+    input_reader_spec_dict = simplejson.loads(request.get("input_reader_state"),
+                                              cls=JsonDecoder)
     input_reader = mapper_spec.input_reader_class().from_json(
         input_reader_spec_dict)
     initial_input_reader_spec_dict = simplejson.loads(
-        request.get("initial_input_reader_state"))
+        request.get("initial_input_reader_state"), cls=JsonDecoder)
     initial_input_reader = mapper_spec.input_reader_class().from_json(
         initial_input_reader_spec_dict)
 
     output_writer = None
     if mapper_spec.output_writer_class():
       output_writer = mapper_spec.output_writer_class().from_json(
-          simplejson.loads(request.get("output_writer_state", "{}")))
+          simplejson.loads(request.get("output_writer_state", "{}"),
+                           cls=JsonDecoder))
       assert isinstance(output_writer, mapper_spec.output_writer_class()), (
           "%s.from_json returned an instance of wrong class: %s" % (
               mapper_spec.output_writer_class(),

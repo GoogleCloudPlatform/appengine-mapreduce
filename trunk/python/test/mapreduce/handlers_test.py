@@ -49,10 +49,12 @@ from google.appengine.ext import db
 from mapreduce.lib import key_range
 from mapreduce import context
 from mapreduce import control
+from mapreduce import datastore_range_iterators as db_iters
 from mapreduce import errors
 from mapreduce import handlers
 from mapreduce import hooks
 from mapreduce import input_readers
+from mapreduce import key_ranges
 from mapreduce import operation
 from mapreduce import output_writers
 from mapreduce import model
@@ -231,6 +233,19 @@ class InputReader(input_readers.DatastoreInputReader):
       yield entity
 
   @classmethod
+  def split_input(cls, mapper_spec):
+    """Split into the exact number of shards asked for."""
+    shard_count = mapper_spec.shard_count
+    query_spec = cls._get_query_spec(mapper_spec)
+
+    k_ranges = [key_ranges.KeyRangesFactory.create_from_list(
+        [key_range.KeyRange()]) for _ in range(shard_count)]
+    iters = [db_iters.RangeIteratorFactory.create_key_ranges_iterator(
+        r, query_spec, cls._KEY_RANGE_ITER_CLS) for r in k_ranges]
+
+    return [cls(i) for i in iters]
+
+  @classmethod
   def reset(cls):
     cls.yields = 0
 
@@ -349,18 +364,6 @@ class MapreduceHandlerTestBase(testutil.HandlerTestBase):
         return task
     return None
 
-  def verify_input_reader_state(self, str_state, **kwargs):
-    """Check that input reader state has expected values.
-
-    Args:
-      str_state: input reader state serialized into string.
-    """
-    state = simplejson.loads(str_state)
-    self.assertEquals(ENTITY_KIND, state["entity_kind"])
-    self.assertTrue("key_range" in state or "current_key_range" in state,
-                    "invalid state: %r" % str_state)
-    self.assertEquals(50, state["batch_size"])
-
   def verify_shard_task(self, task, shard_id, slice_id=0, eta=None,
                         countdown=None, **kwargs):
     """Checks that all shard task properties have expected values.
@@ -393,7 +396,6 @@ class MapreduceHandlerTestBase(testutil.HandlerTestBase):
     mapreduce_spec = model.MapreduceSpec.from_json_str(
         payload["mapreduce_spec"])
     self.verify_mapreduce_spec(mapreduce_spec, **kwargs)
-    self.verify_input_reader_state(payload["input_reader_state"], **kwargs)
 
   def verify_mapreduce_spec(self, mapreduce_spec, **kwargs):
     """Check all mapreduce spec properties to have expected values.
@@ -998,13 +1000,17 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
     if self.mapreduce_spec.mapper.output_writer_class():
       output_writer = self.mapreduce_spec.mapper.output_writer_class()()
 
+    reader_iter = db_iters.RangeIteratorFactory.create_key_ranges_iterator(
+        key_ranges.KeyRangesFactory.create_from_list([key_range.KeyRange()]),
+        model.QuerySpec("ENTITY_KIND", model_class_path=ENTITY_KIND),
+        db_iters.KeyRangeModelIterator)
     self.transient_state = model.TransientShardState(
         "/mapreduce",
         self.mapreduce_spec,
         self.shard_id,
         self.slice_id,
-        InputReader(ENTITY_KIND, [key_range.KeyRange()]),
-        InputReader(ENTITY_KIND, [key_range.KeyRange()]),
+        InputReader(reader_iter),
+        InputReader(reader_iter),
         output_writer=output_writer
         )
 
@@ -1184,18 +1190,11 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
 
   def testScheduleSlice(self):
     """Test _schedule_slice method."""
-    input_reader = input_readers.DatastoreInputReader(
-        ENTITY_KIND,
-        [key_range.KeyRange(key_start=self.key(75),
-                            key_end=self.key(100),
-                            direction="ASC",
-                            include_start=False,
-                            include_end=True)])
     self.handler._schedule_slice(
         self.shard_state,
         model.TransientShardState(
             "/mapreduce", self.mapreduce_spec,
-            self.shard_id, 123, input_reader, input_reader))
+            self.shard_id, 123, mock.Mock(), mock.Mock()))
 
     tasks = self.taskqueue.GetTasks("default")
     self.assertEquals(1, len(tasks))
@@ -1204,18 +1203,11 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
   def testScheduleSlice_Eta(self):
     """Test _schedule_slice method."""
     eta = datetime.datetime.utcnow() + datetime.timedelta(hours=1)
-    input_reader = input_readers.DatastoreInputReader(
-        ENTITY_KIND,
-        [key_range.KeyRange(key_start=self.key(75),
-                            key_end=self.key(100),
-                            direction="ASC",
-                            include_start=False,
-                            include_end=True)])
     self.handler._schedule_slice(
         self.shard_state,
         model.TransientShardState(
             "/mapreduce", self.mapreduce_spec,
-            self.shard_id, 123, input_reader, input_reader),
+            self.shard_id, 123, mock.Mock(), mock.Mock()),
         eta=eta)
 
     tasks = self.taskqueue.GetTasks("default")
@@ -1225,18 +1217,11 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
   def testScheduleSlice_Countdown(self):
     """Test _schedule_slice method."""
     countdown = 60 * 60
-    input_reader = input_readers.DatastoreInputReader(
-        ENTITY_KIND,
-        [key_range.KeyRange(key_start=self.key(75),
-                            key_end=self.key(100),
-                            direction="ASC",
-                            include_start=False,
-                            include_end=True)])
     self.handler._schedule_slice(
         self.shard_state,
         model.TransientShardState(
             "/mapreduce", self.mapreduce_spec,
-            self.shard_id, 123, input_reader, input_reader),
+            self.shard_id, 123, mock.Mock(), mock.Mock()),
         countdown=countdown)
 
     tasks = self.taskqueue.GetTasks("default")
@@ -1247,18 +1232,11 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
     """Tests that _schedule_slice will enqueue tasks on the calling queue."""
     os.environ["HTTP_X_APPENGINE_QUEUENAME"] = "crazy-queue"
     try:
-      query_range = input_readers.DatastoreInputReader(
-          ENTITY_KIND,
-          [key_range.KeyRange(key_start=self.key(75),
-                              key_end=self.key(100),
-                              direction="ASC",
-                              include_start=False,
-                              include_end=True)])
       self.handler._schedule_slice(
           self.shard_state,
           model.TransientShardState(
               "/mapreduce", self.mapreduce_spec,
-              self.shard_id, 123, query_range, query_range))
+              self.shard_id, 123, mock.Mock(), mock.Mock()))
 
       tasks = self.taskqueue.GetTasks("crazy-queue")
       self.assertEquals(1, len(tasks))
@@ -1299,18 +1277,11 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
     hooks_class_name = hooks.__name__ + '.' + hooks.Hooks.__name__
     self.init(hooks_class_name=hooks_class_name)
 
-    input_reader = input_readers.DatastoreInputReader(
-        ENTITY_KIND,
-        [key_range.KeyRange(key_start=self.key(75),
-                            key_end=self.key(100),
-                             direction="ASC",
-                            include_start=False,
-                            include_end=True)])
     self.handler._schedule_slice(
         self.shard_state,
         model.TransientShardState(
             "/mapreduce", self.mapreduce_spec,
-            self.shard_id, 123, input_reader, input_reader))
+            self.shard_id, 123, mock.Mock(), mock.Mock()))
 
     tasks = self.taskqueue.GetTasks("default")
     self.assertEquals(1, len(tasks))

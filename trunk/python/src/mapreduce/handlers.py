@@ -87,7 +87,7 @@ def _run_task_hook(hooks, method, task, queue_name):
   return False
 
 
-class MapperWorkerCallbackHandler(util.HugeTaskHandler):
+class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
   """Callback handler for mapreduce worker task.
 
   Request Parameters:
@@ -98,7 +98,7 @@ class MapperWorkerCallbackHandler(util.HugeTaskHandler):
 
   def __init__(self, *args):
     """Constructor."""
-    util.HugeTaskHandler.__init__(self, *args)
+    super(MapperWorkerCallbackHandler, self).__init__(*args)
     self._time = time.time
 
   def handle(self):
@@ -543,7 +543,7 @@ class MapperWorkerCallbackHandler(util.HugeTaskHandler):
     return slice_processing_limit
 
 
-class ControllerCallbackHandler(util.HugeTaskHandler):
+class ControllerCallbackHandler(base_handler.HugeTaskHandler):
   """Supervises mapreduce execution.
 
   Is also responsible for gathering execution status from shards together.
@@ -554,7 +554,7 @@ class ControllerCallbackHandler(util.HugeTaskHandler):
 
   def __init__(self, *args):
     """Constructor."""
-    util.HugeTaskHandler.__init__(self, *args)
+    super(ControllerCallbackHandler, self).__init__(*args)
     self._time = time.time
 
   def handle(self):
@@ -769,7 +769,7 @@ class ControllerCallbackHandler(util.HugeTaskHandler):
                         task_name, task_params, e.__class__, e)
 
 
-class KickOffJobHandler(util.HugeTaskHandler):
+class KickOffJobHandler(base_handler.HugeTaskHandler):
   """Taskqueue handler which kicks off a mapreduce processing.
 
   Request Parameters:

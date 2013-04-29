@@ -6,6 +6,7 @@
 
 # pylint: disable=g-bad-name
 
+import datetime
 import unittest
 
 
@@ -24,6 +25,7 @@ from testlib import testutil
 class TestEntity(db.Model):
   """Test entity class."""
   data = db.StringProperty()
+  dt = db.DateTimeProperty(default=datetime.datetime(2000, 1, 1))
 
 
 class TestOutputEntity(db.Model):
@@ -206,6 +208,8 @@ class MapperPipelineTest(testutil.HandlerTestBase):
         params={
             "input_reader": {
                 "entity_kind": __name__ + ".TestEntity",
+                # Test datetime can be json serialized.
+                "filters": [("dt", "=", datetime.datetime(2000, 1, 1))],
                 },
             },
         )

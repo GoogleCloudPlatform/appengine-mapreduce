@@ -135,11 +135,7 @@ class FileOutputWriterEndToEndTest(testutil.HandlerTestBase):
         data = f.read(10000000)
         file_lengths.append(len(data.strip().split("\n")))
 
-    # these numbers are totally random and depend on our sharding,
-    # which is quite deterministic.
-    expected_lengths = [199, 210, 275, 316]
-    self.assertEqual(1000, sum(expected_lengths))
-    self.assertEquals(expected_lengths, file_lengths)
+    self.assertEquals(1000, sum(file_lengths))
 
 
 class BlobstoreOutputWriterEndToEndTest(testutil.HandlerTestBase):
@@ -214,11 +210,7 @@ class BlobstoreOutputWriterEndToEndTest(testutil.HandlerTestBase):
         data = f.read(10000000)
         file_lengths.append(len(data.strip().split("\n")))
 
-    # these numbers are totally random and depend on our sharding,
-    # which is quite deterministic.
-    expected_lengths = [199, 210, 275, 316]
-    self.assertEqual(1000, sum(expected_lengths))
-    self.assertEquals(expected_lengths, file_lengths)
+    self.assertEqual(1000, sum(file_lengths))
 
 
 if __name__ == "__main__":
