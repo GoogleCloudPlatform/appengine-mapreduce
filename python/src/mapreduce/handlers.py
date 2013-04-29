@@ -28,7 +28,6 @@ import math
 import os
 import time
 
-from google.appengine.api import memcache
 from google.appengine.api import taskqueue
 from google.appengine.ext import db
 from mapreduce import base_handler
@@ -38,7 +37,6 @@ from mapreduce import input_readers
 from mapreduce import model
 from mapreduce import operation
 from mapreduce import parameters
-from mapreduce import quota
 from mapreduce import util
 
 try:
@@ -46,9 +44,6 @@ try:
 except ImportError:
   ndb = None
 
-
-# TODO(user): Make this a product of the reader or in quotas.py
-_QUOTA_BATCH_SIZE = 20
 
 # The amount of time to perform scanning in one slice. New slice will be
 # scheduled as soon as current one takes this long.
@@ -155,14 +150,6 @@ class MapperWorkerCallbackHandler(util.HugeTaskHandler):
 
     input_reader = tstate.input_reader
 
-    if spec.mapper.params.get("enable_quota", True):
-      quota_consumer = quota.QuotaConsumer(
-          quota.QuotaManager(memcache.Client()),
-          shard_id,
-          _QUOTA_BATCH_SIZE)
-    else:
-      quota_consumer = None
-
     # Tell NDB to never cache anything in memcache or in-process. This ensures
     # that entities fetched from Datastore input_readers via NDB will not bloat
     # up the request memory size and Datastore Puts will avoid doing calls
@@ -178,7 +165,7 @@ class MapperWorkerCallbackHandler(util.HugeTaskHandler):
 
     try:
       self.process_inputs(
-          input_reader, shard_state, tstate, quota_consumer, ctx)
+          input_reader, shard_state, tstate, ctx)
 
       if not shard_state.active:
         # shard is going to stop. Finalize output writer only when shard is
@@ -191,8 +178,6 @@ class MapperWorkerCallbackHandler(util.HugeTaskHandler):
       retry_shard = self._retry_logic(e, shard_state, tstate, spec.mapreduce_id)
     finally:
       context.Context._set(None)
-      if quota_consumer:
-        quota_consumer.dispose()
 
     config = util.create_datastore_write_config(spec)
 
@@ -223,8 +208,7 @@ class MapperWorkerCallbackHandler(util.HugeTaskHandler):
   def process_inputs(self,
                      input_reader,
                      shard_state,
-                     transient_shard_state,
-                     quota_consumer,
+                     tstate,
                      ctx):
     """Read inputs, process them, and write out outputs.
 
@@ -240,45 +224,42 @@ class MapperWorkerCallbackHandler(util.HugeTaskHandler):
     Args:
       input_reader: input reader.
       shard_state: shard state.
-      transient_shard_state: transient shard state.
-      quota_consumer: quota consumer to limit processing rate.
+      tstate: transient shard state.
       ctx: mapreduce context.
     """
-    # We shouldn't fetch an entity from the reader if there's not enough
-    # quota to process it. Perform all quota checks proactively.
-    if not quota_consumer or quota_consumer.consume():
-      finished_shard = True
+    processing_limit = self._processing_limit(tstate.mapreduce_spec)
+    if processing_limit == 0:
+      return
 
-      for entity in input_reader:
-        if isinstance(entity, db.Model):
-          shard_state.last_work_item = repr(entity.key())
-        elif ndb and isinstance(entity, ndb.Model):
-          shard_state.last_work_item = repr(entity.key)
-        else:
-          shard_state.last_work_item = repr(entity)[:100]
+    finished_shard = True
 
-        if not self.process_data(
-            entity, input_reader, ctx, transient_shard_state):
-          finished_shard = False
-          break
-        elif quota_consumer and not quota_consumer.consume():
-          # not enough quota to keep processing.
-          finished_shard = False
-          break
+    for entity in input_reader:
+      if isinstance(entity, db.Model):
+        shard_state.last_work_item = repr(entity.key())
+      elif ndb and isinstance(entity, ndb.Model):
+        shard_state.last_work_item = repr(entity.key)
+      else:
+        shard_state.last_work_item = repr(entity)[:100]
 
-      # Flush context and its pools.
-      operation.counters.Increment(
-          context.COUNTER_MAPPER_WALLTIME_MS,
-          int((time.time() - self._start_time)*1000))(ctx)
-      ctx.flush()
+      processing_limit -= 1
 
-      if finished_shard:
-        # We consumed extra quota item at the end of the for loop.
-        # Just be nice here and give it back :)
-        if quota_consumer:
-          quota_consumer.put(1)
-        shard_state.active = False
-        shard_state.result_status = model.ShardState.RESULT_SUCCESS
+      if not self.process_data(
+          entity, input_reader, ctx, tstate):
+        finished_shard = False
+        break
+      elif processing_limit == 0:
+        finished_shard = False
+        break
+
+    # Flush context and its pools.
+    operation.counters.Increment(
+        context.COUNTER_MAPPER_WALLTIME_MS,
+        int((self._time() - self._start_time)*1000))(ctx)
+    ctx.flush()
+
+    if finished_shard:
+      shard_state.active = False
+      shard_state.result_status = model.ShardState.RESULT_SUCCESS
 
   def process_data(self, data, input_reader, ctx, transient_shard_state):
     """Process a single data piece.
@@ -292,7 +273,7 @@ class MapperWorkerCallbackHandler(util.HugeTaskHandler):
       transient_shard_state: transient shard state.
 
     Returns:
-      True if scan should be continued, False if scan should be aborted.
+      True if scan should be continued, False if scan should be stopped.
     """
     if data is not input_readers.ALLOW_CHECKPOINT:
       ctx.counters.increment(context.COUNTER_MAPPER_CALLS)
@@ -391,15 +372,20 @@ class MapperWorkerCallbackHandler(util.HugeTaskHandler):
     return "appengine-mrshard-%s-%s-retry-%s" % (
         shard_id, slice_id, retry)
 
-  def reschedule(self, shard_state, transient_shard_state):
+  def reschedule(self, shard_state, tstate):
     """Reschedule worker task to continue scanning work.
 
     Args:
-      transient_shard_state: an instance of TransientShardState.
+      tstate: an instance of TransientShardState.
     """
-    transient_shard_state.slice_id += 1
+    tstate.slice_id += 1
+    spec = tstate.mapreduce_spec
+    countdown = 0
+    if self._processing_limit(spec) != -1:
+      countdown = max(
+          int(_SLICE_DURATION_SEC - (self._time() - self._start_time)), 0)
     MapperWorkerCallbackHandler._schedule_slice(
-        shard_state, transient_shard_state)
+        shard_state, tstate, countdown=countdown)
 
   @classmethod
   def _schedule_slice(cls,
@@ -450,6 +436,22 @@ class MapperWorkerCallbackHandler(util.HugeTaskHandler):
                         transient_shard_state.to_dict(),
                         e.__class__,
                         e)
+
+  def _processing_limit(self, spec):
+    """Get the limit on the number of map calls allowed by this slice.
+
+    Args:
+      spec: a Mapreduce spec.
+
+    Returns:
+      The limit as a positive int if specified by user. -1 otherwise.
+    """
+    processing_rate = float(spec.mapper.params.get("processing_rate", 0))
+    slice_processing_limit = -1
+    if processing_rate > 0:
+      slice_processing_limit = int(math.ceil(
+          _SLICE_DURATION_SEC*processing_rate/int(spec.mapper.shard_count)))
+    return slice_processing_limit
 
 
 class ControllerCallbackHandler(util.HugeTaskHandler):
@@ -523,7 +525,6 @@ class ControllerCallbackHandler(util.HugeTaskHandler):
                      spec.mapreduce_id, state.result_status)
 
     self.aggregate_state(state, shard_states)
-    poll_time = state.last_poll_time
     state.last_poll_time = datetime.datetime.utcfromtimestamp(self._time())
 
     if not state.active:
@@ -536,9 +537,6 @@ class ControllerCallbackHandler(util.HugeTaskHandler):
     config = util.create_datastore_write_config(spec)
     state.put(config=config)
 
-    processing_rate = int(spec.mapper.params.get(
-        "processing_rate") or model._DEFAULT_PROCESSING_RATE_PER_SEC)
-    self.refill_quotas(poll_time, processing_rate, active_shards)
     ControllerCallbackHandler.reschedule(
         state, self.base_path(), spec, self.serial_id() + 1)
 
@@ -558,34 +556,6 @@ class ControllerCallbackHandler(util.HugeTaskHandler):
           context.COUNTER_MAPPER_CALLS))
 
     mapreduce_state.set_processed_counts(processed_counts)
-
-  def refill_quotas(self,
-                    last_poll_time,
-                    processing_rate,
-                    active_shard_states):
-    """Refill quotas for all active shards.
-
-    Args:
-      last_poll_time: Datetime with the last time the job state was updated.
-      processing_rate: How many items to process per second overall.
-      active_shard_states: All active shard states, list of ShardState.
-    """
-    if not active_shard_states:
-      return
-    quota_manager = quota.QuotaManager(memcache.Client())
-
-    current_time = int(self._time())
-    last_poll_time = time.mktime(last_poll_time.timetuple())
-    total_quota_refill = processing_rate * max(0, current_time - last_poll_time)
-    quota_refill = int(math.ceil(
-        1.0 * total_quota_refill / len(active_shard_states)))
-
-    if not quota_refill:
-      return
-
-    # TODO(user): use batch memcache API to refill quota in one API call.
-    for shard_state in active_shard_states:
-      quota_manager.put(shard_state.shard_id, quota_refill)
 
   def serial_id(self):
     """Get serial unique identifier of this task from request.
@@ -817,14 +787,6 @@ class KickOffJobHandler(util.HugeTaskHandler):
     db.put((shard for shard in shard_states
             if shard.key() not in existing_shard_keys),
            config=util.create_datastore_write_config(spec))
-
-    # Give each shard some quota to start with.
-    processing_rate = int(spec.mapper.params.get(
-        "processing_rate") or model._DEFAULT_PROCESSING_RATE_PER_SEC)
-    quota_refill = processing_rate / len(shard_states)
-    quota_manager = quota.QuotaManager(memcache.Client())
-    for shard_state in shard_states:
-      quota_manager.put(shard_state.shard_id, quota_refill)
 
     # Schedule shard tasks.
     for shard_number, (input_reader, output_writer) in enumerate(
