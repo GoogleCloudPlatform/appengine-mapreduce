@@ -115,13 +115,10 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
       tstate: model.TransientShardState from taskqueue paylod.
 
     Returns:
-      True if lease is acquired. False if this task should be dropped. Only
-    old tasks (comparing to datastore state) will be dropped. Future tasks
-    are retried until they naturally become old so that we don't ever stuck
-    MR.
-
-    Raises:
-      Exception: if the task should be retried by taskqueue.
+      True if lease is acquired. None if this task should be retried.
+    False if this task should be dropped. Only old tasks
+    (comparing to datastore state) will be dropped. Future tasks are
+    retried until they naturally become old so that we don't ever stuck MR.
     """
     # Controller will tally shard_states and properly handle the situation.
     if not shard_state:
@@ -149,9 +146,10 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
       # By the end of last slice, task enqueue succeeded but datastore commit
       # failed. That transaction will be retried and adding the same task
       # will pass.
-      raise ValueError(
+      logging.warning(
           "ShardState for %s is behind slice. Waiting for it to catch up",
           shard_state.shard_id)
+      return
 
     # Validate slice id.
     # Taskqueue executes old successful tasks.
@@ -167,7 +165,7 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
       logging.warning(
           "Task %s-%s is ahead of ShardState %s. Waiting for it to catch up.",
           tstate.shard_id, tstate.slice_id, shard_state.slice_id)
-      raise errors.RetrySliceError("Raise an error to trigger retry.")
+      return
 
     # Check potential duplicated tasks for the same slice.
     # See model.ShardState doc.
@@ -182,7 +180,7 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
         # only applies to add new tasks, not retry of tasks.
         # Reduce contention.
         time.sleep(countdown)
-        raise errors.RetrySliceError("Raise an error to trigger retry")
+        return
       # lease could have expired. Verify with logs API.
       else:
         if not self._old_request_ended(shard_state):
@@ -190,7 +188,7 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
               "Last retry of slice %s-%s is still in flight with request_id "
               "%s. Will try again later.", tstate.shard_id, tstate.slice_id,
               shard_state.slice_request_id)
-          raise errors.RetrySliceError("Raise an error to trigger retry")
+          return
 
     # Lease expired or slice_start_time not set.
     config = util.create_datastore_write_config(tstate.mapreduce_spec)
@@ -200,6 +198,9 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
 
       If failed for any reason, raise error to retry the task (hence all
       the previous validation code). The task would die naturally eventually.
+
+      Returns:
+        True if state commit succeeded. None otherwise.
       """
       fresh_state = model.ShardState.get_by_shard_id(tstate.shard_id)
       if not fresh_state:
@@ -211,17 +212,16 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
         fresh_state.slice_start_time = datetime.datetime.now()
         fresh_state.slice_request_id = os.environ.get("REQUEST_LOG_ID")
         fresh_state.put(config=config)
+        return True
       else:
         logging.warning(
             "Contention on slice %s-%s execution. Will retry again.",
             tstate.shard_id, tstate.slice_id)
         # One proposer should win. In case all lost, back off arbitrarily.
         time.sleep(random.randrange(1, 5))
-        # Can not use Rolback() because db swallow that exception.
-        raise errors.RetrySliceError()
+        return
 
-    _tx()
-    return True
+    return _tx()
 
   def _old_request_ended(self, shard_state):
     """Whether previous slice retry has ended.
@@ -317,7 +317,11 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
         model.MapreduceControl.get_key_by_job_id(spec.mapreduce_id),
     ])
 
-    if not self._try_acquire_lease(shard_state, tstate):
+    lease_acquired = self._try_acquire_lease(shard_state, tstate)
+    if lease_acquired is None:
+      self.retry_task()
+      return
+    if not lease_acquired:
       return
 
     ctx = context.Context(spec, shard_state,
@@ -344,7 +348,7 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
       ndb_ctx.set_memcache_policy(lambda key: False)
 
     context.Context._set(ctx)
-    retry_shard = False
+    retry_directive = False
 
     try:
       self.process_inputs(
@@ -362,11 +366,14 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
           tstate.output_writer.finalize(ctx, shard_state)
     # pylint: disable=broad-except
     except Exception, e:
-      retry_shard = self._retry_logic(e, shard_state, tstate, spec.mapreduce_id)
+      retry_directive = self._retry_logic(
+          e, shard_state, tstate, spec.mapreduce_id)
     finally:
       context.Context._set(None)
 
-    self._save_state_and_schedule_next(shard_state, tstate, retry_shard)
+    if retry_directive is None:
+      return self.retry_task()
+    self._save_state_and_schedule_next(shard_state, tstate, retry_directive)
 
   def process_inputs(self,
                      input_reader,
@@ -547,10 +554,8 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
       mr_id: mapreduce id.
 
     Returns:
-      True if shard should be retried. False otherwise.
-
-    Raises:
-      errors.RetrySliceError: in order to trigger a slice retry.
+      True if shard should be retried. None if slice should be retried.
+    False otherwise.
     """
     logging.error("Shard %s got error.", shard_state.shard_id)
     # This logs the callstack leading up to the exception. Thus it excludes the
@@ -568,7 +573,9 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
     if type(e) in errors.SHARD_RETRY_ERRORS:
       return self._attempt_shard_retry(shard_state, tstate, mr_id)
     else:
-      return self._attempt_slice_retry(shard_state, tstate)
+      if self._attempt_slice_retry(shard_state, tstate):
+        return
+      return False
 
   def _attempt_shard_retry(self, shard_state, tstate, mr_id):
     """Whether to retry shard.
@@ -624,7 +631,8 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
       tstate: model.TransientShardState for current shard.
 
     Returns:
-      False when slice can't be retried anymore.
+      True when slice should be retried.
+    False when slice can't be retried anymore.
 
     Raises:
       errors.RetrySliceError: in order to trigger a slice retry.
@@ -641,7 +649,7 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
       # in log.
       sys.exc_clear()
       self._try_free_lease(shard_state, slice_retry=True)
-      raise errors.RetrySliceError("Raise an error to trigger slice retry")
+      return True
 
     logging.error("Slice reached max retry limit of %s. "
                   "Shard %s failed permanently.",
