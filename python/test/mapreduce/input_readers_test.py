@@ -1731,6 +1731,16 @@ class ConsistentKeyReaderTest(unittest.TestCase):
     finally:
       self.mox.UnsetStubs()
 
+  def testSerialization(self):
+    """Test json serialization."""
+    # Create a single empty reader.
+    readers = input_readers.ConsistentKeyReader.split_input(self.mapper_spec)
+    self.assertEqual(1, len(readers))
+    r = readers[0]
+    # Serialize it.
+    new_r = input_readers.ConsistentKeyReader.from_json(r.to_json())
+    self.assertEqual(r.start_time_us, new_r.start_time_us)
+
   def testSplitInputNoData(self):
     """Splits empty input among several shards."""
     readers = input_readers.ConsistentKeyReader.split_input(self.mapper_spec)

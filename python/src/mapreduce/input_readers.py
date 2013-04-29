@@ -2130,7 +2130,7 @@ class ConsistentKeyReader(_OldAbstractDatastoreInputReader):
     Returns:
       all the data in json-compatible map.
     """
-    json_dict = super(DatastoreKeyInputReader, self).to_json()
+    json_dict = super(ConsistentKeyReader, self).to_json()
     json_dict[self.START_TIME_US_PARAM] = self.start_time_us
     return json_dict
 
