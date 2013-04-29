@@ -26,7 +26,9 @@ import gc
 import logging
 import math
 import os
+import sys
 import time
+import traceback
 
 from google.appengine.api import taskqueue
 from google.appengine.ext import db
@@ -112,18 +114,23 @@ class MapperWorkerCallbackHandler(util.HugeTaskHandler):
     if not shard_state:
       # We're letting this task to die. It's up to controller code to
       # reinitialize and restart the task.
-      logging.error("State not found for shard ID %r; shutting down",
+      logging.error("State not found for shard %s; Possible spurious task "
+                    "execution. Dropping this task.",
                     shard_id)
       return
 
     if not shard_state.active:
-      logging.error("Shard is not active. Looks like spurious task execution.")
+      logging.error("Shard %s is not active. Possible spurious task "
+                    "execution. Dropping this task.", shard_id)
+      logging.error(str(shard_state))
       return
     if shard_state.retries > tstate.retries:
       logging.error(
-          "Got shard %s from previous shard retry %s. Drop",
-          shard_state.shard_id,
+          "Got shard %s from previous shard retry %s. Possible spurious "
+          "task execution. Dropping this task.",
+          shard_id,
           tstate.retries)
+      logging.error(str(shard_state))
       return
     elif shard_state.retries < tstate.retries:
       # This happens when the transaction that updates shardstate and enqueues
@@ -192,8 +199,10 @@ class MapperWorkerCallbackHandler(util.HugeTaskHandler):
         raise db.Rollback()
       if (not fresh_shard_state.active or
           "worker_active_state_collision" in _TEST_INJECTED_FAULTS):
-        shard_state.active = False
-        logging.error("Spurious task execution. Aborting the shard.")
+        logging.error("Shard %s is not active. Possible spurious task "
+                      "execution. Dropping this task.", shard_id)
+        logging.error("Datastore's %s", str(fresh_shard_state))
+        logging.error("Slice's %s", str(shard_state))
         return
       fresh_shard_state.copy_from(shard_state)
       fresh_shard_state.put(config=config)
@@ -315,9 +324,15 @@ class MapperWorkerCallbackHandler(util.HugeTaskHandler):
     Raises:
       the exception caught if slice should be retried.
     """
+    logging.error("Shard %s got error.", shard_state.shard_id)
+    # This logs the callstack leading up to the exception. Thus it excludes the
+    # call frames generated to handle the retry.
+    logging.error(traceback.format_exc())
+
     # Fail fast.
     if type(e) is errors.FailJobError:
-      logging.error("Shard %s failed permanently.", shard_state.shard_id)
+      logging.error("Got FailJobError. Shard %s failed permanently.",
+                    shard_state.shard_id)
       shard_state.active = False
       shard_state.result_status = model.ShardState.RESULT_FAILED
       return False
@@ -328,12 +343,16 @@ class MapperWorkerCallbackHandler(util.HugeTaskHandler):
       if shard_retry < parameters.DEFAULT_SHARD_RETRY_LIMIT:
         if tstate.output_writer and (
             not tstate.output_writer._can_be_retried(tstate)):
-          logging.error("Shard %s failed permanently.", shard_state.shard_id)
+          logging.error("Can not retry shard. Shard %s failed permanently.",
+                        shard_state.shard_id)
           shard_state.active = False
           shard_state.result_status = model.ShardState.RESULT_FAILED
           return False
 
         shard_state.reset_for_retry()
+        logging.error("Shard %s will be retried for the %s time.",
+                      shard_state.shard_id,
+                      shard_state.retries)
         output_writer = None
         if tstate.output_writer:
           mr_state = model.MapreduceState.get_by_job_id(mr_id)
@@ -345,14 +364,21 @@ class MapperWorkerCallbackHandler(util.HugeTaskHandler):
     else:
       slice_retry = self.task_retry_count()
       if slice_retry < _RETRY_SLICE_ERROR_MAX_RETRIES:
-        logging.info(
+        logging.error(
             "Will retry slice %s %s for the %s time.",
             tstate.shard_id,
             tstate.slice_id,
             slice_retry + 1)
-        raise e
+        # Clear info related to current exception. Otherwise, the real
+        # callstack that includes a frame for this method will show up
+        # in log.
+        sys.exc_clear()
+        raise errors.RetrySliceError("Raise an error to trigger slice retry")
 
-    logging.error("Shard %s failed permanently.", shard_state.shard_id)
+    logging.error("Slice reached max retry limit of %s. "
+                  "Shard %s failed permanently.",
+                  self.task_retry_count(),
+                  shard_state.shard_id)
     shard_state.active = False
     shard_state.result_status = model.ShardState.RESULT_FAILED
     return False

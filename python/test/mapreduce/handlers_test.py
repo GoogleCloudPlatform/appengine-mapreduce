@@ -98,10 +98,6 @@ def TestMap(entity):
   pass
 
 
-class TestException(Exception):
-  """Test exception to use in test handlers."""
-
-
 class MockTime(object):
   """Simple class to use for mocking time() function."""
 
@@ -169,9 +165,9 @@ def test_handler_raise_exception(entity):
   """Test handler function which always raises exception.
 
   Raises:
-    TestException: always.
+    ValueError: always
   """
-  raise TestException()
+  raise ValueError()
 
 
 def test_handler_raise_fail_job_exception(entity):
@@ -1371,7 +1367,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
 
     m.ReplayAll()
     try: # test, verify
-      self.assertRaises(TestException, self.handler.post)
+      self.assertRaises(errors.RetrySliceError, self.handler.post)
 
       # slice should be still active
       shard_state = model.ShardState.get_by_shard_id(self.shard_id)
