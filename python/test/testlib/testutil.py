@@ -14,8 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Test utilities for mapreduce framework.
-"""
+"""Test utilities for mapreduce framework."""
 
 
 
@@ -31,10 +30,8 @@ from google.appengine.tools import os_compat
 from testlib import mox
 import os
 import shutil
-import sys
 import tempfile
 import unittest
-import urllib
 
 from google.appengine.api import apiproxy_stub_map
 from google.appengine.api.files import file_service_stub
