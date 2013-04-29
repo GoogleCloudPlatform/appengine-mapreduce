@@ -26,12 +26,14 @@ import gc
 import logging
 import math
 import os
+import random
 import sys
 import time
 import traceback
 
 from google.appengine import runtime
 from google.appengine.api import datastore_errors
+from google.appengine.api import logservice
 from google.appengine.api import taskqueue
 from google.appengine.ext import db
 from mapreduce import base_handler
@@ -50,9 +52,13 @@ except ImportError:
   ndb = None
 
 
+# TODO(user): find a proper value for this.
 # The amount of time to perform scanning in one slice. New slice will be
 # scheduled as soon as current one takes this long.
 _SLICE_DURATION_SEC = 15
+
+# See model.ShardState doc on slice_start_time. In second.
+_LEASE_GRACE_PERIOD = 1
 
 # Delay between consecutive controller callback invocations.
 _CONTROLLER_PERIOD_SEC = 2
@@ -90,59 +96,219 @@ def _run_task_hook(hooks, method, task, queue_name):
 
 
 class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
-  """Callback handler for mapreduce worker task.
-
-  Request Parameters:
-    mapreduce_spec: MapreduceSpec of the mapreduce serialized to json.
-    shard_id: id of the shard.
-    slice_id: id of the slice.
-  """
+  """Callback handler for mapreduce worker task."""
 
   def __init__(self, *args):
     """Constructor."""
     super(MapperWorkerCallbackHandler, self).__init__(*args)
     self._time = time.time
 
+  def _try_acquire_lease(self, shard_state, tstate):
+    """Validate datastore and the task payload are consistent.
+
+    If so, attempt to get a lease on this slice's execution.
+    See model.ShardState doc on slice_start_time.
+
+    Args:
+      shard_state: model.ShardState from datastore.
+      tstate: model.TransientShardState from taskqueue paylod.
+
+    Returns:
+      True if lease is acquired. False if this task should be dropped. Only
+    old tasks (comparing to datastore state) will be dropped. Future tasks
+    are retried until they naturally become old so that we don't ever stuck
+    MR.
+
+    Raises:
+      Exception: if the task should be retried by taskqueue.
+    """
+    # Controller will tally shard_states and properly handle the situation.
+    if not shard_state:
+      logging.warning("State not found for shard %s; Possible spurious task "
+                      "execution. Dropping this task.",
+                      tstate.shard_id)
+      return False
+
+    if not shard_state.active:
+      logging.warning("Shard %s is not active. Possible spurious task "
+                      "execution. Dropping this task.", tstate.shard_id)
+      logging.warning(str(shard_state))
+      return False
+
+    # Validate shard retry count.
+    if shard_state.retries > tstate.retries:
+      logging.warning(
+          "Got shard %s from previous shard retry %s. Possible spurious "
+          "task execution. Dropping this task.",
+          tstate.shard_id,
+          tstate.retries)
+      logging.warning(str(shard_state))
+      return False
+    elif shard_state.retries < tstate.retries:
+      # By the end of last slice, task enqueue succeeded but datastore commit
+      # failed. That transaction will be retried and adding the same task
+      # will pass.
+      raise ValueError(
+          "ShardState for %s is behind slice. Waiting for it to catch up",
+          shard_state.shard_id)
+
+    # Validate slice id.
+    # Taskqueue executes old successful tasks.
+    if shard_state.slice_id > tstate.slice_id:
+      logging.warning(
+          "Task %s-%s is behind ShardState %s. Dropping task.""",
+          tstate.shard_id, tstate.slice_id, shard_state.slice_id)
+      return False
+    # By the end of last slice, task enqueue succeeded but datastore commit
+    # failed. That transaction will be retried and adding the same task
+    # will pass. User data is duplicated in this case.
+    elif shard_state.slice_id < tstate.slice_id:
+      logging.warning(
+          "Task %s-%s is ahead of ShardState %s. Waiting for it to catch up.",
+          tstate.shard_id, tstate.slice_id, shard_state.slice_id)
+      raise errors.RetrySliceError("Raise an error to trigger retry.")
+
+    # Check potential duplicated tasks for the same slice.
+    # See model.ShardState doc.
+    if shard_state.slice_start_time:
+      countdown = self._lease_countdown(shard_state)
+      if countdown > 0:
+        logging.warning(
+            "Last retry of slice %s-%s may be still running."
+            "Will try again in %s seconds", tstate.shard_id, tstate.slice_id,
+            countdown)
+        # TODO(user): There might be a better way. Taskqueue's countdown
+        # only applies to add new tasks, not retry of tasks.
+        # Reduce contention.
+        time.sleep(countdown)
+        raise errors.RetrySliceError("Raise an error to trigger retry")
+      # lease could have expired. Verify with logs API.
+      else:
+        if not self._old_request_ended(shard_state):
+          logging.warning(
+              "Last retry of slice %s-%s is still in flight with request_id "
+              "%s. Will try again later.", tstate.shard_id, tstate.slice_id,
+              shard_state.slice_request_id)
+          raise errors.RetrySliceError("Raise an error to trigger retry")
+
+    # Lease expired or slice_start_time not set.
+    config = util.create_datastore_write_config(tstate.mapreduce_spec)
+    @db.transactional(retries=5)
+    def _tx():
+      """Use datastore to set slice_start_time to now.
+
+      If failed for any reason, raise error to retry the task (hence all
+      the previous validation code). The task would die naturally eventually.
+      """
+      fresh_state = model.ShardState.get_by_shard_id(tstate.shard_id)
+      if not fresh_state:
+        logging.error("ShardState missing.")
+        raise db.Rollback()
+      if (fresh_state.active and
+          fresh_state.slice_id == shard_state.slice_id and
+          fresh_state.slice_start_time == shard_state.slice_start_time):
+        fresh_state.slice_start_time = datetime.datetime.now()
+        fresh_state.slice_request_id = os.environ.get("REQUEST_LOG_ID")
+        fresh_state.put(config=config)
+      else:
+        logging.warning(
+            "Contention on slice %s-%s execution. Will retry again.",
+            tstate.shard_id, tstate.slice_id)
+        # One proposer should win. In case all lost, back off arbitrarily.
+        time.sleep(random.randrange(1, 5))
+        # Can not use Rolback() because db swallow that exception.
+        raise errors.RetrySliceError()
+
+    _tx()
+    return True
+
+  def _old_request_ended(self, shard_state):
+    """Whether previous slice retry has ended.
+
+    Args:
+      shard_state: shard state.
+
+    Returns:
+      True if the request of previous slice retry has ended. False if it has
+    not or unknown.
+    """
+    assert shard_state.slice_start_time is not None
+    assert shard_state.slice_request_id is not None
+    logs = list(logservice.fetch(request_ids=[shard_state.slice_request_id]))
+    if not logs or not logs[0].finished:
+      return False
+    return True
+
+  def _lease_countdown(self, shard_state):
+    """Number of seconds before lease expire."""
+    assert shard_state.slice_start_time is not None
+    delta = datetime.datetime.now() - shard_state.slice_start_time
+    min_delta = datetime.timedelta(
+        seconds=_SLICE_DURATION_SEC + _LEASE_GRACE_PERIOD)
+    if delta < min_delta:
+      # round up.
+      return int(math.ceil((min_delta - delta).total_seconds()))
+    else:
+      return 0
+
+  def _try_free_lease(self, shard_state, slice_retry=False):
+    """Try to free lease.
+
+    A lightweight transaction to update shard_state and unset
+    slice_start_time to allow the next retry to happen without blocking.
+    We don't care if this fails or not because the lease will expire
+    anyway.
+
+    Under normal execution, _save_state_and_schedule_next is the exit point.
+    It updates/saves shard state and schedules the next slice or returns.
+    Other exit points are:
+    1. _are_states_consistent: at the beginning of handle, checks
+      if datastore states and the task are in sync.
+      If not, raise or return.
+    2. _attempt_slice_retry: may raise exception to taskqueue.
+    3. _save_state_and_schedule_next: may raise exception when taskqueue/db
+       unreachable.
+
+    This handler should try to free the lease on every exceptional exit point.
+
+    Args:
+      shard_state: model.ShardState.
+      slice_retry: whether to count this as a failed slice execution.
+    """
+    @db.transactional
+    def _tx():
+      fresh_state = model.ShardState.get_by_shard_id(shard_state.shard_id)
+      if (fresh_state and
+          fresh_state.active and
+          fresh_state.slice_id == shard_state.slice_id):
+        # Free lease.
+        fresh_state.slice_start_time = None
+        fresh_state.slice_request_id = None
+        if slice_retry:
+          fresh_state.slice_retries += 1
+        fresh_state.put()
+    try:
+      _tx()
+    # pylint: disable=broad-except
+    except Exception, e:
+      logging.warning(e)
+      logging.warning(
+          "Release lock for slice %s-%s failed. Wait for lease to expire.",
+          shard_state.shard_id, shard_state.slice_id)
+
   def handle(self):
     """Handle request."""
     tstate = model.TransientShardState.from_request(self.request)
     spec = tstate.mapreduce_spec
     self._start_time = self._time()
-    shard_id = tstate.shard_id
 
     shard_state, control = db.get([
-        model.ShardState.get_key_by_shard_id(shard_id),
+        model.ShardState.get_key_by_shard_id(tstate.shard_id),
         model.MapreduceControl.get_key_by_job_id(spec.mapreduce_id),
     ])
-    if not shard_state:
-      # We're letting this task to die. It's up to controller code to
-      # reinitialize and restart the task.
-      logging.error("State not found for shard %s; Possible spurious task "
-                    "execution. Dropping this task.",
-                    shard_id)
-      return
 
-    if not shard_state.active:
-      logging.error("Shard %s is not active. Possible spurious task "
-                    "execution. Dropping this task.", shard_id)
-      logging.error(str(shard_state))
+    if not self._try_acquire_lease(shard_state, tstate):
       return
-    if shard_state.retries > tstate.retries:
-      logging.error(
-          "Got shard %s from previous shard retry %s. Possible spurious "
-          "task execution. Dropping this task.",
-          shard_id,
-          tstate.retries)
-      logging.error(str(shard_state))
-      return
-    elif shard_state.retries < tstate.retries:
-      # This happens when the transaction that updates shardstate and enqueues
-      # task fails after the task has been added. That transaction will
-      # be retried. Adding the same task will result in
-      # TaskAlreadyExistsError but the error is ignored.
-      raise ValueError(
-          "ShardState for %s is behind slice. Waiting for it to catch up",
-          shard_state.shard_id)
 
     ctx = context.Context(spec, shard_state,
                           task_retry_count=self.task_retry_count())
@@ -156,8 +322,6 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
       shard_state.result_status = model.ShardState.RESULT_ABORTED
       shard_state.put(config=util.create_datastore_write_config(spec))
       return
-
-    input_reader = tstate.input_reader
 
     # Tell NDB to never cache anything in memcache or in-process. This ensures
     # that entities fetched from Datastore input_readers via NDB will not bloat
@@ -174,7 +338,7 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
 
     try:
       self.process_inputs(
-          input_reader, shard_state, tstate, ctx)
+          tstate.input_reader, shard_state, tstate, ctx)
 
       if not shard_state.active:
         # shard is going to stop. Finalize output writer only when shard is
@@ -286,12 +450,15 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
             else:
               output_writer.write(output, ctx)
 
-    if self._time() - self._start_time > _SLICE_DURATION_SEC:
+    if self._time() - self._start_time >= _SLICE_DURATION_SEC:
       return False
     return True
 
   def _save_state_and_schedule_next(self, shard_state, tstate, retry_shard):
     """Save state to datastore and schedule next task for this shard.
+
+    Update and save shard state. Schedule next slice if needed.
+    This method handles interactions with datastore and taskqueue.
 
     Args:
       shard_state: model.ShardState for current shard.
@@ -305,21 +472,19 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
     # Prepare for taskqueue add.
     task = None
     if retry_shard:
-      # shard retry logic has already set tstate to the desired values.
+      # shard retry logic has already set tstate and shard_state
+      # to desired values. So we only need to convert to task.
       task = self._state_to_task(tstate)
     elif shard_state.active:
+      shard_state.advance_for_next_slice()
       tstate.advance_for_next_slice()
       countdown = self._get_countdown_for_next_slice(spec)
       task = self._state_to_task(tstate, countdown=countdown)
     queue_name = os.environ.get("HTTP_X_APPENGINE_QUEUENAME", "default")
 
-    # We don't want shard state to override active state, since that
-    # may stuck job execution (see issue 116). Do a transactional
-    # verification for status.
     @db.transactional(retries=5)
     def _tx():
-      fresh_shard_state = db.get(
-          model.ShardState.get_key_by_shard_id(tstate.shard_id))
+      fresh_shard_state = model.ShardState.get_by_shard_id(tstate.shard_id)
       if not fresh_shard_state:
         raise db.Rollback()
       if (not fresh_shard_state.active or
@@ -330,14 +495,17 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
         logging.error("Slice's %s", str(shard_state))
         return
       fresh_shard_state.copy_from(shard_state)
-      fresh_shard_state.put(config=config)
+      # It's possible tx goes through but we still see datastore timeouts.
+      # So always add task first!
+      # This way we guarantee taskqueue is never behind datastore states.
+      # Old tasks will be dropped.
+      # Future task won't run until datastore states catches up.
       if fresh_shard_state.active:
         assert task is not None
         # Not adding task transactionally.
         # transactional enqueue requires tasks with no name.
-        # This is still part of a transaction because we don't want
-        # successful state commit but no task.
         self._add_task(task, fresh_shard_state, spec, queue_name)
+      fresh_shard_state.put(config=config)
 
     try:
       _tx()
@@ -351,8 +519,9 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
           tstate.shard_id,
           tstate.slice_id,
           self.task_retry_count() + 1)
+      shard_state.slice_id -= 1
+      self._try_free_lease(shard_state)
       raise e
-
     finally:
       gc.collect()
 
@@ -450,17 +619,18 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
     Raises:
       errors.RetrySliceError: in order to trigger a slice retry.
     """
-    slice_retry = self.task_retry_count()
-    if slice_retry < _RETRY_SLICE_ERROR_MAX_RETRIES:
+    if shard_state.slice_retries < _RETRY_SLICE_ERROR_MAX_RETRIES:
       logging.error(
           "Will retry slice %s %s for the %s time.",
           tstate.shard_id,
           tstate.slice_id,
-          slice_retry + 1)
+          # Use taskqueue's count here.
+          self.task_retry_count() + 1)
       # Clear info related to current exception. Otherwise, the real
       # callstack that includes a frame for this method will show up
       # in log.
       sys.exc_clear()
+      self._try_free_lease(shard_state, slice_retry=True)
       raise errors.RetrySliceError("Raise an error to trigger slice retry")
 
     logging.error("Slice reached max retry limit of %s. "
@@ -476,7 +646,9 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
     """Compute single worker task name.
 
     Args:
-      transient_shard_state: An instance of TransientShardState.
+      shard_id: shard id.
+      slice_id: slice id.
+      retry: current shard retry count.
 
     Returns:
       task name which should be used to process specified shard/slice.
@@ -950,11 +1122,13 @@ class KickOffJobHandler(base_handler.HugeTaskHandler):
             mr_state, shard_state)
       shard_states.append(shard_state)
 
-    # Retrievs already existing shards.
+    # Retrieves already existing shards.
     existing_shard_states = db.get(shard.key() for shard in shard_states)
     existing_shard_keys = set(shard.key() for shard in existing_shard_states
                               if shard is not None)
 
+    # TODO(user): Overwriting shard state non transactionally.
+    # Could be problematic.
     # Puts only non-existing shards.
     db.put((shard for shard in shard_states
             if shard.key() not in existing_shard_keys),
