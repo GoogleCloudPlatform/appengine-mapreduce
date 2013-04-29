@@ -1,45 +1,43 @@
-// Copyright 2011 Google Inc. All Rights Reserved.
 package com.google.appengine.tools.mapreduce.inputs;
 
-import com.google.appengine.api.blobstore.BlobKey;
-import com.google.appengine.api.blobstore.BlobstoreInputStream;
+import static com.google.common.base.Preconditions.checkNotNull;
+
+import com.google.appengine.tools.cloudstorage.GcsFilename;
+import com.google.appengine.tools.cloudstorage.GcsService;
+import com.google.appengine.tools.cloudstorage.GcsServiceFactory;
 import com.google.appengine.tools.mapreduce.InputReader;
 import com.google.appengine.tools.mapreduce.inputs.InputStreamIterator.OffsetRecordPair;
 import com.google.common.base.Preconditions;
 import com.google.common.io.CountingInputStream;
 
 import java.io.IOException;
+import java.nio.channels.Channels;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
 
 /**
- * BlobstoreLineInputReader reads files from blobstore one line at a time.
+ * CloudStorageLineInputReader reads files from Cloud Storage one line at a time.
  */
-class BlobstoreInputReader extends InputReader<byte[]> {
-// --------------------------- STATIC FIELDS ---------------------------
+class CloudStorageLineInputReader extends InputReader<byte[]> {
+  private static final long serialVersionUID = -762091129798691745L;
 
-  private static final long serialVersionUID = -1869136825803030034L;
-
-// ------------------------------ FIELDS ------------------------------
+  private static final transient GcsService GCS_SERVICE = GcsServiceFactory.createGcsService();
+  private static final int BUFFER_SIZE = 1024 * 1024;
 
   /*VisibleForTesting*/ long startOffset;
   /*VisibleForTesting*/ long endOffset;
-  private String blobKey;
-  private byte terminator;
+  private GcsFilename file;
+  private byte separator;
   private long offset = 0L;
   private transient CountingInputStream input;
   private transient Iterator<OffsetRecordPair> recordIterator;
 
-// --------------------------- CONSTRUCTORS ---------------------------
-
-  BlobstoreInputReader(String blobKey, long startOffset, long endOffset, byte terminator) {
-    this.blobKey = blobKey;
+  CloudStorageLineInputReader(GcsFilename file, long startOffset, long endOffset, byte separator) {
+    this.file = checkNotNull(file, "Null file");
     this.startOffset = startOffset;
     this.endOffset = endOffset;
-    this.terminator = terminator;
+    this.separator = separator;
   }
-
-// --------------------------- METHODS ---------------------------
 
   private void checkInitialized() {
     Preconditions.checkState(recordIterator != null, "%s: Not initialized", this);
@@ -51,8 +49,7 @@ class BlobstoreInputReader extends InputReader<byte[]> {
     if (!recordIterator.hasNext()) {
       throw new NoSuchElementException();
     }
-
-    // TODO(ohler): simplify by removing OffsetRecordPair
+    // TODO(user): simplify by removing OffsetRecordPair
     return recordIterator.next().getRecord();
   }
 
@@ -68,14 +65,13 @@ class BlobstoreInputReader extends InputReader<byte[]> {
   }
 
   @Override
-  public void beginSlice() throws IOException {
-    Preconditions.checkState(recordIterator == null, "%s: Already initialized: %s",
-        this, recordIterator);
-    input = new CountingInputStream(
-            new BlobstoreInputStream(new BlobKey(blobKey), startOffset + offset));
-    recordIterator = new InputStreamIterator(input, endOffset - startOffset - offset,
-        startOffset != 0L && offset == 0L,
-        terminator);
+  public void beginSlice() {
+    Preconditions.checkState(
+        recordIterator == null, "%s: Already initialized: %s", this, recordIterator);
+    input = new CountingInputStream(Channels.newInputStream(
+        GCS_SERVICE.openPrefetchingReadChannel(file, startOffset + offset, BUFFER_SIZE)));
+    recordIterator = new InputStreamIterator(
+        input, endOffset - startOffset - offset, startOffset != 0L && offset == 0L, separator);
   }
 
   @Override

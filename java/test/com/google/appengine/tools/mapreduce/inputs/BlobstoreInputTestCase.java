@@ -8,6 +8,8 @@ import com.google.appengine.api.files.AppEngineFile;
 import com.google.appengine.api.files.FileService;
 import com.google.appengine.api.files.FileServiceFactory;
 import com.google.appengine.api.files.FileWriteChannel;
+import com.google.appengine.api.files.FinalizationException;
+import com.google.appengine.api.files.LockException;
 import com.google.appengine.tools.development.testing.LocalBlobstoreServiceTestConfig;
 import com.google.appengine.tools.development.testing.LocalDatastoreServiceTestConfig;
 import com.google.appengine.tools.development.testing.LocalFileServiceTestConfig;
@@ -15,14 +17,13 @@ import com.google.appengine.tools.development.testing.LocalServiceTestHelper;
 
 import junit.framework.TestCase;
 
+import java.io.FileNotFoundException;
+import java.io.IOException;
 import java.nio.ByteBuffer;
 
 /**
  */
 abstract class BlobstoreInputTestCase extends TestCase {
-
-  public static final String RECORD = "01234567890\n";
-  public static final int RECORDS_COUNT = 100;
 
   // ------------------------------ FIELDS ------------------------------
 
@@ -39,16 +40,6 @@ abstract class BlobstoreInputTestCase extends TestCase {
   public void setUp() throws Exception {
     super.setUp();
     helper.setUp();
-
-    FileService fileService = FileServiceFactory.getFileService();
-    AppEngineFile blobFile = fileService.createNewBlobFile("application/bin");
-    FileWriteChannel writeChannel = fileService.openWriteChannel(blobFile, true);
-    for (int i = 0; i < RECORDS_COUNT; i++) {
-      writeChannel.write(ByteBuffer.wrap(RECORD.getBytes()));
-    }
-    writeChannel.closeFinally();
-    blobKey = fileService.getBlobKey(blobFile);
-    blobSize = new BlobInfoFactory().loadBlobInfo(blobKey).getSize();
   }
 
   @Override
@@ -56,4 +47,18 @@ abstract class BlobstoreInputTestCase extends TestCase {
     helper.tearDown();
     super.tearDown();
   }
+
+  protected void createFile(String record, int recordsCount)
+      throws IOException, FileNotFoundException, FinalizationException, LockException {
+    FileService fileService = FileServiceFactory.getFileService();
+    AppEngineFile blobFile = fileService.createNewBlobFile("application/bin");
+    FileWriteChannel writeChannel = fileService.openWriteChannel(blobFile, true);
+    for (int i = 0; i < recordsCount; i++) {
+      writeChannel.write(ByteBuffer.wrap(record.getBytes()));
+    }
+    writeChannel.closeFinally();
+    blobKey = fileService.getBlobKey(blobFile);
+    blobSize = new BlobInfoFactory().loadBlobInfo(blobKey).getSize();
+  }
+
 }

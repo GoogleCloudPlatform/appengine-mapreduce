@@ -24,16 +24,26 @@ import java.util.List;
  * Unit test for {@code BlobstoreInput}.
  */
 public class BlobstoreInputTest extends BlobstoreInputTestCase {
+  
+  public static final String RECORD = "01234567890\n";
+  public static final int RECORDS_COUNT = 1000;
+
+  @Override
+  public void setUp() throws Exception {
+    super.setUp();
+    createFile(RECORD, RECORDS_COUNT);
+  }
+
 // -------------------------- TEST METHODS --------------------------
 
   public void testSplit() throws Exception {
     BlobstoreInput input = new BlobstoreInput(blobKey.getKeyString(), (byte) '\n', 4);
     List<? extends InputReader<byte[]>> readers = input.createReaders();
     assertEquals(4, readers.size());
-    assertSplitRange(0, 300, readers.get(0));
-    assertSplitRange(300, 600, readers.get(1));
-    assertSplitRange(600, 900, readers.get(2));
-    assertSplitRange(900, 1200, readers.get(3));
+    assertSplitRange(0, 3000, readers.get(0));
+    assertSplitRange(3000, 6000, readers.get(1));
+    assertSplitRange(6000, 9000, readers.get(2));
+    assertSplitRange(9000, 12000, readers.get(3));
   }
 
 // -------------------------- STATIC METHODS --------------------------

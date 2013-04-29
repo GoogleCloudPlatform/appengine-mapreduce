@@ -19,13 +19,13 @@ package com.google.appengine.tools.mapreduce.inputs;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.common.base.Objects;
-import com.google.common.base.Preconditions;
 import com.google.common.collect.AbstractIterator;
-import com.google.common.io.ByteStreams;
 import com.google.common.io.CountingInputStream;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.Arrays;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -37,29 +37,28 @@ import java.util.logging.Logger;
 class InputStreamIterator extends AbstractIterator<InputStreamIterator.OffsetRecordPair> {
 
   private static final Logger log = Logger.getLogger(InputStreamIterator.class.getName());
-  private static final int READ_LIMIT = 1024 * 1024;
+  private static final int INITIAL_BUFFER_SIZE = 10000;
 
   private final CountingInputStream input;
   private final long length;
   private final boolean skipFirstTerminator;
-  private final byte terminator;
+  private final byte separator;
 
   // Note: length may be a negative value when we are reading beyond the split boundary.
-  InputStreamIterator(CountingInputStream input, long length, boolean skipFirstTerminator, byte terminator) {
+  InputStreamIterator(
+      CountingInputStream input, long length, boolean skipFirstTerminator, byte separator) {
     this.input = checkNotNull(input, "Null input");
     this.length = length;
     this.skipFirstTerminator = skipFirstTerminator;
-    this.terminator = terminator;
+    this.separator = separator;
   }
 
   @Override
   public OffsetRecordPair computeNext() {
     try {
       if (input.getCount() == 0 && skipFirstTerminator) {
-        // find the first record start;
-        if (skipUntilNextRecord(input) != SkipRecordResult.TERMINATOR) {
-          return endOfData();
-        }
+        // skip the first record
+        copyUntilNextRecord(input, null);
       }
       // we are reading one record after split-end
       // and are skipping first record for all splits except for the leading one.
@@ -67,26 +66,12 @@ class InputStreamIterator extends AbstractIterator<InputStreamIterator.OffsetRec
       if (input.getCount() - 1 >= length) {
         return endOfData();
       }
-
       long recordStart = input.getCount();
-      input.mark(READ_LIMIT);
-      SkipRecordResult skipValue = skipUntilNextRecord(input);
-      if (skipValue == SkipRecordResult.AT_EOF) {
+      ByteArrayOutputStream tempBuffer = new ByteArrayOutputStream(INITIAL_BUFFER_SIZE);
+      if (!copyUntilNextRecord(input, tempBuffer)) {
         return endOfData();
       }
-
-      long recordEnd = input.getCount();
-      input.reset();
-      int byteValueLen = (int) (recordEnd - recordStart);
-      if (skipValue == SkipRecordResult.TERMINATOR) {
-        // Skip terminator
-        byteValueLen--;
-      }
-      byte[] byteValue = new byte[byteValueLen];
-      ByteStreams.readFully(input, byteValue);
-      if (skipValue == SkipRecordResult.TERMINATOR) {
-        Preconditions.checkState(input.skip(1) == 1); // skip the terminator
-      }
+      byte[] byteValue = tempBuffer.toByteArray();
       return new OffsetRecordPair(recordStart, byteValue);
     } catch (IOException e) {
       log.log(Level.WARNING, "Failed to read next record", e);
@@ -94,28 +79,21 @@ class InputStreamIterator extends AbstractIterator<InputStreamIterator.OffsetRec
     }
   }
 
-  // Searches for the start of the next record.
-  //
-  // Returns
-  // TERMINATOR if a terminator is reached. Otherwise,
-  // EOF_AFTER_RECORD if EOF is reached after reading some number of non-terminator characters
-  // AT_EOF if EOF is reached without any characters being read
-  private SkipRecordResult skipUntilNextRecord(InputStream stream) throws IOException {
-    boolean readCharSinceTerminator = false;
-    int value;
-    do {
-      value = stream.read();
-      if (value == -1) {
-        return readCharSinceTerminator ? SkipRecordResult.EOF_AFTER_RECORD
-            : SkipRecordResult.AT_EOF;
+  /**
+   * @return false iff was unable to read anything because the end of the InputStream was reached.
+   */
+  private boolean copyUntilNextRecord(InputStream in, OutputStream out) throws IOException {
+    int value = in.read();
+    if (value == -1) {
+      return false;
+    }
+    while ((value != (separator & 0xff)) && value != -1) {
+      if (out != null) {
+        out.write(value);
       }
-      readCharSinceTerminator = true;
-    } while (value != (terminator & 0xff));
-    return SkipRecordResult.TERMINATOR;
-  }
-
-  private enum SkipRecordResult {
-    AT_EOF, EOF_AFTER_RECORD, TERMINATOR
+      value = in.read();
+    }
+    return true;
   }
 
   public static final class OffsetRecordPair {
