@@ -22,7 +22,7 @@ test () {
     exit 1
   fi
 
-  export PYTHONPATH="${PYTHONPATH}\
+  export PYTHONPATH="${PYTHONPATH}:\
 $APPENGINE_LIB:\
 $APPENGINE_LIB/lib/django_1_2:\
 $APPENGINE_LIB/lib/fancy_urllib:\
