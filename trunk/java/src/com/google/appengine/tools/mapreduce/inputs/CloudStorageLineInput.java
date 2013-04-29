@@ -26,11 +26,17 @@ public class CloudStorageLineInput extends Input<byte[]> {
   private final GcsFilename file;
   private final byte separator;
   private final int shardCount;
+  private final int bufferSize;
 
   public CloudStorageLineInput(GcsFilename file, byte separator, int shardCount) {
+    this(file, separator, shardCount, 0);
+  }
+
+  public CloudStorageLineInput(GcsFilename file, byte separator, int shardCount, int bufferSize) {
     this.file = checkNotNull(file, "Null file");
     this.separator = separator;
     this.shardCount = shardCount;
+    this.bufferSize = bufferSize;
   }
 
   @Override
@@ -60,7 +66,8 @@ public class CloudStorageLineInput extends Input<byte[]> {
     long startOffset = 0L;
     for (int i = 1; i < shardCount; i++) {
       long endOffset = (i * blobSize) / shardCount;
-      result.add(new CloudStorageLineInputReader(file, startOffset, endOffset, separator));
+      result.add(new CloudStorageLineInputReader(file, startOffset, endOffset, separator,
+          bufferSize));
       startOffset = endOffset;
     }
     result.add(new CloudStorageLineInputReader(file, startOffset, blobSize, separator));
