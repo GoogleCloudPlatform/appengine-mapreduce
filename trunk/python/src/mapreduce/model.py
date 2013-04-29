@@ -746,7 +746,8 @@ class TransientShardState(object):
       base_path: base path of this mapreduce job.
       mapreduce_spec: an instance of MapReduceSpec.
       shard_id: shard id.
-      slice_id: slice id.
+      slice_id: slice id. When enqueuing task for the next slice, this number
+        is incremented by 1.
       input_reader: input reader instance for this shard.
       initial_input_reader: the input reader instance before any iteration.
         Used by shard retry.
@@ -856,8 +857,27 @@ class ShardState(db.Model):
     update_time: The last time this shard state was updated.
     shard_description: A string description of the work this shard will do.
     last_work_item: A string description of the last work item processed.
-    writer_state: writer state for this shard. This is filled when output
-      per input.
+    writer_state: writer state for this shard. This is filled when a job
+      has one output per shard by OutputWriter's create method.
+    slice_id: slice id of current executing slice. A task
+      will not run unless its slice_id matches this. Initial
+      value is 0. By the end of slice execution, this number is
+      incremented by 1.
+    slice_start_time: a slice updates this to now at the beginning of
+      execution transactionally. If transaction succeeds, the current task holds
+      a lease of slice duration + some grace period. During this time, no
+      other task with the same slice_id will execute. Upon slice failure,
+      the task should try to unset this value to allow retries to carry on
+      ASAP. slice_start_time is only meaningful when slice_id is the same.
+    slice_request_id: the request id that holds/held the lease. When lease has
+      expired, new request needs to verify that said request has indeed
+      ended according to logs API. Do this only when lease has expired
+      because logs API is expensive. This field should always be set/unset
+      with slice_start_time.
+    slice_retries: the number of times a slice has been retried due to
+      data processing error (non taskqueue/datastore). This count is
+      only a lower bound and is used to determined when to fail a slice
+      completely.
   """
 
   RESULT_SUCCESS = "success"
@@ -874,6 +894,10 @@ class ShardState(db.Model):
   result_status = db.StringProperty(choices=_RESULTS, indexed=False)
   retries = db.IntegerProperty(default=0, indexed=False)
   writer_state = JsonProperty(dict, indexed=False)
+  slice_id = db.IntegerProperty(default=0, indexed=False)
+  slice_start_time = db.DateTimeProperty(indexed=False)
+  slice_request_id = db.ByteStringProperty(indexed=False)
+  slice_retries = db.IntegerProperty(default=0, indexed=False)
 
   # For UI purposes only.
   mapreduce_id = db.StringProperty(required=True)
@@ -882,16 +906,28 @@ class ShardState(db.Model):
   last_work_item = db.TextProperty(default="")
 
   def __str__(self):
-    return ("ShardState is:\n"
-            "active=%s\n "
-            "result_status=%s\n "
-            "retries=%s\n"
-            "update_time=%s\n"
-            "last_work_item=%s") % (self.active,
-                                    self.result_status,
-                                    self.retries,
-                                    self.update_time,
-                                    self.last_work_item)
+    kv = {"active": self.active,
+          "slice_id": self.slice_id,
+          "last_work_item": self.last_work_item,
+          "update_time": self.update_time}
+    if self.result_status:
+      kv["result_status"] = self.result_status
+    if self.retries:
+      kv["retries"] = self.retries
+    if self.slice_start_time:
+      kv["slice_start_time"] = self.slice_start_time
+    if self.slice_retries:
+      kv["slice_retries"] = self.slice_retries
+    if self.slice_request_id:
+      kv["slice_request_id"] = self.slice_request_id
+    keys = kv.keys()
+    keys.sort()
+
+    result = "ShardState is {"
+    for k in keys:
+      result += k + ":" + str(kv[k]) + ","
+    result += "}"
+    return result
 
   def reset_for_retry(self):
     """Reset self for shard retry."""
@@ -900,6 +936,17 @@ class ShardState(db.Model):
     self.active = True
     self.result_status = None
     self.counters_map = CountersMap()
+    self.slice_id = 0
+    self.slice_start_time = None
+    self.slice_request_id = None
+    self.slice_retries = 0
+
+  def advance_for_next_slice(self):
+    """Advance self for next slice."""
+    self.slice_id += 1
+    self.slice_start_time = None
+    self.slice_request_id = None
+    self.slice_retries = 0
 
   def copy_from(self, other_state):
     """Copy data from another shard state entity to self."""
