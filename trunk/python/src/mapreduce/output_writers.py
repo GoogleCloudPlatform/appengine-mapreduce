@@ -675,12 +675,24 @@ class FileOutputWriterBase(OutputWriter):
     if output_sharding == self.OUTPUT_SHARDING_INPUT_SHARDS:
       filesystem = self._get_filesystem(mapreduce_spec.mapper)
       state = self._State.from_json(shard_state.writer_state)
-      files.finalize(state.filenames[0])
+      writable_filename = state.filenames[0]
+      files.finalize(writable_filename)
       finalized_filenames = [self._get_finalized_filename(
           filesystem, state.filenames[0], state.request_filenames[0])]
+
       state.filenames = finalized_filenames
       state.request_filenames = []
       shard_state.writer_state = state.to_json()
+
+      # Log to help debug empty blobstore key.
+      # b/8302363
+      if filesystem == "blobstore":
+        logging.info(
+            "Shard %s-%s finalized blobstore file %s.",
+            mapreduce_spec.mapreduce_id,
+            shard_state.shard_number,
+            writable_filename)
+        logging.info("Finalized name is %s.", finalized_filenames[0])
 
   @classmethod
   def get_filenames(cls, mapreduce_state):
