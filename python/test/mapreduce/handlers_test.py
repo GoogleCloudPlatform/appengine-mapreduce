@@ -31,6 +31,7 @@ from testlib import testutil
 import base64
 import cgi
 import datetime
+import httplib
 import mock
 from testlib import mox
 import os
@@ -1124,7 +1125,8 @@ class MapperWorkerCallbackHandlerLeaseTest(unittest.TestCase):
 
   def testFutureTask(self):
     handler, _ = self._create_handler(slice_id=self.CURRENT_SLICE_ID + 1)
-    self.assertRaises(errors.RetrySliceError, handler.post)
+    handler.post()
+    self.assertEqual(httplib.SERVICE_UNAVAILABLE, handler.response.status)
 
   def testLeaseHasNotEnd(self):
     self.shard_state.slice_start_time = datetime.datetime.now()
@@ -1138,7 +1140,8 @@ class MapperWorkerCallbackHandlerLeaseTest(unittest.TestCase):
       self.assertEqual(
           handlers._SLICE_DURATION_SEC + handlers._LEASE_GRACE_PERIOD,
           handler._lease_countdown(self.shard_state))
-      self.assertRaises(errors.RetrySliceError, handler.post)
+      handler.post()
+      self.assertEqual(httplib.SERVICE_UNAVAILABLE, handler.response.status)
 
   def testRequestHasNotEnd(self):
     self.shard_state.slice_start_time = datetime.datetime(2000, 1, 1)
@@ -1149,9 +1152,10 @@ class MapperWorkerCallbackHandlerLeaseTest(unittest.TestCase):
     self.assertEqual(0, handler._lease_countdown(self.shard_state))
     # Logs API doesn't think the request has ended.
     self.assertFalse(handler._old_request_ended(self.shard_state))
-    self.assertRaises(errors.RetrySliceError, handler.post)
+    handler.post()
+    self.assertEqual(httplib.SERVICE_UNAVAILABLE, handler.response.status)
 
-  def testContetionWhenAcquireLease(self):
+  def testContentionWhenAcquireLease(self):
     # Shard has moved on AFTER we got shard state.
     self.shard_state.slice_id += 1
     self.shard_state.put()
@@ -1159,11 +1163,10 @@ class MapperWorkerCallbackHandlerLeaseTest(unittest.TestCase):
     # Revert in memory shard state.
     self.shard_state.slice_id -= 1
     handler, tstate = self._create_handler()
-    self.assertRaises(errors.RetrySliceError,
-                      handler._try_acquire_lease,
-                      # Use old shard state.
-                      self.shard_state,
-                      tstate)
+    self.assertEqual(
+        None,
+        # Use old shard state.
+        handler._try_acquire_lease(self.shard_state, tstate))
 
   def testAcquireLeaseSuccess(self):
     # lease acquired a long time ago.
@@ -1237,7 +1240,8 @@ class MapperWorkerCallbackHandlerLeaseTest(unittest.TestCase):
     self._init_job(__name__ + "." + test_handler_raise_exception.__name__)
     self._init_shard()
     handler, _ = self._create_handler()
-    self.assertRaises(errors.RetrySliceError, handler.post)
+    handler.post()
+    self.assertEqual(httplib.SERVICE_UNAVAILABLE, handler.response.status)
 
     shard_state = model.ShardState.get_by_shard_id(self.shard_id)
     self.assertTrue(shard_state.active)
@@ -1659,8 +1663,9 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
     self.init(__name__ + ".test_handler_raise_slice_retry_exception")
     TestEntity().put()
 
-    # First time, it gets re-raised.
-    self.assertRaises(errors.RetrySliceError, self.handler.post)
+    # First time, the task gets retried.
+    self.handler.post()
+    self.assertEqual(httplib.SERVICE_UNAVAILABLE, self.handler.response.status)
     self.verify_shard_state(
         model.ShardState.get_by_shard_id(self.shard_id),
         active=True,
@@ -1729,7 +1734,9 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
 
     m.ReplayAll()
     try: # test, verify
-      self.assertRaises(errors.RetrySliceError, self.handler.post)
+      self.handler.post()
+      self.assertEqual(httplib.SERVICE_UNAVAILABLE,
+                       self.handler.response.status)
 
       # slice should be still active
       shard_state = model.ShardState.get_by_shard_id(self.shard_id)

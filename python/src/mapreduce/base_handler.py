@@ -20,6 +20,7 @@
 
 # pylint: disable=g-bad-name
 
+import httplib
 import logging
 from mapreduce.lib import simplejson
 
@@ -77,6 +78,17 @@ class TaskQueueHandler(BaseHandler):
   def task_retry_count(self):
     """Number of times this task has been retried."""
     return int(self.request.headers.get("X-AppEngine-TaskExecutionCount", 0))
+
+  def retry_task(self):
+    """Ask taskqueue to retry this task.
+
+    Even though raising an exception can cause a task retry, it
+    will flood logs with highly visible ERROR logs. Handlers should uses
+    this method to perform controlled task retries. Only raise exceptions
+    for those deserve ERROR log entries.
+    """
+    self.response.set_status(httplib.SERVICE_UNAVAILABLE, "Retry task")
+    self.response.clear()
 
 
 class JsonHandler(BaseHandler):
