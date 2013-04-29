@@ -30,14 +30,16 @@ from google.appengine.tools import os_compat
 import base64
 import cgi
 import datetime
+import mock
 from testlib import mox
 import os
 from mapreduce.lib import simplejson
 import time
-import urllib
 import unittest
 
 from google.appengine.api import apiproxy_stub_map
+from google.appengine.api import datastore
+from google.appengine.api import datastore_errors
 from google.appengine.api import datastore_file_stub
 from google.appengine.api import files
 from google.appengine.api import memcache
@@ -1314,6 +1316,31 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
     self.assertEquals(1, len(tasks))
     self.verify_shard_task(tasks[0], self.shard_id, 123,
                            hooks_class_name=hooks_class_name)
+
+  def testDatastoreExceptionInHandler(self):
+    """Test when a handler can't save state to datastore."""
+    self.init(__name__ + ".test_handler_yield_keys")
+    TestEntity().put()
+    original_method = datastore.PutAsync
+    datastore.PutAsync = mock.MagicMock(side_effect=datastore_errors.Timeout())
+
+    # Can't reach datastore. Keep retry.
+    self.assertRaises(datastore_errors.Timeout, self.handler.post)
+    self.assertRaises(datastore_errors.Timeout, self.handler.post)
+    self.assertRaises(datastore_errors.Timeout, self.handler.post)
+    self.verify_shard_state(
+        model.ShardState.get_by_shard_id(self.shard_id),
+        active=True,
+        processed=0)
+
+    datastore.PutAsync = original_method
+    self.handler.post()
+
+    self.verify_shard_state(
+        model.ShardState.get_by_shard_id(self.shard_id),
+        active=False,
+        result_status=model.ShardState.RESULT_SUCCESS,
+        processed=1)
 
   def testSlicRetryExceptionInHandler(self):
     """Test when a handler throws a fatal exception."""
