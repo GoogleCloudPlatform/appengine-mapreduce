@@ -28,7 +28,6 @@ __all__ = [
     "is_generator",
     "parse_bool",
     "HugeTask",
-    "HugeTaskHandler",
     ]
 
 
@@ -43,7 +42,6 @@ from google.appengine.api import files
 from google.appengine.api import taskqueue
 from google.appengine.ext import db
 from google.appengine.datastore import datastore_rpc
-from mapreduce import base_handler
 
 
 def for_name(fq_name, recursive=False):
@@ -315,45 +313,3 @@ class HugeTask(object):
       else:
         result[name] = value
     return result
-
-
-class HugeTaskHandler(base_handler.TaskQueueHandler):
-  """Base handler for processing HugeTasks."""
-
-  class RequestWrapper(object):
-    def __init__(self, request):
-      self._request = request
-
-      self.path = self._request.path
-      self.headers = self._request.headers
-
-      self._encoded = True  # we have encoded payload.
-
-      if (not self._request.get(HugeTask.PAYLOAD_PARAM) and
-          not self._request.get(HugeTask.PAYLOAD_KEY_PARAM)):
-          self._encoded = False
-          return
-      self._params = HugeTask.decode_payload(
-          {HugeTask.PAYLOAD_PARAM:
-              self._request.get(HugeTask.PAYLOAD_PARAM),
-           HugeTask.PAYLOAD_KEY_PARAM:
-              self._request.get(HugeTask.PAYLOAD_KEY_PARAM)})
-
-    def get(self, name, default=""):
-      if self._encoded:
-        return self._params.get(name, default)
-      else:
-        return self._request.get(name, default)
-
-    def set(self, name, value):
-      if self._encoded:
-        self._params.set(name, value)
-      else:
-        self._request.set(name, value)
-
-  def __init__(self, *args, **kwargs):
-    base_handler.TaskQueueHandler.__init__(self, *args, **kwargs)
-
-  def _setup(self):
-    base_handler.TaskQueueHandler._setup(self)
-    self.request = self.RequestWrapper(self.request)

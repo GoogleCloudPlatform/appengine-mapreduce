@@ -16,11 +16,18 @@
 
 """Utility functions for use with the Google App Engine Pipeline API."""
 
-__all__ = ["for_name", "is_generator_function"]
+__all__ = ["for_name",
+           "JsonEncoder",
+           "JsonDecoder",
+           "JSON_DEFAULTS"]
 
+#pylint: disable=g-bad-name
 
+import datetime
 import inspect
-import logging
+
+# Relative imports
+from mapreduce.lib import simplejson
 
 
 def for_name(fq_name, recursive=False):
@@ -108,3 +115,69 @@ def is_generator_function(obj):
   return bool(((inspect.isfunction(obj) or inspect.ismethod(obj)) and
                obj.func_code.co_flags & CO_GENERATOR))
 
+
+class JsonEncoder(simplejson.JSONEncoder):
+  """Pipeline customized json encoder."""
+
+  TYPE_ID = "__pipeline_json_type"
+
+  def default(self, o):
+    """Inherit docs."""
+    if type(o) in JSON_DEFAULTS:
+      encoder = JSON_DEFAULTS[type(o)][0]
+      json_struct = encoder(o)
+      json_struct[self.TYPE_ID] = type(o).__name__
+      return json_struct
+    return super(JsonEncoder, self).default(o)
+
+
+class JsonDecoder(simplejson.JSONDecoder):
+  """Pipeline customized json decoder."""
+
+  def __init__(self, **kwargs):
+    if "object_hook" not in kwargs:
+      kwargs["object_hook"] = self._dict_to_obj
+    super(JsonDecoder, self).__init__(**kwargs)
+
+  def _dict_to_obj(self, d):
+    """Converts a dictionary of json object to a Python object."""
+    if JsonEncoder.TYPE_ID not in d:
+      return d
+
+    obj_type = d.pop(JsonEncoder.TYPE_ID)
+    if obj_type in _TYPE_IDS:
+      decoder = JSON_DEFAULTS[_TYPE_IDS[obj_type]][1]
+      return decoder(d)
+    else:
+      raise TypeError("Invalid type %s.", obj_type)
+
+
+_DATETIME_FORMAT = "%Y-%m-%d %H:%M:%S.%f"
+
+
+def _json_encode_datetime(o):
+  """Json encode a datetime object.
+
+  Args:
+    o: a datetime object.
+
+  Returns:
+    A dict of json primitives.
+  """
+  return {"isostr": o.strftime(_DATETIME_FORMAT)}
+
+
+def _json_decode_datetime(d):
+  """Converts a dict of json primitives to a datetime object."""
+  return datetime.datetime.strptime(d["isostr"], _DATETIME_FORMAT)
+
+
+# To extend what Pipeline can json serialize, add to this where
+# key is the type and value is a tuple of encoder and decoder function.
+JSON_DEFAULTS = {
+    datetime.datetime: (_json_encode_datetime, _json_decode_datetime),
+}
+
+
+_TYPE_IDS = dict(zip([cls.__name__ for cls in JSON_DEFAULTS],
+                     JSON_DEFAULTS.keys()))

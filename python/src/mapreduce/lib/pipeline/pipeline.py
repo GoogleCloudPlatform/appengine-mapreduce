@@ -36,7 +36,6 @@ import re
 import sys
 import threading
 import time
-import traceback
 import urllib
 import uuid
 
@@ -247,7 +246,8 @@ class Slot(object):
     self._filler_pipeline_key = filler_pipeline_key
     self._fill_datetime = datetime.datetime.utcnow()
     # Convert to JSON and back again, to simulate the behavior of production.
-    self._value = simplejson.loads(simplejson.dumps(value))
+    self._value = simplejson.loads(simplejson.dumps(
+        value, cls=mr_util.JsonEncoder), cls=mr_util.JsonDecoder)
 
   def __repr__(self):
     """Returns a string representation of this slot."""
@@ -1341,7 +1341,7 @@ def _generate_args(pipeline, future, queue_name, base_path):
     output_slot_keys.add(slot.key)
     output_slots[name] = str(slot.key)
 
-  params_encoded = simplejson.dumps(params)
+  params_encoded = simplejson.dumps(params, cls=mr_util.JsonEncoder)
   params_text = None
   params_blob = None
   if len(params_encoded) > _MAX_JSON_SIZE:
@@ -1409,7 +1409,9 @@ class _PipelineContext(object):
     if _TEST_MODE:
       slot._set_value_test(filler_pipeline_key, value)
     else:
-      encoded_value = simplejson.dumps(value, sort_keys=True)
+      encoded_value = simplejson.dumps(value,
+                                       sort_keys=True,
+                                       cls=mr_util.JsonEncoder)
       value_text = None
       value_blob = None
       if len(encoded_value) <= _MAX_JSON_SIZE:

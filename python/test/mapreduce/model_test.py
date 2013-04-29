@@ -103,6 +103,17 @@ class TestEntity(db.Model):
 ENTITY_KIND = '__main__.TestEntity'
 
 
+class JsonSerializationTest(unittest.TestCase):
+  """Test custom json encoder and decoder."""
+
+  def testE2e(self):
+    now = datetime.datetime.now()
+    obj = {"a": 1, "b": [{"c": "d"}], "e": now}
+    new_obj = model.simplejson.loads(model.simplejson.dumps(
+        obj, cls=model.JsonEncoder), cls=model.JsonDecoder)
+    self.assertEquals(obj, new_obj)
+
+
 class JsonPropertyTest(unittest.TestCase):
   """Test model.JsonProperty."""
 

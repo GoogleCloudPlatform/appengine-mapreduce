@@ -6,6 +6,7 @@
 # pylint: disable=g-bad-name
 
 from google.appengine.datastore import datastore_query
+from google.appengine.datastore import datastore_rpc
 from google.appengine.ext import db
 from mapreduce.lib import key_range
 from mapreduce import key_ranges
@@ -21,7 +22,8 @@ __all__ = [
     "AbstractKeyRangeIterator",
     "KeyRangeModelIterator",
     "KeyRangeEntityIterator",
-    "KeyRangeKeyIterator"]
+    "KeyRangeKeyIterator",
+    "KeyRangeEntityProtoIterator"]
 
 
 class RangeIteratorFactory(object):
@@ -160,7 +162,7 @@ class _PropertyRangeModelIterator(RangeIterator):
 
   def to_json(self):
     """Inherit doc."""
-    if self._query:
+    if self._query is not None:
       if isinstance(self._query, db.Query):
         self._cursor = self._query.cursor()
       else:
@@ -323,7 +325,7 @@ class KeyRangeModelIterator(AbstractKeyRangeIterator):
         yield model_instance
 
   def _get_cursor(self):
-    if self._query:
+    if self._query is not None:
       if isinstance(self._query, db.Query):
         return self._query.cursor()
       else:
@@ -345,7 +347,7 @@ class KeyRangeEntityIterator(AbstractKeyRangeIterator):
       yield entity
 
   def _get_cursor(self):
-    if self._query:
+    if self._query is not None:
       return self._query.GetCursor()
 
 
@@ -355,11 +357,38 @@ class KeyRangeKeyIterator(KeyRangeEntityIterator):
   _KEYS_ONLY = True
 
 
+class KeyRangeEntityProtoIterator(AbstractKeyRangeIterator):
+  """Yields datastore.Entity's raw proto within a key range."""
+
+  def __iter__(self):
+    query = self._key_range.make_ascending_datastore_query(
+        self._query_spec.entity_kind, filters=self._query_spec.filters)
+    # get a connection without adapter.
+    connection = datastore_rpc.Connection()
+    query_options = datastore_query.QueryOptions(
+        batch_size=self._query_spec.batch_size,
+        start_cursor=self._cursor,
+        produce_cursors=True)
+
+    # Transform datastore.Query:
+    # datastore.Query -> datastore_query.Query -> datastore_query.Batcher ->
+    # datastore_query.ResultsIterator
+    self._query = datastore_query.ResultsIterator(
+        query.GetQuery().run(connection, query_options))
+    for entity_proto in self._query:
+      yield entity_proto
+
+  def _get_cursor(self):
+    if self._query is not None:
+      return self._query.cursor()
+
+
 # TODO(user): update this map automatically using metaclass if needed.
 # Ideally, we want a parameter in datastore input reader to control
 # the return type.
 _KEY_RANGE_ITERATORS = {
     KeyRangeModelIterator.__name__: KeyRangeModelIterator,
     KeyRangeEntityIterator.__name__: KeyRangeEntityIterator,
-    KeyRangeKeyIterator.__name__: KeyRangeKeyIterator
+    KeyRangeKeyIterator.__name__: KeyRangeKeyIterator,
+    KeyRangeEntityProtoIterator.__name__: KeyRangeEntityProtoIterator
 }

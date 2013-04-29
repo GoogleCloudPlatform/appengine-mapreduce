@@ -7,6 +7,7 @@
 
 
 
+import datetime
 import random
 import string
 import unittest
@@ -32,6 +33,7 @@ def random_string(length):
 class TestEntity(db.Model):
   """Test entity class."""
   int_property = db.IntegerProperty()
+  dt = db.DateTimeProperty(default=datetime.datetime(2000, 1, 1))
 
 
 class NdbTestEntity(ndb.Model):
@@ -157,7 +159,9 @@ class EndToEndTest(testutil.HandlerTestBase):
         "mapreduce.input_readers.DatastoreInputReader",
         {
             "entity_kind": __name__ + "." + TestEntity.__name__,
-            "filters": [("int_property", "=", 3)],
+            "filters": [("int_property", "=", 3),
+                        # Test datetime can be json serialized.
+                        ("dt", "=", datetime.datetime(2000, 1, 1))],
         },
         shard_count=4,
         base_path="/mapreduce_base_path")

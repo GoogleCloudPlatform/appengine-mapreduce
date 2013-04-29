@@ -14,11 +14,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Base handler class for all mapreduce handlers.
-"""
+"""Base handler class for all mapreduce handlers."""
 
 
 
+# pylint: disable=g-bad-name
 
 import logging
 from mapreduce.lib import simplejson
@@ -29,6 +29,8 @@ except ImportError:
   pipeline = None
 from google.appengine.ext import webapp
 from mapreduce import errors
+from mapreduce import model
+from mapreduce import util
 
 
 class Error(Exception):
@@ -128,7 +130,7 @@ class JsonHandler(BaseHandler):
 
     self.response.headers["Content-Type"] = "text/javascript"
     try:
-      output = simplejson.dumps(self.json_response)
+      output = simplejson.dumps(self.json_response, cls=model.JsonEncoder)
     except:
       logging.exception("Could not serialize to JSON")
       self.response.set_status(500, message="Could not serialize to JSON")
@@ -153,6 +155,48 @@ class GetJsonHandler(JsonHandler):
 
   def get(self):
     self._handle_wrapper()
+
+
+class HugeTaskHandler(TaskQueueHandler):
+  """Base handler for processing HugeTasks."""
+
+  class _RequestWrapper(object):
+    def __init__(self, request):
+      self._request = request
+
+      self.path = self._request.path
+      self.headers = self._request.headers
+
+      self._encoded = True  # we have encoded payload.
+
+      if (not self._request.get(util.HugeTask.PAYLOAD_PARAM) and
+          not self._request.get(util.HugeTask.PAYLOAD_KEY_PARAM)):
+        self._encoded = False
+        return
+      self._params = util.HugeTask.decode_payload(
+          {util.HugeTask.PAYLOAD_PARAM:
+           self._request.get(util.HugeTask.PAYLOAD_PARAM),
+           util.HugeTask.PAYLOAD_KEY_PARAM:
+           self._request.get(util.HugeTask.PAYLOAD_KEY_PARAM)})
+
+    def get(self, name, default=""):
+      if self._encoded:
+        return self._params.get(name, default)
+      else:
+        return self._request.get(name, default)
+
+    def set(self, name, value):
+      if self._encoded:
+        self._params.set(name, value)
+      else:
+        self._request.set(name, value)
+
+  def __init__(self, *args, **kwargs):
+    super(HugeTaskHandler, self).__init__(*args, **kwargs)
+
+  def _setup(self):
+    super(HugeTaskHandler, self)._setup()
+    self.request = self._RequestWrapper(self.request)
 
 
 # This path will be changed by build process when this is a part of SDK.
