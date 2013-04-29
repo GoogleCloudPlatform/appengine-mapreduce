@@ -355,6 +355,7 @@ class GetJobDetailHandler(base_handler.GetJsonHandler):
 
         # Specific to detail page.
         "chart_url": job.chart_url,
+        "chart_width": job.chart_width,
     })
     self.json_response["result_status"] = job.result_status
 
