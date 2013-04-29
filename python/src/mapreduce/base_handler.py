@@ -106,7 +106,6 @@ class JsonHandler(BaseHandler):
 
   def _handle_wrapper(self):
     if self.request.headers.get("X-Requested-With") != "XMLHttpRequest":
-      logging.error(self.request.headers)
       logging.error("Got JSON request with no X-Requested-With header")
       self.response.set_status(
           403, message="Got JSON request with no X-Requested-With header")
