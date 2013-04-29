@@ -12,7 +12,6 @@ import com.google.appengine.tools.mapreduce.OutputWriter;
 import com.google.appengine.tools.mapreduce.Worker;
 import com.google.appengine.tools.mapreduce.WorkerContext;
 import com.google.appengine.tools.mapreduce.impl.shardedjob.IncrementalTask;
-import com.google.appengine.tools.mapreduce.impl.shardedjob.IncrementalTask.RunResult;
 import com.google.common.base.Stopwatch;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
@@ -33,7 +32,6 @@ import java.util.logging.Logger;
 public abstract class WorkerShardTask<I, O, C extends WorkerContext>
     implements IncrementalTask<WorkerShardTask<I, O, C>, WorkerResult<O>> {
 
-  @SuppressWarnings("unused")
   private static final Logger log = Logger.getLogger(WorkerShardTask.class.getName());
 
   private static final long serialVersionUID = 992552712402490981L;

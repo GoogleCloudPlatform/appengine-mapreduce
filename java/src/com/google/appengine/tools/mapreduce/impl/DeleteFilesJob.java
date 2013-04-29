@@ -23,7 +23,6 @@ import java.util.logging.Logger;
 public class DeleteFilesJob extends Job1<Void, List<AppEngineFile>> {
   private static final long serialVersionUID = 701830786556967921L;
 
-  @SuppressWarnings("unused")
   private static final Logger log = Logger.getLogger(DeleteFilesJob.class.getName());
 
   // 20 is too many, leads to timeout.

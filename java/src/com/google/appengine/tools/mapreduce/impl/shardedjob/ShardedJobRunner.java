@@ -77,7 +77,6 @@ class ShardedJobRunner<T extends IncrementalTask<T, R>, R extends Serializable> 
   // Pipeline or the task queue runs a job twice.  (For example, a caller could
   // derive the job id for the sharded job from the Pipeline job id.)
 
-  @SuppressWarnings("unused")
   private static final Logger log = Logger.getLogger(ShardedJobRunner.class.getName());
 
   static final String JOB_ID_PARAM = "job";

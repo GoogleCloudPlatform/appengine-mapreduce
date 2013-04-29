@@ -51,7 +51,6 @@ import javax.servlet.http.HttpServletResponse;
 @SuppressWarnings("serial")
 public class Servlet extends HttpServlet {
 
-  @SuppressWarnings("unused")
   private static final Logger log = Logger.getLogger(Servlet.class.getName());
 
   private final MemcacheService memcache = MemcacheServiceFactory.getMemcacheService();

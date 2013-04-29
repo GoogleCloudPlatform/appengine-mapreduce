@@ -25,7 +25,7 @@ public interface ShardedJobController<T extends IncrementalTask<T, R>,
    * share state with arguments, but should not have other observable
    * side-effects.
    *
-   * Note that {@link partialResults} may be empty.
+   * Note that {@code partialResults} may be empty.
    */
   /*Nullable*/ R combineResults(Iterable<R> partialResults);
 

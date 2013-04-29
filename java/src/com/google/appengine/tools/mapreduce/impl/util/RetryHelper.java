@@ -19,7 +19,6 @@ import java.util.logging.Logger;
  */
 public class RetryHelper<V> {
 
-  @SuppressWarnings("unused")
   private static final Logger log = Logger.getLogger(RetryHelper.class.getName());
 
 

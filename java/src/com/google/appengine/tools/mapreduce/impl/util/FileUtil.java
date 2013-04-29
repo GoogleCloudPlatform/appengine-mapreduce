@@ -21,7 +21,6 @@ import java.util.logging.Logger;
  */
 public class FileUtil {
 
-  @SuppressWarnings("unused")
   private static final Logger log = Logger.getLogger(FileUtil.class.getName());
 
   private static final FileService FILE_SERVICE = FileServiceFactory.getFileService();
@@ -94,7 +93,7 @@ public class FileUtil {
           @Override public String toString() {
             return "finalizing file " + file;
           }
-          String stage = "init";
+          @SuppressWarnings("unused") String stage = "init";
           FileWriteChannel out = null;
           @Override public AppEngineFile run() throws IOException {
             if (out != null) {

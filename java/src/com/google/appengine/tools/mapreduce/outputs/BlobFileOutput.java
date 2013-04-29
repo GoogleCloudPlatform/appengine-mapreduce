@@ -55,7 +55,6 @@ public class BlobFileOutput extends Output<ByteBuffer, List<AppEngineFile>> {
   @Override public List<AppEngineFile> finish(List<? extends OutputWriter<ByteBuffer>> writers) {
     List<AppEngineFile> out = Lists.newArrayList();
     for (OutputWriter<ByteBuffer> w : writers) {
-      @SuppressWarnings("unchecked")
       BlobFileOutputWriter writer = (BlobFileOutputWriter) w;
       out.add(writer.getFile());
     }

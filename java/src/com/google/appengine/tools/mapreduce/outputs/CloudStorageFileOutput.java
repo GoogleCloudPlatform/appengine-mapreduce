@@ -54,7 +54,6 @@ public class CloudStorageFileOutput extends Output<ByteBuffer, List<GcsFilename>
   public List<GcsFilename> finish(List<? extends OutputWriter<ByteBuffer>> writers) {
     List<GcsFilename> out = Lists.newArrayList();
     for (OutputWriter<ByteBuffer> w : writers) {
-      @SuppressWarnings("unchecked")
       CloudStorageFileOutputWriter writer = (CloudStorageFileOutputWriter) w;
       out.add(writer.getFile());
     }

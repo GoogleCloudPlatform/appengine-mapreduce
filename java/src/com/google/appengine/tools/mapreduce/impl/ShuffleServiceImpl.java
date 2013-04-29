@@ -23,7 +23,7 @@ import java.util.logging.Logger;
  * @author ohler@google.com (Christian Ohler)
  */
 class ShuffleServiceImpl implements ShuffleService {
-  @SuppressWarnings("unused")
+
   private static final Logger log = Logger.getLogger(ShuffleServiceImpl.class.getName());
   
   @Override

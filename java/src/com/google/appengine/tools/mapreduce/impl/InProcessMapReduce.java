@@ -41,7 +41,6 @@ import java.util.logging.Logger;
  */
 public class InProcessMapReduce<I, K, V, O, R> {
 
-  @SuppressWarnings("unused")
   private static final Logger log = Logger.getLogger(InProcessMapReduce.class.getName());
 
   static class MapResult<K, V> {

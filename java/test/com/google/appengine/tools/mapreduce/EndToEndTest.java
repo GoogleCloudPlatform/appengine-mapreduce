@@ -37,7 +37,6 @@ import java.util.logging.Logger;
  */
 public class EndToEndTest extends EndToEndTestCase {
 
-  @SuppressWarnings("unused")
   private static final Logger log = Logger.getLogger(EndToEndTest.class.getName());
 
   private PipelineService pipelineService;
