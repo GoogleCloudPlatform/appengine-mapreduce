@@ -30,6 +30,7 @@ import sys
 import time
 import traceback
 
+from google.appengine import runtime
 from google.appengine.api import datastore_errors
 from google.appengine.api import taskqueue
 from google.appengine.ext import db
@@ -41,6 +42,7 @@ from mapreduce import model
 from mapreduce import operation
 from mapreduce import parameters
 from mapreduce import util
+from google.appengine.runtime import apiproxy_errors
 
 try:
   from google.appengine.ext import ndb
@@ -296,8 +298,20 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
       tstate: model.TransientShardState for current shard.
       retry_shard: whether to retry shard.
     """
+    # Prepare for db transaction.
     spec = tstate.mapreduce_spec
     config = util.create_datastore_write_config(spec)
+
+    # Prepare for taskqueue add.
+    task = None
+    if retry_shard:
+      # shard retry logic has already set tstate to the desired values.
+      task = self._state_to_task(tstate)
+    elif shard_state.active:
+      tstate.advance_for_next_slice()
+      countdown = self._get_countdown_for_next_slice(spec)
+      task = self._state_to_task(tstate, countdown=countdown)
+    queue_name = os.environ.get("HTTP_X_APPENGINE_QUEUENAME", "default")
 
     # We don't want shard state to override active state, since that
     # may stuck job execution (see issue 116). Do a transactional
@@ -317,22 +331,28 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
         return
       fresh_shard_state.copy_from(shard_state)
       fresh_shard_state.put(config=config)
-      if retry_shard:
-        self._schedule_slice(fresh_shard_state, tstate)
-      elif shard_state.active:
-        self.reschedule(fresh_shard_state, tstate)
+      if fresh_shard_state.active:
+        assert task is not None
+        # Not adding task transactionally.
+        # transactional enqueue requires tasks with no name.
+        # This is still part of a transaction because we don't want
+        # successful state commit but no task.
+        self._add_task(task, fresh_shard_state, spec, queue_name)
 
     try:
       _tx()
-    except (datastore_errors.Timeout,
-            datastore_errors.TransactionFailedError,
-            datastore_errors.InternalError), e:
+    except (datastore_errors.Error,
+            taskqueue.Error,
+            runtime.DeadlineExceededError,
+            apiproxy_errors.Error), e:
       logging.error(
-          "Can't reach datastore. Will retry slice %s %s for the %s time.",
+          "Can't transactionally continue shard. "
+          "Will retry slice %s %s for the %s time.",
           tstate.shard_id,
           tstate.slice_id,
           self.task_retry_count() + 1)
       raise e
+
     finally:
       gc.collect()
 
@@ -466,75 +486,85 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
     return "appengine-mrshard-%s-%s-retry-%s" % (
         shard_id, slice_id, retry)
 
-  def reschedule(self, shard_state, tstate):
-    """Reschedule worker task to continue scanning work.
+  def _get_countdown_for_next_slice(self, spec):
+    """Get countdown for next slice's task.
+
+    When user sets processing rate, we set countdown to delay task execution.
 
     Args:
-      tstate: an instance of TransientShardState.
+      spec: model.MapreduceSpec
+
+    Returns:
+      countdown in int.
     """
-    tstate.slice_id += 1
-    spec = tstate.mapreduce_spec
     countdown = 0
     if self._processing_limit(spec) != -1:
       countdown = max(
           int(_SLICE_DURATION_SEC - (self._time() - self._start_time)), 0)
-    MapperWorkerCallbackHandler._schedule_slice(
-        shard_state, tstate, countdown=countdown)
+    return countdown
 
   @classmethod
-  def _schedule_slice(cls,
-                      shard_state,
-                      transient_shard_state,
-                      queue_name=None,
-                      eta=None,
-                      countdown=None):
-    """Schedule slice scanning by adding it to the task queue.
+  def _state_to_task(cls,
+                     tstate,
+                     eta=None,
+                     countdown=None):
+    """Generate task for slice according to current states.
 
     Args:
-      shard_state: An instance of ShardState.
-      transient_shard_state: An instance of TransientShardState.
-      queue_name: Optional queue to run on; uses the current queue of
-        execution or the default queue if unspecified.
+      tstate: An instance of TransientShardState.
       eta: Absolute time when the MR should execute. May not be specified
         if 'countdown' is also supplied. This may be timezone-aware or
         timezone-naive.
       countdown: Time in seconds into the future that this MR should execute.
         Defaults to zero.
+
+    Returns:
+      A util.HugeTask instance for the slice specified by current states.
     """
-    base_path = transient_shard_state.base_path
-    mapreduce_spec = transient_shard_state.mapreduce_spec
+    base_path = tstate.base_path
 
     task_name = MapperWorkerCallbackHandler.get_task_name(
-        transient_shard_state.shard_id,
-        transient_shard_state.slice_id,
-        transient_shard_state.retries)
-    queue_name = queue_name or os.environ.get("HTTP_X_APPENGINE_QUEUENAME",
-                                              "default")
+        tstate.shard_id,
+        tstate.slice_id,
+        tstate.retries)
 
     worker_task = util.HugeTask(url=base_path + "/worker_callback",
-                                params=transient_shard_state.to_dict(),
+                                params=tstate.to_dict(),
                                 name=task_name,
                                 eta=eta,
                                 countdown=countdown)
+    return worker_task
 
+  @classmethod
+  def _add_task(cls,
+                worker_task,
+                shard_state,
+                mapreduce_spec,
+                queue_name):
+    """Schedule slice scanning by adding it to the task queue.
+
+    Args:
+      worker_task: a util.HugeTask task for slice. This is NOT a taskqueue
+        task.
+      shard_state: an instance of ShardState.
+      mapreduce_spec: an instance of model.MapreduceSpec.
+      queue_name: Optional queue to run on; uses the current queue of
+        execution or the default queue if unspecified.
+    """
     if not _run_task_hook(mapreduce_spec.get_hooks(),
                           "enqueue_worker_task",
                           worker_task,
                           queue_name):
       try:
+        # Not adding transactionally because worker_task has name.
+        # Named task is not allowed for transactional add.
         worker_task.add(queue_name, parent=shard_state)
       except (taskqueue.TombstonedTaskError,
               taskqueue.TaskAlreadyExistsError), e:
         logging.warning("Task %r already exists. %s: %s",
-                        task_name,
+                        worker_task.name,
                         e.__class__,
                         e)
-      except (taskqueue.TransientError,
-              taskqueue.InternalError), e:
-        logging.error(
-            "Slice %s got error."
-            "Can't reach taskqueue service. Slice will be retried.", task_name)
-        raise e
 
   def _processing_limit(self, spec):
     """Get the limit on the number of map calls allowed by this slice.
@@ -551,6 +581,33 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
       slice_processing_limit = int(math.ceil(
           _SLICE_DURATION_SEC*processing_rate/int(spec.mapper.shard_count)))
     return slice_processing_limit
+
+  # Deprecated. Only used by old test cases.
+  # TODO(user): clean up tests.
+  @classmethod
+  def _schedule_slice(cls,
+                      shard_state,
+                      tstate,
+                      queue_name=None,
+                      eta=None,
+                      countdown=None):
+    """Schedule slice scanning by adding it to the task queue.
+
+    Args:
+      shard_state: An instance of ShardState.
+      tstate: An instance of TransientShardState.
+      queue_name: Optional queue to run on; uses the current queue of
+        execution or the default queue if unspecified.
+      eta: Absolute time when the MR should execute. May not be specified
+        if 'countdown' is also supplied. This may be timezone-aware or
+        timezone-naive.
+      countdown: Time in seconds into the future that this MR should execute.
+        Defaults to zero.
+    """
+    queue_name = queue_name or os.environ.get("HTTP_X_APPENGINE_QUEUENAME",
+                                              "default")
+    task = cls._state_to_task(tstate, eta, countdown)
+    cls._add_task(task, shard_state, tstate.mapreduce_spec, queue_name)
 
 
 class ControllerCallbackHandler(base_handler.HugeTaskHandler):
@@ -881,7 +938,7 @@ class KickOffJobHandler(base_handler.HugeTaskHandler):
     """
     # Note: it's safe to re-attempt this handler because:
     # - shard state has deterministic and unique key.
-    # - _schedule_slice will fall back gracefully if a task already exists.
+    # - _add_task will fall back gracefully if a task already exists.
     shard_states = []
     writer_class = spec.mapper.output_writer_class()
     output_writers = [None] * len(input_readers)
@@ -908,12 +965,14 @@ class KickOffJobHandler(base_handler.HugeTaskHandler):
         zip(input_readers, output_writers)):
       shard_id = model.ShardState.shard_id_from_number(
           spec.mapreduce_id, shard_number)
-      MapperWorkerCallbackHandler._schedule_slice(
-          shard_states[shard_number],
+      task = MapperWorkerCallbackHandler._state_to_task(
           model.TransientShardState(
               base_path, spec, shard_id, 0, input_reader, input_reader,
-              output_writer=output_writer),
-          queue_name=queue_name)
+              output_writer=output_writer))
+      MapperWorkerCallbackHandler._add_task(task,
+                                            shard_states[shard_number],
+                                            spec,
+                                            queue_name)
 
 
 class StartJobHandler(base_handler.PostJsonHandler):
