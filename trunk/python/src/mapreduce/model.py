@@ -609,7 +609,7 @@ class MapreduceState(db.Model):
     active_shards: How many shards are still processing.
     start_time: When the job started.
     writer_state: Json property to be used by writer to store its state.
-      This is filled when single output per job. Will be dprecated.
+      This is filled when single output per job. Will be deprecated.
   """
 
   RESULT_SUCCESS = "success"
