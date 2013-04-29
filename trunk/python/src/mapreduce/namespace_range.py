@@ -18,6 +18,17 @@
 
 
 
+# pylint: disable=g-bad-name
+
+__all__ = [
+    'NAMESPACE_CHARACTERS',
+    'MAX_NAMESPACE_LENGTH',
+    'MAX_NAMESPACE',
+    'MIN_NAMESPACE',
+    'NamespaceRange',
+    'get_namespace_keys',
+]
+
 import itertools
 import string
 
@@ -226,6 +237,11 @@ class NamespaceRange(object):
                            self.namespace_end,
                            _app=self.app)]
 
+  def __copy__(self):
+    return self.__class__(self.__namespace_start,
+                          self.__namespace_end,
+                          self.__app)
+
   def __eq__(self, o):
     return (self.namespace_start == o.namespace_start and
             self.namespace_end == o.namespace_end)
@@ -394,3 +410,15 @@ class NamespaceRange(object):
       return continuous_ns_ranges
     else:
       return ns_ranges
+
+  def __iter__(self):
+    """Iterate over all the namespaces within this range."""
+    query = self.make_datastore_query()
+    for ns_key in query.Run():
+      yield ns_key.name() or ''
+
+
+def get_namespace_keys(app, limit):
+  """Get namespace keys."""
+  ns_query = datastore.Query('__namespace__', keys_only=True, _app=app)
+  return ns_query.Get(limit=limit)
