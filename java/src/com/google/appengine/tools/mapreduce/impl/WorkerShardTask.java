@@ -103,7 +103,7 @@ public abstract class WorkerShardTask<I, O, C extends WorkerContext>
     worker.beginSlice();
 
     Stopwatch overallStopwatch = Stopwatch.createStarted();
-    Stopwatch workerStopwatch = new Stopwatch();
+    Stopwatch workerStopwatch = Stopwatch.createUnstarted();
     int workerCalls = 0;
     boolean inputExhausted = false;
     I next = null;
