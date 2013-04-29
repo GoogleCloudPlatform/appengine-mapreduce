@@ -17,13 +17,14 @@
 
 
 
-# Disable "Invalid method name"
-# pylint: disable-msg=C6409
+# pylint: disable=g-bad-name
 
 # os_compat must be first to ensure timezones are UTC.
 # Disable "unused import" and "invalid import order"
 # pylint: disable-msg=W0611
 from google.appengine.tools import os_compat
+# testutil must be imported before mock.
+from testlib import testutil
 # pylint: enable-msg=W0611
 # pylint: disable=unused-argument
 
@@ -59,7 +60,6 @@ from mapreduce import operation
 from mapreduce import output_writers
 from mapreduce import model
 from mapreduce import test_support
-from testlib import testutil
 from mapreduce import mock_webapp
 
 
@@ -1624,6 +1624,7 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
   def testShardsDoneFinalizeOutputWriter(self):
     self.mapreduce_state.mapreduce_spec.mapper.output_writer_spec = (
         __name__ + '.' + TestOutputWriter.__name__)
+    self.mapreduce_state.put()
     self.handler.request.set("mapreduce_spec",
                              self.mapreduce_state.mapreduce_spec.to_json_str())
 
@@ -1643,6 +1644,7 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
   def testShardsDoneWithHooks(self):
     self.mapreduce_state.mapreduce_spec.hooks_class_name = (
         __name__ + '.' + TestHooks.__name__)
+    self.mapreduce_state.put()
     self.handler.request.set("mapreduce_spec",
                              self.mapreduce_state.mapreduce_spec.to_json_str())
 
@@ -1696,6 +1698,8 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
       shard_state.active = False
       if i == 0:
         shard_state.result_status = model.ShardState.RESULT_FAILED
+      elif i == 1:
+        shard_state.result_status = model.ShardState.RESULT_ABORTED
       else:
         shard_state.result_status = model.ShardState.RESULT_SUCCESS
       shard_state.put()
@@ -1707,7 +1711,7 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
         mapreduce_state, active=False, shard_count=3,
         result_status=model.ShardState.RESULT_FAILED)
     self.assertEquals(1, mapreduce_state.failed_shards)
-    self.assertEquals(0, mapreduce_state.aborted_shards)
+    self.assertEquals(1, mapreduce_state.aborted_shards)
 
     tasks = self.taskqueue.GetTasks("default")
     # Finalize task should be spawned.
@@ -1755,13 +1759,13 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
     self.verify_controller_task(tasks[0], shard_count=3)
     self.taskqueue.FlushQueue("default")
 
-    # Force all shards to completion state (success, failure, or abort).
+    # Force all shards to completion state (success, success, or abort).
     shard_state_list = model.ShardState.find_by_mapreduce_state(mapreduce_state)
     self.assertEquals(3, len(shard_state_list))
     shard_state_list[0].active = False
     shard_state_list[0].result_status = model.ShardState.RESULT_SUCCESS
     shard_state_list[1].active = False
-    shard_state_list[1].result_status = model.ShardState.RESULT_FAILED
+    shard_state_list[1].result_status = model.ShardState.RESULT_SUCCESS
     shard_state_list[2].active = False
     shard_state_list[2].result_status = model.ShardState.RESULT_ABORTED
     db.put(shard_state_list)
@@ -1770,8 +1774,7 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
     mapreduce_state = model.MapreduceState.get_by_key_name(self.mapreduce_id)
     self.verify_mapreduce_state(
         mapreduce_state, active=False, shard_count=3,
-        result_status=model.ShardState.RESULT_ABORTED)
-    self.assertEquals(1, mapreduce_state.failed_shards)
+        result_status=model.MapreduceState.RESULT_ABORTED)
     self.assertEquals(1, mapreduce_state.aborted_shards)
 
     tasks = self.taskqueue.GetTasks("default")
@@ -1856,6 +1859,7 @@ class CleanUpJobTest(testutil.HandlerTestBase):
     self.assertEquals({"status": ("Job %s successfully cleaned up." %
                                   self.mapreduce_id) },
                       result)
+    self.assertFalse(model.ShardState.find_by_mapreduce_id(self.mapreduce_id))
     self.assertFalse(db.get(key))
 
 

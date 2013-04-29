@@ -30,7 +30,6 @@ from google.appengine.api import apiproxy_stub_map
 from google.appengine.api import datastore_errors
 from google.appengine.api import datastore_file_stub
 from google.appengine.ext import db
-from mapreduce import control
 from mapreduce import hooks
 from mapreduce import model
 

@@ -153,7 +153,6 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
       shard_state.active = False
       shard_state.result_status = model.ShardState.RESULT_ABORTED
       shard_state.put(config=util.create_datastore_write_config(spec))
-      model.MapreduceControl.abort(spec.mapreduce_id)
       return
 
     input_reader = tstate.input_reader
@@ -180,6 +179,10 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
         # successful because writer might be stuck in some bad state otherwise.
         if (shard_state.result_status == model.ShardState.RESULT_SUCCESS and
             tstate.output_writer):
+          # It's possible that finalization is successful but
+          # saving state failed. In this case this shard will retry upon
+          # finalization error.
+          # TODO(user): make finalize method idempotent!
           tstate.output_writer.finalize(ctx, shard_state)
     # pylint: disable=broad-except
     except Exception, e:
@@ -262,13 +265,14 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
     if data is not input_readers.ALLOW_CHECKPOINT:
       ctx.counters.increment(context.COUNTER_MAPPER_CALLS)
 
-      handler = ctx.mapreduce_spec.mapper.handler
+      handler = transient_shard_state.handler
+
       if input_reader.expand_parameters:
         result = handler(*data)
       else:
         result = handler(data)
 
-      if util.is_generator(handler):
+      if util.is_generator(result):
         for output in result:
           if isinstance(output, operation.Operation):
             output(ctx)
@@ -561,76 +565,84 @@ class ControllerCallbackHandler(base_handler.HugeTaskHandler):
     """Handle request."""
     spec = model.MapreduceSpec.from_json_str(
         self.request.get("mapreduce_spec"))
-
     state, control = db.get([
         model.MapreduceState.get_key_by_job_id(spec.mapreduce_id),
         model.MapreduceControl.get_key_by_job_id(spec.mapreduce_id),
     ])
+
     if not state:
-      logging.error("State not found for mapreduce_id '%s'; skipping",
+      logging.error("State not found for MR '%s'; dropping controller task.",
                     spec.mapreduce_id)
+      return
+    if not state.active:
+      logging.info(
+          "MR %r is not active. Looks like spurious controller task execution.",
+          spec.mapreduce_id)
+      self._clean_up_mr(spec, self.base_path())
       return
 
     shard_states = model.ShardState.find_by_mapreduce_state(state)
-    if state.active and len(shard_states) != spec.mapper.shard_count:
-      # Some shards were lost
-      logging.error("Incorrect number of shard states: %d vs %d; "
-                    "aborting job '%s'",
+    if len(shard_states) != spec.mapper.shard_count:
+      logging.error("Found %d shard states. Expect %d. "
+                    "Issuing abort command to job '%s'",
                     len(shard_states), spec.mapper.shard_count,
                     spec.mapreduce_id)
-      state.active = False
-      state.result_status = model.MapreduceState.RESULT_FAILED
+      # We issue abort command to allow shards to stop themselves.
       model.MapreduceControl.abort(spec.mapreduce_id)
 
+    self._update_state_from_shard_states(state, shard_states, control)
+
+    if state.active:
+      ControllerCallbackHandler.reschedule(
+          state, self.base_path(), spec, self.serial_id() + 1)
+
+  def _update_state_from_shard_states(self, state, shard_states, control):
+    """Update mr state by examing shard states.
+
+    Args:
+      state: current mapreduce state as MapreduceState.
+      shard_states: all shard states (active and inactive). list of ShardState.
+      control: model.MapreduceControl entity.
+    """
     active_shards = [s for s in shard_states if s.active]
     failed_shards = [s for s in shard_states
                      if s.result_status == model.ShardState.RESULT_FAILED]
     aborted_shards = [s for s in shard_states
                      if s.result_status == model.ShardState.RESULT_ABORTED]
-    if state.active:
-      state.active = bool(active_shards)
-      state.active_shards = len(active_shards)
-      state.failed_shards = len(failed_shards)
-      state.aborted_shards = len(aborted_shards)
-      if not control and failed_shards:
-        model.MapreduceControl.abort(spec.mapreduce_id)
+    spec = state.mapreduce_spec
 
-    if (not state.active and control and
-        control.command == model.MapreduceControl.ABORT):
-      # User-initiated abort *after* all shards have completed.
-      logging.info("Abort signal received for job '%s'", spec.mapreduce_id)
-      state.result_status = model.MapreduceState.RESULT_ABORTED
+    # If any shard is active then the mr is active.
+    # This way, controller won't prematurely stop before all the shards have.
+    state.active = bool(active_shards)
+    state.active_shards = len(active_shards)
+    state.failed_shards = len(failed_shards)
+    state.aborted_shards = len(aborted_shards)
+    if not control and (failed_shards or aborted_shards):
+      # Issue abort command if there are failed shards.
+      model.MapreduceControl.abort(spec.mapreduce_id)
 
-    if not state.active:
-      state.active_shards = 0
-      if not state.result_status:
-        # Set final result status derived from shard states.
-        if [s for s in shard_states
-            if s.result_status != model.ShardState.RESULT_SUCCESS]:
-          state.result_status = model.MapreduceState.RESULT_FAILED
-        else:
-          state.result_status = model.MapreduceState.RESULT_SUCCESS
-        logging.info("Final result for job '%s' is '%s'",
-                     spec.mapreduce_id, state.result_status)
-
-    self.aggregate_state(state, shard_states)
+    self._aggregate_stats(state, shard_states)
     state.last_poll_time = datetime.datetime.utcfromtimestamp(self._time())
 
     if not state.active:
-      ControllerCallbackHandler._finalize_job(
-          spec, state, self.base_path())
-      return
+      # Set final result status derived from shard states.
+      if failed_shards or not shard_states:
+        state.result_status = model.MapreduceState.RESULT_FAILED
+      # It's important failed shards is checked before aborted shards
+      # because failed shards will trigger other shards to abort.
+      elif aborted_shards:
+        state.result_status = model.MapreduceState.RESULT_ABORTED
+      else:
+        state.result_status = model.MapreduceState.RESULT_SUCCESS
+      self._finalize_job(spec, state, self.base_path())
+    else:
+      # We don't need a transaction here, since we change only statistics data,
+      # and we don't care if it gets overwritten/slightly inconsistent.
+      config = util.create_datastore_write_config(spec)
+      state.put(config=config)
 
-    # We don't need a transaction here, since we change only statistics data,
-    # and we don't care if it gets overwritten/slightly inconsistent.
-    config = util.create_datastore_write_config(spec)
-    state.put(config=config)
-
-    ControllerCallbackHandler.reschedule(
-        state, self.base_path(), spec, self.serial_id() + 1)
-
-  def aggregate_state(self, mapreduce_state, shard_states):
-    """Update current mapreduce state by aggregating shard states.
+  def _aggregate_stats(self, mapreduce_state, shard_states):
+    """Update stats in mapreduce state by aggregating stats from shard states.
 
     Args:
       mapreduce_state: current mapreduce state as MapreduceState.
@@ -654,47 +666,55 @@ class ControllerCallbackHandler(base_handler.HugeTaskHandler):
     """
     return int(self.request.get("serial_id"))
 
-  @staticmethod
-  def _finalize_job(mapreduce_spec, mapreduce_state, base_path):
+  @classmethod
+  def _finalize_job(cls, mapreduce_spec, mapreduce_state, base_path):
     """Finalize job execution.
 
-    Finalizes output writer, invokes done callback an schedules
-    finalize job execution.
+    Finalizes output writer, invokes done callback and save mapreduce state
+    in a transaction, and schedule necessary clean ups.
 
     Args:
       mapreduce_spec: an instance of MapreduceSpec
       mapreduce_state: an instance of MapreduceState
-      base_path: handler base path.
+      base_path: handler_base path.
     """
     config = util.create_datastore_write_config(mapreduce_spec)
 
-    # Only finalize the output writers if we the job is successful.
+    # Only finalize the output writers if the job is successful.
     if (mapreduce_spec.mapper.output_writer_class() and
         mapreduce_state.result_status == model.MapreduceState.RESULT_SUCCESS):
       mapreduce_spec.mapper.output_writer_class().finalize_job(mapreduce_state)
 
-    # Enqueue done_callback if needed.
+    queue_name = mapreduce_spec.params.get(
+        model.MapreduceSpec.PARAM_DONE_CALLBACK_QUEUE,
+        "default")
+    done_callback = mapreduce_spec.params.get(
+        model.MapreduceSpec.PARAM_DONE_CALLBACK)
+    done_task = None
+    if done_callback:
+      done_task = taskqueue.Task(
+          url=done_callback,
+          headers={"Mapreduce-Id": mapreduce_spec.mapreduce_id},
+          method=mapreduce_spec.params.get("done_callback_method", "POST"))
+
     def put_state(state):
       state.put(config=config)
-      done_callback = mapreduce_spec.params.get(
-          model.MapreduceSpec.PARAM_DONE_CALLBACK)
-      if done_callback:
-        done_task = taskqueue.Task(
-            url=done_callback,
-            headers={"Mapreduce-Id": mapreduce_spec.mapreduce_id},
-            method=mapreduce_spec.params.get("done_callback_method", "POST"))
-        queue_name = mapreduce_spec.params.get(
-            model.MapreduceSpec.PARAM_DONE_CALLBACK_QUEUE,
-            "default")
+      # Enqueue done_callback if needed.
+      if done_task and not _run_task_hook(
+          mapreduce_spec.get_hooks(),
+          "enqueue_done_task",
+          done_task,
+          queue_name):
+        done_task.add(queue_name, transactional=True)
 
-        if not _run_task_hook(mapreduce_spec.get_hooks(),
-                              "enqueue_done_task",
-                              done_task,
-                              queue_name):
-          done_task.add(queue_name, transactional=True)
-      FinalizeJobHandler.schedule(base_path, mapreduce_spec)
-
+    logging.info("Final result for job '%s' is '%s'",
+                 mapreduce_spec.mapreduce_id, mapreduce_state.result_status)
     db.run_in_transaction_custom_retries(5, put_state, mapreduce_state)
+    cls._clean_up_mr(mapreduce_spec, base_path)
+
+  @classmethod
+  def _clean_up_mr(cls, mapreduce_spec, base_path):
+    FinalizeJobHandler.schedule(base_path, mapreduce_spec)
 
   @staticmethod
   def get_task_name(mapreduce_spec, serial_id):
@@ -1018,7 +1038,8 @@ class StartJobHandler(base_handler.PostJsonHandler):
     ctx = context.Context(mapreduce_spec, None)
     context.Context._set(ctx)
     try:
-      mapper_spec.get_handler()
+      # pylint: disable=pointless-statement
+      mapper_spec.handler
     finally:
       context.Context._set(None)
 
@@ -1081,7 +1102,6 @@ class FinalizeJobHandler(base_handler.TaskQueueHandler):
       for shard_state in shard_states:
         db.delete(util._HugeTaskPayload.all().ancestor(shard_state),
                   config=config)
-      db.delete(shard_states, config=config)
       db.delete(util._HugeTaskPayload.all().ancestor(mapreduce_state),
                 config=config)
 
@@ -1115,7 +1135,13 @@ class CleanUpJobHandler(base_handler.PostJsonHandler):
 
   def handle(self):
     mapreduce_id = self.request.get("mapreduce_id")
-    db.delete(model.MapreduceState.get_key_by_job_id(mapreduce_id))
+
+    mapreduce_state = model.MapreduceState.get_by_job_id(mapreduce_id)
+    if mapreduce_state:
+      shard_keys = model.ShardState.calculate_keys_by_mapreduce_state(
+          mapreduce_state)
+      db.delete(shard_keys)
+      db.delete(mapreduce_state)
     self.json_response["status"] = ("Job %s successfully cleaned up." %
                                     mapreduce_id)
 
