@@ -272,41 +272,43 @@ class HugeTask(object):
                countdown=None):
     self.url = url
     self.params = params
+    self.compressed_payload = None
     self.name = name
     self.eta = eta
     self.countdown = countdown
 
+    payload_str = urllib.urlencode(self.params)
+    if len(payload_str) > self.MAX_TASK_PAYLOAD:
+      compressed_payload = base64.b64encode(zlib.compress(payload_str))
+      if len(compressed_payload) > self.MAX_DB_PAYLOAD:
+        raise Exception("Payload from %s to big to be stored in database: %s",
+                        self.name, len(compressed_payload))
+      self.compressed_payload = compressed_payload
+
   def add(self, queue_name, transactional=False, parent=None):
     """Add task to the queue."""
-    payload_str = urllib.urlencode(self.params)
-    if len(payload_str) < self.MAX_TASK_PAYLOAD:
+    if self.compressed_payload is None:
       # Payload is small. Don't bother with anything.
       task = self.to_task()
       task.add(queue_name, transactional)
       return
 
-    compressed_payload = base64.b64encode(zlib.compress(payload_str))
-
-    if len(compressed_payload) < self.MAX_TASK_PAYLOAD:
+    if len(self.compressed_payload) < self.MAX_TASK_PAYLOAD:
       # Compressed payload is small. Don't bother with datastore.
       task = taskqueue.Task(
           url=self.url,
-          params={self.PAYLOAD_PARAM: compressed_payload},
+          params={self.PAYLOAD_PARAM: self.compressed_payload},
           name=self.name,
           eta=self.eta,
           countdown=self.countdown)
       task.add(queue_name, transactional)
       return
 
-    if len(compressed_payload) > self.MAX_DB_PAYLOAD:
-      raise Exception("Payload to big to be stored in database: %s",
-                      len(compressed_payload))
-
     # Store payload in the datastore.
     if not parent:
       raise Exception("Huge tasks should specify parent entity.")
 
-    payload_entity = _HugeTaskPayload(payload=compressed_payload,
+    payload_entity = _HugeTaskPayload(payload=self.compressed_payload,
                                       parent=parent)
 
     payload_key = payload_entity.put()

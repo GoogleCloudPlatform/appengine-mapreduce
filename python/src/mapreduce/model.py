@@ -777,6 +777,10 @@ class TransientShardState(object):
     self.output_writer = output_writer
     self.handler = None
 
+  def advance_for_next_slice(self):
+    """Advance relavent states for next slice."""
+    self.slice_id += 1
+
   def to_dict(self):
     """Convert state to dictionary to save in task payload."""
     result = {"mapreduce_spec": self.mapreduce_spec.to_json_str(),
