@@ -7,6 +7,9 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import com.google.appengine.api.files.AppEngineFile;
 import com.google.appengine.api.files.FileService;
 import com.google.appengine.api.files.FileServiceFactory;
+import com.google.appengine.api.files.FileServicePb.GetCapabilitiesRequest;
+import com.google.appengine.api.files.FileServicePb.GetCapabilitiesResponse;
+import com.google.appengine.repackaged.com.google.protobuf.InvalidProtocolBufferException;
 import com.google.appengine.tools.mapreduce.KeyValue;
 import com.google.appengine.tools.mapreduce.MapReduceSettings;
 import com.google.appengine.tools.mapreduce.MapReduceSpecification;
@@ -14,11 +17,13 @@ import com.google.appengine.tools.mapreduce.OutputWriter;
 import com.google.appengine.tools.mapreduce.ReducerInput;
 import com.google.appengine.tools.mapreduce.impl.handlers.MapReduceServletImpl;
 import com.google.appengine.tools.mapreduce.impl.util.FileUtil;
+import com.google.appengine.tools.mapreduce.impl.util.SerializationUtil;
 import com.google.appengine.tools.mapreduce.inputs.NoInput;
 import com.google.appengine.tools.pipeline.Job1;
 import com.google.appengine.tools.pipeline.Job2;
 import com.google.appengine.tools.pipeline.PromisedValue;
 import com.google.appengine.tools.pipeline.Value;
+import com.google.apphosting.api.ApiProxy;
 import com.google.common.collect.ImmutableList;
 
 import java.io.IOException;
@@ -93,7 +98,7 @@ public class ShuffleJob<K, V, O>
                 mrSpec.getIntermediateKeyMarshaller(),
                 mrSpec.getIntermediateValueMarshaller())));
     ShuffleService shuffleService = ShuffleServiceFactory.getShuffleService();
-    if (shuffleService.isAvailable()) {
+    if (isServiceAvailable()) {
       PromisedValue<String> shuffleError = newPromise(String.class);
       shuffleService.shuffle("Shuffle-for-MR-" + mrJobId,
           mapOutputs,
@@ -118,6 +123,19 @@ public class ShuffleJob<K, V, O>
     }
   }
 
+  private static boolean isServiceAvailable() {
+    byte[] responseBytes = ApiProxy.makeSyncCall("file", "GetCapabilities",
+        GetCapabilitiesRequest.newBuilder().build().toByteArray());
+    GetCapabilitiesResponse response;
+    try {
+      response = GetCapabilitiesResponse.parseFrom(responseBytes);
+    } catch (InvalidProtocolBufferException e) {
+      throw new RuntimeException("Failed to parse GetCapabilitiesResponse: "
+          + SerializationUtil.prettyBytes(responseBytes), e);
+    }
+    return response.getShuffleAvailable();
+  }
+  
   private static class WaitForShuffleJob<K, V, O>
       extends Job2<ShuffleResult<K, V, O>, ShuffleResult<K, V, O>, String> {
     private static final long serialVersionUID = 308217691163421115L;

@@ -4,8 +4,6 @@ package com.google.appengine.tools.mapreduce.impl;
 
 
 import com.google.appengine.api.files.AppEngineFile;
-import com.google.appengine.api.files.FileServicePb.GetCapabilitiesRequest;
-import com.google.appengine.api.files.FileServicePb.GetCapabilitiesResponse;
 import com.google.appengine.api.files.FileServicePb.GetShuffleStatusRequest;
 import com.google.appengine.api.files.FileServicePb.GetShuffleStatusResponse;
 import com.google.appengine.api.files.FileServicePb.ShuffleEnums;
@@ -74,29 +72,13 @@ class ShuffleServiceImpl implements ShuffleService {
 
     log.info("Starting shuffle job " + shuffleId + " with callback " + callback
         + ": " + request.build());
-    if (!isAvailable()) {
-      throw new RuntimeException("not available");
-    }
+
     ApiProxy.ApiConfig config = new ApiProxy.ApiConfig();
     config.setDeadlineInSeconds(30.0);
     // TODO(ohler): handle exceptions
     byte[] response = ApiProxy.makeSyncCall("file", "Shuffle", request.build().toByteArray(),
         config);
     // response has no data, no point in parsing it
-  }
-
-  @Override
-  public boolean isAvailable() {
-    byte[] responseBytes = ApiProxy.makeSyncCall("file", "GetCapabilities",
-        GetCapabilitiesRequest.newBuilder().build().toByteArray());
-    GetCapabilitiesResponse response;
-    try {
-      response = GetCapabilitiesResponse.parseFrom(responseBytes);
-    } catch (InvalidProtocolBufferException e) {
-      throw new RuntimeException("Failed to parse GetCapabilitiesResponse: "
-          + SerializationUtil.prettyBytes(responseBytes), e);
-    }
-    return response.getShuffleAvailable();
   }
 
   // TODO(ohler): Don't use protobuf return type

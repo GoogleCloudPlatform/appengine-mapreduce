@@ -15,8 +15,6 @@ public interface ShuffleService {
   void shuffle(String shuffleId, List<AppEngineFile> inputFiles,
       List<AppEngineFile> outputFiles, ShuffleCallback callback);
 
-  boolean isAvailable();
-
   // TODO(ohler): Don't use protobuf return type
   GetShuffleStatusResponse getStatus(String shuffleId);
 
