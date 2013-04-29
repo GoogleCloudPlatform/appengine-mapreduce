@@ -17,6 +17,8 @@
 
 
 
+# pylint: disable=g-bad-name
+
 import unittest
 
 from mapreduce import util
@@ -29,6 +31,14 @@ class TestHandler(object):
     pass
 
   def process(self, entity):
+    pass
+
+  @staticmethod
+  def process2(entity):
+    pass
+
+  @classmethod
+  def process3(cls):
     pass
 
 
@@ -46,6 +56,14 @@ class TestHandlerWithArgs(object):
 
   def process(self, entity):
     """Empty process function."""
+    pass
+
+
+# pylint: disable=g-old-style-class
+class TestHandlerOldStyle():
+  """Old style class."""
+
+  def __call__(self, entity):
     pass
 
 
@@ -128,6 +146,32 @@ class ForNameTest(unittest.TestCase):
       self.fail("Did not raise exception")
 
 
+class SerializeHandlerTest(unittest.TestCase):
+  """Test util.try_*serialize_handler works on various types."""
+
+  def testNonSerializableTypes(self):
+    # function.
+    self.assertEquals(None, util.try_serialize_handler(test_handler_function))
+    # Unbound method.
+    self.assertEquals(None, util.try_serialize_handler(TestHandler.process))
+    # bounded method.
+    self.assertEquals(None, util.try_serialize_handler(TestHandler().process))
+    # class method.
+    self.assertEquals(None, util.try_serialize_handler(TestHandler.process3))
+    # staticmethod, which is really a function.
+    self.assertEquals(None, util.try_serialize_handler(TestHandler.process2))
+
+  def testSerializableTypes(self):
+    # new style callable instance.
+    i = TestHandler()
+    self.assertNotEquals(
+        None, util.try_deserialize_handler(util.try_serialize_handler(i)))
+
+    i = TestHandlerOldStyle()
+    self.assertNotEquals(
+        None, util.try_deserialize_handler(util.try_serialize_handler(i)))
+
+
 class IsGeneratorFunctionTest(unittest.TestCase):
   """Test util.is_generator function."""
 
@@ -179,7 +223,6 @@ class CreateConfigTest(unittest.TestCase):
     config = util.create_datastore_write_config(self.spec)
     self.assertTrue(config)
     self.assertTrue(config.force_writes)
-
 
 
 if __name__ == "__main__":

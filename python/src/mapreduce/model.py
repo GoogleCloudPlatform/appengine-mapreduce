@@ -435,14 +435,12 @@ class MapperSpec(JsonMixin):
 
     Properties:
       handler_spec: name of handler class/function to use.
-      shard_count: number of shards to process in parallel.
-      handler: cached instance of mapper handler as callable.
       input_reader_spec: The class name of the input reader to use.
-      output_writer_spec: The class name of the output writer to use.
       params: Dictionary of additional parameters for the mapper.
+      shard_count: number of shards to process in parallel.
+      output_writer_spec: The class name of the output writer to use.
     """
     self.handler_spec = handler_spec
-    self.__handler = None
     self.input_reader_spec = input_reader_spec
     self.output_writer_spec = output_writer_spec
     self.shard_count = shard_count
@@ -452,11 +450,9 @@ class MapperSpec(JsonMixin):
     """Get mapper handler instance.
 
     Returns:
-      cached handler instance as callable.
+      handler instance as callable.
     """
-    if self.__handler is None:
-      self.__handler = util.handler_for_name(self.handler_spec)
-    return self.__handler
+    return util.handler_for_name(self.handler_spec)
 
   handler = property(get_handler)
 
@@ -482,7 +478,7 @@ class MapperSpec(JsonMixin):
         "mapper_handler_spec": self.handler_spec,
         "mapper_input_reader": self.input_reader_spec,
         "mapper_params": self.params,
-        "mapper_shard_count": self.shard_count,
+        "mapper_shard_count": self.shard_count
     }
     if self.output_writer_spec:
       result["mapper_output_writer"] = self.output_writer_spec
@@ -501,7 +497,7 @@ class MapperSpec(JsonMixin):
                json["mapper_params"],
                json["mapper_shard_count"],
                json.get("mapper_output_writer")
-               )
+              )
 
 
 class MapreduceSpec(JsonMixin):
@@ -742,7 +738,8 @@ class TransientShardState(object):
                input_reader,
                initial_input_reader,
                output_writer=None,
-               retries=0):
+               retries=0,
+               handler=None):
     """Init.
 
     Args:
@@ -756,6 +753,7 @@ class TransientShardState(object):
       output_writer: output writer instance for this shard, if exists.
       retries: the number of retries of the current shard. Used to drop
         tasks from old retries.
+      handler: map/reduce handler.
     """
     self.base_path = base_path
     self.mapreduce_spec = mapreduce_spec
@@ -765,12 +763,19 @@ class TransientShardState(object):
     self.initial_input_reader = initial_input_reader
     self.output_writer = output_writer
     self.retries = retries
+    self.handler = handler
 
   def reset_for_retry(self, output_writer):
+    """Reset self for shard retry.
+
+    Args:
+      output_writer: new output writer that contains new output files.
+    """
     self.input_reader = self.initial_input_reader
     self.slice_id = 0
     self.retries += 1
     self.output_writer = output_writer
+    self.handler = None
 
   def to_dict(self):
     """Convert state to dictionary to save in task payload."""
@@ -783,6 +788,9 @@ class TransientShardState(object):
               "retries": str(self.retries)}
     if self.output_writer:
       result["output_writer_state"] = self.output_writer.to_json_str()
+    serialized_handler = util.try_serialize_handler(self.handler)
+    if serialized_handler:
+      result["serialized_handler"] = serialized_handler
     return result
 
   @classmethod
@@ -812,6 +820,10 @@ class TransientShardState(object):
     request_path = request.path
     base_path = request_path[:request_path.rfind("/")]
 
+    handler = util.try_deserialize_handler(request.get("serialized_handler"))
+    if not handler:
+      handler = mapreduce_spec.mapper.handler
+
     return cls(base_path,
                mapreduce_spec,
                str(request.get("shard_id")),
@@ -819,7 +831,8 @@ class TransientShardState(object):
                input_reader,
                initial_input_reader,
                output_writer=output_writer,
-               retries=int(request.get("retries")))
+               retries=int(request.get("retries")),
+               handler=handler)
 
 
 class ShardState(db.Model):
@@ -845,6 +858,8 @@ class ShardState(db.Model):
 
   RESULT_SUCCESS = "success"
   RESULT_FAILED = "failed"
+  # Shard can be in aborted state when user issued abort, or controller
+  # issued abort because some other shard failed.
   RESULT_ABORTED = "aborted"
 
   _RESULTS = frozenset([RESULT_SUCCESS, RESULT_FAILED, RESULT_ABORTED])
@@ -951,11 +966,25 @@ class ShardState(db.Model):
     Returns:
       iterable of all ShardState for given mapreduce.
     """
+    keys = cls.calculate_keys_by_mapreduce_state(mapreduce_state)
+    return [state for state in db.get(keys) if state]
+
+  @classmethod
+  def calculate_keys_by_mapreduce_state(cls, mapreduce_state):
+    """Calculate all shard states keys for given mapreduce.
+
+    Args:
+      mapreduce_state: MapreduceState instance
+
+    Returns:
+      A list of keys for shard states. The corresponding shard states
+      may not exist.
+    """
     keys = []
     for i in range(mapreduce_state.mapreduce_spec.mapper.shard_count):
       shard_id = cls.shard_id_from_number(mapreduce_state.key().name(), i)
       keys.append(cls.get_key_by_shard_id(shard_id))
-    return [state for state in db.get(keys) if state]
+    return keys
 
   @classmethod
   def find_by_mapreduce_id(cls, mapreduce_id):

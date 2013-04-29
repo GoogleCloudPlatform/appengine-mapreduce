@@ -28,17 +28,19 @@ __all__ = [
     "is_generator",
     "parse_bool",
     "HugeTask",
+    "try_serialize_handler",
+    "try_deserialize_handler",
     ]
 
 
 import base64
 import cgi
 import inspect
-import zlib
+import pickle
 import types
 import urllib
+import zlib
 
-from google.appengine.api import files
 from google.appengine.api import taskqueue
 from google.appengine.ext import db
 from google.appengine.datastore import datastore_rpc
@@ -136,6 +138,39 @@ def handler_for_name(fq_name):
     return getattr(resolved_name.im_class(), resolved_name.__name__)
   else:
     return resolved_name
+
+
+def try_serialize_handler(handler):
+  """Try to serialize map/reduce handler.
+
+  Args:
+    handler: handler function/instance. Handler can be a function or an
+      instance of a callable class. In the latter case, the handler will
+      be serialized across slices to allow users to save states.
+
+  Returns:
+    serialized handler string or None.
+  """
+  if (isinstance(handler, types.InstanceType) or  # old style class
+      (isinstance(handler, object) and  # new style class
+       not inspect.isfunction(handler) and
+       not inspect.ismethod(handler)) and
+      hasattr(handler, "__call__")):
+    return pickle.dumps(handler)
+  return None
+
+
+def try_deserialize_handler(serialized_handler):
+  """Reverse function of try_serialize_handler.
+
+  Args:
+    serialized_handler: serialized handler str or None.
+
+  Returns:
+    handler instance or None.
+  """
+  if serialized_handler:
+    return pickle.loads(serialized_handler)
 
 
 def is_generator(obj):

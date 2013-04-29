@@ -100,6 +100,8 @@ class _KeyRangesFromList(KeyRanges):
     raise StopIteration()
 
   def __str__(self):
+    if len(self._key_ranges) == 1:
+      return "Single KeyRange %s" % (self._key_ranges[0])
     if self._key_ranges:
       return "From %s to %s" % (self._key_ranges[0], self._key_ranges[-1])
     return "Empty KeyRange."

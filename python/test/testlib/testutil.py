@@ -18,8 +18,9 @@
 
 
 
-# Disable "Invalid method name"
-# pylint: disable-msg=C6409
+# pylint: disable=g-bad-name
+# pylint: disable=g-import-not-at-top
+# pylint: disable=invalid-import-order
 
 # os_compat must be first to ensure timezones are UTC.
 # Disable "unused import" and "invalid import order"
@@ -27,9 +28,11 @@
 from google.appengine.tools import os_compat
 # pylint: enable-msg=W0611
 
+import imp
 from testlib import mox
 import os
 import shutil
+import sys
 import tempfile
 import unittest
 
@@ -41,6 +44,17 @@ from google.appengine.api import queueinfo
 from google.appengine.api.blobstore import file_blob_storage
 from google.appengine.api.memcache import memcache_stub
 from google.appengine.api.taskqueue import taskqueue_stub
+
+# pylint: disable=unused-import
+try:
+  import mock
+except ImportError, e:
+  _NAME = os.environ.get("ROOT_PACKAGE_NAME")
+  if not _NAME:
+    raise e
+  mod = sys.modules.setdefault(_NAME, imp.new_module(_NAME))
+  mod.__path__ = [os.environ["ROOT_PACKAGE_PATH"]]
+  import mock
 
 
 class MatchesDatastoreConfig(mox.Comparator):
