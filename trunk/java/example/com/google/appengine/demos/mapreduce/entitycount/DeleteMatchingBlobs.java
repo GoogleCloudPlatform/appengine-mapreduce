@@ -26,7 +26,6 @@ import java.util.logging.Logger;
 public class DeleteMatchingBlobs extends Job1<Void, Predicate<BlobInfo>> {
   private static final long serialVersionUID = 880699488120908550L;
 
-  @SuppressWarnings("unused")
   private static final Logger log = Logger.getLogger(DeleteMatchingBlobs.class.getName());
 
   public static String start(Predicate<BlobInfo> predicate) {
@@ -77,9 +76,10 @@ public class DeleteMatchingBlobs extends Job1<Void, Predicate<BlobInfo>> {
   public DeleteMatchingBlobs() {
   }
 
+  @Override
   public Value<Void> run(Predicate<BlobInfo> predicate) {
     return futureCall(new DeleteBlobsStartingWith(),
-        immediate(predicate), this.<BlobKey>immediate(null));
+        immediate(predicate), DeleteMatchingBlobs.<BlobKey>immediate(null));
   }
 
 }

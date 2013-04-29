@@ -18,7 +18,6 @@ import java.util.logging.Logger;
 class CountMapper extends Mapper<Entity, String, Long> {
   private static final long serialVersionUID = 4973057382538885270L;
 
-  @SuppressWarnings("unused")
   private static final Logger log = Logger.getLogger(CountMapper.class.getName());
 
   public CountMapper() {

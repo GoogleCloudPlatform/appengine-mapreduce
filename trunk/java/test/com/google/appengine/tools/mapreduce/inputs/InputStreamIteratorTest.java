@@ -165,7 +165,8 @@ public class InputStreamIteratorTest extends TestCase {
   private void test(long start, long end, boolean skipFirstTerminator, int expectedIndexStart,
       int expectedIndexEnd) throws IOException {
     List<InputStreamIterator.OffsetRecordPair> pairs = readPairs(start, end, skipFirstTerminator);
-    assertEquals("pairs between " + start + " and " + end, expectedIndexEnd - expectedIndexStart, pairs.size());
+    assertEquals("pairs between " + start + " and " + end, expectedIndexEnd - expectedIndexStart,
+        pairs.size());
     for (int i = 0; i < pairs.size(); i++) {
       assertEquals(content.get(i + expectedIndexStart), new String(pairs.get(i).getRecord()));
       assertEquals(byteContentOffsets.get(i + expectedIndexStart).longValue(),
@@ -175,17 +176,22 @@ public class InputStreamIteratorTest extends TestCase {
 
 // -------------------------- INNER CLASSES --------------------------
 
-  // Double check that an InputStreamIterator applied to a BufferedInputStream doesn't call
-  // mark() and reset() on the underlying InputStream. Should be obvious, but doesn't hurt to test.
+  /**
+   * Wrapper class for {@code ByteArrayInputStream} to double check that an InputStreamIterator
+   * applied to a BufferedInputStream doesn't call mark() and reset() on the underlying InputStream.
+   * Should be obvious, but doesn't hurt to test.
+   */
   public class NonResetableByteArrayInputStream extends ByteArrayInputStream {
     public NonResetableByteArrayInputStream(byte[] array) {
       super(array);
     }
 
+    @Override
     public void mark(int readAheadLimit) {
       fail("Tried to call mark() on the underlying InputStream");
     }
 
+    @Override
     public void reset() {
       fail("Tried to call reset() on the underlying InputStream");
     }

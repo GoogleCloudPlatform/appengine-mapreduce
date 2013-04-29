@@ -4,8 +4,6 @@ package com.google.appengine.tools.mapreduce;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
-import com.google.appengine.tools.mapreduce.reducers.NoReducer;
-
 import java.io.Serializable;
 
 /**

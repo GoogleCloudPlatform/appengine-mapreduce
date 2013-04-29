@@ -34,7 +34,6 @@ import java.util.logging.Logger;
  */
 public class IntermediateInputTest extends TestCase {
 
-  @SuppressWarnings("unused")
   private static final Logger log = Logger.getLogger(IntermediateInputTest.class.getName());
 
   private final LocalServiceTestHelper helper =

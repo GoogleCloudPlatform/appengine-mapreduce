@@ -62,8 +62,8 @@ public class CloudStorageLineInputReaderTest extends CloudStorageLineInputTestCa
   }
 
 
-  private void verifyReaders(List<CloudStorageLineInputReader> readers, boolean performSerialization)
-      throws IOException {
+  private void verifyReaders(
+      List<CloudStorageLineInputReader> readers, boolean performSerialization) throws IOException {
     int recordsRead = 0;
     long lastOffset = -1;
     String recordWithoutSeparator = RECORD.substring(0, RECORD.length() - 1);

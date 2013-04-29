@@ -49,7 +49,8 @@ public class CloudStorageFileOutputTest extends TestCase {
   }
 
   public void testFilesAreWritten() throws IOException {
-    CloudStorageFileOutput creator = new CloudStorageFileOutput(BUCKET, FILE_NAME_PATTERN, MIME_TYPE, NUM_SHARDS);
+    CloudStorageFileOutput creator =
+        new CloudStorageFileOutput(BUCKET, FILE_NAME_PATTERN, MIME_TYPE, NUM_SHARDS);
     List<? extends OutputWriter<ByteBuffer>> writers = creator.createWriters();
     assertEquals(NUM_SHARDS, writers.size());
     for (int i = 0; i < NUM_SHARDS; i++) {
@@ -70,7 +71,8 @@ public class CloudStorageFileOutputTest extends TestCase {
   }
 
   public void testSlicing() throws IOException, ClassNotFoundException {
-    CloudStorageFileOutput creator = new CloudStorageFileOutput(BUCKET, FILE_NAME_PATTERN, MIME_TYPE, NUM_SHARDS);
+    CloudStorageFileOutput creator =
+        new CloudStorageFileOutput(BUCKET, FILE_NAME_PATTERN, MIME_TYPE, NUM_SHARDS);
     List<? extends OutputWriter<ByteBuffer>> writers = creator.createWriters();
     assertEquals(NUM_SHARDS, writers.size());
     for (int i = 0; i < NUM_SHARDS; i++) {
