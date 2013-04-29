@@ -43,6 +43,7 @@ from google.appengine.api import datastore
 from google.appengine.api import datastore_errors
 from google.appengine.api import datastore_file_stub
 from google.appengine.api import files
+from google.appengine.api import logservice
 from google.appengine.api import memcache
 from google.appengine.api import taskqueue
 from google.appengine.api.memcache import memcache_stub
@@ -1143,6 +1144,31 @@ class MapperWorkerCallbackHandlerLeaseTest(unittest.TestCase):
       mock_request_log = mock.Mock()
       mock_request_log.finished = True
       fetch.return_value = [mock_request_log]
+      handler._try_acquire_lease(self.shard_state, tstate)
+
+    shard_state = model.ShardState.get_by_shard_id(self.shard_id)
+    self.assertTrue(shard_state.active)
+    self.assertEqual(self.CURRENT_SLICE_ID, shard_state.slice_id)
+    self.assertEqual(self.CURRENT_REQUEST_ID, shard_state.slice_request_id)
+    self.assertTrue(shard_state.slice_start_time >
+                    self.shard_state.slice_start_time)
+
+  def testAcquireLeaseSuccessWithServer(self):
+    """Same as testAcquireLeaseSuccess but fetchs log with server options."""
+    # lease acquired a long time ago.
+    self.shard_state.slice_start_time = datetime.datetime(2000, 1, 1)
+    self.shard_state.slice_request_id = self.PREVIOUS_REQUEST_ID
+    self.shard_state.put()
+    handler, tstate = self._create_handler()
+    with mock.patch("google.appengine.api.logservice"
+                    ".fetch", autospec=True) as fetch:
+      mock_request_log = mock.Mock()
+      mock_request_log.finished = True
+      def side_effect(*args, **kwds):
+        if "server_versions" in kwds:
+          return [mock_request_log]
+        raise logservice.InvalidArgumentError()
+      fetch.side_effect = side_effect
       handler._try_acquire_lease(self.shard_state, tstate)
 
     shard_state = model.ShardState.get_by_shard_id(self.shard_id)

@@ -34,6 +34,7 @@ import traceback
 from google.appengine import runtime
 from google.appengine.api import datastore_errors
 from google.appengine.api import logservice
+from google.appengine.api import servers
 from google.appengine.api import taskqueue
 from google.appengine.ext import db
 from mapreduce import base_handler
@@ -234,7 +235,16 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
     """
     assert shard_state.slice_start_time is not None
     assert shard_state.slice_request_id is not None
-    logs = list(logservice.fetch(request_ids=[shard_state.slice_request_id]))
+    request_ids = [shard_state.slice_request_id]
+    try:
+      logs = list(logservice.fetch(request_ids=request_ids))
+    except logservice.InvalidArgumentError:
+      # TODO(user): Remove after the bug/8173230 is fixed.
+      logs = list(logservice.fetch(
+          request_ids=request_ids,
+          server_versions=[(servers.get_current_server_name(),
+                            servers.get_current_version_name())]))
+
     if not logs or not logs[0].finished:
       return False
     return True
