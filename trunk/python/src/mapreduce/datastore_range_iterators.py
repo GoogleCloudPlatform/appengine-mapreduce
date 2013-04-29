@@ -75,7 +75,7 @@ class RangeIteratorFactory(object):
     return _RANGE_ITERATORS[json["name"]].from_json(json)
 
 
-class RangeIterator(object):
+class RangeIterator(model.JsonMixin):
   """Interface for DatastoreInputReader helper iterators.
 
   RangeIterator defines Python's generator interface and additional
@@ -162,25 +162,40 @@ class _PropertyRangeModelIterator(RangeIterator):
 
   def to_json(self):
     """Inherit doc."""
+    cursor_object = False
     if self._query is not None:
       if isinstance(self._query, db.Query):
         self._cursor = self._query.cursor()
       else:
-        self._cursor = self._query.cursor_after()
+        cursor_object = True
+        self._cursor = self._query.cursor_after().to_websafe_string()
+    else:
+      self._cursor = None
 
     return {"property_range": self._property_range.to_json(),
             "query_spec": self._query_spec.to_json(),
             "cursor": self._cursor,
             "ns_range": self._ns_range.to_json_object(),
-            "name": self.__class__.__name__}
+            "name": self.__class__.__name__,
+            "cursor_object": cursor_object}
 
+  # TODO(user): it sucks we need to handle cursor_to_str in many places.
+  # In the long run, datastore adaptor refactor will take care of this as
+  # we will only need to deal with low level datastore API after that.
+  # Thus we will not add Cursor as a json primitive MR should understand.
   @classmethod
   def from_json(cls, json):
     """Inherit doc."""
     obj = cls(property_range.PropertyRange.from_json(json["property_range"]),
               namespace_range.NamespaceRange.from_json_object(json["ns_range"]),
               model.QuerySpec.from_json(json["query_spec"]))
-    obj._cursor = json["cursor"]
+    cursor = json["cursor"]
+    # lint bug. Class method can access protected fields.
+    # pylint: disable=protected-access
+    if cursor and json["cursor_object"]:
+      obj._cursor = datastore_query.Cursor.from_websafe_string(cursor)
+    else:
+      obj._cursor = cursor
     return obj
 
 
@@ -257,7 +272,7 @@ _RANGE_ITERATORS = {
     }
 
 
-class AbstractKeyRangeIterator(object):
+class AbstractKeyRangeIterator(model.JsonMixin):
   """Iterates over a single key_range.KeyRange and yields value for each key."""
 
   def __init__(self, k_range, query_spec):
@@ -288,16 +303,28 @@ class AbstractKeyRangeIterator(object):
     Returns:
       all states in json-compatible map.
     """
+    cursor = self._get_cursor()
+    cursor_object = False
+    if cursor and isinstance(cursor, datastore_query.Cursor):
+      cursor = cursor.to_websafe_string()
+      cursor_object = True
     return {"key_range": self._key_range.to_json(),
             "query_spec": self._query_spec.to_json(),
-            "cursor": self._get_cursor()}
+            "cursor": cursor,
+            "cursor_object": cursor_object}
 
   @classmethod
   def from_json(cls, json):
     """Reverse of to_json."""
     obj = cls(key_range.KeyRange.from_json(json["key_range"]),
               model.QuerySpec.from_json(json["query_spec"]))
-    obj._cursor = json["cursor"]
+    cursor = json["cursor"]
+    # lint bug. Class method can access protected fields.
+    # pylint: disable=protected-access
+    if cursor and json["cursor_object"]:
+      obj._cursor = datastore_query.Cursor.from_websafe_string(cursor)
+    else:
+      obj._cursor = cursor
     return obj
 
 
