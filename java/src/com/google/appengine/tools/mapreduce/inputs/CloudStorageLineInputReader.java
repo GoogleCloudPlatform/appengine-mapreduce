@@ -22,21 +22,28 @@ class CloudStorageLineInputReader extends InputReader<byte[]> {
   private static final long serialVersionUID = -762091129798691745L;
 
   private static final transient GcsService GCS_SERVICE = GcsServiceFactory.createGcsService();
-  private static final int BUFFER_SIZE = 1024 * 1024;
+  private static final int DEFAULT_BUFFER_SIZE = 1024 * 1024;
 
   /*VisibleForTesting*/ long startOffset;
   /*VisibleForTesting*/ long endOffset;
   private GcsFilename file;
   private byte separator;
   private long offset = 0L;
+  private int bufferSize;
   private transient CountingInputStream input;
   private transient Iterator<OffsetRecordPair> recordIterator;
 
   CloudStorageLineInputReader(GcsFilename file, long startOffset, long endOffset, byte separator) {
+    this(file, startOffset, endOffset, separator, DEFAULT_BUFFER_SIZE);
+  }
+
+  CloudStorageLineInputReader(GcsFilename file, long startOffset, long endOffset, byte separator,
+      int bufferSize) {
     this.file = checkNotNull(file, "Null file");
     this.startOffset = startOffset;
     this.endOffset = endOffset;
     this.separator = separator;
+    this.bufferSize = (bufferSize > 0) ? bufferSize : DEFAULT_BUFFER_SIZE;
   }
 
   private void checkInitialized() {
@@ -69,7 +76,7 @@ class CloudStorageLineInputReader extends InputReader<byte[]> {
     Preconditions.checkState(
         recordIterator == null, "%s: Already initialized: %s", this, recordIterator);
     input = new CountingInputStream(Channels.newInputStream(
-        GCS_SERVICE.openPrefetchingReadChannel(file, startOffset + offset, BUFFER_SIZE)));
+        GCS_SERVICE.openPrefetchingReadChannel(file, startOffset + offset, bufferSize)));
     recordIterator = new InputStreamIterator(
         input, endOffset - startOffset - offset, startOffset != 0L && offset == 0L, separator);
   }
