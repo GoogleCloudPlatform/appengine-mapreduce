@@ -26,7 +26,6 @@ public class CloudStorageLineInput extends Input<byte[]> {
   private final GcsFilename file;
   private final byte separator;
   private final int shardCount;
-  private final GcsService gcsService = GcsServiceFactory.createGcsService();
 
   public CloudStorageLineInput(GcsFilename file, byte separator, int shardCount) {
     this.file = checkNotNull(file, "Null file");
@@ -36,6 +35,7 @@ public class CloudStorageLineInput extends Input<byte[]> {
 
   @Override
   public List<? extends InputReader<byte[]>> createReaders() throws IOException {
+    GcsService gcsService = GcsServiceFactory.createGcsService();
     GcsFileMetadata metadata = gcsService.getMetadata(file);
     if (metadata == null) {
       throw new RuntimeException("File does not exist:" + file.toString());
