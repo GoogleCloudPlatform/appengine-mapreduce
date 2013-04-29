@@ -70,7 +70,7 @@ def _shallow_split(filenames, size_per_shard, parsed_formats, sizes):
   for i, size in enumerate(sizes):
     shard_size += size
     inputs.append(_FileRange(filenames[i], None))
-    if shard_size > size_per_shard:
+    if shard_size >= size_per_shard:
       roots.append(FileFormatRoot(copy.deepcopy(parsed_formats), inputs))
       inputs = []
       shard_size = 0
