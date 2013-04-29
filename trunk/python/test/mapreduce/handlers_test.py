@@ -1867,6 +1867,48 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
     self.handler.post()
     self.assertEquals(403, self.handler.response.status)
 
+  def testStateUpdateIsCmpAndSet(self):
+    """Verify updating model.MapreduceState is cmp and set."""
+    # Create shard states for 3 finished shards.
+    shard_states = []
+    for i in range(3):
+      shard_state = self.create_shard_state(self.mapreduce_id, i)
+      shard_state.active = False
+      shard_state.put()
+      shard_states.append(shard_state)
+
+    # MapreduceState.active is changed to False by another duplicated running
+    # controller task.
+    mapreduce_state = model.MapreduceState.get_by_key_name(self.mapreduce_id)
+    mapreduce_state.active = False
+    mapreduce_state.result_status = model.MapreduceState.RESULT_SUCCESS
+    mapreduce_state.put()
+
+    # Invoke controller handler with stale mapreduce_state and shard_states.
+    mapreduce_state.active = True
+    mapreduce_state.result_status = None
+    for s in shard_states:
+      s.active = True
+    self.handler._update_state_from_shard_states(mapreduce_state,
+                                                 shard_states,
+                                                 None)
+
+    # Make sure we did't overwrite active or result_status.
+    mapreduce_state = model.MapreduceState.get_by_key_name(self.mapreduce_id)
+    self.verify_mapreduce_state(
+        mapreduce_state,
+        shard_count=3,
+        active=False,
+        result_status=model.MapreduceState.RESULT_SUCCESS)
+
+    # New controller task will drop itself because it detected that
+    # mapreduce_state.active is False.
+    # It will enqueue a finalizejob callback to cleanup garbage.
+    self.handler.post()
+    tasks = self.taskqueue.GetTasks("default")
+    self.assertEqual(1, len(tasks))
+    self.assertEqual("/mapreduce/finalizejob_callback", tasks[0]["url"])
+
   def testSmoke(self):
     """Verify main execution path.
 
