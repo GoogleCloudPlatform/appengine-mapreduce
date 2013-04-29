@@ -99,8 +99,7 @@ class SplitTest(unittest.TestCase):
   def runShallowSplitTest(self, shards, filenames):
     roots = file_format_root.split(filenames, 'lines', shards)
     self.assertTrue(len(roots) <= shards)
-    # This low threshold is kind arbitrary based on empirical data.
-    self.assertTrue(len(roots) >= shards/2.0)
+    self.assertTrue(len(roots) >= shards*0.9)
 
   def testShallowSplit(self):
     filenames = self.createFilesForShallowSplitTest()
@@ -108,6 +107,8 @@ class SplitTest(unittest.TestCase):
     self.runShallowSplitTest(3, filenames)
     self.runShallowSplitTest(5, filenames)
     self.runShallowSplitTest(33, filenames)
+    # This will only generate 63 shards. Each shard is slightly bigger.
+    # But this is OK because they are still even in size.
     self.runShallowSplitTest(66, filenames)
     self.runShallowSplitTest(100, filenames)
     self.runShallowSplitTest(500, filenames)
