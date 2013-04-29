@@ -28,7 +28,7 @@ serialized to/from json and passed around with other means.
 
 __all__ = ["JsonMixin", "JsonProperty", "MapreduceState", "MapperSpec",
            "MapreduceControl", "MapreduceSpec", "ShardState", "CountersMap",
-           "TransientShardState"]
+           "TransientShardState", "QuerySpec"]
 
 import copy
 import datetime
@@ -946,3 +946,44 @@ class MapreduceControl(db.Model):
     """
     cls(key_name="%s:%s" % (mapreduce_id, cls._KEY_NAME),
         command=cls.ABORT).put(**kwargs)
+
+
+class QuerySpec(object):
+  """Encapsulates everything about a query needed by DatastoreInputReader."""
+
+  DEFAULT_BATCH_SIZE = 50
+
+  def __init__(self,
+               entity_kind,
+               keys_only=None,
+               filters=None,
+               batch_size=None,
+               model_class_path=None,
+               app=None,
+               ns=None):
+    self.entity_kind = entity_kind
+    self.keys_only = keys_only or False
+    self.filters = filters or None
+    self.batch_size = batch_size or self.DEFAULT_BATCH_SIZE
+    self.model_class_path = model_class_path
+    self.app = app
+    self.ns = ns
+
+  def to_json(self):
+    return {"entity_kind": self.entity_kind,
+            "keys_only": self.keys_only,
+            "filters": self.filters,
+            "batch_size": self.batch_size,
+            "model_class_path": self.model_class_path,
+            "app": self.app,
+            "ns": self.ns}
+
+  @classmethod
+  def from_json(cls, json):
+    return cls(json["entity_kind"],
+               json["keys_only"],
+               json["filters"],
+               json["batch_size"],
+               json["model_class_path"],
+               json["app"],
+               json["ns"])
