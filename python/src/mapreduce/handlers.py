@@ -816,11 +816,11 @@ class ControllerCallbackHandler(base_handler.HugeTaskHandler):
     ])
 
     if not state:
-      logging.error("State not found for MR '%s'; dropping controller task.",
-                    spec.mapreduce_id)
+      logging.warning("State not found for MR '%s'; dropping controller task.",
+                      spec.mapreduce_id)
       return
     if not state.active:
-      logging.info(
+      logging.warning(
           "MR %r is not active. Looks like spurious controller task execution.",
           spec.mapreduce_id)
       self._clean_up_mr(spec, self.base_path())
@@ -881,10 +881,20 @@ class ControllerCallbackHandler(base_handler.HugeTaskHandler):
         state.result_status = model.MapreduceState.RESULT_SUCCESS
       self._finalize_job(spec, state, self.base_path())
     else:
-      # We don't need a transaction here, since we change only statistics data,
-      # and we don't care if it gets overwritten/slightly inconsistent.
-      config = util.create_datastore_write_config(spec)
-      state.put(config=config)
+      @db.transactional(retries=5)
+      def _put_state():
+        fresh_state = model.MapreduceState.get_by_job_id(spec.mapreduce_id)
+        # We don't check anything other than active because we are only
+        # updating stats. It's OK if they are briefly inconsistent.
+        if not fresh_state.active:
+          logging.warning(
+              "Job %s is not active. Look like spurious task execution. "
+              "Dropping controller task.", spec.mapreduce_id)
+          return
+        config = util.create_datastore_write_config(spec)
+        state.put(config=config)
+
+      _put_state()
 
   def _aggregate_stats(self, mapreduce_state, shard_states):
     """Update stats in mapreduce state by aggregating stats from shard states.
@@ -942,8 +952,16 @@ class ControllerCallbackHandler(base_handler.HugeTaskHandler):
           headers={"Mapreduce-Id": mapreduce_spec.mapreduce_id},
           method=mapreduce_spec.params.get("done_callback_method", "POST"))
 
-    def put_state(state):
-      state.put(config=config)
+    @db.transactional(retries=5)
+    def _put_state():
+      fresh_state = model.MapreduceState.get_by_job_id(
+          mapreduce_spec.mapreduce_id)
+      if not fresh_state.active:
+        logging.warning(
+            "Job %s is not active. Look like spurious task execution. "
+            "Dropping controller task.", mapreduce_spec.mapreduce_id)
+        return
+      mapreduce_state.put(config=config)
       # Enqueue done_callback if needed.
       if done_task and not _run_task_hook(
           mapreduce_spec.get_hooks(),
@@ -952,9 +970,9 @@ class ControllerCallbackHandler(base_handler.HugeTaskHandler):
           queue_name):
         done_task.add(queue_name, transactional=True)
 
+    _put_state()
     logging.info("Final result for job '%s' is '%s'",
                  mapreduce_spec.mapreduce_id, mapreduce_state.result_status)
-    db.run_in_transaction_custom_retries(5, put_state, mapreduce_state)
     cls._clean_up_mr(mapreduce_spec, base_path)
 
   @classmethod
