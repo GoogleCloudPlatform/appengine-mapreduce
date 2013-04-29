@@ -75,7 +75,7 @@ class InputStreamIterator extends AbstractIterator<InputStreamIterator.OffsetRec
       return new OffsetRecordPair(recordStart, byteValue);
     } catch (IOException e) {
       log.log(Level.WARNING, "Failed to read next record", e);
-      return endOfData();
+      throw new RuntimeException("Failed to read next record", e);
     }
   }
 
