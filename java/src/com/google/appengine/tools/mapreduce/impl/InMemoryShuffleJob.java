@@ -15,7 +15,6 @@ import com.google.appengine.api.files.RecordWriteChannel;
 import com.google.appengine.repackaged.com.google.protobuf.ByteString;
 import com.google.appengine.tools.mapreduce.KeyValue;
 import com.google.appengine.tools.mapreduce.MapReduceSpecification;
-import com.google.appengine.tools.mapreduce.impl.util.FileUtil;
 import com.google.appengine.tools.mapreduce.impl.util.RetryHelper;
 import com.google.appengine.tools.mapreduce.impl.util.RetryHelper.Body;
 import com.google.appengine.tools.mapreduce.impl.util.RetryParams;
@@ -47,6 +46,12 @@ public class InMemoryShuffleJob<K, V, O> extends
   @SuppressWarnings("unused")
   private static final Logger log = Logger.getLogger(InMemoryShuffleJob.class.getName());
 
+  private static final RetryParams backoffParams = new RetryParams();
+  static { // Numbers chosen to have the total backoff time between 30 and 60 seconds.
+    backoffParams.setInitialRetryDelayMillis(30);
+    backoffParams.setRetryMaxAttempts(10);
+  }
+  
   private transient FileService fileService;
 
   private final MapReduceSpecification<?, K, V, O, ?> mrSpec;
@@ -111,10 +116,7 @@ public class InMemoryShuffleJob<K, V, O> extends
   }
 
   private List<KeyValue<K, V>> readInput(AppEngineFile file) {
-    RetryParams backoffParams = new RetryParams();
-    backoffParams.setInitialRetryDelayMillis(10);
-    backoffParams.setRetryDelayBackoffFactor(2);
-    backoffParams.setRetryMaxAttempts(10);
+
 
     ImmutableList.Builder<KeyValue<K, V>> out = ImmutableList.builder();
     ReadRecord reader = new ReadRecord(file, null, 0);
@@ -153,9 +155,8 @@ public class InMemoryShuffleJob<K, V, O> extends
     return out.build();
   }
 
-
   private final class WriteRecord implements Body<Void> {
-    final AppEngineFile file;
+    private final AppEngineFile file;
     RecordWriteChannel out;
     ByteBuffer data;
     int sequence;
@@ -170,29 +171,44 @@ public class InMemoryShuffleJob<K, V, O> extends
     @Override
     public Void run() throws IOException {
       if (out == null) {
-        out = fileService.openRecordWriteChannel(file, false);
+        open();
       }
       try {
         String asString = String.format("%010d", sequence);
         out.write(data, asString);
-        return null;
       } catch (KeyOrderingException e) {
-        return null; // Already written
+        close();
       } catch (IOException e) {
-        out = null;
+        close();
         throw e;
       } finally {
         data.rewind();
       }
+      return null;
     }
+
+    private void open() {
+      RetryHelper.runWithRetries(new Body<Void>() {
+        @Override
+        public Void run() throws IOException {
+          out = fileService.openRecordWriteChannel(file, true);
+          return null;
+        }}, backoffParams);
+    }
+    
+    private void close() {
+      RetryHelper.runWithRetries(new Body<Void>() {
+        @Override
+        public Void run() throws IOException {
+          out.close();
+          return null;
+        }}, backoffParams);
+      out = null;
+    }
+    
   }
 
   private void writeOutput(AppEngineFile file, List<KeyValue<K, List<V>>> items) {
-    RetryParams backoffParams = new RetryParams();
-    backoffParams.setInitialRetryDelayMillis(10);
-    backoffParams.setRetryDelayBackoffFactor(2);
-    backoffParams.setRetryMaxAttempts(10);
-
     WriteRecord writer = new WriteRecord(file, null, null, 0);
     int i = 0;
     for (KeyValue<K, List<V>> item : items) {
@@ -208,6 +224,17 @@ public class InMemoryShuffleJob<K, V, O> extends
       RetryHelper.runWithRetries(writer, backoffParams);
       i++;
     }
+    closeFinally(writer.out);
+  }
+
+  private void closeFinally(final RecordWriteChannel out) {
+    RetryHelper.runWithRetries(new Body<Void>() {
+      @Override
+      public Void run() throws IOException {
+        out.closeFinally();
+        return null;
+      }
+    }, backoffParams);
   }
 
   private void writeOutputs(List<AppEngineFile> files, List<List<KeyValue<K, List<V>>>> data) {
@@ -224,9 +251,6 @@ public class InMemoryShuffleJob<K, V, O> extends
     List<List<KeyValue<K, List<V>>>> out =
         Shuffling.shuffle(in, mrSpec.getIntermediateKeyMarshaller(), reduceInputs.size());
     writeOutputs(reduceInputs, out);
-    for (AppEngineFile file : shuffleResult.getReducerInputFiles()) {
-      FileUtil.ensureFinalized(file);
-    }
     return immediate(shuffleResult);
   }
 

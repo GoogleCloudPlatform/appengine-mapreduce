@@ -262,11 +262,16 @@ public class MapReduceJob<I, K, V, O, R>
           mrSpec.getOutput(),
           shuffleResult.getReducerWriters(),
           new TaskCreator<KeyValue<K, ReducerInput<V>>, O, ReducerContext<O>>() {
-            @Override public WorkerShardTask<KeyValue<K, ReducerInput<V>>, O, ReducerContext<O>>
-                createTask(int shard, int shardCount,
-                    InputReader<KeyValue<K, ReducerInput<V>>> reader, OutputWriter<O> writer) {
-              return new ReduceShardTask<K, V, O>(mrJobId, shard, shardCount,
-                  reader, mrSpec.getReducer(), writer,
+            @Override
+            public WorkerShardTask<KeyValue<K, ReducerInput<V>>, O, ReducerContext<O>> createTask(
+                int shard, int shardCount, InputReader<KeyValue<K, ReducerInput<V>>> reader,
+                OutputWriter<O> writer) {
+              return new ReduceShardTask<K, V, O>(mrJobId,
+                  shard,
+                  shardCount,
+                  reader,
+                  mrSpec.getReducer(),
+                  writer,
                   settings.getMillisPerSlice());
             }
           },
@@ -325,18 +330,19 @@ public class MapReduceJob<I, K, V, O, R>
     }
   }
 
-  public Value<MapReduceResult<R>> run(MapReduceSpecification<I, K, V, O, R> mrSpec,
-      MapReduceSettings settings) {
+  public Value<MapReduceResult<R>> run(
+      MapReduceSpecification<I, K, V, O, R> mrSpec, MapReduceSettings settings) {
     String mrJobId = getJobKey().getName();
-    FutureValue<ResultAndCounters<List<AppEngineFile>>> mapResult = futureCall(
-        new MapJob<I, K, V>(mrJobId, mrSpec, settings), Util.jobSettings(settings));
+    FutureValue<ResultAndCounters<List<AppEngineFile>>> mapResult =
+        futureCall(new MapJob<I, K, V>(mrJobId, mrSpec, settings), Util.jobSettings(settings));
     FutureValue<ShuffleResult<K, V, O>> shuffleResult = futureCall(
-        new ShuffleJob<K, V, O>(mrJobId, mrSpec, settings), mapResult, Util.jobSettings(settings));
+        new ShuffleJob<K, V, O>(mrJobId, mrSpec, settings), mapResult,
+        Util.jobSettings(settings, maxAttempts(3)));
     futureCall(new IntermediateCleanupJob(mrJobId, settings), mapResult,
         Util.jobSettings(settings, waitFor(shuffleResult)));
     FutureValue<MapReduceResult<R>> reduceResult = futureCall(
-        new ReduceJob<K, V, O, R>(mrJobId, mrSpec, settings),
-        mapResult, shuffleResult, Util.jobSettings(settings));
+        new ReduceJob<K, V, O, R>(mrJobId, mrSpec, settings), mapResult, shuffleResult,
+        Util.jobSettings(settings));
     futureCall(new FinalCleanupJob<K, V, O>(mrJobId, settings), shuffleResult,
         Util.jobSettings(settings, waitFor(reduceResult)));
     return reduceResult;
