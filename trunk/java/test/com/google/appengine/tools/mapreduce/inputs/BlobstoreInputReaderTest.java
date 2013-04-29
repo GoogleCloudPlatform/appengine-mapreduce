@@ -13,6 +13,15 @@ import java.util.NoSuchElementException;
  */
 public class BlobstoreInputReaderTest extends BlobstoreInputTestCase {
 
+  public static final String RECORD = "01234567890\n";
+  public static final int RECORDS_COUNT = 100;
+
+  @Override
+  public void setUp() throws Exception {
+    super.setUp();
+    createFile(RECORD, RECORDS_COUNT);
+  }
+
   public void testAllSplitPoints() throws Exception {
     for (int splitPoint = 1; splitPoint < blobSize - 1; splitPoint++) {
       List<BlobstoreInputReader> readers = new ArrayList<BlobstoreInputReader>();
