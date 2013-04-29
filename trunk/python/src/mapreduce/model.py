@@ -33,7 +33,6 @@ __all__ = ["JsonMixin", "JsonProperty", "MapreduceState", "MapperSpec",
 import copy
 import datetime
 import logging
-import math
 import os
 import random
 from mapreduce.lib import simplejson
@@ -784,6 +783,18 @@ class ShardState(db.Model):
   update_time = db.DateTimeProperty(auto_now=True, indexed=False)
   shard_description = db.TextProperty(default="")
   last_work_item = db.TextProperty(default="")
+
+  def __str__(self):
+    return ("ShardState is:\n"
+            "active=%s\n "
+            "result_status=%s\n "
+            "retries=%s\n"
+            "update_time=%s\n"
+            "last_work_item=%s") % (self.active,
+                                    self.result_status,
+                                    self.retries,
+                                    self.update_time,
+                                    self.last_work_item)
 
   def reset_for_retry(self):
     """Reset self for shard retry."""
