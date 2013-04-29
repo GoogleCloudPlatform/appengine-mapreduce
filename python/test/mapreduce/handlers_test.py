@@ -255,6 +255,14 @@ class InputReader(input_readers.DatastoreInputReader):
     cls.yields = 0
 
 
+class EmptyInputReader(input_readers.DatastoreInputReader):
+  """Always returns nothing from input splits."""
+
+  @classmethod
+  def split_input(cls, mapper_spec):
+    return None
+
+
 class TestOutputWriter(output_writers.OutputWriter):
   """Test output writer."""
 
@@ -415,8 +423,9 @@ class MapreduceHandlerTestBase(testutil.HandlerTestBase):
                       mapreduce_spec.mapper.handler_spec)
     self.assertEquals(kwargs.get("output_writer_spec", None),
                       mapreduce_spec.mapper.output_writer_spec)
-    self.assertEquals(ENTITY_KIND,
-                      mapreduce_spec.mapper.params["entity_kind"])
+    self.assertEquals(
+        ENTITY_KIND,
+        mapreduce_spec.mapper.params["input_reader"]["entity_kind"])
     self.assertEquals(kwargs.get("shard_count", 8),
                       mapreduce_spec.mapper.shard_count)
     self.assertEquals(kwargs.get("hooks_class_name"),
@@ -484,7 +493,8 @@ class MapreduceHandlerTestBase(testutil.HandlerTestBase):
                             mapper_handler_spec=MAPPER_HANDLER_SPEC,
                             mapper_parameters=None,
                             hooks_class_name=None,
-                            output_writer_spec=None):
+                            output_writer_spec=None,
+                            input_reader_spec=None):
     """Create a new valid mapreduce_spec.
 
     Args:
@@ -496,13 +506,17 @@ class MapreduceHandlerTestBase(testutil.HandlerTestBase):
     Returns:
       new MapreduceSpec.
     """
-    params = {"entity_kind": __name__ + "." + TestEntity.__name__}
+    params = {
+        "input_reader": {
+            "entity_kind": __name__ + "." + TestEntity.__name__
+        },
+    }
     if mapper_parameters is not None:
       params.update(mapper_parameters)
 
     mapper_spec = model.MapperSpec(
         mapper_handler_spec,
-        __name__ + ".InputReader",
+        input_reader_spec or __name__ + ".InputReader",
         params,
         shard_count,
         output_writer_spec=output_writer_spec)
@@ -888,7 +902,25 @@ class KickOffJobHandlerTest(MapreduceHandlerTestBase):
     self.assertEquals(0, len(self.taskqueue.GetTasks("default")))
     self.assertEquals(9, len(self.taskqueue.GetTasks("crazy-queue")))
 
+  def testNoInputReader(self):
+    """Test split input returned no input reader."""
+    self.mapreduce_spec = self.create_mapreduce_spec(
+        self.mapreduce_id,
+        input_reader_spec=__name__ + "." + "EmptyInputReader")
+    self.handler.request.set(
+        "mapreduce_spec",
+        self.mapreduce_spec.to_json_str())
+    self.handler.request.headers["X-AppEngine-QueueName"] = "default"
+
+    self.handler.post()
+
+    state = model.MapreduceState.get_by_job_id(self.mapreduce_id)
+    self.assertFalse(state.active)
+    self.assertEqual(model.MapreduceState.RESULT_SUCCESS, state.result_status)
+    self.assertEqual(0, state.active_shards)
+
   def testNoData(self):
+    """Test no data exists for input reader to consume."""
     self.handler.post()
     self.assertEquals(9, len(self.taskqueue.GetTasks("default")))
 

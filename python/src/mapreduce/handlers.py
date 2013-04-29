@@ -879,6 +879,7 @@ class ControllerCallbackHandler(base_handler.HugeTaskHandler):
         state.result_status = model.MapreduceState.RESULT_ABORTED
       else:
         state.result_status = model.MapreduceState.RESULT_SUCCESS
+      self._finalize_outputs(spec, state)
       self._finalize_job(spec, state, self.base_path())
     else:
       @db.transactional(retries=5)
@@ -922,11 +923,24 @@ class ControllerCallbackHandler(base_handler.HugeTaskHandler):
     return int(self.request.get("serial_id"))
 
   @classmethod
+  def _finalize_outputs(cls, mapreduce_spec, mapreduce_state):
+    """Finalize outputs.
+
+    Args:
+      mapreduce_spec: an instance of MapreduceSpec.
+      mapreduce_state: an instance of MapreduceState.
+    """
+    # Only finalize the output writers if the job is successful.
+    if (mapreduce_spec.mapper.output_writer_class() and
+        mapreduce_state.result_status == model.MapreduceState.RESULT_SUCCESS):
+      mapreduce_spec.mapper.output_writer_class().finalize_job(mapreduce_state)
+
+  @classmethod
   def _finalize_job(cls, mapreduce_spec, mapreduce_state, base_path):
     """Finalize job execution.
 
-    Finalizes output writer, invokes done callback and save mapreduce state
-    in a transaction, and schedule necessary clean ups.
+    Invokes done callback and save mapreduce state in a transaction,
+    and schedule necessary clean ups.
 
     Args:
       mapreduce_spec: an instance of MapreduceSpec
@@ -934,11 +948,6 @@ class ControllerCallbackHandler(base_handler.HugeTaskHandler):
       base_path: handler_base path.
     """
     config = util.create_datastore_write_config(mapreduce_spec)
-
-    # Only finalize the output writers if the job is successful.
-    if (mapreduce_spec.mapper.output_writer_class() and
-        mapreduce_state.result_status == model.MapreduceState.RESULT_SUCCESS):
-      mapreduce_spec.mapper.output_writer_class().finalize_job(mapreduce_state)
 
     queue_name = mapreduce_spec.params.get(
         model.MapreduceSpec.PARAM_DONE_CALLBACK_QUEUE,
@@ -1083,6 +1092,7 @@ class KickOffJobHandler(base_handler.HugeTaskHandler):
       logging.warning("Found no mapper input data to process.")
       state.active = False
       state.active_shards = 0
+      state.result_status = model.MapreduceState.RESULT_SUCCESS
       ControllerCallbackHandler._finalize_job(spec, state, self.base_path())
       return
 

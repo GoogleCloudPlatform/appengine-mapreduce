@@ -165,7 +165,7 @@ class InputReader(model.JsonMixin):
         parameters to define the behavior of input readers.
 
     Returns:
-      A list of InputReaders.
+      A list of InputReaders. None when no input data can be found.
     """
     raise NotImplementedError("split_input() not implemented in %s" % cls)
 
@@ -459,8 +459,8 @@ class AbstractDatastoreInputReader(InputReader):
     else:
       ns_keys = namespace_range.get_namespace_keys(
           query_spec.app, cls.MAX_NAMESPACES_FOR_KEY_SHARD+1)
-      # No namespace means the app's datastore has no entity at all.
-      # Just return.
+      # No namespace means the app may have some data but those data are not
+      # visible yet. Just return.
       if not ns_keys:
         return
       # If the number of ns is small, we shard each ns by key and assign each
