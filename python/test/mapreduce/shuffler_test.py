@@ -78,6 +78,7 @@ class ShuffleServicePipelineTest(testutil.HandlerTestBase):
 
   def testError(self):
     p = shuffler._ShuffleServicePipeline("testjob", ["file1", "file2"])
+    self.assertEquals(1, p.current_attempt)
     p.start()
     test_support.execute_until_empty(self.taskqueue)
 
@@ -92,7 +93,7 @@ class ShuffleServicePipelineTest(testutil.HandlerTestBase):
     test_support.execute_until_empty(self.taskqueue)
 
     p = shuffler._ShuffleServicePipeline.from_id(p.pipeline_id)
-    self.assertTrue(p.was_aborted)
+    self.assertEquals(2, p.current_attempt)
 
 
 if __name__ == "__main__":

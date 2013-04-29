@@ -633,7 +633,7 @@ class _ShuffleServicePipeline(base_handler.PipelineBase):
 
   def callback(self, **kwargs):
     if "error" in kwargs:
-      self.abort("Error from shuffle service: %s" % kwargs["error"])
+      self.retry("Error from shuffle service: %s" % kwargs["error"])
       return
 
     output_files = self.outputs._output_files.value
