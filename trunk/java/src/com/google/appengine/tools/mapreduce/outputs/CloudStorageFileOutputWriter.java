@@ -62,6 +62,11 @@ public class CloudStorageFileOutputWriter extends OutputWriter<ByteBuffer> {
   }
 
   @Override
+  public void endSlice() throws IOException {
+    channel.waitForOutstandingWrites();
+  }
+
+  @Override
   public void close() throws IOException {
     if (closed) {
       return;

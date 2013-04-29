@@ -18,6 +18,7 @@ import java.io.ObjectOutputStream;
 import java.nio.ByteBuffer;
 import java.nio.channels.ReadableByteChannel;
 import java.util.List;
+import java.util.Random;
 
 /**
  *
@@ -33,13 +34,19 @@ public class CloudStorageFileOutputTest extends TestCase {
   private static final String FILE_NAME_PATTERN = "shard-%02x";
   private static final String MIME_TYPE = "text/ascii";
   private static final int NUM_SHARDS = 10;
-  private static final byte[] CONTENT = new byte[] {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+  private static final byte[] SMALL_CONTENT = new byte[] {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
 
+  // This size chosen so that it is larger than the buffer and on the first and second buffer fills
+  // there will be some left over.
+  private static final byte[] LARGE_CONTENT = new byte[(int) (1024 * 1024 * 2.5)];
 
   @Override
   protected void setUp() throws Exception {
     super.setUp();
     helper.setUp();
+    //Filling the large_content buffer with a non-repeating but consistent pattern.
+    Random r = new Random(0);
+    r.nextBytes(LARGE_CONTENT);
   }
 
   @Override
@@ -56,7 +63,7 @@ public class CloudStorageFileOutputTest extends TestCase {
     for (int i = 0; i < NUM_SHARDS; i++) {
       OutputWriter<ByteBuffer> out = writers.get(i);
       out.beginSlice();
-      out.write(ByteBuffer.wrap(CONTENT));
+      out.write(ByteBuffer.wrap(SMALL_CONTENT));
       out.endSlice();
       out.close();
     }
@@ -65,12 +72,20 @@ public class CloudStorageFileOutputTest extends TestCase {
     for (int i = 0; i < NUM_SHARDS; i++) {
       GcsFileMetadata metadata = gcsService.getMetadata(files.get(i));
       assertNotNull(metadata);
-      assertEquals(CONTENT.length, metadata.getLength());
+      assertEquals(SMALL_CONTENT.length, metadata.getLength());
       assertEquals(MIME_TYPE, metadata.getOptions().getMimeType());
     }
   }
 
-  public void testSlicing() throws IOException, ClassNotFoundException {
+  public void testSmallSlicing() throws IOException, ClassNotFoundException {
+    testSlicing(SMALL_CONTENT);
+  }
+
+  public void testLargeSlicing() throws IOException, ClassNotFoundException {
+    testSlicing(LARGE_CONTENT);
+  }
+
+  private void testSlicing(byte[] content) throws IOException, ClassNotFoundException {
     CloudStorageFileOutput creator =
         new CloudStorageFileOutput(BUCKET, FILE_NAME_PATTERN, MIME_TYPE, NUM_SHARDS);
     List<? extends OutputWriter<ByteBuffer>> writers = creator.createWriters();
@@ -78,29 +93,29 @@ public class CloudStorageFileOutputTest extends TestCase {
     for (int i = 0; i < NUM_SHARDS; i++) {
       OutputWriter<ByteBuffer> out = writers.get(i);
       out.beginSlice();
-      out.write(ByteBuffer.wrap(CONTENT));
+      out.write(ByteBuffer.wrap(content));
       out.endSlice();
       out = reconstruct(out);
       out.beginSlice();
-      out.write(ByteBuffer.wrap(CONTENT));
+      out.write(ByteBuffer.wrap(content));
       out.endSlice();
       out.close();
     }
     List<GcsFilename> files = creator.finish(writers);
     assertEquals(NUM_SHARDS, files.size());
-    ByteBuffer expectedContent = ByteBuffer.allocate(CONTENT.length * 2);
-    expectedContent.put(CONTENT);
-    expectedContent.put(CONTENT);
+    ByteBuffer expectedContent = ByteBuffer.allocate(content.length * 2);
+    expectedContent.put(content);
+    expectedContent.put(content);
     for (int i = 0; i < NUM_SHARDS; i++) {
       expectedContent.rewind();
-      ByteBuffer actualContent = ByteBuffer.allocate(CONTENT.length * 2 + 1);
+      ByteBuffer actualContent = ByteBuffer.allocate(content.length * 2 + 1);
       GcsFileMetadata metadata = gcsService.getMetadata(files.get(i));
       assertNotNull(metadata);
       assertEquals(expectedContent.capacity(), metadata.getLength());
       assertEquals(MIME_TYPE, metadata.getOptions().getMimeType());
       ReadableByteChannel readChannel = gcsService.openReadChannel(files.get(i), 0);
       int read = readChannel.read(actualContent);
-      assertEquals(read, CONTENT.length * 2);
+      assertEquals(read, content.length * 2);
       actualContent.limit(actualContent.position());
       actualContent.rewind();
       assertEquals(expectedContent, actualContent);
@@ -114,6 +129,7 @@ public class CloudStorageFileOutputTest extends TestCase {
     ObjectOutputStream oout = new ObjectOutputStream(bout);
     oout.writeObject(writer);
     oout.close();
+    assertTrue(bout.size() < 1000*1000); //Should fit in datastore.
     ByteArrayInputStream bin = new ByteArrayInputStream(bout.toByteArray());
     ObjectInputStream oin = new ObjectInputStream(bin);
     return (OutputWriter<ByteBuffer>) oin.readObject();
