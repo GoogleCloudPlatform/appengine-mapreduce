@@ -44,6 +44,7 @@ from google.appengine.api import datastore_errors
 from google.appengine.api import datastore_file_stub
 from google.appengine.api import files
 from google.appengine.api import memcache
+from google.appengine.api import taskqueue
 from google.appengine.api.memcache import memcache_stub
 from google.appengine.api.taskqueue import taskqueue_stub
 from google.appengine.ext import db
@@ -955,10 +956,14 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
   def setUp(self):
     """Sets up the test harness."""
     MapreduceHandlerTestBase.setUp(self)
+    self.original_task_add = taskqueue.Task.add
+    self.original_slice_duration = handlers._SLICE_DURATION_SEC
     self.init()
 
   def tearDown(self):
     handlers._TEST_INJECTED_FAULTS.clear()
+    taskqueue.Task.add = self.original_task_add
+    handlers._SLICE_DURATION_SEC = self.original_slice_duration
     MapreduceHandlerTestBase.tearDown(self)
 
   def init(self,
@@ -1295,10 +1300,10 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
     original_method = datastore.PutAsync
     datastore.PutAsync = mock.MagicMock(side_effect=datastore_errors.Timeout())
 
-    # Can't reach datastore. Keep retry.
-    self.assertRaises(datastore_errors.Timeout, self.handler.post)
-    self.assertRaises(datastore_errors.Timeout, self.handler.post)
-    self.assertRaises(datastore_errors.Timeout, self.handler.post)
+    # Tests that handler doesn't abort task for datastore errors.
+    # Unfornately they still increase TaskExecutionCount.
+    for _ in range(handlers._RETRY_SLICE_ERROR_MAX_RETRIES + 1):
+      self.assertRaises(datastore_errors.Timeout, self.handler.post)
     self.verify_shard_state(
         model.ShardState.get_by_shard_id(self.shard_id),
         active=True,
@@ -1311,6 +1316,32 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
         model.ShardState.get_by_shard_id(self.shard_id),
         active=False,
         result_status=model.ShardState.RESULT_SUCCESS,
+        processed=1)
+
+  def testTaskqueueExceptionInHandler(self):
+    """Test when a handler can't reach taskqueue."""
+    self.init(__name__ + ".test_handler_yield_keys")
+    # Force enqueue another task.
+    handlers._SLICE_DURATION_SEC = -1
+    TestEntity().put()
+    taskqueue.Task.add = mock.MagicMock(side_effect=taskqueue.TransientError)
+
+    # Tests that handler doesn't abort task for taskqueue errors.
+    # Unfornately they still increase TaskExecutionCount.
+    for _ in range(handlers._RETRY_SLICE_ERROR_MAX_RETRIES + 1):
+      self.assertRaises(taskqueue.TransientError, self.handler.post)
+    self.verify_shard_state(
+        model.ShardState.get_by_shard_id(self.shard_id),
+        active=True,
+        processed=0)
+
+    taskqueue.Task.add = self.original_task_add
+    self.handler.post()
+
+    self.verify_shard_state(
+        model.ShardState.get_by_shard_id(self.shard_id),
+        active=True,
+        result_status=None,
         processed=1)
 
   def testSlicRetryExceptionInHandler(self):

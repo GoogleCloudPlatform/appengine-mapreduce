@@ -325,7 +325,8 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
     try:
       _tx()
     except (datastore_errors.Timeout,
-            datastore_errors.TransactionFailedError), e:
+            datastore_errors.TransactionFailedError,
+            datastore_errors.InternalError), e:
       logging.error(
           "Can't reach datastore. Will retry slice %s %s for the %s time.",
           tstate.shard_id,
@@ -524,11 +525,16 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
         worker_task.add(queue_name, parent=shard_state)
       except (taskqueue.TombstonedTaskError,
               taskqueue.TaskAlreadyExistsError), e:
-        logging.warning("Task %r with params %r already exists. %s: %s",
+        logging.warning("Task %r already exists. %s: %s",
                         task_name,
-                        transient_shard_state.to_dict(),
                         e.__class__,
                         e)
+      except (taskqueue.TransientError,
+              taskqueue.InternalError), e:
+        logging.error(
+            "Slice %s got error."
+            "Can't reach taskqueue service. Slice will be retried.", task_name)
+        raise e
 
   def _processing_limit(self, spec):
     """Get the limit on the number of map calls allowed by this slice.

@@ -170,9 +170,7 @@ class FileOutputWriterTest(testutil.HandlerTestBase):
     output_writers.FileOutputWriter.init_job(mapreduce_state)
     self.assertTrue(mapreduce_state.writer_state)
     filenames = output_writers.FileOutputWriter.get_filenames(mapreduce_state)
-    self.assertEqual(10, len(filenames))
-    for filename in filenames:
-      self.assertEqual(None, filename)
+    self.assertEqual(0, len(filenames))
 
   def testInitJob_GoogleStorage(self):
     mapreduce_state = self.create_mapreduce_state(

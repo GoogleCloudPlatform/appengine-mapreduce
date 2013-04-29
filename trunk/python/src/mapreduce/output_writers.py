@@ -358,43 +358,36 @@ class RecordsPool(object):
 
   def flush(self):
     """Flush pool contents."""
-    try:
-      # Write data to in-memory buffer first.
-      buf = _StringWriter()
-      with records.RecordsWriter(buf) as w:
-        for record in self._buffer:
-          w.write(record)
+    # Write data to in-memory buffer first.
+    buf = _StringWriter()
+    with records.RecordsWriter(buf) as w:
+      for record in self._buffer:
+        w.write(record)
 
-      str_buf = buf.to_string()
-      if not self._exclusive and len(str_buf) > _FILES_API_MAX_SIZE:
-        # Shouldn't really happen because of flush size.
-        raise errors.Error(
-            "Buffer too big. Can't write more than %s bytes in one request: "
-            "risk of writes interleaving. Got: %s" %
-            (_FILES_API_MAX_SIZE, len(str_buf)))
+    str_buf = buf.to_string()
+    if not self._exclusive and len(str_buf) > _FILES_API_MAX_SIZE:
+      # Shouldn't really happen because of flush size.
+      raise errors.Error(
+          "Buffer too big. Can't write more than %s bytes in one request: "
+          "risk of writes interleaving. Got: %s" %
+          (_FILES_API_MAX_SIZE, len(str_buf)))
 
-      # Write data to file.
-      start_time = time.time()
-      with files.open(self._filename, "a", exclusive_lock=self._exclusive) as f:
-        f.write(str_buf)
-        if self._ctx:
-          operation.counters.Increment(
-              COUNTER_IO_WRITE_BYTES, len(str_buf))(self._ctx)
+    # Write data to file.
+    start_time = time.time()
+    with files.open(self._filename, "a", exclusive_lock=self._exclusive) as f:
+      f.write(str_buf)
       if self._ctx:
         operation.counters.Increment(
-            COUNTER_IO_WRITE_MSEC,
-            int((time.time() - start_time) * 1000))(self._ctx)
+            COUNTER_IO_WRITE_BYTES, len(str_buf))(self._ctx)
+    if self._ctx:
+      operation.counters.Increment(
+          COUNTER_IO_WRITE_MSEC,
+          int((time.time() - start_time) * 1000))(self._ctx)
 
-      # reset buffer
-      self._buffer = []
-      self._size = 0
-      gc.collect()
-    except (files.UnknownError), e:
-      logging.warning("UnknownError: %s", e)
-      raise errors.RetrySliceError()
-    except (files.ExistenceError), e:
-      logging.warning("ExistenceError: %s", e)
-      raise errors.FailJobError("Existence error: %s" % (e))
+    # reset buffer
+    self._buffer = []
+    self._size = 0
+    gc.collect()
 
   def __enter__(self):
     return self
@@ -511,12 +504,8 @@ class FileOutputWriterBase(OutputWriter):
     """
     output_sharding = cls._get_output_sharding(mapreduce_state=mapreduce_state)
     if output_sharding == cls.OUTPUT_SHARDING_INPUT_SHARDS:
-      shard_count = mapreduce_state.mapreduce_spec.mapper.shard_count
       # Each shard creates its own file to support shard retry.
-      # Just create placeholder here.
-      mapreduce_state.writer_state = cls._State(
-          [None] * shard_count,
-          [None] * shard_count).to_json()
+      mapreduce_state.writer_state = cls._State([], []).to_json()
       return
 
     mapper_spec = mapreduce_state.mapreduce_spec.mapper
