@@ -54,7 +54,6 @@ from mapreduce import input_readers
 from mapreduce import operation
 from mapreduce import output_writers
 from mapreduce import model
-from mapreduce import quota
 from mapreduce import test_support
 from testlib import testutil
 from mapreduce import mock_webapp
@@ -104,7 +103,7 @@ class TestException(Exception):
 
 
 class MockTime(object):
-  """Simple class to use for mocking time() funciton."""
+  """Simple class to use for mocking time() function."""
 
   now = time.time()
 
@@ -966,7 +965,8 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
            mapper_handler_spec=MAPPER_HANDLER_SPEC,
            mapper_parameters=None,
            hooks_class_name=None,
-           output_writer_spec=None):
+           output_writer_spec=None,
+           shard_count=8):
     """Init everything needed for testing worker callbacks.
 
     Args:
@@ -984,6 +984,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
     self.mapreduce_id = "mapreduce0"
     self.mapreduce_spec = self.create_mapreduce_spec(
         self.mapreduce_id,
+        shard_count,
         mapper_handler_spec=mapper_handler_spec,
         hooks_class_name=hooks_class_name,
         output_writer_spec=output_writer_spec,
@@ -1013,10 +1014,6 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
     for param_name in worker_params:
       self.handler.request.set(param_name, worker_params[param_name])
 
-    self.quota_manager = quota.QuotaManager(memcache.Client())
-    self.initial_quota = 100000
-    self.quota_manager.set(self.shard_id, self.initial_quota)
-
     self.handler.request.headers["X-AppEngine-QueueName"] = "default"
 
   def testCSRF(self):
@@ -1026,7 +1023,10 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
     self.assertEquals(403, self.handler.response.status)
 
   def testSmoke(self):
-    """Test main execution path of entity scanning."""
+    """Test main execution path of entity scanning.
+
+    No processing rate limit.
+    """
     e1 = TestEntity()
     e1.put()
 
@@ -1044,9 +1044,8 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
         active=False, processed=2,
         result_status=model.ShardState.RESULT_SUCCESS)
 
-    # quota should be reclaimed correctly
-    self.assertEquals(self.initial_quota - len(TestHandler.processed_keys),
-                      self.quota_manager.get(self.shard_id))
+    tasks = self.taskqueue.GetTasks("default")
+    self.assertEquals(0, len(tasks))
 
   def testCompletedState(self):
     self.shard_state.active = False
@@ -1137,10 +1136,6 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
     # only first entity should be processed
     self.assertEquals([str(e1.key())], TestHandler.processed_keys)
 
-    # quota should be reclaimed correctly
-    self.assertEquals(self.initial_quota - len(TestHandler.processed_keys),
-                      self.quota_manager.get(self.shard_id))
-
     # slice should be still active
     self.verify_shard_state(
         model.ShardState.get_by_shard_id(self.shard_id),
@@ -1150,6 +1145,36 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
     tasks = self.taskqueue.GetTasks("default")
     self.assertEquals(1, len(tasks))
     self.verify_shard_task(tasks[0], self.shard_id, self.slice_id + 1)
+    self.assertEquals(tasks[0]['eta_delta'], '0:00:00 ago')
+
+  def testLimitingRate(self):
+    """Test not enough quota to process everything in this slice."""
+    e1 = TestEntity()
+    e1.put()
+
+    e2 = TestEntity()
+    e2.put()
+
+    e3 = TestEntity()
+    e3.put()
+
+    # Everytime the handler is called, it increases time by this amount.
+    TestHandler.delay = handlers._SLICE_DURATION_SEC/2 - 1
+    # handler should be called twice.
+    self.init(mapper_parameters={"processing_rate":
+        10.0/handlers._SLICE_DURATION_SEC}, shard_count=5)
+
+    self.handler.post()
+
+    self.assertEquals(2, len(TestHandler.processed_keys))
+    self.verify_shard_state(
+        model.ShardState.get_by_shard_id(self.shard_id),
+        active=True, processed=2,
+        result_status=None)
+
+    tasks = self.taskqueue.GetTasks("default")
+    self.assertEquals(1, len(tasks))
+    self.assertEquals(tasks[0]['eta_delta'], '0:00:02 from now')
 
   def testLongProcessDataWithAllowCheckpoint(self):
     """Tests that process_data works with input_readers.ALLOW_CHECKPOINT."""
@@ -1294,99 +1319,6 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
     self.verify_shard_task(tasks[0], self.shard_id, 123,
                            hooks_class_name=hooks_class_name)
 
-  def testQuotaCanBeOptedOut(self):
-    """Test work cycle if there was no quota at the very beginning."""
-    e1 = TestEntity()
-    e1.put()
-    self.init(mapper_parameters={"enable_quota": False})
-    self.quota_manager.set(self.shard_id, 0)
-
-    self.handler.post()
-
-    # something should still be processed.
-    self.assertEquals([str(e1.key())], TestHandler.processed_keys)
-    self.assertEquals(1, InputReader.yields)
-
-    # slice should be still active
-    self.verify_shard_state(
-        model.ShardState.get_by_shard_id(self.shard_id),
-        processed=1, active=False, result_status="success")
-
-    # new task should be spawned
-    tasks = self.taskqueue.GetTasks("default")
-    self.assertEquals(0, len(tasks))
-
-  def testNoQuotaAtAll(self):
-    """Test work cycle if there was no quota at the very beginning."""
-    TestEntity().put()
-    self.quota_manager.set(self.shard_id, 0)
-
-    self.handler.post()
-
-    # nothing should be processed.
-    self.assertEquals([], TestHandler.processed_keys)
-    self.assertEquals(0, InputReader.yields)
-
-    # slice should be still active
-    self.verify_shard_state(
-        model.ShardState.get_by_shard_id(self.shard_id),
-        processed=0)
-
-    # new task should be spawned
-    tasks = self.taskqueue.GetTasks("default")
-    self.assertEquals(1, len(tasks))
-    self.verify_shard_task(tasks[0], self.shard_id, self.slice_id + 1)
-
-  def testQuotaForPartialBatchOnly(self):
-    """Test work cycle if there was quota for less than a batch."""
-    for i in range(handlers._QUOTA_BATCH_SIZE * 2):
-      TestEntity().put()
-
-    quota = handlers._QUOTA_BATCH_SIZE / 2
-    self.quota_manager.set(self.shard_id, quota)
-
-    self.handler.post()
-
-    # only quota size should be processed
-    self.assertEquals(quota, len(TestHandler.processed_keys))
-    self.assertEquals(0, self.quota_manager.get(self.shard_id))
-    self.assertEquals(quota, InputReader.yields)
-
-    # slice should be still active
-    self.verify_shard_state(
-        model.ShardState.get_by_shard_id(self.shard_id),
-        processed=quota)
-
-    # new task should be spawned
-    tasks = self.taskqueue.GetTasks("default")
-    self.assertEquals(1, len(tasks))
-    self.verify_shard_task(tasks[0], self.shard_id, self.slice_id + 1)
-
-  def testQuotaForBatchAndAHalf(self):
-    """Test work cycle if there was quota for batch and a half."""
-    for i in range(handlers._QUOTA_BATCH_SIZE * 2):
-      TestEntity().put()
-
-    quota = 3 * handlers._QUOTA_BATCH_SIZE / 2
-    self.quota_manager.set(self.shard_id, quota)
-
-    self.handler.post()
-
-    # only quota size should be processed
-    self.assertEquals(quota, len(TestHandler.processed_keys))
-    self.assertEquals(0, self.quota_manager.get(self.shard_id))
-    self.assertEquals(quota, InputReader.yields)
-
-    # slice should be still active
-    self.verify_shard_state(
-        model.ShardState.get_by_shard_id(self.shard_id),
-        processed=quota)
-
-    # new task should be spawned
-    tasks = self.taskqueue.GetTasks("default")
-    self.assertEquals(1, len(tasks))
-    self.verify_shard_task(tasks[0], self.shard_id, self.slice_id + 1)
-
   def testSlicRetryExceptionInHandler(self):
     """Test when a handler throws a fatal exception."""
     self.init(__name__ + ".test_handler_raise_slice_retry_exception")
@@ -1441,10 +1373,6 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
     try: # test, verify
       self.assertRaises(TestException, self.handler.post)
 
-      # quota should be still consumed
-      self.assertEquals(self.initial_quota - 1,
-                        self.quota_manager.get(self.shard_id))
-
       # slice should be still active
       shard_state = model.ShardState.get_by_shard_id(self.shard_id)
       self.verify_shard_state(shard_state, processed=0)
@@ -1477,10 +1405,6 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
     m.ReplayAll()
     try: # test, verify
       self.handler.post()
-
-      # quota should be still consumed
-      self.assertEquals(self.initial_quota - 1,
-                        self.quota_manager.get(self.shard_id))
 
       # slice should not be active
       shard_state = model.ShardState.get_by_shard_id(self.shard_id)
@@ -1597,7 +1521,6 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
 
     self.handler.request.set("mapreduce_spec", mapreduce_spec.to_json_str())
     self.handler.request.set("serial_id", "1234")
-    self.quota_manager = quota.QuotaManager(memcache.Client())
 
     self.handler.request.headers["X-AppEngine-QueueName"] = "default"
 
@@ -1864,68 +1787,6 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
 
     # Done Callback task should be spawned
     self.verify_done_task()
-
-  def testInitialQuota(self):
-    """Tests that the controller gives shards no quota to start."""
-    shard_states = []
-    for i in range(3):
-      shard_state = self.create_shard_state(self.mapreduce_id, i)
-      shard_states.append(shard_state)
-      shard_state.put()
-
-    self.handler.post()
-
-    for shard_state in shard_states:
-      self.assertEquals(0, self.quota_manager.get(shard_state.shard_id))
-
-  def testQuotaRefill(self):
-    """Test that controller refills quota after some time."""
-    shard_states = []
-    for i in range(3):
-      shard_state = self.create_shard_state(self.mapreduce_id, i)
-      shard_states.append(shard_state)
-      shard_state.put()
-
-    mapreduce_state = model.MapreduceState.get_by_key_name(self.mapreduce_id)
-    mapreduce_state.last_poll_time = \
-        datetime.datetime.utcfromtimestamp(int(MockTime.time()))
-    mapreduce_state.put()
-
-    self.handler.post()
-
-    # 0 second passed. No quota should be filled
-    for shard_state in shard_states:
-      self.assertEquals(0, self.quota_manager.get(shard_state.shard_id))
-
-    MockTime.advance_time(1)
-    self.handler.post()
-
-    # 1 second passed. ceil(33.3) = 34 quotas should be refilled.
-    # (100 entities/sec = 33.3 entities/shard/sec in our case).
-    for shard_state in shard_states:
-      self.assertEquals(333334, self.quota_manager.get(shard_state.shard_id))
-
-  def testQuotaIsSplitOnlyBetweenActiveShards(self):
-    """Test that quota is split only between active shards."""
-    active_shard_states = []
-    for i in range(3):
-      shard_state = self.create_shard_state(self.mapreduce_id, i)
-      if i == 1:
-        shard_state.active = False
-      else:
-        active_shard_states.append(shard_state)
-      shard_state.put()
-
-    mapreduce_state = model.MapreduceState.get_by_key_name(self.mapreduce_id)
-    mapreduce_state.last_poll_time = \
-        datetime.datetime.fromtimestamp(int(MockTime.time()))
-    mapreduce_state.put()
-
-    MockTime.advance_time(1)
-    self.handler.post()
-
-    for shard_state in active_shard_states:
-      self.assertEquals(500000, self.quota_manager.get(shard_state.shard_id))
 
   def testScheduleQueueName(self):
     """Tests that the calling queue name is preserved on schedule calls."""
