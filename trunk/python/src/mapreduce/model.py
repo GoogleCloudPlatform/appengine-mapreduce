@@ -64,6 +64,10 @@ _DEFAULT_PROCESSING_RATE_PER_SEC = 1000000
 # Default number of shards to have.
 _DEFAULT_SHARD_COUNT = 8
 
+_MAP_REDUCE_KINDS = ("_AE_MR_MapreduceControl",
+                     "_AE_MR_MapreduceState",
+                     "_AE_MR_ShardState")
+
 
 class JsonEncoder(simplejson.JSONEncoder):
   """MR customized json encoder."""
