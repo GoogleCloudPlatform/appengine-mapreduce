@@ -13,10 +13,14 @@
   <property name="testlib" location="test_lib" />
 
   <property name="sdk" location="sdk" />
-  <property name="version" value="1.7.6" />
+  <property name="version" value="1.7.7" />
   <property name="sdkdirname" value="appengine-java-sdk-${version}" />
   <property name="sdkfilename" value="${sdkdirname}.zip" />
   <property name="sdklibdir" location="${sdk}/${sdkdirname}/lib" />
+
+  <property name="gcsversion" value="r34" />
+  <property name="gcsclientzip" value="appengine-gcs-client-java.zip" />
+  <property name="gcsclientjar" value="appengine-gcs-client.jar" />
 
   <path id="sdkjars">
     <fileset dir="${sdklibdir}/user">
@@ -49,7 +53,7 @@
     <mkdir dir="${build}" />
   </target>
 
-  <target name="compile" depends="init,download_sdk">
+  <target name="compile" depends="init,download_sdk,download_gcs">
     <javac srcdir="${src}" destdir="${build}" debug="on" debuglevel="lines,source">
       <compilerarg value="-Xlint:all"/>
       <compilerarg value="-Xlint:-sunapi"/>
@@ -64,7 +68,7 @@
     <mkdir dir="${testbuild}" />
   </target>
 
-  <target name="test_compile" depends="test_init,dist,download_sdk">
+  <target name="test_compile" depends="test_init,dist,download_sdk,download_gcs">
     <javac srcdir="${testsrc}" destdir="${testbuild}" debug="on" debuglevel="lines,source">
       <classpath>
         <path refid="sdkjars" />
@@ -76,7 +80,7 @@
   </target>
 
   <target name="test" depends="test_compile">
-    <junit filtertrace="off">
+    <junit filtertrace="off" maxmemory="256m" fork="true">
       <batchtest>
         <fileset dir="${testsrc}">
           <include name="**/*Test*.java" />
@@ -88,6 +92,7 @@
           <exclude name="com/google/appengine/tools/mapreduce/impl/shardedjob/TestController.java" />
           <exclude name="com/google/appengine/tools/mapreduce/impl/shardedjob/TestTask.java" />
           <exclude name="com/google/appengine/tools/mapreduce/inputs/BlobstoreInputTestCase.java" />
+          <exclude name="com/google/appengine/tools/mapreduce/inputs/CloudStorageLineInputTestCase.java" />
         </fileset>
       </batchtest>
       <classpath>
@@ -132,6 +137,38 @@
     <mkdir dir="${sdk}" />
     <get src="http://googleappengine.googlecode.com/files/${sdkfilename}" dest="${sdk}/${sdkfilename}" />
     <unzip src="${sdk}/${sdkfilename}" dest="${sdk}" />
+  </target>
+
+  <!-- Helper macro to delete a directory only if it is empty -->
+  <macrodef name="deleteEmptyFolder">
+    <attribute name="dir" />
+    <sequential>
+      <delete includeemptydirs="true" verbose="true">
+        <fileset dir="@{dir}">
+          <and>
+            <size value="0" />
+            <type type="dir" />
+          </and>
+        </fileset>
+      </delete>
+    </sequential>
+  </macrodef>
+
+  <target name="check_gcs_extracted">
+    <available file="${lib}/${gcsclientjar}" property="gcsextracted" />
+  </target>
+
+  <target name="download_gcs" description="Gets the GCS Library" depends="check_gcs_extracted" unless="gcsextracted">
+    <mkdir dir="${lib}/tmp" />
+    <get src="https://appengine-gcs-client.googlecode.com/files/appengine-gcs-client-java-${gcsversion}.zip"
+      dest="${lib}/tmp/${gcsclientzip}" />
+    <unzip src="${lib}/tmp/${gcsclientzip}" dest="${lib}">
+      <patternset>
+        <include name="${gcsclientjar}"/>
+      </patternset>
+    </unzip>
+    <delete file="${lib}/tmp/${gcsclientzip}" />
+    <deleteEmptyFolder dir="${lib}/tmp" />
   </target>
 
   <!-- Separate target because downloading the SDK can be expensive and
