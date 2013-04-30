@@ -37,7 +37,7 @@ public class RetryHelper<V> {
     V run() throws IOException;
   }
 
-  private final Stopwatch stopwatch = Stopwatch.createUnstarted();
+  private final Stopwatch stopwatch = new Stopwatch();
   private int attemptsSoFar = 0;
   private final Body<V> body;
   private final RetryParams params;
