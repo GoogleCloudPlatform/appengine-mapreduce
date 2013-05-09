@@ -573,7 +573,7 @@ class DatastoreInputReaderTestCommon(unittest.TestCase):
     self.assertEquals(keys, results)
 
   # Subclass should override with its own assert equals.
-  def _assertEqualsForAllShards_splitInput(self, keys, *itrs):
+  def _assertEqualsForAllShards_splitInput(self, keys, max_read, *itrs):
     """AssertEquals helper for splitInput tests.
 
     Check the outputs from all shards. This is used when sharding
@@ -581,6 +581,9 @@ class DatastoreInputReaderTestCommon(unittest.TestCase):
 
     Args:
       keys: a set of expected key names from this iterator.
+      max_read: limit number of results read from the iterators before failing
+        or None for no limit. Useful for preventing infinite loops or bounding
+        the execution of the test.
       *itrs: input readers returned from splitInput.
     """
     results = []
@@ -589,6 +592,8 @@ class DatastoreInputReaderTestCommon(unittest.TestCase):
         try:
           results.append(self._get_keyname(iter(itr).next()))
           itr = itr.__class__.from_json(itr.to_json())
+          if max_read is not None and len(results) > max_read:
+            self.fail("Too many results found")
         except StopIteration:
           break
     results.sort()
@@ -628,7 +633,7 @@ class DatastoreInputReaderTestCommon(unittest.TestCase):
         params, 2)
     results = self.reader_cls.split_input(mapper_spec)
     self.assertEquals(2, len(results))
-    self._assertEqualsForAllShards_splitInput(["0", "1", "2"], *results)
+    self._assertEqualsForAllShards_splitInput(["0", "1", "2"], None, *results)
 
   def testSplitInput_withNs_moreShardThanScatter(self):
     self._create_entities(range(3), {"1": 1}, "f")
@@ -642,7 +647,7 @@ class DatastoreInputReaderTestCommon(unittest.TestCase):
         params, 4)
     results = self.reader_cls.split_input(mapper_spec)
     self.assertTrue(len(results) >= 2)
-    self._assertEqualsForAllShards_splitInput(["0", "1", "2"], *results)
+    self._assertEqualsForAllShards_splitInput(["0", "1", "2"], None, *results)
 
   def testSplitInput_noEntity(self):
     params = {
@@ -668,7 +673,7 @@ class DatastoreInputReaderTestCommon(unittest.TestCase):
     results = self.reader_cls.split_input(mapper_spec)
     self.assertTrue(len(results) >= 2)
     self._assertEqualsForAllShards_splitInput(
-        ["0", "1", "2", "10", "11", "12"], *results)
+        ["0", "1", "2", "10", "11", "12"], None, *results)
 
   def testSplitInput_moreThanOneUnevenNS(self):
     self._create_entities(range(5), {"1": 1, "3": 3}, "1")
@@ -683,7 +688,7 @@ class DatastoreInputReaderTestCommon(unittest.TestCase):
     results = self.reader_cls.split_input(mapper_spec)
     self.assertTrue(len(results) >= 3)
     self._assertEqualsForAllShards_splitInput(
-        ["0", "1", "2", "3", "4", "10", "11", "12"], *results)
+        ["0", "1", "2", "3", "4", "10", "11", "12"], None, *results)
 
   def testSplitInput_lotsOfNS(self):
     self._create_entities(range(3), {"1": 1}, "9")
@@ -701,6 +706,40 @@ class DatastoreInputReaderTestCommon(unittest.TestCase):
     self._assertEquals_splitInput(results[0], ["0", "1", "2"])
     self._assertEquals_splitInput(results[1], ["3", "4", "5"])
     self._assertEquals_splitInput(results[2], ["6", "7", "8"])
+
+  def testSplitInput_withNsAndDefaultNs(self):
+    shards = 2
+    # 10 entities in the default namespace
+    empty_ns_keys = [str(k) for k in range(10)]
+    self._create_entities(empty_ns_keys,
+                          dict([(k, 1) for k in empty_ns_keys]),
+                          None)
+    # 10 entities for each of N different non-default namespaces. The number
+    # of namespaces, N, is set to be twice the cutoff for switching to sharding
+    # by namespace instead of keys.
+    non_empty_ns_keys = []
+    for ns_num in range(self.reader_cls.MAX_NAMESPACES_FOR_KEY_SHARD * 2):
+      ns_keys = ["n-%02d-k-%02d" % (ns_num, k) for k in range(10)]
+      non_empty_ns_keys.extend(ns_keys)
+      self._create_entities(ns_keys,
+                            dict([(k, 1) for k in ns_keys]),
+                            "%02d" % ns_num)
+
+    # Test a query over all namespaces
+    params = {
+        "entity_kind": self.entity_kind,
+        "namespace": None}
+    mapper_spec = model.MapperSpec(
+        "FooHandler",
+        "InputReader",
+        params,
+        shards)
+    results = self.reader_cls.split_input(mapper_spec)
+    self.assertEqual(shards, len(results))
+    all_keys = empty_ns_keys + non_empty_ns_keys
+    self._assertEqualsForAllShards_splitInput(all_keys,
+                                              len(all_keys),
+                                              *results)
 
 
 class RawDatastoreInputReaderTest(DatastoreInputReaderTestCommon):
@@ -745,7 +784,7 @@ class RawDatastoreInputReaderTest(DatastoreInputReaderTestCommon):
         params, 2)
     results = self.reader_cls.split_input(mapper_spec)
     self.assertEquals(2, len(results))
-    self._assertEqualsForAllShards_splitInput(["0", "1", "2"], *results)
+    self._assertEqualsForAllShards_splitInput(["0", "1", "2"], None, *results)
 
   def testRawEntityTypeFromOtherApp(self):
     """Test reading from other app."""
