@@ -81,8 +81,9 @@ class ControlTest(testutil.HandlerTestBase):
     # Checks that tasks are scheduled into the future.
     task = tasks[0]
     self.assertEquals("/mapreduce_base_path/kickoffjob_callback", task["url"])
-
-    mapreduce_spec =self.get_mapreduce_spec(task)
+    handler = test_support.execute_task(task)
+    mapreduce_spec = model.MapreduceSpec.from_json_str(
+        handler.request.get("mapreduce_spec"))
     self.assertTrue(mapreduce_spec)
     self.assertEquals(mapreduce_id, mapreduce_spec.mapreduce_id)
     self.assertEquals({"foo": "bar"}, mapreduce_spec.params)

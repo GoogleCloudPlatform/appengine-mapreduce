@@ -491,12 +491,12 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
     if retry_shard:
       # shard retry logic has already set tstate and shard_state
       # to desired values. So we only need to convert to task.
-      task = self._state_to_task(tstate)
+      task = self._state_to_task(tstate, shard_state)
     elif shard_state.active:
       shard_state.advance_for_next_slice()
       tstate.advance_for_next_slice()
       countdown = self._get_countdown_for_next_slice(spec)
-      task = self._state_to_task(tstate, countdown=countdown)
+      task = self._state_to_task(tstate, shard_state, countdown=countdown)
     queue_name = os.environ.get("HTTP_X_APPENGINE_QUEUENAME", "default")
 
     @db.transactional(retries=5)
@@ -512,8 +512,8 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
         logging.error("Slice's %s", str(shard_state))
         return
       fresh_shard_state.copy_from(shard_state)
-      # It's possible tx goes through but we still see datastore timeouts.
-      # So always add task first!
+      fresh_shard_state.put(config=config)
+      # Add task in the same datastore transaction.
       # This way we guarantee taskqueue is never behind datastore states.
       # Old tasks will be dropped.
       # Future task won't run until datastore states catches up.
@@ -521,8 +521,7 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
         assert task is not None
         # Not adding task transactionally.
         # transactional enqueue requires tasks with no name.
-        self._add_task(task, fresh_shard_state, spec, queue_name)
-      fresh_shard_state.put(config=config)
+        self._add_task(task, spec, queue_name)
 
     try:
       _tx()
@@ -696,12 +695,14 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
   @classmethod
   def _state_to_task(cls,
                      tstate,
+                     shard_state,
                      eta=None,
                      countdown=None):
     """Generate task for slice according to current states.
 
     Args:
       tstate: An instance of TransientShardState.
+      shard_state: An instance of ShardState.
       eta: Absolute time when the MR should execute. May not be specified
         if 'countdown' is also supplied. This may be timezone-aware or
         timezone-naive.
@@ -709,7 +710,7 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
         Defaults to zero.
 
     Returns:
-      A util.HugeTask instance for the slice specified by current states.
+      A model.HugeTask instance for the slice specified by current states.
     """
     base_path = tstate.base_path
 
@@ -718,25 +719,25 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
         tstate.slice_id,
         tstate.retries)
 
-    worker_task = util.HugeTask(url=base_path + "/worker_callback",
-                                params=tstate.to_dict(),
-                                name=task_name,
-                                eta=eta,
-                                countdown=countdown)
+    worker_task = model.HugeTask(
+        url=base_path + "/worker_callback",
+        params=tstate.to_dict(),
+        name=task_name,
+        eta=eta,
+        countdown=countdown,
+        parent=shard_state)
     return worker_task
 
   @classmethod
   def _add_task(cls,
                 worker_task,
-                shard_state,
                 mapreduce_spec,
                 queue_name):
     """Schedule slice scanning by adding it to the task queue.
 
     Args:
-      worker_task: a util.HugeTask task for slice. This is NOT a taskqueue
+      worker_task: a model.HugeTask task for slice. This is NOT a taskqueue
         task.
-      shard_state: an instance of ShardState.
       mapreduce_spec: an instance of model.MapreduceSpec.
       queue_name: Optional queue to run on; uses the current queue of
         execution or the default queue if unspecified.
@@ -748,7 +749,7 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
       try:
         # Not adding transactionally because worker_task has name.
         # Named task is not allowed for transactional add.
-        worker_task.add(queue_name, parent=shard_state)
+        worker_task.add(queue_name)
       except (taskqueue.TombstonedTaskError,
               taskqueue.TaskAlreadyExistsError), e:
         logging.warning("Task %r already exists. %s: %s",
@@ -796,8 +797,8 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
     """
     queue_name = queue_name or os.environ.get("HTTP_X_APPENGINE_QUEUENAME",
                                               "default")
-    task = cls._state_to_task(tstate, eta, countdown)
-    cls._add_task(task, shard_state, tstate.mapreduce_spec, queue_name)
+    task = cls._state_to_task(tstate, shard_state, eta, countdown)
+    cls._add_task(task, tstate.mapreduce_spec, queue_name)
 
 
 class ControllerCallbackHandler(base_handler.HugeTaskHandler):
@@ -1052,17 +1053,18 @@ class ControllerCallbackHandler(base_handler.HugeTaskHandler):
     if not queue_name:
       queue_name = os.environ.get("HTTP_X_APPENGINE_QUEUENAME", "default")
 
-    controller_callback_task = util.HugeTask(
+    controller_callback_task = model.HugeTask(
         url=base_path + "/controller_callback",
         name=task_name, params=task_params,
-        countdown=_CONTROLLER_PERIOD_SEC)
+        countdown=_CONTROLLER_PERIOD_SEC,
+        parent=mapreduce_state)
 
     if not _run_task_hook(mapreduce_spec.get_hooks(),
                           "enqueue_controller_task",
                           controller_callback_task,
                           queue_name):
       try:
-        controller_callback_task.add(queue_name, parent=mapreduce_state)
+        controller_callback_task.add(queue_name)
       except (taskqueue.TombstonedTaskError,
               taskqueue.TaskAlreadyExistsError), e:
         logging.warning("Task %r with params %r already exists. %s: %s",
@@ -1113,6 +1115,7 @@ class KickOffJobHandler(base_handler.HugeTaskHandler):
     if output_writer_class:
       output_writer_class.init_job(state)
 
+    # TODO(user): Non transactional override of state. Dangerous!
     state.put(config=util.create_datastore_write_config(spec))
 
     KickOffJobHandler._schedule_shards(
@@ -1188,9 +1191,9 @@ class KickOffJobHandler(base_handler.HugeTaskHandler):
       task = MapperWorkerCallbackHandler._state_to_task(
           model.TransientShardState(
               base_path, spec, shard_id, 0, input_reader, input_reader,
-              output_writer=output_writer))
+              output_writer=output_writer),
+          shard_states[shard_number])
       MapperWorkerCallbackHandler._add_task(task,
-                                            shard_states[shard_number],
                                             spec,
                                             queue_name)
 
@@ -1293,12 +1296,7 @@ class StartJobHandler(base_handler.PostJsonHandler):
                  _app=None,
                  transactional=False,
                  parent_entity=None):
-    queue_name = queue_name or os.environ.get("HTTP_X_APPENGINE_QUEUENAME",
-                                              "default")
-    if queue_name[0] == "_":
-      # We are currently in some special queue. E.g. __cron.
-      queue_name = "default"
-
+    """See control.start_map."""
     if not transactional and parent_entity:
       raise Exception("Parent shouldn't be specfied "
                       "for non-transactional starts.")
@@ -1328,49 +1326,57 @@ class StartJobHandler(base_handler.PostJsonHandler):
     finally:
       context.Context._set(None)
 
+    if not transactional:
+      # Save state in datastore so that UI can see it.
+      state = model.MapreduceState.create_new(mapreduce_spec.mapreduce_id)
+      state.mapreduce_spec = mapreduce_spec
+      state.active = True
+      state.active_shards = mapper_spec.shard_count
+      if _app:
+        state.app_id = _app
+      config = util.create_datastore_write_config(mapreduce_spec)
+      state.put(config=config)
+      parent_entity = state
+
+    cls._add_kickoff_task(
+        base_path, mapreduce_spec, eta, countdown, parent_entity,
+        queue_name, transactional, _app)
+
+    return mapreduce_id
+
+  @classmethod
+  def _add_kickoff_task(cls,
+                        base_path,
+                        mapreduce_spec,
+                        eta,
+                        countdown,
+                        parent,
+                        queue_name,
+                        transactional,
+                        _app):
+    queue_name = queue_name or os.environ.get("HTTP_X_APPENGINE_QUEUENAME",
+                                              "default")
+    if queue_name[0] == "_":
+      # We are currently in some special queue. E.g. __cron.
+      queue_name = "default"
+
     kickoff_params = {"mapreduce_spec": mapreduce_spec.to_json_str()}
     if _app:
       kickoff_params["app"] = _app
-    kickoff_worker_task = util.HugeTask(
+    kickoff_worker_task = model.HugeTask(
         url=base_path + "/kickoffjob_callback",
         params=kickoff_params,
         eta=eta,
-        countdown=countdown)
-
+        countdown=countdown,
+        parent=parent)
     hooks = mapreduce_spec.get_hooks()
-    config = util.create_datastore_write_config(mapreduce_spec)
-
-    def start_mapreduce():
-      parent = parent_entity
-      if not transactional:
-        # Save state in datastore so that UI can see it.
-        # We can't save state in foreign transaction, but conventional UI
-        # doesn't ask for transactional starts anyway.
-        state = model.MapreduceState.create_new(mapreduce_spec.mapreduce_id)
-        state.mapreduce_spec = mapreduce_spec
-        state.active = True
-        state.active_shards = mapper_spec.shard_count
-        if _app:
-          state.app_id = _app
-        state.put(config=config)
-        parent = state
-
-      if hooks is not None:
-        try:
-          hooks.enqueue_kickoff_task(kickoff_worker_task, queue_name)
-        except NotImplementedError:
-          # Use the default task addition implementation.
-          pass
-        else:
-          return
-      kickoff_worker_task.add(queue_name, transactional=True, parent=parent)
-
-    if transactional:
-      start_mapreduce()
+    if hooks is not None:
+      try:
+        hooks.enqueue_kickoff_task(kickoff_worker_task, queue_name)
+      except NotImplementedError:
+        kickoff_worker_task.add(queue_name, transactional=transactional)
     else:
-      db.run_in_transaction(start_mapreduce)
-
-    return mapreduce_id
+      kickoff_worker_task.add(queue_name)
 
 
 class FinalizeJobHandler(base_handler.TaskQueueHandler):
@@ -1385,9 +1391,9 @@ class FinalizeJobHandler(base_handler.TaskQueueHandler):
               config=config)
       shard_states = model.ShardState.find_by_mapreduce_state(mapreduce_state)
       for shard_state in shard_states:
-        db.delete(util._HugeTaskPayload.all().ancestor(shard_state),
+        db.delete(model._HugeTaskPayload.all().ancestor(shard_state),
                   config=config)
-      db.delete(util._HugeTaskPayload.all().ancestor(mapreduce_state),
+      db.delete(model._HugeTaskPayload.all().ancestor(mapreduce_state),
                 config=config)
 
   @classmethod

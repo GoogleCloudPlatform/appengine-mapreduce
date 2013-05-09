@@ -31,7 +31,6 @@ except ImportError:
 from google.appengine.ext import webapp
 from mapreduce import errors
 from mapreduce import model
-from mapreduce import util
 
 
 class Error(Exception):
@@ -64,12 +63,7 @@ class TaskQueueHandler(BaseHandler):
       self.response.set_status(
           403, message="Task queue handler received non-task queue request")
       return
-    self._setup()
     self.handle()
-
-  def _setup(self):
-    """Called before handle method to set up handler."""
-    pass
 
   def handle(self):
     """To be implemented by subclasses."""
@@ -175,39 +169,22 @@ class HugeTaskHandler(TaskQueueHandler):
   class _RequestWrapper(object):
     def __init__(self, request):
       self._request = request
-
-      self.path = self._request.path
-      self.headers = self._request.headers
-
-      self._encoded = True  # we have encoded payload.
-
-      if (not self._request.get(util.HugeTask.PAYLOAD_PARAM) and
-          not self._request.get(util.HugeTask.PAYLOAD_KEY_PARAM)):
-        self._encoded = False
-        return
-      self._params = util.HugeTask.decode_payload(
-          {util.HugeTask.PAYLOAD_PARAM:
-           self._request.get(util.HugeTask.PAYLOAD_PARAM),
-           util.HugeTask.PAYLOAD_KEY_PARAM:
-           self._request.get(util.HugeTask.PAYLOAD_KEY_PARAM)})
+      self._params = model.HugeTask.decode_payload(request)
 
     def get(self, name, default=""):
-      if self._encoded:
-        return self._params.get(name, default)
-      else:
-        return self._request.get(name, default)
+      return self._params.get(name, default)
 
     def set(self, name, value):
-      if self._encoded:
-        self._params.set(name, value)
-      else:
-        self._request.set(name, value)
+      self._params[name] = value
+
+    def __getattr__(self, name):
+      return getattr(self._request, name)
 
   def __init__(self, *args, **kwargs):
     super(HugeTaskHandler, self).__init__(*args, **kwargs)
 
-  def _setup(self):
-    super(HugeTaskHandler, self)._setup()
+  def initialize(self, request, response):
+    super(HugeTaskHandler, self).initialize(request, response)
     self.request = self._RequestWrapper(self.request)
 
 

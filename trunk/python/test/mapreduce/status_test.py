@@ -17,8 +17,6 @@
 
 
 
-import base64
-import cgi
 import os
 from mapreduce.lib import simplejson
 import shutil
@@ -32,6 +30,7 @@ from mapreduce import errors
 from mapreduce import handlers
 from mapreduce import status
 from testlib import testutil
+from mapreduce import test_support
 from mapreduce import mock_webapp
 
 
@@ -512,15 +511,7 @@ class GetJobDetailTest(testutil.HandlerTestBase):
 
   def KickOffMapreduce(self):
     """Executes pending kickoff task."""
-    kickoff_task = self.taskqueue.GetTasks("default")[0]
-    handler = handlers.KickOffJobHandler()
-    handler.initialize(mock_webapp.MockRequest(), mock_webapp.MockResponse())
-    handler.request.path = "/mapreduce/kickoffjob_callback"
-    handler.request.params.update(
-        cgi.parse_qsl(base64.b64decode(kickoff_task["body"])))
-    handler.request.headers["X-AppEngine-QueueName"] = "default"
-    handler.post()
-    self.taskqueue.DeleteTask("default", kickoff_task["name"])
+    test_support.execute_all_tasks(self.taskqueue)
 
   def testCSRF(self):
     """Test that we check the X-Requested-With header."""

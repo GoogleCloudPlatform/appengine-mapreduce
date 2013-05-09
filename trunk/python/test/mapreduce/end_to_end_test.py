@@ -17,10 +17,10 @@ from google.appengine.api.files import records
 from google.appengine.ext import db
 from mapreduce import control
 from mapreduce import handlers
+from mapreduce import model
 from mapreduce import output_writers
 from mapreduce import test_support
 from testlib import testutil
-from mapreduce import util
 from google.appengine.ext import ndb
 
 # pylint: disable=g-bad-name
@@ -372,7 +372,7 @@ class EndToEndTest(testutil.HandlerTestBase):
 
     test_support.execute_until_empty(self.taskqueue)
     self.assertEquals(100, len(TestHandler.processed_entites))
-    self.assertEquals([], util._HugeTaskPayload.all().fetch(100))
+    self.assertEquals([], model._HugeTaskPayload.all().fetch(100))
 
   def testHugeTaskUseDatastore(self):
     """Test map job with huge parameter values."""
@@ -402,7 +402,7 @@ class EndToEndTest(testutil.HandlerTestBase):
 
     test_support.execute_until_empty(self.taskqueue)
     self.assertEquals(100, len(TestHandler.processed_entites))
-    self.assertEquals([], util._HugeTaskPayload.all().fetch(100))
+    self.assertEquals([], model._HugeTaskPayload.all().fetch(100))
 
 
 if __name__ == "__main__":
