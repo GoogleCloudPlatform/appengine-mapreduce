@@ -18,20 +18,14 @@
 
 
 from testlib import mox
-import os
 import unittest
 
+from google.appengine.ext import ndb
 import unittest
 from google.appengine.api import datastore
 from google.appengine.ext import db
 from mapreduce import context
 from testlib import testutil
-from mapreduce import model
-
-try:
-  from google.appengine.ext import ndb
-except ImportError:
-  ndb = None
 
 
 class TestEntity(db.Model):

@@ -31,6 +31,8 @@ import sys
 import time
 import traceback
 
+from google.appengine.ext import ndb
+
 from google.appengine import runtime
 from google.appengine.api import datastore_errors
 from google.appengine.api import logservice
@@ -46,11 +48,6 @@ from mapreduce import operation
 from mapreduce import parameters
 from mapreduce import util
 from google.appengine.runtime import apiproxy_errors
-
-try:
-  from google.appengine.ext import ndb
-except ImportError:
-  ndb = None
 
 
 # TODO(user): find a proper value for this.
@@ -342,10 +339,9 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
     # up the request memory size and Datastore Puts will avoid doing calls
     # to memcache. Without this you get soft memory limit exits, which hurts
     # overall throughput.
-    if ndb is not None:
-      ndb_ctx = ndb.get_context()
-      ndb_ctx.set_cache_policy(lambda key: False)
-      ndb_ctx.set_memcache_policy(lambda key: False)
+    ndb_ctx = ndb.get_context()
+    ndb_ctx.set_cache_policy(lambda key: False)
+    ndb_ctx.set_memcache_policy(lambda key: False)
 
     context.Context._set(ctx)
     retry_directive = False
@@ -406,7 +402,7 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
     for entity in input_reader:
       if isinstance(entity, db.Model):
         shard_state.last_work_item = repr(entity.key())
-      elif ndb and isinstance(entity, ndb.Model):
+      elif isinstance(entity, ndb.Model):
         shard_state.last_work_item = repr(entity.key)
       else:
         shard_state.last_work_item = repr(entity)[:100]
