@@ -27,6 +27,7 @@ __all__ = [
     "handler_for_name",
     "is_generator",
     "parse_bool",
+    "total_seconds",
     "try_serialize_handler",
     "try_deserialize_handler",
     ]
@@ -36,6 +37,24 @@ import pickle
 import types
 
 from google.appengine.datastore import datastore_rpc
+
+
+def total_seconds(td):
+  """convert a timedelta to seconds.
+
+  This is patterned after timedelta.total_seconds, which is only
+  available in python 27.
+
+  Args:
+    td: a timedelta object.
+
+  Returns:
+    total seconds within a timedelta. Rounded up to seconds.
+  """
+  secs = td.seconds + td.days * 24 * 3600
+  if td.microseconds:
+    secs += 1
+  return secs
 
 
 def for_name(fq_name, recursive=False):

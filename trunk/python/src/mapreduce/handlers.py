@@ -253,8 +253,7 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
     min_delta = datetime.timedelta(
         seconds=_SLICE_DURATION_SEC + _LEASE_GRACE_PERIOD)
     if delta < min_delta:
-      # round up.
-      return int(math.ceil((min_delta - delta).total_seconds()))
+      return util.total_seconds(min_delta - delta)
     else:
       return 0
 
