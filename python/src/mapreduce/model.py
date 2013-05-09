@@ -38,8 +38,10 @@ __all__ = ["JsonEncoder",
            "ShardState",
            "CountersMap",
            "TransientShardState",
-           "QuerySpec"]
+           "QuerySpec",
+           "HugeTask"]
 
+import cgi
 import copy
 import datetime
 import logging
@@ -47,9 +49,13 @@ import os
 import random
 from mapreduce.lib import simplejson
 import time
+import urllib
+import zlib
 
 from google.appengine.api import datastore_errors
 from google.appengine.api import datastore_types
+from google.appengine.api import taskqueue
+from google.appengine.datastore import datastore_rpc
 from google.appengine.ext import db
 from mapreduce import context
 from mapreduce import hooks
@@ -64,9 +70,162 @@ _DEFAULT_PROCESSING_RATE_PER_SEC = 1000000
 # Default number of shards to have.
 _DEFAULT_SHARD_COUNT = 8
 
+# Special datastore kinds for MR.
 _MAP_REDUCE_KINDS = ("_AE_MR_MapreduceControl",
                      "_AE_MR_MapreduceState",
-                     "_AE_MR_ShardState")
+                     "_AE_MR_ShardState",
+                     "_AE_MR_TaskPayload")
+
+
+class _HugeTaskPayload(db.Model):
+  """Model object to store task payload."""
+
+  payload = db.BlobProperty()
+
+  @classmethod
+  def kind(cls):
+    """Returns entity kind."""
+    return "_AE_MR_TaskPayload"
+
+
+class HugeTask(object):
+  """HugeTask is a taskqueue.Task-like class that can store big payloads.
+
+  Payloads are stored either in the task payload itself or in the datastore.
+  Task handlers should inherit from base_handler.HugeTaskHandler class.
+  """
+
+  PAYLOAD_PARAM = "__payload"
+  PAYLOAD_KEY_PARAM = "__payload_key"
+
+  # Leave some wiggle room for headers and other fields.
+  MAX_TASK_PAYLOAD = taskqueue.MAX_PUSH_TASK_SIZE_BYTES - 1024
+  MAX_DB_PAYLOAD = datastore_rpc.BaseConnection.MAX_RPC_BYTES
+
+  PAYLOAD_VERSION_HEADER = "AE-MR-Payload-Version"
+  # Update version when payload handling is changed
+  # in a backward incompatible way.
+  PAYLOAD_VERSION = "1"
+
+  def __init__(self,
+               url,
+               params,
+               name=None,
+               eta=None,
+               countdown=None,
+               parent=None):
+    """Init.
+
+    Args:
+      url: task url in str.
+      params: a dict from str to str.
+      name: task name.
+      eta: task eta.
+      countdown: task countdown.
+      parent: parent entity of huge task's payload.
+
+    Raises:
+      ValueError: when payload is too big even for datastore, or parent is
+    not specified when payload is stored in datastore.
+    """
+    self.url = url
+    self.name = name
+    self.eta = eta
+    self.countdown = countdown
+    self._headers = {
+        "Content-Type": "application/octet-stream",
+        self.PAYLOAD_VERSION_HEADER: self.PAYLOAD_VERSION
+    }
+
+    # TODO(user): Find a more space efficient way than urlencoding.
+    payload_str = urllib.urlencode(params)
+    compressed_payload = ""
+    if len(payload_str) > self.MAX_TASK_PAYLOAD:
+      compressed_payload = zlib.compress(payload_str)
+
+    # Payload is small. Don't bother with anything.
+    if not compressed_payload:
+      self._payload = payload_str
+    # Compressed payload is small. Don't bother with datastore.
+    elif len(compressed_payload) < self.MAX_TASK_PAYLOAD:
+      self._payload = self.PAYLOAD_PARAM + compressed_payload
+    elif len(compressed_payload) > self.MAX_DB_PAYLOAD:
+      raise ValueError(
+          "Payload from %s to big to be stored in database: %s" %
+          self.name, len(compressed_payload))
+    # Store payload in the datastore.
+    else:
+      if not parent:
+        raise ValueError("Huge tasks should specify parent entity.")
+
+      payload_entity = _HugeTaskPayload(payload=compressed_payload,
+                                        parent=parent)
+      payload_key = payload_entity.put()
+      self._payload = self.PAYLOAD_KEY_PARAM + str(payload_key)
+
+  def add(self, queue_name, transactional=False):
+    """Add task to the queue."""
+    task = self.to_task()
+    task.add(queue_name, transactional)
+
+  def to_task(self):
+    """Convert to a taskqueue task."""
+    # Never pass params to taskqueue.Task. Use payload instead. Otherwise,
+    # it's up to a particular taskqueue implementation to generate
+    # payload from params. It could blow up payload size over limit.
+    return taskqueue.Task(
+        url=self.url,
+        payload=self._payload,
+        name=self.name,
+        eta=self.eta,
+        countdown=self.countdown,
+        headers=self._headers)
+
+  @classmethod
+  def decode_payload(cls, request):
+    """Decode task payload.
+
+    HugeTask controls its own payload entirely including urlencoding.
+    It doesn't depend on any particular web framework.
+
+    Args:
+      request: a webapp Request instance.
+
+    Returns:
+      A dict of str to str. The same as the params argument to __init__.
+
+    Raises:
+      DeprecationWarning: When task payload constructed from an older
+        incompatible version of mapreduce.
+    """
+    # TODO(user): Pass mr_id into headers. Otherwise when payload decoding
+    # failed, we can't abort a mr.
+    if request.headers.get(cls.PAYLOAD_VERSION_HEADER) != cls.PAYLOAD_VERSION:
+      raise DeprecationWarning(
+          "Task is generated by an older incompatible version of mapreduce. "
+          "Please kill this job manually")
+
+    body = request.body
+    compressed_payload_str = None
+    if body.startswith(cls.PAYLOAD_KEY_PARAM):
+      payload_key = body[len(cls.PAYLOAD_KEY_PARAM):]
+      payload_entity = _HugeTaskPayload.get(payload_key)
+      compressed_payload_str = payload_entity.payload
+    elif body.startswith(cls.PAYLOAD_PARAM):
+      compressed_payload_str = body[len(cls.PAYLOAD_PARAM):]
+
+    if compressed_payload_str:
+      payload_str = zlib.decompress(compressed_payload_str)
+    else:
+      payload_str = body
+
+    result = {}
+    for (name, value) in cgi.parse_qs(payload_str).items():
+      if len(value) == 1:
+        result[name] = value[0]
+      else:
+        result[name] = value
+    return result
 
 
 class JsonEncoder(simplejson.JSONEncoder):

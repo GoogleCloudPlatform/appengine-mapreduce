@@ -32,6 +32,7 @@ from google.appengine.api import datastore_file_stub
 from google.appengine.ext import db
 from mapreduce import hooks
 from mapreduce import model
+from mapreduce import mock_webapp
 
 
 class TestHandler(object):
@@ -100,6 +101,23 @@ class TestEntity(db.Model):
   empty_json_property = model.JsonProperty(EmptyDictJsonType)
 
 ENTITY_KIND = '__main__.TestEntity'
+
+
+class HugeTaskTest(unittest.TestCase):
+  """HugeTask tests.
+
+  Other tests are in end_to_end_test.py
+  """
+
+  def testIncorrectPayloadVersion(self):
+    request = mock_webapp.MockRequest()
+    self.assertRaises(DeprecationWarning,
+                      model.HugeTask.decode_payload,
+                      request)
+    request.headers[model.HugeTask.PAYLOAD_VERSION_HEADER] = "0"
+    self.assertRaises(DeprecationWarning,
+                      model.HugeTask.decode_payload,
+                      request)
 
 
 class JsonSerializationTest(unittest.TestCase):
