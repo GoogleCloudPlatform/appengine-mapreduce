@@ -19,6 +19,7 @@
 
 # pylint: disable=g-bad-name
 
+import datetime
 import unittest
 
 from mapreduce import util
@@ -190,6 +191,17 @@ class GetShortNameTest(unittest.TestCase):
     self.assertEquals("blah", util.get_short_name(".blah"))
     self.assertEquals("blah", util.get_short_name("__mmm__.blah"))
     self.assertEquals("blah", util.get_short_name("__mmm__.Krb.blah"))
+
+
+class TotalSecondsTest(unittest.TestCase):
+  """Test util.total_seconds."""
+
+  def testTotalSeconds(self):
+    td = datetime.timedelta(days=1, seconds=1)
+    self.assertEqual(24 * 60 * 60 + 1, util.total_seconds(td))
+
+    td = datetime.timedelta(days=1, seconds=1, microseconds=1)
+    self.assertEqual(24 * 60 * 60 + 2, util.total_seconds(td))
 
 
 class ParseBoolTest(unittest.TestCase):
