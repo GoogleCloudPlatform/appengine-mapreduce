@@ -53,10 +53,8 @@ import time
 import zipfile
 
 from google.net.proto import ProtocolBuffer
-try:
-  from google.appengine.ext import ndb
-except ImportError:
-  ndb = None
+from google.appengine.ext import ndb
+
 from google.appengine.api import datastore
 from google.appengine.api import files
 from google.appengine.api import logservice
@@ -706,7 +704,7 @@ class DatastoreInputReader(AbstractDatastoreInputReader):
     entity_type = util.for_name(model_classpath)
     if isinstance(entity_type, db.Model):
       return entity_type.kind()
-    elif ndb and isinstance(entity_type, (ndb.Model, ndb.MetaModel)):
+    elif isinstance(entity_type, (ndb.Model, ndb.MetaModel)):
       # pylint: disable=protected-access
       return entity_type._get_kind()
     else:
