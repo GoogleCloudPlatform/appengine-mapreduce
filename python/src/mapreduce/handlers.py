@@ -58,6 +58,9 @@ _SLICE_DURATION_SEC = 15
 # See model.ShardState doc on slice_start_time. In second.
 _LEASE_GRACE_PERIOD = 1
 
+# See model.ShardState doc on slice_start_time. In second.
+_REQUEST_EVENTUAL_TIMEOUT = 10 * 60 + 30
+
 # Delay between consecutive controller callback invocations.
 _CONTROLLER_PERIOD_SEC = 2
 
@@ -167,7 +170,8 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
     # Check potential duplicated tasks for the same slice.
     # See model.ShardState doc.
     if shard_state.slice_start_time:
-      countdown = self._lease_countdown(shard_state)
+      countdown = self._wait_time(shard_state,
+                                  _LEASE_GRACE_PERIOD + _SLICE_DURATION_SEC)
       if countdown > 0:
         logging.warning(
             "Last retry of slice %s-%s may be still running."
@@ -180,7 +184,8 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
         return
       # lease could have expired. Verify with logs API.
       else:
-        if not self._old_request_ended(shard_state):
+        if (not self._old_request_ended(shard_state) and
+            self._wait_time(shard_state, _REQUEST_EVENTUAL_TIMEOUT)):
           logging.warning(
               "Last retry of slice %s-%s is still in flight with request_id "
               "%s. Will try again later.", tstate.shard_id, tstate.slice_id,
@@ -221,7 +226,7 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
     return _tx()
 
   def _old_request_ended(self, shard_state):
-    """Whether previous slice retry has ended.
+    """Whether previous slice retry has ended according to Logs API.
 
     Args:
       shard_state: shard state.
@@ -246,14 +251,22 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
       return False
     return True
 
-  def _lease_countdown(self, shard_state):
-    """Number of seconds before lease expire."""
+  def _wait_time(self, shard_state, secs, now=datetime.datetime.now):
+    """Time to wait until slice_start_time is secs ago from now.
+
+    Args:
+      shard_state: shard state.
+      secs: duration in seconds.
+      now: a func that gets now.
+
+    Returns:
+      0 if no wait. A positive int in seconds otherwise. Always around up.
+    """
     assert shard_state.slice_start_time is not None
-    delta = datetime.datetime.now() - shard_state.slice_start_time
-    min_delta = datetime.timedelta(
-        seconds=_SLICE_DURATION_SEC + _LEASE_GRACE_PERIOD)
-    if delta < min_delta:
-      return util.total_seconds(min_delta - delta)
+    delta = now() - shard_state.slice_start_time
+    duration = datetime.timedelta(seconds=secs)
+    if delta < duration:
+      return util.total_seconds(duration - delta)
     else:
       return 0
 
