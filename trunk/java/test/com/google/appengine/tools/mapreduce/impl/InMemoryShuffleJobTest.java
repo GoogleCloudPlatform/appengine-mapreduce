@@ -11,6 +11,7 @@ import com.google.appengine.api.files.FileStat;
 import com.google.appengine.api.files.FileWriteChannel;
 import com.google.appengine.api.files.FinalizationException;
 import com.google.appengine.api.files.GSFileOptions;
+import com.google.appengine.api.files.KeyOrderingException;
 import com.google.appengine.api.files.LockException;
 import com.google.appengine.api.files.RecordReadChannel;
 import com.google.appengine.api.files.RecordWriteChannel;
@@ -34,13 +35,18 @@ import junit.framework.TestCase;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationTargetException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Random;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Logger;
 
 /**
@@ -210,19 +216,22 @@ public class InMemoryShuffleJobTest extends TestCase {
     private final RecordWriteChannel wrapped;
     private final double throwProb;
     private MockFileService mockFileService;
+    private AtomicReference<String> sequence;
 
-    private ThrowingRecordWriteChannel(
-        MockFileService mockFileService, RecordWriteChannel toWrapp, double throwProb) {
+    private ThrowingRecordWriteChannel(MockFileService mockFileService, RecordWriteChannel toWrapp,
+        double throwProb, AtomicReference<String> sequence) {
       this.mockFileService = mockFileService;
       wrapped = toWrapp;
       this.throwProb = throwProb;
+      this.sequence = sequence;
     }
 
     @Override
     public int write(ByteBuffer src) throws IOException {
-      throwMaybe(src);
+      throwMaybe(src, throwProb);
       mockFileService.writeCounter.incrementAndGet();
-      return wrapped.write(src);
+      int result = wrapped.write(src);
+      return result;
     }
 
     private void throwMaybe() throws IOException {
@@ -232,7 +241,7 @@ public class InMemoryShuffleJobTest extends TestCase {
       }
     }
 
-    private void throwMaybe(ByteBuffer src) throws IOException {
+    private void throwMaybe(ByteBuffer src, double throwProb) throws IOException {
       if (mockFileService.r.nextDouble() < throwProb) {
         mockFileService.throwCounter.incrementAndGet();
         src.position(src.limit());
@@ -258,10 +267,36 @@ public class InMemoryShuffleJobTest extends TestCase {
     }
 
     @Override
-    public int write(ByteBuffer src, String arg1) throws IOException {
-      throwMaybe(src);
+    public int write(ByteBuffer src, String seq) throws IOException {
+      throwMaybe(src, throwProb / 2.0);
+      if (sequence.get() != null && sequence.get().compareTo(seq) >= 0) {
+        throwKeyOrderingException();
+      }
       mockFileService.writeCounter.incrementAndGet();
-      return wrapped.write(src, arg1);
+      int result = wrapped.write(src, seq);
+      sequence.set(seq);
+      throwMaybe(src, throwProb / 2.0);
+      return result;
+    }
+
+    /**
+     * @throws KeyOrderingException
+     */
+    void throwKeyOrderingException() throws KeyOrderingException {
+      try {
+        Constructor<KeyOrderingException> constructor =
+            (Constructor) KeyOrderingException.class.getDeclaredConstructors()[1];
+        constructor.setAccessible(true);
+        throw constructor.newInstance();
+      } catch (InstantiationException e) {
+        throw new RuntimeException(e);
+      } catch (IllegalAccessException e) {
+        throw new RuntimeException(e);
+      } catch (IllegalArgumentException e) {
+        throw new RuntimeException(e);
+      } catch (InvocationTargetException e) {
+        throw new RuntimeException(e);
+      }
     }
   }
 
@@ -312,6 +347,8 @@ public class InMemoryShuffleJobTest extends TestCase {
     private final Random r = new Random(17);
     private final double throwOnRead;
     private final double throwOnWrite;
+    private final Map<AppEngineFile, AtomicReference<String>> sequenceNumbers =
+        new HashMap<AppEngineFile, AtomicReference<String>>();
 
     public MockFileService(double throwOnRead, double throwOnWrite) {
       this.throwOnRead = throwOnRead;
@@ -365,8 +402,13 @@ public class InMemoryShuffleJobTest extends TestCase {
     @Override
     public RecordWriteChannel openRecordWriteChannel(AppEngineFile arg0, boolean arg1)
         throws FileNotFoundException, FinalizationException, LockException, IOException {
+      AtomicReference<String> reference = sequenceNumbers.get(arg0);
+      if (reference == null) {
+        reference = new AtomicReference<String>();
+        sequenceNumbers.put(arg0, reference);
+      }
       return new ThrowingRecordWriteChannel(
-          this, fileService.openRecordWriteChannel(arg0, arg1), throwOnWrite);
+          this, fileService.openRecordWriteChannel(arg0, arg1), throwOnWrite, reference);
     }
 
     @Override
