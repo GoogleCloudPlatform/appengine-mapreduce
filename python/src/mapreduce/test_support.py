@@ -85,10 +85,8 @@ def execute_task(task, retries=0, handlers_map=None):
   for (re_str, handler_class) in handlers_map:
     re_str = "^" + re_str + "($|\\?)"
     if re.match(re_str, url):
-      handler = handler_class()
       break
-
-  if not handler:
+  else:
     raise Exception("Can't determine handler for %s" % task)
 
   request = mock_webapp.MockRequest()
@@ -112,8 +110,15 @@ def execute_task(task, retries=0, handlers_map=None):
     for k, v in decode_task_payload(task).iteritems():
       request.set(k, v)
 
-  # Always setup request before call initialize, per webapp contract.
-  handler.initialize(request, mock_webapp.MockResponse())
+  response = mock_webapp.MockResponse()
+  try:
+    # Webapp2 expects request/response in the handler instantiation, and calls
+    # initialize automatically.
+    handler = handler_class(request, response)
+  except TypeError:
+    # For webapp, setup request before calling initialize.
+    handler = handler_class()
+    handler.initialize(request, response)
 
   saved_os_environ = os.environ
   try:
