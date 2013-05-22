@@ -39,8 +39,6 @@ __all__ = [
 
 import gc
 import logging
-import pickle
-import string
 import time
 
 from google.appengine.api import files
@@ -49,14 +47,6 @@ from google.appengine.api.files import records
 from mapreduce import errors
 from mapreduce import model
 from mapreduce import operation
-
-# pylint: disable=g-import-not-at-top
-# TODO(user): Cleanup imports if/when cloudstorage becomes part of runtime.
-try:
-  import cloudstorage  # External users
-except ImportError:
-  # Required post-scrubbing, pylint: disable=unnecessary-pass
-  pass  # CloudStorage library not available
 
 
 # Counter name for number of bytes written.
@@ -146,8 +136,8 @@ class OutputWriter(model.JsonMixin):
 
     Args:
       mapreduce_state: an instance of model.MapreduceState describing current
-      job. State can NOT be modified.
-      shard_state: shard state which can be modified.
+      job. State can be modified.
+      shard_state: shard state.
     """
     raise NotImplementedError("create() not implemented in %s" % cls)
 
@@ -203,7 +193,7 @@ _FILES_API_FLUSH_SIZE = 128*1024
 _FILES_API_MAX_SIZE = 1000*1024
 
 
-def _get_params(mapper_spec, allowed_keys=None, allow_old=True):
+def _get_params(mapper_spec, allowed_keys=None):
   """Obtain output writer parameters.
 
   Utility function for output writer implementation. Fetches parameters
@@ -214,8 +204,6 @@ def _get_params(mapper_spec, allowed_keys=None, allow_old=True):
     allowed_keys: set of all allowed keys in parameters as strings. If it is not
       None, then parameters are expected to be in a separate "output_writer"
       subdictionary of mapper_spec parameters.
-    allow_old: Allow parameters to exist outside of the output_writer
-      subdictionary for compatability.
 
   Returns:
     mapper parameters as dict
@@ -227,7 +215,7 @@ def _get_params(mapper_spec, allowed_keys=None, allow_old=True):
     message = (
         "Output writer's parameters should be specified in "
         "output_writer subdictionary.")
-    if not allow_old or allowed_keys:
+    if allowed_keys:
       raise errors.BadWriterParamsError(message)
     params = mapper_spec.params
     params = dict((str(n), v) for n, v in params.iteritems())
@@ -799,215 +787,3 @@ class BlobstoreRecordsOutputWriter(FileRecordsOutputWriter,
 class KeyValueBlobstoreOutputWriter(KeyValueFileOutputWriter,
                                     BlobstoreOutputWriterBase):
   """Output writer for KeyValue records files in blobstore."""
-
-
-class _CloudStorageOutputWriter(OutputWriter):
-  """Output writer to Google Cloud Storage using the CloudStorage library.
-
-  This class is expected to be subclassed with a writer that applies formatting
-  to user-level records.
-
-  Required configuration in the mapper_spec.output_writer dictionary.
-    BUCKET_NAME_PARAM: name of the bucket to use (with no extra delimiters or
-      suffixes such as directories. Directories/prefixes can be specifed as
-      part of the NAMING_FORMAT_PARAM)
-
-  Optional configuration in the mapper_spec.output_writer dictionary:
-    ACL_PARAM: acl to apply to new files, else bucket default used
-    NAMING_FORMAT_PARAM: prefix format string for the new files (there is no
-      required starting slash, expected formats would look like
-      "directory/basename...", any starting slash will be treated as part of
-      the file name) that should use the following substitutions:
-        $name - the name of the job
-        $id - the id assigned to the job
-        $num - the shard number
-        $retry - the retry count for this shard
-      If there is more than one shard $num must be used. An arbitrary suffix may
-      be applied by the writer.
-    CONTENT_TYPE_PARAM: mime type to apply
-  """
-
-  # Supported parameters
-  BUCKET_NAME_PARAM = "bucket_name"
-  ACL_PARAM = "acl"
-  NAMING_FORMAT_PARAM = "naming_format"
-  CONTENT_TYPE_PARAM = "content_type"
-
-  # Default settings
-  DEFAULT_NAMING_FORMAT = "$name-$id-output-$num-retry-$retry"
-  DEFAULT_CONTENT_TYPE = "application/octet-stream"
-
-  # Internal parameters
-  _ACCOUNT_ID_PARAM = "account_id"  # GAIA ID
-
-  def __init__(self, streaming_buffer):
-    """Initialize a CloudStorageOutputWriter instance.
-
-    Args:
-      streaming_buffer: an instance of writable buffer from cloudstorage_api
-    """
-    self._streaming_buffer = streaming_buffer
-
-  @classmethod
-  def _generate_filename(cls, writer_spec, name, job_id, num,
-                         retry):
-    """Generates a filename for a shard / retry count.
-
-    Args:
-      writer_spec: specification dictionary for the output writer
-      name: name of the job
-      job_id: the ID number assigned to the job
-      num: shard number
-      retry: the retry number
-
-    Returns:
-      a string containing the filename
-
-    Raises:
-      BadWriterParamsError if the template contains any errors such as invalid
-        syntax or contains unknown substitution placeholders.
-    """
-    naming_format = writer_spec.get(cls.NAMING_FORMAT_PARAM,
-                                    cls.DEFAULT_NAMING_FORMAT)
-    template = string.Template(naming_format)
-    try:
-      # Check that template doesn't use undefined mappings and is formatted well
-      return template.substitute(name=name, id=job_id, num=num, retry=retry)
-    except ValueError, error:
-      raise errors.BadWriterParamsError("Naming template is bad, %s" % (error))
-    except KeyError, error:
-      raise errors.BadWriterParamsError("Naming template '%s' has extra "
-                                        "mappings, %s" % (naming_format, error))
-
-  @classmethod
-  def validate(cls, mapper_spec):
-    """Validate mapper specification.
-
-    Args:
-      mapper_spec: an instance of model.MapperSpec
-
-    Raises:
-      BadWriterParamsError if the specification is invalid for any reason such
-        as missing the bucket name or providing an invalid bucket name.
-    """
-    writer_spec = _get_params(mapper_spec, allow_old=False)
-
-    # Bucket Name is required
-    if not cls.BUCKET_NAME_PARAM in writer_spec:
-      raise errors.BadWriterParamsError(
-          "%s is required for Cloud Storage" %
-          cls.BUCKET_NAME_PARAM)
-    try:
-      cloudstorage.validate_bucket_name(
-          writer_spec[cls.BUCKET_NAME_PARAM])
-    except ValueError, error:
-      raise errors.BadWriterParamsError("Bad bucket name, %s" % (error))
-
-    # Validate the naming format does not throw any errors using dummy values
-    cls._generate_filename(writer_spec, "name", "id", 0, 0)
-
-  @classmethod
-  def init_job(cls, mapreduce_state):
-    """Initialize any job-level state.
-
-    Args:
-      mapreduce_state: an instance of model.MapreduceState. State may be
-        modified during initialization.
-    """
-    # There is no work to be done, init occurs during per-shard file creation
-    pass
-
-  @classmethod
-  def finalize_job(cls, mapreduce_state):
-    """Finalize any job-level state.
-
-    Args:
-      mapreduce_state: an instance of model.MapreduceState. State may be
-        modified during finalization.
-    """
-    # There is no work to be done, finalization only occurs per-shard
-    pass
-
-  @classmethod
-  def create(cls, mapreduce_state, shard_state):
-    """Create new writer for a shard.
-
-    Args:
-      mapreduce_state: an instance of model.MapreduceState describing current
-        job. State can NOT be modified.
-      shard_state: an instance of model.ShardState which can be modified.
-
-    Returns:
-      an output writer for the requested shard
-    """
-    # Get the current job state
-    job_spec = mapreduce_state.mapreduce_spec
-    writer_spec = _get_params(job_spec.mapper, allow_old=False)
-
-    # Determine parameters
-    key = cls._generate_filename(writer_spec, job_spec.name,
-                                 job_spec.mapreduce_id,
-                                 shard_state.shard_number, shard_state.retries)
-    # CloudStorage format for filenames, Initial slash is required
-    filename = "/%s/%s" % (writer_spec[cls.BUCKET_NAME_PARAM], key)
-
-    content_type = writer_spec.get(cls.CONTENT_TYPE_PARAM,
-                                   cls.DEFAULT_CONTENT_TYPE)
-
-    options = {}
-    if cls.ACL_PARAM in writer_spec:
-      options["x-goog-acl"] = writer_spec.get(cls.ACL_PARAM)
-
-    account_id = writer_spec.get(cls._ACCOUNT_ID_PARAM, None)
-
-    writer = cloudstorage.open(filename, mode="w",
-                               content_type=content_type,
-                               options=options,
-                               _account_id=account_id)
-
-    # Save filename to shard_state
-    shard_state.writer_state = {"filename": filename}
-
-    return cls(writer)
-
-  @classmethod
-  def _get_filename(cls, shard_state):
-    return shard_state.writer_state["filename"]
-
-  @classmethod
-  def get_filenames(cls, mapreduce_state):
-    shards = model.ShardState.find_by_mapreduce_state(mapreduce_state)
-    filenames = []
-    for shard in shards:
-      filenames.append(cls._get_filename(shard))
-    return filenames
-
-  @classmethod
-  def from_json(cls, state):
-    return cls(pickle.loads(state))
-
-  def to_json(self):
-    return pickle.dumps(self._streaming_buffer)
-
-  def write(self, data, ctx):
-    """Write data to the CloudStorage file.
-
-    Args:
-      data: string containing the data to be written
-      ctx: a model.Context for this shard
-
-    The actual writing to the stream is handled by a private function
-    allowing this method to be overriden with other logic (such as records).
-    """
-    self._write(data, ctx)
-
-  def _write(self, data, ctx):
-    start_time = time.time()
-    self._streaming_buffer.write(data)
-    if ctx:
-      operation.counters.Increment(COUNTER_IO_WRITE_BYTES, len(data))(ctx)
-      operation.counters.Increment(
-          COUNTER_IO_WRITE_MSEC, int((time.time() - start_time) * 1000))(ctx)
-
-  def finalize(self, ctx, shard_state):
-    self._streaming_buffer.close()
