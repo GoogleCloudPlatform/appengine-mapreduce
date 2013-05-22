@@ -22,7 +22,7 @@ import unittest
 from mapreduce import base_handler
 from mapreduce import errors
 from mapreduce import status
-from mapreduce import mock_webapp
+from google.appengine.ext.webapp import mock_webapp
 
 
 class BaseHandlerTest(unittest.TestCase):

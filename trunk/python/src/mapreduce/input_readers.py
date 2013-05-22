@@ -65,7 +65,7 @@ from google.appengine.datastore import datastore_query
 from google.appengine.datastore import datastore_rpc
 from google.appengine.ext import blobstore
 from google.appengine.ext import db
-from mapreduce.lib import key_range
+from google.appengine.ext import key_range
 from google.appengine.ext.db import metadata
 from mapreduce import context
 from mapreduce import datastore_range_iterators as db_iters
