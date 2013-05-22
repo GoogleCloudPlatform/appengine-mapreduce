@@ -7,9 +7,8 @@
 import unittest
 from testlib import mox
 
-from google.appengine.api import apiproxy_stub_map
+from google.appengine.api import apiproxy_stub
 from google.appengine.api.files import file_service_stub
-from google.appengine.ext import testbed
 from mapreduce import shuffler
 from mapreduce import test_support
 from testlib import testutil
@@ -37,11 +36,9 @@ class ShuffleServicePipelineTest(testutil.HandlerTestBase):
 
   def setUp(self):
     testutil.HandlerTestBase.setUp(self)
-    # Use a special file service stub that enables the shuffle service
-    self.file_service = MockFileServiceStub(self.testbed.get_stub(
-        testbed.BLOBSTORE_SERVICE_NAME).storage)
-    apiproxy_stub_map.apiproxy.ReplaceStub(testbed.FILES_SERVICE_NAME,
-                                           self.file_service)
+
+  def createFileServiceStub(self, blob_storage):
+    return MockFileServiceStub(blob_storage)
 
   def testSuccessfulRun(self):
     p = shuffler._ShuffleServicePipeline("testjob", ["file1", "file2"])
