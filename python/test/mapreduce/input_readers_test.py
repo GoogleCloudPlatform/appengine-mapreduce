@@ -27,6 +27,7 @@ from google.appengine.tools import os_compat  # pylint: disable-msg=W0611
 import cStringIO
 import datetime
 import logging
+import math
 from testlib import mox
 import os
 import random
@@ -63,6 +64,14 @@ from mapreduce import model
 from mapreduce import namespace_range
 from testlib import testutil
 from google.appengine.datastore import entity_pb
+
+# pylint: disable=g-import-not-at-top
+# TODO(user): Cleanup imports if/when cloudstorage becomes part of runtime.
+try:
+  import cloudstorage
+  enable_cloudstorage_tests = True
+except ImportError:
+  enable_cloudstorage_tests = False
 
 
 class TestJsonType(object):
@@ -2741,6 +2750,340 @@ class FileInputReaderTest(unittest.TestCase):
                       input_readers.FileInputReader.validate,
                       mapper_spec)
 
+
+class GoogleCloudStorageInputTestBase(testutil.CloudStorageTestBase):
+  """Base class for running input tests with Google Cloud Storage.
+
+  Subclasses must define READER_NAME and may redefine NUM_SHARDS.
+  """
+
+  # Defaults
+  NUM_SHARDS = 10
+
+  def create_mapper_spec(self, num_shards=None, input_params=None):
+    """Create a Mapper specification using the GoogleCloudStorageInputReader.
+
+    The specification generated uses a dummy handler and by default the
+    number of shards is 10.
+
+    Args:
+      num_shards: optionally specify the number of shards.
+      input_params: parameters for the input reader.
+
+    Returns:
+      a model.MapperSpec with default settings and specified input_params.
+    """
+    mapper_spec = model.MapperSpec(
+        "DummyHandler",
+        self.READER_NAME,
+        {"input_reader": input_params or {}},
+        num_shards or self.NUM_SHARDS)
+    return mapper_spec
+
+  def create_test_file(self, filename, content):
+    """Create a test file with minimal content.
+
+    Args:
+      filename: the name of the file in the form "/bucket/object".
+      content: the content to put in the file or if None a dummy string
+        containing the filename will be used.
+    """
+    test_file = cloudstorage.open(filename, mode="w")
+    test_file.write(content)
+    test_file.close()
+
+
+class GoogleCloudStorageInputReaderTest(GoogleCloudStorageInputTestBase):
+  """Tests for GoogleCloudStorageInputReader."""
+
+  READER_CLS = input_readers._GoogleCloudStorageInputReader
+  READER_NAME = input_readers.__name__ + "." + READER_CLS.__name__
+
+  def setUp(self):
+    super(GoogleCloudStorageInputReaderTest, self).setUp()
+
+    # create test content
+    self.test_bucket = "testing"
+    self.test_content = []
+    self.test_num_files = 20
+    for file_num in range(self.test_num_files):
+      content = "Dummy Content %03d" % file_num
+      self.test_content.append(content)
+      self.create_test_file("/%s/file-%03d" % (self.test_bucket, file_num),
+                            content)
+
+  def testValidate_NoParams(self):
+    self.assertRaises(
+        errors.BadReaderParamsError,
+        self.READER_CLS.validate,
+        self.create_mapper_spec())
+
+  def testValidate_NoBucket(self):
+    self.assertRaises(
+        errors.BadReaderParamsError,
+        self.READER_CLS.validate,
+        self.create_mapper_spec(input_params={"objects": ["1", "2", "3"]}))
+
+  def testValidate_NoObjects(self):
+    self.assertRaises(
+        errors.BadReaderParamsError,
+        self.READER_CLS.validate,
+        self.create_mapper_spec(input_params={"bucket_name": self.test_bucket}))
+
+  def testValidate_NonList(self):
+    self.assertRaises(
+        errors.BadReaderParamsError,
+        self.READER_CLS.validate,
+        self.create_mapper_spec(input_params={"bucket_name": self.test_bucket,
+                                              "objects": "1"}))
+
+  def testValidate_SingleObject(self):
+    # expect no errors are raised
+    self.READER_CLS.validate(
+        self.create_mapper_spec(input_params={"bucket_name": self.test_bucket,
+                                              "objects": ["1"]}))
+
+  def testValidate_ObjectList(self):
+    # expect no errors are raised
+    self.READER_CLS.validate(
+        self.create_mapper_spec(input_params={"bucket_name": self.test_bucket,
+                                              "objects": ["1", "2", "3"]}))
+
+  def testValidate_ObjectListNonString(self):
+    self.assertRaises(
+        errors.BadReaderParamsError,
+        self.READER_CLS.validate,
+        self.create_mapper_spec(input_params={"bucket_name": self.test_bucket,
+                                              "objects": ["1", ["2", "3"]]}))
+
+  def testSplit_SingleObjectSingleShard(self):
+    readers = self.READER_CLS.split_input(
+        self.create_mapper_spec(num_shards=1,
+                                input_params={"bucket_name": self.test_bucket,
+                                              "objects": ["1"]}))
+    self.assertEqual(1, len(readers))
+    self.assertEqual(1, len(readers[0]._filenames))
+
+  def testSplit_SingleObjectManyShards(self):
+    readers = self.READER_CLS.split_input(
+        self.create_mapper_spec(num_shards=10,
+                                input_params={"bucket_name": self.test_bucket,
+                                              "objects": ["1"]}))
+    self.assertEqual(1, len(readers))
+    self.assertEqual(1, len(readers[0]._filenames))
+
+  def testSplit_ManyObjectEvenlySplitManyShards(self):
+    num_shards = 10
+    files_per_shard = 3
+    filenames = ["f-%d" % f for f in range(num_shards * files_per_shard)]
+    readers = self.READER_CLS.split_input(
+        self.create_mapper_spec(num_shards=num_shards,
+                                input_params={"bucket_name": self.test_bucket,
+                                              "objects": filenames}))
+    self.assertEqual(num_shards, len(readers))
+    for reader in readers:
+      self.assertEqual(files_per_shard, len(reader._filenames))
+
+  def testSplit_ManyObjectUnevenlySplitManyShards(self):
+    num_shards = 10
+    total_files = int(10 * 2.33)
+    filenames = ["f-%d" % f for f in range(total_files)]
+    readers = self.READER_CLS.split_input(
+        self.create_mapper_spec(num_shards=num_shards,
+                                input_params={"bucket_name": self.test_bucket,
+                                              "objects": filenames}))
+    self.assertEqual(num_shards, len(readers))
+    found_files = 0
+    for reader in readers:
+      shard_num_files = len(reader._filenames)
+      found_files += shard_num_files
+      # ensure per-shard distribution is even
+      min_files = math.floor(total_files / num_shards)
+      max_files = min_files + 1
+      self.assertTrue(min_files <= shard_num_files,
+                      msg="Too few files (%d > %d) in reader: %s" %
+                      (min_files, shard_num_files, reader))
+      self.assertTrue(max_files >= shard_num_files,
+                      msg="Too many files (%d < %d) in reader: %s" %
+                      (max_files, shard_num_files, reader))
+    self.assertEqual(total_files, found_files)
+
+  def testSplit_Wildcard(self):
+    # test prefix matching all files
+    readers = self.READER_CLS.split_input(
+        self.create_mapper_spec(num_shards=1,
+                                input_params={"bucket_name": self.test_bucket,
+                                              "objects": ["file-*"]}))
+    self.assertEqual(1, len(readers))
+    self.assertEqual(self.test_num_files, len(readers[0]._filenames))
+
+    # test prefix the first 10 (those with 00 prefix)
+    self.assertTrue(self.test_num_files > 10,
+                    msg="More than 10 files required for testing")
+    readers = self.READER_CLS.split_input(
+        self.create_mapper_spec(num_shards=1,
+                                input_params={"bucket_name": self.test_bucket,
+                                              "objects": ["file-00*"]}))
+    self.assertEqual(1, len(readers))
+    self.assertEqual(10, len(readers[0]._filenames))
+
+    # test prefix matching no files
+    readers = self.READER_CLS.split_input(
+        self.create_mapper_spec(num_shards=1,
+                                input_params={"bucket_name": self.test_bucket,
+                                              "objects": ["badprefix*"]}))
+    self.assertEqual(0, len(readers))
+
+  def testNext(self):
+    readers = self.READER_CLS.split_input(
+        self.create_mapper_spec(num_shards=1,
+                                input_params={"bucket_name": self.test_bucket,
+                                              "objects": ["file-*"]}))
+    self.assertEqual(1, len(readers))
+    reader_files = list(readers[0])
+    self.assertEqual(self.test_num_files, len(reader_files))
+    found_content = []
+    for reader_file in reader_files:
+      found_content.append(reader_file.read())
+    self.assertEqual(len(self.test_content), len(found_content))
+    for content in self.test_content:
+      self.assertTrue(content in found_content)
+
+  def testSerialization(self):
+    readers = self.READER_CLS.split_input(
+        self.create_mapper_spec(num_shards=1,
+                                input_params={"bucket_name": self.test_bucket,
+                                              "objects": ["file-*"]}))
+    self.assertEqual(1, len(readers))
+    # serialize/deserialize unused reader
+    reader = self.READER_CLS.from_json(readers[0].to_json())
+
+    found_content = []
+    for _ in range(self.test_num_files):
+      reader_file = reader.next()
+      found_content.append(reader_file.read())
+      # serialize/deserialize after each file is read
+      reader = self.READER_CLS.from_json(reader.to_json())
+    self.assertEqual(len(self.test_content), len(found_content))
+    for content in self.test_content:
+      self.assertTrue(content in found_content)
+
+    # verify a reader at EOF still raises EOF after serialization
+    self.assertRaises(StopIteration, reader.next)
+
+
+class GoogleCloudStorageRecordInputReaderTest(GoogleCloudStorageInputTestBase):
+  """Tests for GoogleCloudStorageInputReader."""
+
+  READER_CLS = input_readers._GoogleCloudStorageRecordInputReader
+  READER_NAME = input_readers.__name__ + "." + READER_CLS.__name__
+  TEST_BUCKET = "testing"
+
+  def create_test_file(self, filename, content):
+    """Create a test LevelDB file with a RecordWriter.
+
+    Args:
+      filename: the name of the file in the form "/bucket/object".
+      content: list of content to put in file in LevelDB format.
+    """
+    test_file = cloudstorage.open(filename, mode="w")
+    with records.RecordsWriter(test_file) as w:
+      for c in content:
+        w.write(c)
+    test_file.close()
+
+  def testSingleFileNoRecord(self):
+    filename = "/%s/empty-file" % self.TEST_BUCKET
+    self.create_test_file(filename, [])
+    reader = self.READER_CLS([filename])
+
+    self.assertRaises(StopIteration, reader.next)
+
+  def testSingleFileOneRecord(self):
+    filename = "/%s/single-record-file" % self.TEST_BUCKET
+    data = "foobardata"
+    self.create_test_file(filename, [data])
+    reader = self.READER_CLS([filename])
+
+    self.assertEqual(data, reader.next())
+    self.assertRaises(StopIteration, reader.next)
+
+  def testSingleFileManyRecords(self):
+    filename = "/%s/many-records-file" % self.TEST_BUCKET
+    data = []
+    for record_num in range(100):  # Make 100 records
+      data.append(("%03d" % record_num) * 10)  # Make each record 30 chars long
+    self.create_test_file(filename, data)
+    reader = self.READER_CLS([filename])
+
+    for record in data:
+      self.assertEqual(record, reader.next())
+    self.assertRaises(StopIteration, reader.next)
+    # ensure StopIteration is still raised after its first encountered
+    self.assertRaises(StopIteration, reader.next)
+
+  def testManyFilesManyRecords(self):
+    filenames = []
+    all_data = []
+    for file_num in range(10):  # Make 10 files
+      filename = "/%s/file-%03d" % (self.TEST_BUCKET, file_num)
+      data_set = []
+      for record_num in range(10):  # Make 10 records, each 30 chars long
+        data_set.append(("%03d" % record_num) * 10)
+      self.create_test_file(filename, data_set)
+      filenames.append(filename)
+      all_data.append(data_set)
+    reader = self.READER_CLS(filenames)
+
+    for data_set in all_data:
+      for record in data_set:
+        self.assertEqual(record, reader.next())
+    self.assertRaises(StopIteration, reader.next)
+
+  def testManyFilesSomeEmpty(self):
+    filenames = []
+    all_data = []
+    for file_num in range(50):  # Make 10 files
+      filename = "/%s/file-%03d" % (self.TEST_BUCKET, file_num)
+      data_set = []
+      for record_num in range(file_num % 5):  # Make up to 4 records
+        data_set.append(("%03d" % record_num) * 10)
+      self.create_test_file(filename, data_set)
+      filenames.append(filename)
+      all_data.append(data_set)
+    reader = self.READER_CLS(filenames)
+
+    for data_set in all_data:
+      for record in data_set:
+        self.assertEqual(record, reader.next())
+    self.assertRaises(StopIteration, reader.next)
+
+  def testSerialization(self):
+    filenames = []
+    all_data = []
+    for file_num in range(50):  # Make 10 files
+      filename = "/%s/file-%03d" % (self.TEST_BUCKET, file_num)
+      data_set = []
+      for record_num in range(file_num % 5):  # Make up to 4 records
+        data_set.append(("%03d" % record_num) * 10)
+      self.create_test_file(filename, data_set)
+      filenames.append(filename)
+      all_data.append(data_set)
+    reader = self.READER_CLS(filenames)
+
+    # Serialize before using
+    reader = self.READER_CLS.from_json(reader.to_json())
+
+    for data_set in all_data:
+      for record in data_set:
+        self.assertEqual(record, reader.next())
+        # Serialize after each read
+        reader = self.READER_CLS.from_json(reader.to_json())
+    self.assertRaises(StopIteration, reader.next)
+
+    # Serialize after StopIteration reached
+    reader = self.READER_CLS.from_json(reader.to_json())
+    self.assertRaises(StopIteration, reader.next)
 
 if __name__ == "__main__":
   unittest.main()

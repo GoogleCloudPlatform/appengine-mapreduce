@@ -452,6 +452,7 @@ class ListJobsTest(testutil.HandlerTestBase):
     TestKind().put()
     self.start.request.set("name", "my job 1")
     self.start.post()
+    time.sleep(.1)  # Can not start two jobs before time advances
     self.start.request.set("name", "my job 2")
     self.start.post()
 
