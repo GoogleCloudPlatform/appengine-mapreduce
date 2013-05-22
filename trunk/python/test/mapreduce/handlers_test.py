@@ -1116,22 +1116,63 @@ class MapperWorkerCallbackHandlerLeaseTest(unittest.TestCase):
       dt.now.return_value = (self.shard_state.slice_start_time +
                              datetime.timedelta(milliseconds=1))
       self.assertEqual(
-          handlers._SLICE_DURATION_SEC + handlers._LEASE_GRACE_PERIOD,
-          handler._lease_countdown(self.shard_state))
+          handlers._LEASE_GRACE_PERIOD + handlers._SLICE_DURATION_SEC,
+          handler._wait_time(self.shard_state,
+                             handlers._LEASE_GRACE_PERIOD +
+                             handlers._SLICE_DURATION_SEC))
       handler.post()
       self.assertEqual(httplib.SERVICE_UNAVAILABLE, handler.response.status)
 
   def testRequestHasNotEnd(self):
-    self.shard_state.slice_start_time = datetime.datetime(2000, 1, 1)
+    # Previous request's lease has timed out but the request has not.
+    now = datetime.datetime.now()
+    old = (now -
+           datetime.timedelta(seconds=handlers._LEASE_GRACE_PERIOD +
+                              handlers._SLICE_DURATION_SEC +
+                              1))
+    self.shard_state.slice_start_time = old
     self.shard_state.slice_request_id = self.PREVIOUS_REQUEST_ID
     self.shard_state.put()
     handler, _ = self._create_handler()
     # Lease has ended.
-    self.assertEqual(0, handler._lease_countdown(self.shard_state))
+    self.assertEqual(0,
+                     handler._wait_time(self.shard_state,
+                                        handlers._LEASE_GRACE_PERIOD +
+                                        handlers._SLICE_DURATION_SEC),
+                     lambda: now)
     # Logs API doesn't think the request has ended.
     self.assertFalse(handler._old_request_ended(self.shard_state))
+    # Request has not timed out.
+    self.assertTrue(handler._wait_time(self.shard_state,
+                                       handlers._REQUEST_EVENTUAL_TIMEOUT,
+                                       lambda: now))
     handler.post()
     self.assertEqual(httplib.SERVICE_UNAVAILABLE, handler.response.status)
+
+  def testRequestHasTimedOut(self):
+    self.shard_state.slice_start_time = datetime.datetime(2000, 1, 1)
+    self.shard_state.slice_request_id = self.PREVIOUS_REQUEST_ID
+    self.shard_state.put()
+    handler, tstate = self._create_handler()
+    # Lease has ended.
+    self.assertEqual(0,
+                     handler._wait_time(self.shard_state,
+                                        handlers._LEASE_GRACE_PERIOD +
+                                        handlers._SLICE_DURATION_SEC))
+    # Logs API doesn't think the request has ended.
+    self.assertFalse(handler._old_request_ended(self.shard_state))
+    # But request has timed out.
+    self.assertEqual(0, handler._wait_time(self.shard_state,
+                                           handlers._REQUEST_EVENTUAL_TIMEOUT))
+    # acquire lease should succeed.
+    handler._try_acquire_lease(self.shard_state, tstate)
+
+    shard_state = model.ShardState.get_by_shard_id(self.shard_id)
+    self.assertTrue(shard_state.active)
+    self.assertEqual(self.CURRENT_SLICE_ID, shard_state.slice_id)
+    self.assertEqual(self.CURRENT_REQUEST_ID, shard_state.slice_request_id)
+    self.assertTrue(shard_state.slice_start_time >
+                    self.shard_state.slice_start_time)
 
   def testContentionWhenAcquireLease(self):
     # Shard has moved on AFTER we got shard state.

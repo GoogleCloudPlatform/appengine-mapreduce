@@ -1036,7 +1036,9 @@ class ShardState(db.Model):
       expired, new request needs to verify that said request has indeed
       ended according to logs API. Do this only when lease has expired
       because logs API is expensive. This field should always be set/unset
-      with slice_start_time.
+      with slice_start_time. It is possible Logs API doesn't log a request
+      at all or doesn't log the end of a request. So a new request can
+      proceed after a long conservative timeout.
     slice_retries: the number of times a slice has been retried due to
       data processing error (non taskqueue/datastore). This count is
       only a lower bound and is used to determined when to fail a slice
