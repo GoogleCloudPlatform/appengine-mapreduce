@@ -23,14 +23,14 @@ import java.util.Random;
 /**
  *
  */
-public class CloudStorageFileOutputTest extends TestCase {
+public class GoogleCloudStorageFileOutputTest extends TestCase {
 
   private final LocalServiceTestHelper helper =
       new LocalServiceTestHelper(new LocalFileServiceTestConfig());
 
   private final GcsService gcsService = GcsServiceFactory.createGcsService();
 
-  private static final String BUCKET = "CloudFileOutputTest";
+  private static final String BUCKET = "GCSFileOutputTest";
   private static final String FILE_NAME_PATTERN = "shard-%02x";
   private static final String MIME_TYPE = "text/ascii";
   private static final int NUM_SHARDS = 10;
@@ -56,8 +56,8 @@ public class CloudStorageFileOutputTest extends TestCase {
   }
 
   public void testFilesAreWritten() throws IOException {
-    CloudStorageFileOutput creator =
-        new CloudStorageFileOutput(BUCKET, FILE_NAME_PATTERN, MIME_TYPE, NUM_SHARDS);
+    GoogleCloudStorageFileOutput creator =
+        new GoogleCloudStorageFileOutput(BUCKET, FILE_NAME_PATTERN, MIME_TYPE, NUM_SHARDS);
     List<? extends OutputWriter<ByteBuffer>> writers = creator.createWriters();
     assertEquals(NUM_SHARDS, writers.size());
     for (int i = 0; i < NUM_SHARDS; i++) {
@@ -86,8 +86,8 @@ public class CloudStorageFileOutputTest extends TestCase {
   }
 
   private void testSlicing(byte[] content) throws IOException, ClassNotFoundException {
-    CloudStorageFileOutput creator =
-        new CloudStorageFileOutput(BUCKET, FILE_NAME_PATTERN, MIME_TYPE, NUM_SHARDS);
+    GoogleCloudStorageFileOutput creator =
+        new GoogleCloudStorageFileOutput(BUCKET, FILE_NAME_PATTERN, MIME_TYPE, NUM_SHARDS);
     List<? extends OutputWriter<ByteBuffer>> writers = creator.createWriters();
     assertEquals(NUM_SHARDS, writers.size());
     for (int i = 0; i < NUM_SHARDS; i++) {
@@ -129,7 +129,7 @@ public class CloudStorageFileOutputTest extends TestCase {
     ObjectOutputStream oout = new ObjectOutputStream(bout);
     oout.writeObject(writer);
     oout.close();
-    assertTrue(bout.size() < 1000*1000); //Should fit in datastore.
+    assertTrue(bout.size() < 1000 * 1000); //Should fit in datastore.
     ByteArrayInputStream bin = new ByteArrayInputStream(bout.toByteArray());
     ObjectInputStream oin = new ObjectInputStream(bin);
     return (OutputWriter<ByteBuffer>) oin.readObject();

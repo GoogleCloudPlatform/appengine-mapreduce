@@ -22,7 +22,7 @@ import java.nio.ByteBuffer;
  * cannot be read back with the CloudStorageLineInputReader.
  *
  */
-public class CloudStorageFileOutputWriter extends OutputWriter<ByteBuffer> {
+public class GoogleCloudStorageFileOutputWriter extends OutputWriter<ByteBuffer> {
   private static final long serialVersionUID = -4019473590179157706L;
 
   private static final GcsService GCS_SERVICE = GcsServiceFactory.createGcsService();
@@ -32,22 +32,23 @@ public class CloudStorageFileOutputWriter extends OutputWriter<ByteBuffer> {
   private final GcsOutputChannel channel;
 
 
-  CloudStorageFileOutputWriter(GcsFilename file, String mimeType) throws IOException {
+  GoogleCloudStorageFileOutputWriter(GcsFilename file, String mimeType) throws IOException {
     this.file = checkNotNull(file, "Null file");
     checkNotNull(mimeType, "Null mimeType");
     this.channel =
         GCS_SERVICE.createOrReplace(file, GcsFileOptions.builder().withMimeType(mimeType));
   }
 
-  public static CloudStorageFileOutputWriter forWorker(Worker<?> worker,
+  public static GoogleCloudStorageFileOutputWriter forWorker(Worker<?> worker,
       String bucket, String fileName, String mimeType) throws IOException {
     return forRegistry(worker.getLifecycleListenerRegistry(), bucket, fileName, mimeType);
   }
 
-  public static CloudStorageFileOutputWriter forRegistry(LifecycleListenerRegistry registry,
+  public static GoogleCloudStorageFileOutputWriter forRegistry(LifecycleListenerRegistry registry,
       String bucket, String fileName, String mimeType) throws IOException {
     GcsFilename file = new GcsFilename(bucket, fileName);
-    CloudStorageFileOutputWriter writer = new CloudStorageFileOutputWriter(file, mimeType);
+    GoogleCloudStorageFileOutputWriter writer =
+        new GoogleCloudStorageFileOutputWriter(file, mimeType);
     // We could now add a listener to registry but it so happens that we don't
     // currently care about {begin,end}{Slice,Shard}.
     return writer;

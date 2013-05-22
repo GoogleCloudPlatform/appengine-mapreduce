@@ -18,7 +18,7 @@ import java.util.NoSuchElementException;
 /**
  * CloudStorageLineInputReader reads files from Cloud Storage one line at a time.
  */
-class CloudStorageLineInputReader extends InputReader<byte[]> {
+class GoogleCloudStorageLineInputReader extends InputReader<byte[]> {
   private static final long serialVersionUID = -762091129798691745L;
 
   private static final transient GcsService GCS_SERVICE = GcsServiceFactory.createGcsService();
@@ -33,12 +33,13 @@ class CloudStorageLineInputReader extends InputReader<byte[]> {
   private transient CountingInputStream input;
   private transient Iterator<OffsetRecordPair> recordIterator;
 
-  CloudStorageLineInputReader(GcsFilename file, long startOffset, long endOffset, byte separator) {
+  GoogleCloudStorageLineInputReader(
+      GcsFilename file, long startOffset, long endOffset, byte separator) {
     this(file, startOffset, endOffset, separator, DEFAULT_BUFFER_SIZE);
   }
 
-  CloudStorageLineInputReader(GcsFilename file, long startOffset, long endOffset, byte separator,
-      int bufferSize) {
+  GoogleCloudStorageLineInputReader(
+      GcsFilename file, long startOffset, long endOffset, byte separator, int bufferSize) {
     this.file = checkNotNull(file, "Null file");
     this.startOffset = startOffset;
     this.endOffset = endOffset;
