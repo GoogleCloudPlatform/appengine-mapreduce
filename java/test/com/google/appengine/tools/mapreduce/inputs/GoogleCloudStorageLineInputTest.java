@@ -6,9 +6,9 @@ import com.google.appengine.tools.mapreduce.InputReader;
 import java.util.List;
 
 /**
- * Unit test for {@link CloudStorageLineInput}.
+ * Unit test for {@link GoogleCloudStorageLineInput}.
  */
-public class CloudStorageLineInputTest extends CloudStorageLineInputTestCase {
+public class GoogleCloudStorageLineInputTest extends GoogleCloudStorageLineInputTestCase {
   
   private static final String FILENAME = "CloudStorageLineInputTestFile";
   private static final String BUCKET = "CloudStorageLineInputTestBucket";
@@ -25,7 +25,7 @@ public class CloudStorageLineInputTest extends CloudStorageLineInputTestCase {
   }
 
   public void testSplit() throws Exception {
-    CloudStorageLineInput input = new CloudStorageLineInput(filename, (byte) '\n', 4);
+    GoogleCloudStorageLineInput input = new GoogleCloudStorageLineInput(filename, (byte) '\n', 4);
     List<? extends InputReader<byte[]>> readers = input.createReaders();
     assertEquals(4, readers.size());
     assertSplitRange(0, 3000, readers.get(0));
@@ -35,7 +35,7 @@ public class CloudStorageLineInputTest extends CloudStorageLineInputTestCase {
   }
 
   public void testUnevenSplit() throws Exception {
-    CloudStorageLineInput input = new CloudStorageLineInput(filename, (byte) '\n', 7);
+    GoogleCloudStorageLineInput input = new GoogleCloudStorageLineInput(filename, (byte) '\n', 7);
     List<? extends InputReader<byte[]>> readers = input.createReaders();
     assertEquals(7, readers.size());
     assertSplitRange(0, 1714, readers.get(0));
@@ -51,7 +51,7 @@ public class CloudStorageLineInputTest extends CloudStorageLineInputTestCase {
 // -------------------------- STATIC METHODS --------------------------
 
   private static void assertSplitRange(int start, int end, InputReader<byte[]> reader) {
-    CloudStorageLineInputReader r = (CloudStorageLineInputReader) reader;
+    GoogleCloudStorageLineInputReader r = (GoogleCloudStorageLineInputReader) reader;
     assertEquals("Start offset mismatch", start, r.startOffset);
     assertEquals("End offset mismatch", end, r.endOffset);
   }

@@ -10,10 +10,10 @@ import java.util.NoSuchElementException;
 
 /**
  */
-public class CloudStorageLineInputReaderTest extends CloudStorageLineInputTestCase {
+public class GoogleCloudStorageLineInputReaderTest extends GoogleCloudStorageLineInputTestCase {
 
-  private static final String FILENAME = "CloudStorageLineInputReaderTestFile";
-  private static final String BUCKET = "CloudStorageInputReaderTestBucket";
+  private static final String FILENAME = "GoogleCloudStorageLineInputReaderTestFile";
+  private static final String BUCKET = "GoogleCloudStorageInputReaderTestBucket";
   public static final String RECORD = "01234567890\n";
   public static final int RECORDS_COUNT = 10;
 
@@ -26,49 +26,54 @@ public class CloudStorageLineInputReaderTest extends CloudStorageLineInputTestCa
     fileSize = createFile(filename, RECORD, RECORDS_COUNT);
   }
   public void testSingleSplitPoint() throws Exception {
-    List<CloudStorageLineInputReader> readers = new ArrayList<CloudStorageLineInputReader>();
-    readers.add(new CloudStorageLineInputReader(filename, 0, RECORD.length(), (byte) '\n'));
+    List<GoogleCloudStorageLineInputReader> readers =
+        new ArrayList<GoogleCloudStorageLineInputReader>();
+    readers.add(new GoogleCloudStorageLineInputReader(filename, 0, RECORD.length(), (byte) '\n'));
     readers.add(
-        new CloudStorageLineInputReader(filename, RECORD.length(), fileSize, (byte) '\n'));
+        new GoogleCloudStorageLineInputReader(filename, RECORD.length(), fileSize, (byte) '\n'));
     verifyReaders(readers, false);
   }
 
   public void testSingleSplitPointsWithSerialization() throws Exception {
-    List<CloudStorageLineInputReader> readers = new ArrayList<CloudStorageLineInputReader>();
-    readers.add(new CloudStorageLineInputReader(filename, 0, RECORD.length(), (byte) '\n'));
+    List<GoogleCloudStorageLineInputReader> readers =
+        new ArrayList<GoogleCloudStorageLineInputReader>();
+    readers.add(new GoogleCloudStorageLineInputReader(filename, 0, RECORD.length(), (byte) '\n'));
     readers.add(
-        new CloudStorageLineInputReader(filename, RECORD.length(), fileSize, (byte) '\n'));
+        new GoogleCloudStorageLineInputReader(filename, RECORD.length(), fileSize, (byte) '\n'));
     verifyReaders(readers, true);
   }
 
   public void testAllSplitPoints() throws Exception {
     for (int splitPoint = 1; splitPoint < fileSize - 1; splitPoint++) {
-      List<CloudStorageLineInputReader> readers = new ArrayList<CloudStorageLineInputReader>();
-      readers.add(new CloudStorageLineInputReader(filename, 0, splitPoint, (byte) '\n'));
+      List<GoogleCloudStorageLineInputReader> readers =
+          new ArrayList<GoogleCloudStorageLineInputReader>();
+      readers.add(new GoogleCloudStorageLineInputReader(filename, 0, splitPoint, (byte) '\n'));
       readers.add(
-          new CloudStorageLineInputReader(filename, splitPoint, fileSize, (byte) '\n'));
+          new GoogleCloudStorageLineInputReader(filename, splitPoint, fileSize, (byte) '\n'));
       verifyReaders(readers, false);
     }
   }
 
   public void testAllSplitPointsWithSerialization() throws Exception {
     for (int splitPoint = 1; splitPoint < fileSize - 1; splitPoint++) {
-      List<CloudStorageLineInputReader> readers = new ArrayList<CloudStorageLineInputReader>();
-      readers.add(new CloudStorageLineInputReader(filename, 0, splitPoint, (byte) '\n'));
+      List<GoogleCloudStorageLineInputReader> readers =
+          new ArrayList<GoogleCloudStorageLineInputReader>();
+      readers.add(new GoogleCloudStorageLineInputReader(filename, 0, splitPoint, (byte) '\n'));
       readers.add(
-          new CloudStorageLineInputReader(filename, splitPoint, fileSize, (byte) '\n'));
+          new GoogleCloudStorageLineInputReader(filename, splitPoint, fileSize, (byte) '\n'));
       verifyReaders(readers, true);
     }
   }
 
 
   private void verifyReaders(
-      List<CloudStorageLineInputReader> readers, boolean performSerialization) throws IOException {
+      List<GoogleCloudStorageLineInputReader> readers, boolean performSerialization)
+      throws IOException {
     int recordsRead = 0;
     long lastOffset = -1;
     String recordWithoutSeparator = RECORD.substring(0, RECORD.length() - 1);
 
-    for (CloudStorageLineInputReader reader : readers) {
+    for (GoogleCloudStorageLineInputReader reader : readers) {
       reader.beginSlice();
       while (true) {
         byte[] value;
@@ -83,7 +88,8 @@ public class CloudStorageLineInputReaderTest extends CloudStorageLineInputTestCa
         if (performSerialization) {
           reader.endSlice();
           byte[] bytes = SerializationUtil.serializeToByteArray(reader);
-          reader = (CloudStorageLineInputReader) SerializationUtil.deserializeFromByteArray(bytes);
+          reader =
+              (GoogleCloudStorageLineInputReader) SerializationUtil.deserializeFromByteArray(bytes);
           reader.beginSlice();
         }
       }

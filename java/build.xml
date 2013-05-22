@@ -92,7 +92,7 @@
           <exclude name="com/google/appengine/tools/mapreduce/impl/shardedjob/TestController.java" />
           <exclude name="com/google/appengine/tools/mapreduce/impl/shardedjob/TestTask.java" />
           <exclude name="com/google/appengine/tools/mapreduce/inputs/BlobstoreInputTestCase.java" />
-          <exclude name="com/google/appengine/tools/mapreduce/inputs/CloudStorageLineInputTestCase.java" />
+          <exclude name="com/google/appengine/tools/mapreduce/inputs/GoogleCloudStorageLineInputTestCase.java" />
         </fileset>
       </batchtest>
       <classpath>
