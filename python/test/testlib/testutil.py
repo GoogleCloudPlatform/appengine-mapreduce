@@ -31,19 +31,12 @@ from google.appengine.tools import os_compat
 import imp
 from testlib import mox
 import os
-import shutil
 import sys
-import tempfile
 import unittest
 
-from google.appengine.api import apiproxy_stub_map
-from google.appengine.api.files import file_service_stub
-from google.appengine.api.blobstore import blobstore_stub
-from google.appengine.api import datastore_file_stub
 from google.appengine.api import queueinfo
-from google.appengine.api.blobstore import file_blob_storage
-from google.appengine.api.memcache import memcache_stub
-from google.appengine.api.taskqueue import taskqueue_stub
+from google.appengine.ext import testbed
+from google.appengine.datastore import datastore_stub_util
 
 # pylint: disable=unused-import
 try:
@@ -106,8 +99,21 @@ class HandlerTestBase(unittest.TestCase):
     os.environ["CURRENT_VERSION_ID"] = self.version_id
     os.environ["HTTP_HOST"] = "localhost"
 
-    self.memcache = memcache_stub.MemcacheServiceStub()
-    self.taskqueue = taskqueue_stub.TaskQueueServiceStub()
+    self.testbed = testbed.Testbed()
+    self.testbed.activate()
+    self.testbed.init_app_identity_stub()
+    self.testbed.init_blobstore_stub()
+    # For compability with some test that rely on datastore timing
+    self.testbed.init_datastore_v3_stub(
+        consistency_policy=datastore_stub_util.MasterSlaveConsistencyPolicy())
+    self.testbed.init_files_stub()
+    self.testbed.init_memcache_stub()
+    self.testbed.init_taskqueue_stub()
+    self.testbed.init_urlfetch_stub()
+
+    # For backwards compatibility, maintain easy references to some stubs
+    self.taskqueue = self.testbed.get_stub(testbed.TASKQUEUE_SERVICE_NAME)
+
     self.taskqueue.queue_yaml_parser = (
         lambda x: queueinfo.LoadSingleQueue(
             "queue:\n"
@@ -116,31 +122,13 @@ class HandlerTestBase(unittest.TestCase):
             "- name: crazy-queue\n"
             "  rate: 2000/d\n"
             "  bucket_size: 10\n"))
-    self.datastore = datastore_file_stub.DatastoreFileStub(
-        self.appid, "/dev/null", "/dev/null")
-
-    self.blob_storage_directory = tempfile.mkdtemp()
-    blob_storage = file_blob_storage.FileBlobStorage(
-        self.blob_storage_directory, self.appid)
-    self.blobstore_stub = blobstore_stub.BlobstoreServiceStub(blob_storage)
-    self.file_service = self.createFileServiceStub(blob_storage)
-
-    apiproxy_stub_map.apiproxy = apiproxy_stub_map.APIProxyStubMap()
-    apiproxy_stub_map.apiproxy.RegisterStub("taskqueue", self.taskqueue)
-    apiproxy_stub_map.apiproxy.RegisterStub("memcache", self.memcache)
-    apiproxy_stub_map.apiproxy.RegisterStub("datastore_v3", self.datastore)
-    apiproxy_stub_map.apiproxy.RegisterStub("blobstore", self.blobstore_stub)
-    apiproxy_stub_map.apiproxy.RegisterStub("file", self.file_service)
-
-  def createFileServiceStub(self, blob_storage):
-    return file_service_stub.FileServiceStub(blob_storage)
 
   def tearDown(self):
     try:
       self.mox.VerifyAll()
     finally:
       self.mox.UnsetStubs()
-      shutil.rmtree(self.blob_storage_directory)
+    self.testbed.deactivate()
     unittest.TestCase.tearDown(self)
 
   def assertTaskStarted(self, queue="default"):

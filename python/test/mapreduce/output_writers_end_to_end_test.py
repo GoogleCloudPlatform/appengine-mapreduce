@@ -5,23 +5,39 @@
 
 
 
+# Using opensource naming conventions, pylint: disable=g-bad-name
 
+import sys
 import unittest
 
 
 from google.appengine.api import files
 from google.appengine.ext import db
 from mapreduce import control
+from mapreduce import input_readers
 from mapreduce import model
 from mapreduce import output_writers
 from mapreduce import test_support
 from testlib import testutil
+
+# pylint: disable=g-import-not-at-top
+# TODO(user): Cleanup imports if/when cloudstorage becomes part of runtime.
+try:
+  import cloudstorage  # External users
+  enable_cloudstorage_tests = True
+except ImportError:
+  enable_cloudstorage_tests = False
 
 
 BLOBSTORE_WRITER_NAME = (output_writers.__name__ + "." +
                          output_writers.BlobstoreOutputWriter.__name__)
 FILE_WRITER_NAME = (output_writers.__name__ + "." +
                     output_writers.FileOutputWriter.__name__)
+CLOUD_STORAGE_WRITER_NAME = (output_writers.__name__ + "." +
+                             output_writers._CloudStorageOutputWriter.__name__)
+
+DATASTORE_READER_NAME = (input_readers.__name__ + "." +
+                         input_readers.DatastoreInputReader.__name__)
 
 
 class TestEntity(db.Model):
@@ -45,7 +61,7 @@ class FileOutputWriterEndToEndTest(testutil.HandlerTestBase):
     mapreduce_id = control.start_map(
         "test_map",
         __name__ + ".test_handler_yield_key_str",
-        "mapreduce.input_readers.DatastoreInputReader",
+        DATASTORE_READER_NAME,
         {
             "entity_kind": __name__ + "." + TestEntity.__name__,
             "filesystem": "gs",
@@ -75,7 +91,7 @@ class FileOutputWriterEndToEndTest(testutil.HandlerTestBase):
     mapreduce_id = control.start_map(
         "test_map",
         __name__ + ".test_handler_yield_key_str",
-        "mapreduce.input_readers.DatastoreInputReader",
+        DATASTORE_READER_NAME,
         {
             "input_reader": {
                 "entity_kind": __name__ + "." + TestEntity.__name__,
@@ -109,7 +125,7 @@ class FileOutputWriterEndToEndTest(testutil.HandlerTestBase):
     mapreduce_id = control.start_map(
         "test_map",
         __name__ + ".test_handler_yield_key_str",
-        "mapreduce.input_readers.DatastoreInputReader",
+        DATASTORE_READER_NAME,
         {
             "entity_kind": __name__ + "." + TestEntity.__name__,
             "output_sharding": "input",
@@ -154,7 +170,7 @@ class BlobstoreOutputWriterEndToEndTest(testutil.HandlerTestBase):
     mapreduce_id = control.start_map(
         "test_map",
         __name__ + ".test_handler_yield_key_str",
-        "mapreduce.input_readers.DatastoreInputReader",
+        DATASTORE_READER_NAME,
         {
             "entity_kind": __name__ + "." + TestEntity.__name__,
         },
@@ -185,7 +201,7 @@ class BlobstoreOutputWriterEndToEndTest(testutil.HandlerTestBase):
     mapreduce_id = control.start_map(
         "test_map",
         __name__ + ".test_handler_yield_key_str",
-        "mapreduce.input_readers.DatastoreInputReader",
+        DATASTORE_READER_NAME,
         {
             "entity_kind": __name__ + "." + TestEntity.__name__,
             "output_sharding": "input",
@@ -212,6 +228,60 @@ class BlobstoreOutputWriterEndToEndTest(testutil.HandlerTestBase):
 
     self.assertEqual(1000, sum(file_lengths))
 
+
+class CloudStorageOutputWriterEndToEndTest(testutil.HandlerTestBase):
+  """End-to-end tests for CloudStorageOutputWriter."""
+
+  def setUp(self):
+    if not enable_cloudstorage_tests:
+      # skipTest is only supported starting in Python 2.7, prior to 2.7
+      # the test will result in an error due to the ImportWarning
+      if sys.version_info < (2, 7):
+        raise ImportWarning("Unable to test CloudStorage, Library not found,")
+      else:
+        self.skipTest("Unable to test CloudStorage. Library not found.")
+    super(CloudStorageOutputWriterEndToEndTest, self).setUp()
+
+  def _runTest(self, num_shards):
+    entity_count = 1000
+    bucket_name = "bucket"
+    job_name = "test_map"
+
+    for _ in range(entity_count):
+      TestEntity().put()
+
+    mapreduce_id = control.start_map(
+        job_name,
+        __name__ + ".test_handler_yield_key_str",
+        DATASTORE_READER_NAME,
+        {
+            "entity_kind": __name__ + "." + TestEntity.__name__,
+            "output_writer": {
+                "bucket_name": bucket_name,
+            },
+        },
+        shard_count=num_shards,
+        output_writer_spec=CLOUD_STORAGE_WRITER_NAME)
+
+    test_support.execute_until_empty(self.taskqueue)
+    mapreduce_state = model.MapreduceState.get_by_job_id(mapreduce_id)
+    filenames = output_writers._CloudStorageOutputWriter.get_filenames(
+        mapreduce_state)
+
+    self.assertEqual(num_shards, len(filenames))
+    total_entries = 0
+    for shard in range(num_shards):
+      self.assertTrue(filenames[shard].startswith("/%s/%s" % (bucket_name,
+                                                              job_name)))
+      data = cloudstorage.open(filenames[shard]).read()
+      total_entries += len(data.strip().split("\n"))
+    self.assertEqual(entity_count, total_entries)
+
+  def testSingleShard(self):
+    self._runTest(num_shards=1)
+
+  def testMultipleShards(self):
+    self._runTest(num_shards=4)
 
 if __name__ == "__main__":
   unittest.main()
