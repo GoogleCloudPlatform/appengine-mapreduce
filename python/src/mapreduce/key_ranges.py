@@ -3,7 +3,7 @@
 
 
 
-from mapreduce.lib import key_range
+from google.appengine.ext import key_range
 from mapreduce import namespace_range
 
 

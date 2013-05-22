@@ -49,7 +49,7 @@ from google.appengine.api import taskqueue
 from google.appengine.api.memcache import memcache_stub
 from google.appengine.api.taskqueue import taskqueue_stub
 from google.appengine.ext import db
-from mapreduce.lib import key_range
+from google.appengine.ext import key_range
 from google.appengine.ext import testbed
 from mapreduce import context
 from mapreduce import control
@@ -63,7 +63,7 @@ from mapreduce import model
 from mapreduce import operation
 from mapreduce import output_writers
 from mapreduce import test_support
-from mapreduce import mock_webapp
+from google.appengine.ext.webapp import mock_webapp
 
 
 MAPPER_PARAMS = {"batch_size": 50}

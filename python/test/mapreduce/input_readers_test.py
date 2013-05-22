@@ -54,7 +54,7 @@ from google.appengine.datastore import datastore_stub_util
 from google.appengine.api import namespace_manager
 from google.appengine.ext import blobstore
 from google.appengine.ext import db
-from mapreduce.lib import key_range
+from google.appengine.ext import key_range
 from google.appengine.ext import testbed
 from google.appengine.ext.blobstore import blobstore as blobstore_internal
 from mapreduce import errors

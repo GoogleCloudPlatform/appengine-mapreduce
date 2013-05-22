@@ -31,7 +31,7 @@ from mapreduce import handlers
 from mapreduce import status
 from testlib import testutil
 from mapreduce import test_support
-from mapreduce import mock_webapp
+from google.appengine.ext.webapp import mock_webapp
 
 
 class TestKind(db.Model):

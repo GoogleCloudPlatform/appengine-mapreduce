@@ -26,7 +26,7 @@ import os
 import re
 
 from mapreduce import main
-from mapreduce import mock_webapp
+from google.appengine.ext.webapp import mock_webapp
 
 
 def decode_task_payload(task):

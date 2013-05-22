@@ -32,7 +32,7 @@ from google.appengine.api import datastore_file_stub
 from google.appengine.ext import db
 from mapreduce import hooks
 from mapreduce import model
-from mapreduce import mock_webapp
+from google.appengine.ext.webapp import mock_webapp
 
 
 class TestHandler(object):
