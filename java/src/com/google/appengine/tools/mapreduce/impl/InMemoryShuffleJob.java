@@ -206,6 +206,19 @@ public class InMemoryShuffleJob<K, V, O> extends
       out = null;
     }
     
+    private void closeFinally() {
+      RetryHelper.runWithRetries(new Body<Void>() {
+        @Override
+        public Void run() throws IOException {
+          if (out == null) {
+            out = fileService.openRecordWriteChannel(file, true);
+          }
+          out.closeFinally();
+          return null;
+        }
+      }, backoffParams);
+      out = null;
+    }
   }
 
   private void writeOutput(AppEngineFile file, List<KeyValue<K, List<V>>> items) {
@@ -224,17 +237,7 @@ public class InMemoryShuffleJob<K, V, O> extends
       RetryHelper.runWithRetries(writer, backoffParams);
       i++;
     }
-    closeFinally(writer.out);
-  }
-
-  private void closeFinally(final RecordWriteChannel out) {
-    RetryHelper.runWithRetries(new Body<Void>() {
-      @Override
-      public Void run() throws IOException {
-        out.closeFinally();
-        return null;
-      }
-    }, backoffParams);
+    writer.closeFinally();
   }
 
   private void writeOutputs(List<AppEngineFile> files, List<List<KeyValue<K, List<V>>>> data) {
