@@ -33,7 +33,7 @@ abstract class GoogleCloudStorageLineInputTestCase extends TestCase {
   long createFile(GcsFilename filename, String record, int recordsCount) throws IOException {
     GcsService gcsService = GcsServiceFactory.createGcsService();
     GcsOutputChannel writeChannel = gcsService.createOrReplace(filename,
-        GcsFileOptions.builder().withMimeType("application/bin"));
+        new GcsFileOptions.Builder().mimeType("application/bin").build());
     for (int i = 0; i < recordsCount; i++) {
       writeChannel.write(ByteBuffer.wrap(record.getBytes()));
     }
