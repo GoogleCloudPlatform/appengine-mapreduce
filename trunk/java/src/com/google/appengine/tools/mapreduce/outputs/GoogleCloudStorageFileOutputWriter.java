@@ -36,7 +36,7 @@ public class GoogleCloudStorageFileOutputWriter extends OutputWriter<ByteBuffer>
     this.file = checkNotNull(file, "Null file");
     checkNotNull(mimeType, "Null mimeType");
     this.channel =
-        GCS_SERVICE.createOrReplace(file, GcsFileOptions.builder().withMimeType(mimeType));
+        GCS_SERVICE.createOrReplace(file, new GcsFileOptions.Builder().mimeType(mimeType).build());
   }
 
   public static GoogleCloudStorageFileOutputWriter forWorker(Worker<?> worker,
