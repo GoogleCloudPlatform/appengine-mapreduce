@@ -71,7 +71,7 @@ public class EndToEndTest extends EndToEndTestCase {
     executeTasksUntilEmpty("default");
     JobInfo info = pipelineService.getJobInfo(jobId);
     @SuppressWarnings("unchecked")
-    MapReduceResult<R> result = (MapReduceResult) info.getOutput();
+    MapReduceResult<R> result = (MapReduceResult<R>) info.getOutput();
     assertNotNull(result);
     verifier.verify(result);
   }
@@ -320,7 +320,6 @@ public class EndToEndTest extends EndToEndTestCase {
   }
 
   static class TestMapper extends Mapper<Entity, String, Long> {
-    private transient DatastoreMutationPool pool;
 
     @Override public void map(Entity entity) {
       getContext().incrementCounter("map");
@@ -354,7 +353,6 @@ public class EndToEndTest extends EndToEndTestCase {
 
     @Override public void beginSlice() {
       getContext().incrementCounter("beginSlice");
-      pool = DatastoreMutationPool.forWorker(this);
     }
 
     @Override public void endSlice() {

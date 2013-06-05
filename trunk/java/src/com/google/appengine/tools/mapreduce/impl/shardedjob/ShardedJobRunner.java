@@ -108,7 +108,7 @@ class ShardedJobRunner<T extends IncrementalTask<T, R>, R extends Serializable> 
     return IncrementalTaskState.Serializer.<T, R>fromEntity(entity);
   }
 
-  private List<IncrementalTaskState<T, R>> lookupTasks(ShardedJobState jobState) {
+  private List<IncrementalTaskState<T, R>> lookupTasks(ShardedJobState<?, ?> jobState) {
     ImmutableList.Builder<Key> b = ImmutableList.builder();
     for (int i = 0; i < jobState.getTotalTaskCount(); i++) {
      b.add(IncrementalTaskState.Serializer.makeKey(getTaskId(jobState.getJobId(), i)));
@@ -127,7 +127,7 @@ class ShardedJobRunner<T extends IncrementalTask<T, R>, R extends Serializable> 
 
   private int countActiveTasks(List<IncrementalTaskState<T, R>> taskStates) {
     int count = 0;
-    for (IncrementalTaskState taskState : taskStates) {
+    for (IncrementalTaskState<?, ?> taskState : taskStates) {
       if (taskState.getNextTask() != null) {
         count++;
       }
@@ -212,7 +212,7 @@ class ShardedJobRunner<T extends IncrementalTask<T, R>, R extends Serializable> 
     log.fine(jobId + ": Writing " + jobState);
     Transaction tx = DATASTORE.beginTransaction();
     try {
-      ShardedJobStateImpl existing = lookupJobState(tx, jobId);
+      ShardedJobStateImpl<T, R> existing = lookupJobState(tx, jobId);
       if (existing == null) {
         log.info(jobId + ": Job gone after poll");
         return;
@@ -273,7 +273,7 @@ class ShardedJobRunner<T extends IncrementalTask<T, R>, R extends Serializable> 
     // concurrency exceptions, but we should guard against other RPC failures.
     Transaction tx = DATASTORE.beginTransaction();
     try {
-      IncrementalTaskState existing = lookupTaskState(tx, taskId);
+      IncrementalTaskState<?, ?> existing = lookupTaskState(tx, taskId);
       if (existing == null) {
         log.info(taskId + ": Task disappeared while processing");
         return;

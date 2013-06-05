@@ -24,12 +24,13 @@ class ShardedJobServiceImpl implements ShardedJobService {
     new ShardedJobRunner<T, R>().startJob(jobId, initialTasks, controller, settings);
   }
 
-  @SuppressWarnings("unchecked")
+  @SuppressWarnings({"unchecked", "rawtypes"})
   @Override
   public <R extends Serializable> ShardedJobState<?, R> getJobState(String jobId) {
     return new ShardedJobRunner().getJobState(jobId);
   }
 
+  @SuppressWarnings("rawtypes")
   @Override
   public void abortJob(String jobId) {
     new ShardedJobRunner().abortJob(jobId);
@@ -39,12 +40,14 @@ class ShardedJobServiceImpl implements ShardedJobService {
     throw new RuntimeException("Not implemented");
   }
 
+  @SuppressWarnings("rawtypes")
   @Override public void handleControllerRequest(HttpServletRequest request) {
     new ShardedJobRunner().pollTaskStates(
         checkNotNull(request.getParameter(ShardedJobRunner.JOB_ID_PARAM), "Null job id"),
         Integer.parseInt(request.getParameter(ShardedJobRunner.SEQUENCE_NUMBER_PARAM)));
   }
 
+  @SuppressWarnings("rawtypes")
   @Override public void handleWorkerRequest(HttpServletRequest request) {
     new ShardedJobRunner().runTask(
         checkNotNull(request.getParameter(ShardedJobRunner.TASK_ID_PARAM), "Null task id"),

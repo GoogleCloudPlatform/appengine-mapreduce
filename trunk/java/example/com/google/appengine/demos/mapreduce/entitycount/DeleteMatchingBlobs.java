@@ -6,6 +6,7 @@ import com.google.appengine.api.blobstore.BlobInfo;
 import com.google.appengine.api.blobstore.BlobInfoFactory;
 import com.google.appengine.api.blobstore.BlobKey;
 import com.google.appengine.api.blobstore.BlobstoreServiceFactory;
+import com.google.appengine.tools.pipeline.Job;
 import com.google.appengine.tools.pipeline.Job1;
 import com.google.appengine.tools.pipeline.Job2;
 import com.google.appengine.tools.pipeline.PipelineService;
@@ -79,7 +80,7 @@ public class DeleteMatchingBlobs extends Job1<Void, Predicate<BlobInfo>> {
   @Override
   public Value<Void> run(Predicate<BlobInfo> predicate) {
     return futureCall(new DeleteBlobsStartingWith(),
-        immediate(predicate), DeleteMatchingBlobs.<BlobKey>immediate(null));
+        immediate(predicate), Job.<BlobKey>immediate(null));
   }
 
 }

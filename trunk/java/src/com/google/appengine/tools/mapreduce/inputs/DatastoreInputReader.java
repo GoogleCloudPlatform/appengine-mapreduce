@@ -66,17 +66,23 @@ private static final long serialVersionUID = -2164845668646485549L;
     Preconditions.checkState(iterator == null, "%s: Already initialized: %s", this, iterator);
 
     Query q = new Query(entityKind);
+    Query.FilterPredicate firstFilter = null;
 
     if (currentKey == null) {
       if (startKey != null) {
-        q.addFilter(KEY_RESERVED_PROPERTY, GREATER_THAN_OR_EQUAL, startKey);
+        firstFilter =
+            new Query.FilterPredicate(KEY_RESERVED_PROPERTY, GREATER_THAN_OR_EQUAL, startKey);
       }
     } else {
-      q.addFilter(KEY_RESERVED_PROPERTY, GREATER_THAN, currentKey);
+      firstFilter = new Query.FilterPredicate(KEY_RESERVED_PROPERTY, GREATER_THAN, currentKey);
     }
 
     if (endKey != null) {
-      q.addFilter(KEY_RESERVED_PROPERTY, LESS_THAN, endKey);
+      Query.FilterPredicate secondFilter =
+          new Query.FilterPredicate(KEY_RESERVED_PROPERTY, LESS_THAN, endKey);
+      q.setFilter(Query.CompositeFilterOperator.and(firstFilter, secondFilter));
+    } else {
+      q.setFilter(firstFilter);
     }
 
     q.addSort(KEY_RESERVED_PROPERTY);

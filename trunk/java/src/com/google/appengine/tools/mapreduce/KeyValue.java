@@ -39,7 +39,7 @@ public class KeyValue<K, V> implements Serializable {
   @Override public final boolean equals(Object o) {
     if (o == this) { return true; }
     if (!(o instanceof KeyValue)) { return false; }
-    KeyValue other = (KeyValue) o;
+    KeyValue<?, ?> other = (KeyValue<?, ?>) o;
     return Objects.equal(key, other.key)
         && Objects.equal(value, other.value);
   }

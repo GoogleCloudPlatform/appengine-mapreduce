@@ -63,9 +63,9 @@ public interface ShardedJobState<T extends IncrementalTask<T, R>, R extends Seri
    * {@link ShardedJobController#combineResults}.
    *
    * As long as the job is still active ({@link #getStatus} returns
-   * {@link Status#ACTIVE}), the aggregate result only reflects the progress so
-   * far; when {@link #getStatus} returns one of the final states, the aggregate
-   * result is the final result.
+   * {@link Status#INITIALIZING} or {@link Status#RUNNING}), the aggregate
+   * result only reflects the progress so far; when {@link #getStatus} returns
+   * one of the final states, the aggregate result is the final result.
    */
   /*Nullable*/ R getAggregateResult();
 

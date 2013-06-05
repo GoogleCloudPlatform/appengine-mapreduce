@@ -68,12 +68,8 @@ public class DeleteFilesJob extends Job1<Void, List<AppEngineFile>> {
     for (List<AppEngineFile> batch : batches) {
       // Copy to make it serializable.
       List<AppEngineFile> copy = ImmutableList.copyOf(batch);
-      if (true) {
-        // Schedule separate job for parallelism
-        futureCall(new DeleteBlobsJob(), immediate(copy));
-      } else {
-        log.info(this + ": Was supposed to delete " + copy + " but left them for debugging");
-      }
+      // Schedule separate job for parallelism
+      futureCall(new DeleteBlobsJob(), immediate(copy));
     }
     return null;
   }

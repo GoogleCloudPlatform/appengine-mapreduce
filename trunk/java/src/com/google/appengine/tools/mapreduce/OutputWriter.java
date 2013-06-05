@@ -17,8 +17,8 @@ import java.io.Serializable;
  * first slice, or after the final slice, the {@code OutputWriter} may go
  * through serialization and deserialization.
  *
- * <p>At the end of the final slice, {@link close()} will be called, either
- * before or after {@link endSlice()}.
+ * <p>At the end of the final slice, {@link #close()} will be called, either
+ * before or after {@link #endSlice()}.
  *
  * <p>If a slice is aborted, there is no guarantee whether {@link #endSlice}
  * will be called; however, if it is not called, the {@code OutputWriter} will
@@ -39,7 +39,7 @@ public abstract class OutputWriter<O> implements Serializable {
    * Prepares the writer for writing after possibly having gone through
    * serialization or deserialization.
    */
-  public void beginSlice() throws IOException {};
+  public void beginSlice() throws IOException {}
 
   /**
    * Writes a value to the output.
@@ -49,7 +49,7 @@ public abstract class OutputWriter<O> implements Serializable {
   /**
    * Prepares the writer for possible serialization.
    */
-  public void endSlice() throws IOException {};
+  public void endSlice() throws IOException {}
 
   /**
    * Called when no more output will be written to this writer.

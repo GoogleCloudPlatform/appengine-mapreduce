@@ -2,9 +2,6 @@
 
 package com.google.appengine.tools.mapreduce.impl.handlers;
 
-import static org.easymock.EasyMock.createMock;
-import static org.easymock.EasyMock.expect;
-
 import com.google.appengine.tools.mapreduce.EndToEndTestCase;
 import com.google.appengine.tools.mapreduce.impl.AbstractWorkerController;
 import com.google.appengine.tools.mapreduce.impl.CountersImpl;
@@ -21,8 +18,6 @@ import com.google.common.collect.ImmutableList;
 import org.json.JSONObject;
 
 import java.io.Serializable;
-
-import javax.servlet.http.HttpServletRequest;
 
 /**
  *
@@ -172,32 +167,5 @@ public class StatusHandlerTest extends EndToEndTestCase {
   public static void assertJsonEquals(String expected, JSONObject actual) {
     assertEquals(expected.replace('\'', '"').replace(" ", ""),
         actual.toString().replace(" ", "").replace("\\r\\n", "").replace("\\n", ""));
-  }
-
-  private static HttpServletRequest createMockRequest(
-      String handler, boolean taskQueueRequest, boolean ajaxRequest) {
-    HttpServletRequest request = createMock(HttpServletRequest.class);
-    if (taskQueueRequest) {
-      expect(request.getHeader("X-AppEngine-QueueName"))
-      .andReturn("default")
-      .anyTimes();
-    } else {
-      expect(request.getHeader("X-AppEngine-QueueName"))
-      .andReturn(null)
-      .anyTimes();
-    }
-    if (ajaxRequest) {
-      expect(request.getHeader("X-Requested-With"))
-      .andReturn("XMLHttpRequest")
-      .anyTimes();
-    } else {
-      expect(request.getHeader("X-Requested-With"))
-      .andReturn(null)
-      .anyTimes();
-    }
-    expect(request.getRequestURI())
-    .andReturn("/mapreduce/" + handler)
-    .anyTimes();
-    return request;
   }
 }

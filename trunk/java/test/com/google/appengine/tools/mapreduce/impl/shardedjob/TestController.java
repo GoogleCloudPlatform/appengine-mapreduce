@@ -1,5 +1,7 @@
 package com.google.appengine.tools.mapreduce.impl.shardedjob;
 
+import junit.framework.Assert;
+
 /**
  * A mock controller used for unit tests. It simply sums the inputs to combine the results.
  *
@@ -24,7 +26,7 @@ public class TestController implements ShardedJobController<TestTask, Integer> {
   // TODO(ohler): Assert that this actually gets called.  Seems likely that
   // will be covered by higher-level end-to-end tests, though.
   @Override public void completed(Integer finalCombinedResult) {
-    EndToEndTest.assertEquals(Integer.valueOf(expectedResult), finalCombinedResult);
+    Assert.assertEquals(Integer.valueOf(expectedResult), finalCombinedResult);
   }
  
 

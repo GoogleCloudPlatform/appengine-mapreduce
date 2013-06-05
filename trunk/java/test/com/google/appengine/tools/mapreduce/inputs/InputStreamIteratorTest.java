@@ -212,7 +212,7 @@ public class InputStreamIteratorTest extends TestCase {
     }
 
     @Override
-    public void reset() {
+    public synchronized void reset() {
       fail("Tried to call reset() on the underlying InputStream");
     }
   }

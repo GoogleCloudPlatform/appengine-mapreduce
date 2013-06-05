@@ -284,8 +284,9 @@ public class InMemoryShuffleJobTest extends TestCase {
      */
     void throwKeyOrderingException() throws KeyOrderingException {
       try {
-        Constructor<KeyOrderingException> constructor =
-            (Constructor) KeyOrderingException.class.getDeclaredConstructors()[1];
+        @SuppressWarnings("unchecked")
+        Constructor<KeyOrderingException> constructor = (Constructor<KeyOrderingException>)
+            KeyOrderingException.class.getDeclaredConstructors()[1];
         constructor.setAccessible(true);
         throw constructor.newInstance();
       } catch (InstantiationException e) {

@@ -48,7 +48,7 @@ public class MarshallersTest extends TestCase {
     assertEquals(value, m.fromBytes(wrapped));
   }
 
-  private <T> void checkTruncated(Marshaller<T> m, T value) throws IOException {
+  private <T> void checkTruncated(Marshaller<T> m, T value) {
     ByteBuffer buf = m.toBytes(value);
     buf.limit(buf.limit() - 1);
     try {
@@ -58,7 +58,7 @@ public class MarshallersTest extends TestCase {
     }
   }
 
-  private <T> void checkTrailingBytes(Marshaller<T> m, T value) throws IOException {
+  private <T> void checkTrailingBytes(Marshaller<T> m, T value) {
     ByteBuffer raw = m.toBytes(value);
     ByteBuffer wrapped = ByteBuffer.allocate(raw.remaining() + 1);
     wrapped.put(raw);
