@@ -285,17 +285,19 @@ public class InMemoryShuffleJobTest extends TestCase {
     void throwKeyOrderingException() throws KeyOrderingException {
       try {
         @SuppressWarnings("unchecked")
-        Constructor<KeyOrderingException> constructor = (Constructor<KeyOrderingException>)
-            KeyOrderingException.class.getDeclaredConstructors()[1];
+        Constructor<KeyOrderingException> constructor =
+            KeyOrderingException.class.getDeclaredConstructor();
         constructor.setAccessible(true);
         throw constructor.newInstance();
       } catch (InstantiationException e) {
         throw new RuntimeException(e);
       } catch (IllegalAccessException e) {
         throw new RuntimeException(e);
-      } catch (IllegalArgumentException e) {
-        throw new RuntimeException(e);
       } catch (InvocationTargetException e) {
+        throw new RuntimeException(e);
+      } catch (NoSuchMethodException e) {
+        throw new RuntimeException(e);
+      } catch (SecurityException e) {
         throw new RuntimeException(e);
       }
     }
