@@ -6,7 +6,7 @@
   <name>App Engine MapReduce Library</name>
   <description>A user space MapReduce library for Google App Engine.</description>
   <url>http://code.google.com/p/appengine-mapreduce/</url>
-  <version>0.1-SNAPSHOT</version>
+  <version>0.2-SNAPSHOT</version>
   <packaging>jar</packaging>
   <licenses>
     <license>
@@ -50,12 +50,12 @@
     <dependency>
       <groupId>com.google.appengine.tools</groupId>
       <artifactId>appengine-gcs-client</artifactId>
-      <version>0.2-SNAPSHOT</version>
+      <version>[0.2,0.3)</version>
     </dependency>
     <dependency>
       <groupId>com.google.appengine.tools</groupId>
       <artifactId>appengine-pipeline</artifactId>
-      <version>0.1-SNAPSHOT</version>
+      <version>[0.1,0.2)</version>
     </dependency>
     <dependency>
       <groupId>com.googlecode.charts4j</groupId>
