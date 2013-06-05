@@ -90,7 +90,7 @@ public final class MapReduceServletImpl {
     }
   }
 
-  private static void handleShuffleCallback(HttpServletRequest request) throws IOException {
+  private static void handleShuffleCallback(HttpServletRequest request) {
     String promiseHandle = request.getParameter("promiseHandle");
     String errorCode = request.getParameter("error");
     LOG.info("shuffle callback; promiseHandle=" + promiseHandle + ", error=" + errorCode);

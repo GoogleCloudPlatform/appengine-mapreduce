@@ -112,7 +112,7 @@ class IncrementalTaskState<T extends IncrementalTask<T, R>, R extends Serializab
       return KeyFactory.createKey(ENTITY_KIND, taskId);
     }
 
-    static Entity toEntity(IncrementalTaskState in) {
+    static Entity toEntity(IncrementalTaskState<?, ?> in) {
       Entity out = new Entity(makeKey(in.getTaskId()));
       out.setProperty(JOB_ID_PROPERTY, in.getJobId());
       out.setUnindexedProperty(MOST_RECENT_UPDATE_MILLIS_PROPERTY, in.getMostRecentUpdateMillis());
@@ -128,7 +128,7 @@ class IncrementalTaskState<T extends IncrementalTask<T, R>, R extends Serializab
       return out;
     }
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "rawtypes"})
     static <T extends IncrementalTask<T, R>, R extends Serializable>
         IncrementalTaskState<T, R> fromEntity(Entity in) {
       Preconditions.checkArgument(ENTITY_KIND.equals(in.getKind()), "Unexpected kind: %s", in);

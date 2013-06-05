@@ -60,13 +60,13 @@ public interface ShardedJobService {
 
   /**
    * Must be called from the servlet that handles
-   * {@link ShardedJobSettings#setControllerUrl}.
+   * {@link ShardedJobSettings#setControllerPath}.
    */
   void handleControllerRequest(HttpServletRequest request);
 
   /**
    * Must be called from the servlet that handles
-   * {@link ShardedJobSettings#setWorkerUrl}.
+   * {@link ShardedJobSettings#setWorkerPath}.
    */
   void handleWorkerRequest(HttpServletRequest request);
 

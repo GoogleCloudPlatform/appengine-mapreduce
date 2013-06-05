@@ -71,8 +71,7 @@ public class InMemoryOutput<O> extends Output<O, List<List<O>>> {
   @Override public List<List<O>> finish(List<? extends OutputWriter<O>> writers) {
     ImmutableList.Builder<List<O>> out = ImmutableList.builder();
     for (OutputWriter<O> w : writers) {
-      @SuppressWarnings("unchecked")
-      Writer<O> writer = (Writer) w;
+      Writer<O> writer = (Writer<O>) w;
       out.add(ImmutableList.copyOf(writer.accu));
     }
     return out.build();

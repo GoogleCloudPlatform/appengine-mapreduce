@@ -16,14 +16,17 @@ abstract class ForwardingOutputWriter<O> extends OutputWriter<O> {
 
   protected abstract OutputWriter<?> getDelegate();
 
-  @Override public void beginSlice() throws IOException {
+  @Override
+  public void beginSlice() throws IOException {
     getDelegate().beginSlice();
   }
 
+  @Override
   public void endSlice() throws IOException {
     getDelegate().endSlice();
-  };
+  }
 
+  @Override 
   public void close() throws IOException {
     getDelegate().close();
   }

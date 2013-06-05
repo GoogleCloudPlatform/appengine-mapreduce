@@ -22,7 +22,7 @@ import java.util.logging.Logger;
  * adds an optional terminator, encodes the resulting String according to a
  * {@link Charset}, and writes the result to an underlying {@link Output}.
  *
- * Unmappable characters will be replaced (see {@link CodingErrorAction.REPLACE}).
+ * Unmappable characters will be replaced (see {@link java.nio.charset.CodingErrorAction#REPLACE}).
  *
  * @author ohler@google.com (Christian Ohler)
  *
@@ -118,8 +118,7 @@ public class StringOutput<O, R> extends Output<O, R> {
   @Override public R finish(List<? extends OutputWriter<O>> writers) throws IOException {
     ImmutableList.Builder<OutputWriter<ByteBuffer>> sinkWriters = ImmutableList.builder();
     for (OutputWriter<O> w : writers) {
-      @SuppressWarnings("unchecked")
-      Writer<O> writer = (Writer) w;
+      Writer<O> writer = (Writer<O>) w;
       sinkWriters.add(writer.out);
     }
     return sink.finish(sinkWriters.build());

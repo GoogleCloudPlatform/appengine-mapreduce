@@ -8,9 +8,9 @@ package com.google.appengine.tools.mapreduce;
  * needed or asked by framework. The most common type of pool is mutation pool, where various
  * mutation operations are batched together. </p>
  *
- * <p>Pools are obtained through {@linke MapperContext} using the instance of PoolKey.
+ * <p>Pools are obtained through {@link MapperContext} using the instance of PoolKey.
  * The instance is usually stored inside static variable for unique pool identification,
- * See {@link DatastoreMutationPool#KEY} for example.
+ * See {@link DatastoreMutationPool} for example.
  * </p>
  *
  * <p>This class is really an interface that might be evolving. In order to avoid breaking

@@ -175,7 +175,7 @@ public class IntermediateOutput<K, V> extends Output<KeyValue<K, V>, List<AppEng
     ImmutableList.Builder<AppEngineFile> out = ImmutableList.builder();
     for (OutputWriter<KeyValue<K, V>> w : writers) {
       @SuppressWarnings("unchecked")
-      Writer<K, V> writer = (Writer) w;
+      Writer<K, V> writer = (Writer<K, V>) w;
       if (writer.fileReadHandle != null) {
         out.add(writer.fileReadHandle);
       }

@@ -160,6 +160,7 @@ final class StatusHandler {
   static JSONObject handleGetJobDetail(String jobId) {
     ShardedJobState<?, WorkerResult<? extends Serializable>> state =
         ShardedJobServiceFactory.getShardedJobService().getJobState(jobId);
+    @SuppressWarnings("rawtypes")
     AbstractWorkerController<?, ?> controller =
        (AbstractWorkerController) state.getController();
 
@@ -234,7 +235,7 @@ final class StatusHandler {
     return jobObject;
   }
 
-  private static JSONObject handleListJobs(HttpServletRequest request) throws JSONException {
+  private static JSONObject handleListJobs(HttpServletRequest request) {
     String cursor = request.getParameter("cursor");
     String countString = request.getParameter("count");
     int count = DEFAULT_JOBS_PER_PAGE_COUNT;
@@ -248,7 +249,7 @@ final class StatusHandler {
   /**
    * Handle the list_jobs AJAX command.
    */
-  private static JSONObject handleListJobs(String cursor, int count) throws JSONException {
+  private static JSONObject handleListJobs(String cursor, int count) {
     throw new RuntimeException("Not implemented");
   }
 

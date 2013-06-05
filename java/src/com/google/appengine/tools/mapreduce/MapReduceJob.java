@@ -199,7 +199,7 @@ public class MapReduceJob<I, K, V, O, R>
     }
 
     @Override public Value<ResultAndCounters<List<AppEngineFile>>> run() {
-      @SuppressWarnings("unchecked")
+      @SuppressWarnings({"unchecked", "rawtypes"})
       PromisedValue<ResultAndCounters<List<AppEngineFile>>> result =
           (PromisedValue) newPromise(ResultAndCounters.class);
       String shardedJobId = mrJobId + "-map";
@@ -252,7 +252,7 @@ public class MapReduceJob<I, K, V, O, R>
     @Override public Value<MapReduceResult<R>> run(
         ResultAndCounters<List<AppEngineFile>> mapResult,
         ShuffleResult<K, V, O> shuffleResult) {
-      @SuppressWarnings("unchecked")
+      @SuppressWarnings({"unchecked", "rawtypes"})
       PromisedValue<MapReduceResult<R>> result = (PromisedValue) newPromise(MapReduceResult.class);
       String shardedJobId = mrJobId + "-reduce";
       startShardedJob(mrSpec.getJobName() + " (reduce phase)",
@@ -330,6 +330,7 @@ public class MapReduceJob<I, K, V, O, R>
     }
   }
 
+  @Override
   public Value<MapReduceResult<R>> run(
       MapReduceSpecification<I, K, V, O, R> mrSpec, MapReduceSettings settings) {
     String mrJobId = getJobKey().getName();
