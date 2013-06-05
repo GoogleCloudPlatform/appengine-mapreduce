@@ -1,88 +1,136 @@
-<project name="AppEngineMapReduce" default="dist" basedir=".">
+<project name="AppEngineMapReduce" default="dist" basedir="." xmlns:ivy="antlib:org.apache.ivy.ant">
+
   <description>
-    A user space MapReduce library for AppEngine.
+    A user space MapReduce library for Google App Engine.
   </description>
-  <property name="src" location="src" />
-  <property name="build" location="build" />
-  <property name="lib" location="lib" />
-  <property name="dist" location="dist" />
-  <property name="static" location="static" />
 
-  <property name="testsrc" location="test" />
-  <property name="testbuild" location="test_build" />
-  <property name="testlib" location="test_lib" />
+  <!-- Ivy Configurations -->
+  <property name="thirdparty" value="thirdparty"/>
+  <property name="sdk" value="sdk"/>
+  <property name="test" value="test"/>
+  <property name="sdk_version" value="1.8.0"/>
 
-  <property name="sdk" location="sdk" />
-  <property name="version" value="1.8.0" />
-  <property name="sdkdirname" value="appengine-java-sdk-${version}" />
-  <property name="sdkfilename" value="${sdkdirname}.zip" />
-  <property name="sdklibdir" location="${sdk}/${sdkdirname}/lib" />
+  <!-- Paths -->
+  <property name="src" location="src/main/java"/>
+  <property name="test_src" location="src/test/java"/>
+  <property name="build" location="target/classes"/>
+  <property name="test_build" location="target/test-classes"/>
+  <property name="javadoc" location="javadoc"/>
+  <property name="lib" location="lib"/>
+  <property name="lib_thirdparty" location="${lib}/${thirdparty}"/>
+  <property name="lib_sdk" location="${lib}/${sdk}"/>
+  <property name="lib_test" location="${lib}/${test}"/>
+  <property name="dist" location="dist"/>
+  <property name="ui" location="src/main/resources/ui"/>
+  <property name="example" location="example"/>
+  <property name="example_src" location="${example}/"/>
+  <property name="example_war" location="${example}/war"/>
 
-  <property name="gcsversion" value="r54" />
-  <property name="gcsclientzip" value="appengine-gcs-client-java.zip" />
-  <property name="gcsclientjar" value="appengine-gcs-client.jar" />
+  <!-- Ivy Bootstrap Properties -->
+  <property name="ivy_version" value="2.3.0"/>
+  <property name="mvn_repo" value="http://repo2.maven.org/maven2"/>
+  <property name="ivy_jar" value="ivy-${ivy_version}.jar"/>
+  <property name="ivy_url" value="${mvn_repo}/org/apache/ivy/ivy/${ivy_version}/${ivy_jar}"/>
+  <property name="ivy_dir" value="${lib}/ivy"/>
 
-  <path id="sdkjars">
-    <fileset dir="${sdklibdir}/user">
-      <include name="appengine-api-1.0-sdk-${version}.jar" />
-    </fileset>
-    <fileset dir="${sdklibdir}/shared">
-      <include name="servlet-api.jar" />
-    </fileset>
-  </path>
 
-  <!-- We plan to move to downloading all of these on the fly, but for
-       now json is jar'ed up, and the other two are released
-       relatively infrequently. -->
-  <path id="thirdpartyjars">
-    <fileset dir="${lib}">
-      <include name="*.jar" />
-    </fileset>
-  </path>
-
-  <path id="testjars">
-    <pathelement path="${testlib}/easymock-3.0.jar" />
-    <pathelement path="${testlib}/junit-4.8.2.jar" />
-    <pathelement path="${testlib}/cglib-nodep-2.2.jar" />
-    <pathelement path="${testlib}/objenesis-1.2.jar" />
-    <pathelement path="${sdklibdir}/testing/appengine-testing.jar" />
-    <pathelement path="${sdklibdir}/impl/appengine-api-stubs.jar" />
-  </path>
-
+  <!-- Targets for the MapReduce library -->
   <target name="init">
-    <mkdir dir="${build}" />
+    <mkdir dir="${build}"/>
   </target>
 
-  <target name="compile" depends="init,download_sdk,download_gcs">
-    <javac srcdir="${src}" destdir="${build}" debug="on" debuglevel="lines,source">
-      <compilerarg value="-Xlint:all"/>
-      <compilerarg value="-Xlint:-sunapi"/>
+  <target name="ivy_probe" description="Check if Ivy is already loaded">
+    <condition property="ivy_found">
+      <typefound uri="antlib:org.apache.ivy.ant" name="retrieve"/>
+    </condition>
+  </target>
+
+  <target name="ivy_download" depends="ivy_probe,init" unless="ivy_found">
+    <mkdir dir="${ivy_dir}"/>
+    <get src="${ivy_url}" dest="${ivy_dir}/${ivy_jar}" usetimestamp="true"/>
+  </target>
+
+  <target name="ivy_init" depends="ivy_probe,ivy_download" unless="ivy_found">
+    <typedef uri="antlib:org.apache.ivy.ant" onerror="fail" loaderRef="ivyLoader">
       <classpath>
-        <path refid="sdkjars" />
-        <path refid="thirdpartyjars" />
+        <pathelement location="${ivy_dir}/${ivy_jar}"/>
+      </classpath>
+    </typedef>
+    <fail>
+      <condition>
+        <not>
+          <typefound uri="antlib:org.apache.ivy.ant" name="cleancache"/>
+        </not>
+      </condition>
+      You need Apache Ivy 2.0 or later from http://ant.apache.org/
+      It could not be loaded from ${ivy_url}
+    </fail>
+  </target>
+
+  <target name="dependencies_thirdparty" depends="ivy_init">
+    <ivy:retrieve conf="thirdparty" pattern="${lib_thirdparty}/[artifact]-[revision].[ext]"
+                  sync="true"/>
+  </target>
+
+  <target name="dependencies_sdk" depends="ivy_init">
+    <ivy:retrieve conf="sdk" pattern="${lib_sdk}/[artifact]-[revision].[ext]" sync="true"/>
+  </target>
+
+  <target name="dependencies_test" depends="ivy_init">
+    <ivy:retrieve conf="test" pattern="${lib_test}/[artifact]-[revision].[ext]" sync="true"/>
+  </target>
+
+  <target name="compile" depends="init,dependencies_thirdparty,dependencies_sdk">
+    <javac srcdir="${src}" destdir="${build}" debug="on" debuglevel="lines,source"
+           includeantruntime="false">
+      <compilerarg value="-Xlint:all"/>
+      <classpath>
+        <fileset dir="${lib_thirdparty}">
+          <include name="*.jar"/>
+        </fileset>
+        <fileset dir="${lib_sdk}">
+          <include name="*.jar"/>
+        </fileset>
       </classpath>
     </javac>
+  </target>
+
+  <target name="dist" depends="compile">
+    <mkdir dir="${dist}"/>
+    <jar jarfile="${dist}/appengine-mapreduce.jar" basedir="${build}">
+      <zipfileset dir="${src}"/>
+      <zipfileset dir="${ui}" prefix="com/google/appengine/tools/mapreduce"/>
+    </jar>
+    <copy todir="${dist}">
+      <fileset dir="${lib_thirdparty}"/>
+    </copy>
   </target>
 
   <target name="test_init">
-    <mkdir dir="${testbuild}" />
+    <mkdir dir="${test_build}" />
   </target>
 
-  <target name="test_compile" depends="test_init,dist,download_sdk,download_gcs">
-    <javac srcdir="${testsrc}" destdir="${testbuild}" debug="on" debuglevel="lines,source">
+  <target name="test_compile" depends="test_init,dependencies_test,dependencies_sdk,dist">
+    <javac srcdir="${test_src}" destdir="${test_build}" debug="on" debuglevel="lines,source"
+           includeantruntime="false">
       <classpath>
-        <path refid="sdkjars" />
-        <path refid="thirdpartyjars" />
-        <path refid="testjars" />
-        <pathelement location="${dist}/lib/appengine-mapper.jar" />
+        <fileset dir="${dist}">
+          <include name="*.jar"/>
+        </fileset>
+        <fileset dir="${lib_test}">
+          <include name="*.jar"/>
+        </fileset>
+        <fileset dir="${lib_sdk}">
+          <include name="*.jar"/>
+        </fileset>
       </classpath>
     </javac>
   </target>
 
-  <target name="test" depends="test_compile">
+  <target name="test" depends="dependencies_test,dependencies_sdk,dist,test_compile">
     <junit filtertrace="off" maxmemory="256m" fork="true">
       <batchtest>
-        <fileset dir="${testsrc}">
+        <fileset dir="${test_src}">
           <include name="**/*Test*.java" />
           <!-- We must exclude class that has "Test" in the name AND does not have tests (i.e. a 
                test helper or abstract class) to prevent spurious JUnit errors -->
@@ -96,108 +144,82 @@
         </fileset>
       </batchtest>
       <classpath>
-        <path refid="sdkjars" />
-        <path refid="thirdpartyjars" />
-        <path refid="testjars" />
-        <pathelement location="${dist}/lib/appengine-mapper.jar" />
-        <pathelement location="${testbuild}" />
+        <pathelement location="${test_build}"/>
+        <fileset dir="${dist}">
+          <include name="*.jar"/>
+        </fileset>
+        <fileset dir="${lib_test}">
+          <include name="*.jar"/>
+        </fileset>
+        <fileset dir="${lib_sdk}">
+          <include name="*.jar"/>
+        </fileset>
+        <pathelement path="${example_war}/WEB-INF/classes"/>
       </classpath>
       <formatter type="brief" usefile="false" />
     </junit>
   </target>
 
-  <target name="dist" depends="compile">
-    <mkdir dir="${dist}/lib" />
-    <copy todir="${build}/com/google/appengine/tools/mapreduce">
-      <fileset dir="${static}" />
-    </copy>
-    <copy todir="${build}/com/google/appengine/tools/pipeline/impl/servlets/ui">
-      <fileset dir="pipeline-ui" />
-    </copy>
-    <copy todir="${build}">
-      <fileset dir="${src}" />
-    </copy>
-    <jar jarfile="${dist}/lib/appengine-mapper.jar" basedir="${build}" />
-    <copy todir="${dist}/lib">
-      <path refid="thirdpartyjars" />
-    </copy>
-  </target>
-
-  <target name="clean">
-    <delete dir="${build}" />
-    <delete dir="${dist}" />
-    <delete dir="${testbuild}" />
-  </target>
-
-  <target name="check_sdk_extracted">
-    <available file="${sdk}/${sdkdirname}" property="sdkextracted" />
-  </target>
-
-  <target name="download_sdk" description="Gets the AppEngine SDK" depends="check_sdk_extracted" unless="sdkextracted">
-    <mkdir dir="${sdk}" />
-    <get src="http://googleappengine.googlecode.com/files/${sdkfilename}" dest="${sdk}/${sdkfilename}" />
-    <unzip src="${sdk}/${sdkfilename}" dest="${sdk}" />
-  </target>
-
-  <!-- Helper macro to delete a directory only if it is empty -->
-  <macrodef name="deleteEmptyFolder">
-    <attribute name="dir" />
-    <sequential>
-      <delete includeemptydirs="true" verbose="true">
-        <fileset dir="@{dir}">
-          <and>
-            <size value="0" />
-            <type type="dir" />
-          </and>
+  <target name="javadoc" depends="dependencies_test,dependencies_sdk,dependencies_thirdparty">
+    <delete dir="${javadoc}"/>
+    <mkdir dir="${javadoc}"/>
+    <javadoc packagenames="com.google.appengine.tools.mapreduce" sourcepath="${src}"
+             destdir="${javadoc}" author="false" version="false" use="true"
+             windowtitle="App Engine MapReduce Library">
+      <classpath>
+        <fileset dir="${lib_thirdparty}">
+          <include name="*.jar"/>
         </fileset>
-      </delete>
-    </sequential>
-  </macrodef>
-
-  <target name="check_gcs_extracted">
-    <available file="${lib}/${gcsclientjar}" property="gcsextracted" />
+        <fileset dir="${lib_sdk}">
+          <include name="*.jar"/>
+        </fileset>
+      </classpath>
+      <doctitle>
+        <![CDATA[<h1>Google App Engine MapReduce Library</h1>]]>
+      </doctitle>
+      <bottom>
+        <![CDATA[<i>Copyright &#169; 2011 Google Inc. All Rights Reserved.</i>]]>
+      </bottom>
+    </javadoc>
   </target>
 
-  <target name="download_gcs" description="Gets the GCS Library" depends="check_gcs_extracted" unless="gcsextracted">
-    <mkdir dir="${lib}/tmp" />
-    <get src="https://appengine-gcs-client.googlecode.com/files/appengine-gcs-client-java-${gcsversion}.zip"
-      dest="${lib}/tmp/${gcsclientzip}" />
-    <unzip src="${lib}/tmp/${gcsclientzip}" dest="${lib}">
-      <patternset>
-        <include name="${gcsclientjar}"/>
-      </patternset>
-    </unzip>
-    <delete file="${lib}/tmp/${gcsclientzip}" />
-    <deleteEmptyFolder dir="${lib}/tmp" />
-  </target>
-
-  <!-- Separate target because downloading the SDK can be expensive and
-       usually only needs to be done once. -->
-  <target name="clean_sdk">
-    <delete dir="${sdk}" />
+  <target name="clean" depends="clean_example">
+    <delete dir="${build}"/>
+    <delete dir="${dist}"/>
+    <delete dir="${test_build}"/>
+    <delete dir="${lib}"/>
+    <delete dir="${javadoc}"/>
   </target>
 
   <target name="copy_libs_to_example" depends="dist">
-    <copy todir="example/war/WEB-INF/lib">
-      <fileset dir="${dist}/lib" />
-      <path refid="sdkjars" />
+    <mkdir dir="${example_war}/WEB-INF/lib"/>
+    <copy todir="${example_war}/WEB-INF/lib">
+      <fileset dir="${dist}"/>
+      <fileset dir="${lib_sdk}"/>
     </copy>
   </target>
 
-  <target name="compile_example" depends="copy_libs_to_example">
-    <mkdir dir="example/war/WEB-INF/classes" />
-    <javac srcdir="example" destdir="example/war/WEB-INF/classes">
+  <target name="compile_example" depends="dependencies_test,dependencies_sdk,copy_libs_to_example">
+    <mkdir dir="${example_war}/WEB-INF/classes"/>
+    <javac srcdir="${example_src}" destdir="${example_war}/WEB-INF/classes" debug="on"
+           debuglevel="lines,source" includeantruntime="false">
       <compilerarg value="-Xlint:all"/>
-      <compilerarg value="-Xlint:-sunapi"/>
       <classpath>
-        <fileset dir="example/war/WEB-INF/lib" />
-        <path refid="sdkjars" />
+        <fileset dir="${example_war}/WEB-INF/lib"/>
+        <fileset dir="${lib_sdk}">
+          <include name="*.jar"/>
+        </fileset>
+        <fileset dir="${lib_test}">
+          <include name="*.jar"/>
+        </fileset>
       </classpath>
     </javac>
   </target>
 
   <target name="clean_example">
-    <delete dir="example/war/WEB-INF/lib" />
-    <delete dir="example/war/WEB-INF/classes" />
+    <delete dir="${example_war}/WEB-INF/lib"/>
+    <delete dir="${example_war}/WEB-INF/classes"/>
+    <delete dir="${example_war}/WEB-INF/appengine-generated"/>
+    <delete dir="${example_war}/javadoc"/>
   </target>
 </project>
