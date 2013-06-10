@@ -22,7 +22,7 @@ serialized to/from json and passed around with other means.
 """
 
 # Disable "Invalid method name"
-# pylint: disable-msg=C6409
+# pylint: disable=g-bad-name
 
 
 

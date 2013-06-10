@@ -41,7 +41,7 @@ class FileFormatParserTest(unittest.TestCase):
   def testEscape(self):
     self.assertResultEquals('base64 zip csv(delimiter=\',encoding=utf-8)',
                             'base64[zip[csv(delimiter=\', encoding=utf-8)]]')
-    # pylint: disable-msg=W1401
+    # pylint: disable=anomalous-backslash-in-string
     self.assertResultEquals('csv(delimiter=,,encoding=utf-8)',
                             'csv(delimiter=\,, encoding=utf-8)')
     self.assertResultEquals(r'csv(delimiter=\,encoding=utf-8)',

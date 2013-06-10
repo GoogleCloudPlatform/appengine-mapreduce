@@ -41,7 +41,7 @@ __all__ = [
     "RecordsReader",
     ]
 
-# pylint: disable-msg=C6409
+# pylint: disable=g-bad-name
 
 import base64
 import copy
