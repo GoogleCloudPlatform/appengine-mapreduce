@@ -208,7 +208,7 @@ class FileFormat(object):
     return True
 
   @classmethod
-  # pylint: disable-msg=W0613
+  # pylint: disable=unused-argument
   def split(cls, desired_size, start_index, input_file, cache):
     """Splits a single chunk of desired_size from file.
 

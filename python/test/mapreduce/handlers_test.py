@@ -21,11 +21,11 @@
 
 # os_compat must be first to ensure timezones are UTC.
 # Disable "unused import" and "invalid import order"
-# pylint: disable-msg=W0611
+# pylint: disable=unused-import
 from google.appengine.tools import os_compat
 # testutil must be imported before mock.
 from testlib import testutil
-# pylint: enable-msg=W0611
+# pylint: enable=unused-import
 # pylint: disable=unused-argument
 
 import base64

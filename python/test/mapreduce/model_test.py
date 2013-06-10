@@ -18,7 +18,7 @@
 
 
 # Disable "Invalid method name"
-# pylint: disable-msg=C6409
+# pylint: disable=g-bad-name
 
 import datetime
 import os

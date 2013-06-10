@@ -20,7 +20,7 @@
 
 __all__ = ["start_map"]
 
-# pylint: disable-msg=C6409
+# pylint: disable=g-bad-name
 
 import logging
 

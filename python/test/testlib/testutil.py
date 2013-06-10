@@ -24,9 +24,9 @@
 
 # os_compat must be first to ensure timezones are UTC.
 # Disable "unused import" and "invalid import order"
-# pylint: disable-msg=W0611
+# pylint: disable=unused-import
 from google.appengine.tools import os_compat
-# pylint: enable-msg=W0611
+# pylint: enable=unused-import
 
 import imp
 from testlib import mox
@@ -39,7 +39,7 @@ from google.appengine.ext import testbed
 
 # TODO(user): Cleanup imports if/when cloudstorage becomes part of runtime.
 try:
-  # Check if cloudstorage is available, pylint: disable-msg=unused-import
+  # Check if cloudstorage is available, pylint: disable=unused-import
   import cloudstorage
   enable_cloudstorage_tests = True
 except ImportError:
