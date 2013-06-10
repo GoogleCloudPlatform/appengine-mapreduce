@@ -23,7 +23,7 @@
   <property name="dist" location="dist"/>
   <property name="ui" location="src/main/resources/ui"/>
   <property name="example" location="example"/>
-  <property name="example_src" location="${example}/"/>
+  <property name="example_src" location="${example}/src"/>
   <property name="example_war" location="${example}/war"/>
 
   <!-- Ivy Bootstrap Properties -->
