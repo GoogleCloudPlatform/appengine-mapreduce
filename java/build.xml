@@ -128,7 +128,7 @@
   </target>
 
   <target name="test" depends="dependencies_test,dependencies_sdk,dist,test_compile">
-    <junit filtertrace="off" maxmemory="256m" fork="true">
+    <junit filtertrace="off" maxmemory="256m" fork="true" haltonfailure="yes">
       <batchtest>
         <fileset dir="${test_src}">
           <include name="**/*Test*.java" />
@@ -154,9 +154,35 @@
         <fileset dir="${lib_sdk}">
           <include name="*.jar"/>
         </fileset>
-        <pathelement path="${example_war}/WEB-INF/classes"/>
+        <pathelement path="${example_war}/WEB-INF/classes" />
       </classpath>
       <formatter type="brief" usefile="false" />
+    </junit>
+  </target>
+
+  <target name="runtest" description="Runs the test specified on the command line with -DtestName="
+          depends="dependencies_test,dependencies_sdk,dist,test_compile">
+    <fail message="You must run this target with -DtestName=TestName" unless="testName" />
+    <junit printsummary="withOutAndErr" fork="yes" haltonfailure="yes">
+      <batchtest>
+        <fileset dir="${test_src}">
+          <include name="**/${testName}.java"/>
+        </fileset>
+      </batchtest>
+      <classpath>
+        <pathelement location="${test_build}"/>
+        <fileset dir="${dist}">
+          <include name="*.jar"/>
+        </fileset>
+        <fileset dir="${lib_test}">
+          <include name="*.jar"/>
+        </fileset>
+        <fileset dir="${lib_sdk}">
+          <include name="*.jar"/>
+        </fileset>
+        <pathelement path="${example_war}/WEB-INF/classes"/>
+      </classpath>
+      <formatter type="brief" usefile="false"/>
     </junit>
   </target>
 
