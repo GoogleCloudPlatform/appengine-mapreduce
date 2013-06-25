@@ -255,7 +255,7 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
       if using_modules:
         logs = list(logservice.fetch(
             request_ids=request_ids,
-            server_versions=[(modules.get_current_module_name(),
+            module_versions=[(modules.get_current_module_name(),
                               modules.get_current_version_name())]))
       else:
         logs = list(logservice.fetch(
