@@ -1219,7 +1219,7 @@ class MapperWorkerCallbackHandlerLeaseTest(unittest.TestCase):
       mock_request_log = mock.Mock()
       mock_request_log.finished = True
       def side_effect(*args, **kwds):
-        if "server_versions" in kwds:
+        if "module_versions" in kwds:
           return [mock_request_log]
         raise logservice.InvalidArgumentError()
       fetch.side_effect = side_effect
