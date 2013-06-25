@@ -1183,7 +1183,7 @@ class MapperWorkerCallbackHandlerLeaseTest(unittest.TestCase):
     self.shard_state.slice_id -= 1
     handler, tstate = self._create_handler()
     self.assertEqual(
-        None,
+        handler._TASK_STATE.RETRY_TASK,
         # Use old shard state.
         handler._try_acquire_lease(self.shard_state, tstate))
 
@@ -1280,7 +1280,16 @@ class MapperWorkerCallbackHandlerLeaseTest(unittest.TestCase):
       add.side_effect = taskqueue.Error
       self.assertRaises(taskqueue.Error, handler.post)
 
-    self.assertNoEffect()
+    # No new task in taskqueue.
+    stub = apiproxy_stub_map.apiproxy.GetStub("taskqueue")
+    self.assertEqual(0, len(stub.GetTasks("default")))
+
+    shard_state = model.ShardState.get_by_shard_id(self.shard_state.shard_id)
+    self.assertTrue(shard_state.acquired_once)
+    # Besides these fields, all other fields should be the same.
+    shard_state.acquired_once = self.shard_state.acquired_once
+    shard_state.update_time = self.shard_state.update_time
+    self.assertEqual(str(self.shard_state), str(shard_state))
 
 
 class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
