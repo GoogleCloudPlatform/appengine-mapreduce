@@ -214,7 +214,7 @@ public class EndToEndTest extends EndToEndTestCase {
           }
         },
         MapReduceSpecification.of("Test MR",
-            new ConsecutiveLongInput(-1000, 1000, 10),
+            new ConsecutiveLongInput(-10000, 10000, 10),
             new Mod37Mapper(),
             Marshallers.getStringMarshaller(),
             Marshallers.getLongMarshaller(),
@@ -225,7 +225,7 @@ public class EndToEndTest extends EndToEndTestCase {
               MapReduceResult<List<List<KeyValue<String, List<Long>>>>> result)
               throws Exception {
             Counters counters = result.getCounters();
-            assertEquals(2000, counters.getCounter(CounterNames.MAPPER_CALLS).getValue());
+            assertEquals(20000, counters.getCounter(CounterNames.MAPPER_CALLS).getValue());
             assertEquals(37, counters.getCounter(CounterNames.REDUCER_CALLS).getValue());
 
             List<List<KeyValue<String, List<Long>>>> actualOutput = result.getOutputResult();
@@ -234,7 +234,7 @@ public class EndToEndTest extends EndToEndTestCase {
               expectedOutput.add(ArrayListMultimap.<String, Long>create());
             }
             Marshaller<String> marshaller = Marshallers.getStringMarshaller();
-            for (long l = -1000; l < 1000; l++) {
+            for (long l = -10000; l < 10000; l++) {
               String mod37 = "" + (Math.abs(l) % 37);
               expectedOutput.get(Shuffling.reduceShardFor(marshaller.toBytes(mod37), 5))
                   .put(mod37, l);
