@@ -135,7 +135,7 @@ public class IntermediateInput<K, V> extends Input<KeyValue<K, ReducerInput<V>>>
       try {
         posBytes = channel.position();
       } catch (IOException e) {
-        throw new RuntimeException(this + ": Failed to get position()", e);
+        throw new RuntimeException(this + ": Failed to get updated position()", e);
       }
       if (record == null) {
         return null;
@@ -145,24 +145,23 @@ public class IntermediateInput<K, V> extends Input<KeyValue<K, ReducerInput<V>>>
         return KeyValues.parseFrom(bytes);
       } catch (InvalidProtocolBufferException e) {
         // TODO(ohler): abort mapreduce
-        throw new RuntimeException(this + ": Failed to parse protobuf: "
-            + SerializationUtil.prettyBytes(bytes), e);
+        throw new RuntimeException(this + ": Failed to parse protobuf", e);
       }
     }
 
     private Iterator<V> makeIterator(KeyValues proto) {
-      return Iterators.transform(proto.getValueList().iterator(),
-          new Function<ByteString, V>() {
-            @Override public V apply(ByteString in) {
-              try {
-                return valueMarshaller.fromBytes(in.asReadOnlyByteBuffer());
-              } catch (IOException e) {
-                // TODO(ohler): abort mapreduce
-                throw new RuntimeException(
-                    Reader.this + ": " + valueMarshaller + " failed to parse value: " + in, e);
-              }
-            }
-          });
+      return Iterators.transform(proto.getValueList().iterator(), new Function<ByteString, V>() {
+        @Override
+        public V apply(ByteString in) {
+          try {
+            return valueMarshaller.fromBytes(in.asReadOnlyByteBuffer());
+          } catch (IOException e) {
+            // TODO(ohler): abort mapreduce
+            throw new RuntimeException(
+                Reader.this + ": " + valueMarshaller + " failed to parse value: " + in, e);
+          }
+        }
+      });
     }
 
     @Override public KeyValue<K, ReducerInput<V>> next() {
