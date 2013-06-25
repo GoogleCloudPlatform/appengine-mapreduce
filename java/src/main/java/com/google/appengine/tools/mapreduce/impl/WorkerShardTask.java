@@ -105,35 +105,42 @@ public abstract class WorkerShardTask<I, O, C extends WorkerContext>
     Stopwatch overallStopwatch = new Stopwatch().start();
     Stopwatch workerStopwatch = new Stopwatch();
     int workerCalls = 0;
+    int itemsRead = 0;
     boolean inputExhausted = false;
     I next = null;
-    do {
-      try {
-        next = in.next();
-      } catch (NoSuchElementException e) {
-        inputExhausted = true;
-        break;
-      } catch (IOException e) {
-        if (workerCalls > 0) {
-          // We made progress, persist it.
-          log.log(Level.SEVERE, in + ".next() threw IOException, ending slice early", e);
-          // TODO(ohler): Abort if too many slices in sequence end early
-          // because of these exceptions.
+    try {
+      do {
+        try {
+          next = in.next();
+          itemsRead++;
+        } catch (NoSuchElementException e) {
+          inputExhausted = true;
           break;
+        } catch (IOException e) {
+          if (workerCalls > 0) {
+            // We made progress, persist it.
+            log.log(Level.SEVERE, in + ".next() threw IOException, ending slice early", e);
+            // TODO(ohler): Abort if too many slices in sequence end early
+            // because of these exceptions.
+            break;
+          }
+          throw new RuntimeException(in + ".next() threw IOException", e);
         }
-        throw new RuntimeException(in + ".next() threw IOException", e);
-      }
 
-      workerCalls++;
-      // TODO(ohler): workerStopwatch includes time spent in emit() and the
-      // OutputWriter, which is very significant because it includes I/O.  I
-      // think a clean solution would be to have the context measure the
-      // OutputWriter's time, and to subtract that from the time measured by
-      // workerStopwatch.
-      workerStopwatch.start();
-      callWorker(next);
-      workerStopwatch.stop();
-    } while (overallStopwatch.elapsed(MILLISECONDS) < millisPerSlice);
+        workerCalls++;
+        // TODO(ohler): workerStopwatch includes time spent in emit() and the
+        // OutputWriter, which is very significant because it includes I/O. I
+        // think a clean solution would be to have the context measure the
+        // OutputWriter's time, and to subtract that from the time measured by
+        // workerStopwatch.
+        workerStopwatch.start();
+        callWorker(next);
+        workerStopwatch.stop();
+      } while (overallStopwatch.elapsed(MILLISECONDS) < millisPerSlice);
+    } finally {
+      log.info("Ending slice after " + itemsRead + " items read and calling the worker "
+          + workerCalls + " times");
+    }
     overallStopwatch.stop();
     counters.getCounter(workerCallsCounterName).increment(workerCalls);
     counters.getCounter(workerMillisCounterName).increment(workerStopwatch.elapsed(MILLISECONDS));

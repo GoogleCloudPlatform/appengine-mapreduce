@@ -272,6 +272,7 @@ class ShardedJobRunner<T extends IncrementalTask<T, R>, R extends Serializable> 
     // TOOD: retries.  we should only have one writer, so should have no
     // concurrency exceptions, but we should guard against other RPC failures.
     Transaction tx = DATASTORE.beginTransaction();
+    Entity entity = null;
     try {
       IncrementalTaskState<?, ?> existing = lookupTaskState(tx, taskId);
       if (existing == null) {
@@ -283,11 +284,17 @@ class ShardedJobRunner<T extends IncrementalTask<T, R>, R extends Serializable> 
             + ", now " + existing.getNextSequenceNumber());
         return;
       }
-      DATASTORE.put(tx, IncrementalTaskState.Serializer.toEntity(taskState));
+      entity = IncrementalTaskState.Serializer.toEntity(taskState);
+      
+      DATASTORE.put(tx, entity);
       if (result.getFollowupTask() != null) {
         scheduleWorkerTask(tx, jobState.getSettings(), taskState);
       }
       tx.commit();
+    } catch (Exception e) {
+      throw new RuntimeException("Failed to write end of slice. Serialzing next task: "
+          + taskState.getNextTask() + " Result: " + taskState.getPartialResult()
+          + "Serializing entity: " + entity, e);
     } finally {
       if (tx.isActive()) {
         tx.rollback();
