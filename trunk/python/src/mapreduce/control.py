@@ -76,7 +76,7 @@ def start_map(name,
     mapreduce id as string.
   """
   if shard_count is None:
-    shard_count = parameters.DEFAULT_SHARD_COUNT,
+    shard_count = parameters.DEFAULT_SHARD_COUNT
   if base_path is None:
     # pylint: disable=protected-access
     base_path = parameters._DEFAULT_BASE_PATH
