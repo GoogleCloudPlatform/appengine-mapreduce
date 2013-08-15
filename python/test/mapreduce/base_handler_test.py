@@ -17,12 +17,18 @@
 
 
 
+import httplib
+
 import unittest
 
 from mapreduce import base_handler
 from mapreduce import errors
+from mapreduce import parameters
 from mapreduce import status
+from mapreduce import util
 from google.appengine.ext.webapp import mock_webapp
+
+# pylint: disable=g-bad-name
 
 
 class BaseHandlerTest(unittest.TestCase):
@@ -50,18 +56,86 @@ class TaskQueueHandlerTest(unittest.TestCase):
 
   def setUp(self):
     self.handler = base_handler.TaskQueueHandler()
-    self.handler.initialize(mock_webapp.MockRequest(),
+    self.request = mock_webapp.MockRequest()
+    self.request.headers["X-AppEngine-QueueName"] = "default"
+    self.request.headers["X-AppEngine-TaskName"] = "task_name"
+
+  def init(self):
+    self.handler.initialize(self.request,
                             mock_webapp.MockResponse())
 
   def testPostNoTaskQueueHeader(self):
     """Test calling post() without valid taskqueue header."""
+    del self.request.headers["X-AppEngine-QueueName"]
+    self.init()
     self.handler.post()
-    self.assertEquals(403, self.handler.response.status)
+    self.assertEquals(httplib.FORBIDDEN, self.handler.response.status)
 
   def testTaskRetryCount(self):
+    self.init()
     self.assertEquals(0, self.handler.task_retry_count())
-    self.handler.request.headers["X-AppEngine-TaskExecutionCount"] = 5
+
+    self.request.headers["X-AppEngine-TaskExecutionCount"] = 5
+    self.init()
     self.assertEquals(5, self.handler.task_retry_count())
+
+  def testTaskRetriedTooManyTimes(self):
+    self.request.headers["X-AppEngine-TaskExecutionCount"] = (
+        parameters._MAX_TASK_RETRIES + 1)
+    self.init()
+    self.handler.post()
+    self.assertEqual(httplib.OK, self.handler.response.status)
+
+
+class FaultyTaskQueueHandler(base_handler.TaskQueueHandler):
+  """A handler that always fails at _preprocess."""
+
+  dropped = False
+  handled = False
+
+  def _preprocess(self):
+    raise Exception()
+
+  def _drop_gracefully(self):
+    self.dropped = True
+
+  def handle(self):
+    self.handled = True
+
+  @classmethod
+  def reset(cls):
+    cls.dropped = False
+    cls.handled = False
+
+
+class FaultyTaskQueueHandlerTest(unittest.TestCase):
+
+  def setUp(self):
+    FaultyTaskQueueHandler.reset()
+    self.handler = FaultyTaskQueueHandler()
+    self.request = mock_webapp.MockRequest()
+    self.request.headers["X-AppEngine-QueueName"] = "default"
+    self.request.headers["X-AppEngine-TaskName"] = "task_name"
+    self.request.headers[util._MR_ID_TASK_HEADER] = "mr_id"
+
+  def init(self):
+    self.handler.initialize(self.request,
+                            mock_webapp.MockResponse())
+
+  def testSmoke(self):
+    self.init()
+    self.handler.post()
+    self.assertTrue(self.handler.dropped)
+    self.assertFalse(self.handler.handled)
+    self.assertEqual(httplib.OK, self.handler.response.status)
+
+  def testNoMrIdInHeader(self):
+    """Test _drop_gracefully code is not called."""
+    del self.request.headers[util._MR_ID_TASK_HEADER]
+    self.assertRaises(Exception, self.handler.initialize,
+                      self.request, mock_webapp.MockResponse())
+    self.assertFalse(self.handler.dropped)
+    self.assertFalse(self.handler.handled)
 
 
 class JsonErrorHandler(base_handler.JsonHandler):

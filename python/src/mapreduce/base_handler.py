@@ -18,6 +18,7 @@
 
 
 
+# pylint: disable=protected-access
 # pylint: disable=g-bad-name
 
 import httplib
@@ -32,6 +33,8 @@ except ImportError:
 from google.appengine.ext import webapp
 from mapreduce import errors
 from mapreduce import model
+from mapreduce import parameters
+from mapreduce import util
 
 
 class Error(Exception):
@@ -43,7 +46,10 @@ class BadRequestPathError(Error):
 
 
 class BaseHandler(webapp.RequestHandler):
-  """Base class for all mapreduce handlers."""
+  """Base class for all mapreduce handlers.
+
+  In Python27 runtime, webapp2 will automatically replace webapp.
+  """
 
   def base_path(self):
     """Base path for all mapreduce-related urls."""
@@ -54,21 +60,86 @@ class BaseHandler(webapp.RequestHandler):
 class TaskQueueHandler(BaseHandler):
   """Base class for handlers intended to be run only from the task queue.
 
-  Sub-classes should implement the 'handle' method.
+  Sub-classes should implement
+  1. the 'handle' method for all POST request.
+  2. '_preprocess' method for decoding or validations before handle.
+  3. '_drop_gracefully' method if _preprocess fails and the task has to
+     be dropped.
   """
 
-  def post(self):
+  def __init__(self, *args, **kwargs):
+    super(TaskQueueHandler, self).__init__(*args, **kwargs)
+    self._preprocess_success = False
+
+  def initialize(self, request, response):
+    """Initialize.
+
+    1. call webapp init.
+    2. check request is indeed from taskqueue.
+    3. check the task has not been retried too many times.
+    4. run handler specific processing logic.
+    5. run error handling logic if precessing failed.
+
+    Args:
+      request: a webapp.Request instance.
+      response: a webapp.Response instance.
+    """
+    super(TaskQueueHandler, self).initialize(request, response)
+
+    # Check request is from taskqueue.
     if "X-AppEngine-QueueName" not in self.request.headers:
       logging.error(self.request.headers)
       logging.error("Task queue handler received non-task queue request")
       self.response.set_status(
           403, message="Task queue handler received non-task queue request")
       return
-    self.handle()
+
+    # Check task has not been retried too many times.
+    if self.task_retry_count() > parameters._MAX_TASK_RETRIES:
+      logging.error(
+          "Task %s has been retried %s times. Dropping it permanently.",
+          self.request.headers["X-AppEngine-TaskName"], self.task_retry_count())
+      return
+
+    try:
+      self._preprocess()
+      self._preprocess_success = True
+    # pylint: disable=bare-except
+    except:
+      # For old task w/o mr_id, we raise exception and the task will be
+      # dropped after max retries.
+      # TODO(user): Remove after all tasks have mr_id.
+      self._preprocess_success = False
+      mr_id = self.request.headers.get(util._MR_ID_TASK_HEADER, None)
+      if mr_id is None:
+        raise
+      logging.error(
+          "Preprocess task %s failed. Dropping it permanently.",
+          self.request.headers["X-AppEngine-TaskName"])
+      self._drop_gracefully()
+
+  def post(self):
+    if self._preprocess_success:
+      self.handle()
 
   def handle(self):
     """To be implemented by subclasses."""
     raise NotImplementedError()
+
+  def _preprocess(self):
+    """Preprocess.
+
+    This method is called after webapp initialization code has been run
+    successfully. It can thus access self.request, self.response and so on.
+    """
+    pass
+
+  def _drop_gracefully(self):
+    """Drop task gracefully.
+
+    When preprocess failed, this method is called before the task is dropped.
+    """
+    pass
 
   def task_retry_count(self):
     """Number of times this task has been retried."""
@@ -184,8 +255,7 @@ class HugeTaskHandler(TaskQueueHandler):
   def __init__(self, *args, **kwargs):
     super(HugeTaskHandler, self).__init__(*args, **kwargs)
 
-  def initialize(self, request, response):
-    super(HugeTaskHandler, self).initialize(request, response)
+  def _preprocess(self):
     self.request = self._RequestWrapper(self.request)
 
 

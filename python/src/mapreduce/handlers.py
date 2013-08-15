@@ -51,24 +51,6 @@ from mapreduce import util
 from google.appengine.runtime import apiproxy_errors
 
 
-# TODO(user): find a proper value for this.
-# The amount of time to perform scanning in one slice. New slice will be
-# scheduled as soon as current one takes this long.
-_SLICE_DURATION_SEC = 15
-
-# See model.ShardState doc on slice_start_time. In second.
-_LEASE_GRACE_PERIOD = 1
-
-# See model.ShardState doc on slice_start_time. In second.
-_REQUEST_EVENTUAL_TIMEOUT = 10 * 60 + 30
-
-# Delay between consecutive controller callback invocations.
-_CONTROLLER_PERIOD_SEC = 2
-
-# How many times to cope with a RetrySliceError before totally
-# giving up and aborting the whole job.
-_RETRY_SLICE_ERROR_MAX_RETRIES = 10
-
 # Set of strings of various test-injected faults.
 _TEST_INJECTED_FAULTS = set()
 
@@ -106,6 +88,23 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
     """Constructor."""
     super(MapperWorkerCallbackHandler, self).__init__(*args)
     self._time = time.time
+
+  def _drop_gracefully(self):
+    """Drop worker task gracefully.
+
+    Set current shard_state to failed. Controller logic will take care of
+    other shards and the entire MR.
+    """
+    shard_id = self.request.headers[util._MR_SHARD_ID_TASK_HEADER]
+    mr_id = self.request.headers[util._MR_ID_TASK_HEADER]
+    shard_state, mr_state = db.get([
+        model.ShardState.get_key_by_shard_id(shard_id),
+        model.MapreduceState.get_key_by_job_id(mr_id)])
+
+    if shard_state and shard_state.active:
+      shard_state.set_for_failure()
+      config = util.create_datastore_write_config(mr_state.mapreduce_spec)
+      shard_state.put(config=config)
 
   def _try_acquire_lease(self, shard_state, tstate):
     """Validate datastore and the task payload are consistent.
@@ -174,7 +173,8 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
     # See model.ShardState doc.
     if shard_state.slice_start_time:
       countdown = self._wait_time(shard_state,
-                                  _LEASE_GRACE_PERIOD + _SLICE_DURATION_SEC)
+                                  parameters._LEASE_GRACE_PERIOD +
+                                  parameters._SLICE_DURATION_SEC)
       if countdown > 0:
         logging.warning(
             "Last retry of slice %s-%s may be still running."
@@ -187,7 +187,7 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
         return self._TASK_STATE.RETRY_TASK
       # lease could have expired. Verify with logs API.
       else:
-        if self._wait_time(shard_state, _REQUEST_EVENTUAL_TIMEOUT):
+        if self._wait_time(shard_state, parameters._REQUEST_EVENTUAL_TIMEOUT):
           if not self._old_request_ended(shard_state):
             logging.warning(
                 "Last retry of slice %s-%s is still in flight with request_id "
@@ -198,7 +198,8 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
           logging.warning(
               "Last retry of slice %s-%s has no log entry and has"
               "timed out after %s seconds",
-              tstate.shard_id, tstate.slice_id, _REQUEST_EVENTUAL_TIMEOUT)
+              tstate.shard_id, tstate.slice_id,
+              parameters._REQUEST_EVENTUAL_TIMEOUT)
 
     # Lease expired or slice_start_time not set.
     config = util.create_datastore_write_config(tstate.mapreduce_spec)
@@ -477,7 +478,7 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
             else:
               output_writer.write(output, ctx)
 
-    if self._time() - self._start_time >= _SLICE_DURATION_SEC:
+    if self._time() - self._start_time >= parameters._SLICE_DURATION_SEC:
       return False
     return True
 
@@ -574,8 +575,7 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
     if type(e) is errors.FailJobError:
       logging.error("Got FailJobError. Shard %s failed permanently.",
                     shard_state.shard_id)
-      shard_state.active = False
-      shard_state.result_status = model.ShardState.RESULT_FAILED
+      shard_state.set_for_failure()
       return False
 
     if type(e) in errors.SHARD_RETRY_ERRORS:
@@ -613,8 +613,7 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
       permanent_shard_failure = True
 
     if permanent_shard_failure:
-      shard_state.active = False
-      shard_state.result_status = model.ShardState.RESULT_FAILED
+      shard_state.set_for_failure()
       return False
 
     shard_state.reset_for_retry()
@@ -645,7 +644,7 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
     Raises:
       errors.RetrySliceError: in order to trigger a slice retry.
     """
-    if shard_state.slice_retries < _RETRY_SLICE_ERROR_MAX_RETRIES:
+    if shard_state.slice_retries < parameters._RETRY_SLICE_ERROR_MAX_RETRIES:
       logging.error(
           "Will retry slice %s %s for the %s time.",
           tstate.shard_id,
@@ -663,8 +662,7 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
                   "Shard %s failed permanently.",
                   self.task_retry_count(),
                   shard_state.shard_id)
-    shard_state.active = False
-    shard_state.result_status = model.ShardState.RESULT_FAILED
+    shard_state.set_for_failure()
     return False
 
   @staticmethod
@@ -698,7 +696,8 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
     countdown = 0
     if self._processing_limit(spec) != -1:
       countdown = max(
-          int(_SLICE_DURATION_SEC - (self._time() - self._start_time)), 0)
+          int(parameters._SLICE_DURATION_SEC -
+              (self._time() - self._start_time)), 0)
     return countdown
 
   @classmethod
@@ -783,7 +782,8 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
     slice_processing_limit = -1
     if processing_rate > 0:
       slice_processing_limit = int(math.ceil(
-          _SLICE_DURATION_SEC*processing_rate/int(spec.mapper.shard_count)))
+          parameters._SLICE_DURATION_SEC*processing_rate/
+          int(spec.mapper.shard_count)))
     return slice_processing_limit
 
   # Deprecated. Only used by old test cases.
@@ -828,6 +828,35 @@ class ControllerCallbackHandler(base_handler.HugeTaskHandler):
     """Constructor."""
     super(ControllerCallbackHandler, self).__init__(*args)
     self._time = time.time
+
+  def _drop_gracefully(self):
+    """Gracefully drop controller task.
+
+    This method is called when decoding controller task payload failed.
+    Upon this we mark ShardState and MapreduceState as failed so all
+    tasks can stop.
+
+    Writing to datastore is forced (ignore read-only mode) because we
+    want the tasks to stop badly, and if force_writes was False,
+    the job would have never been started.
+    """
+    mr_id = self.request.headers[util._MR_ID_TASK_HEADER]
+    state = model.MapreduceState.get_by_job_id(mr_id)
+    if not state or not state.active:
+      return
+
+    state.active = False
+    state.result_status = model.MapreduceState.RESULT_FAILED
+    shard_states = model.ShardState.find_by_mapreduce_state(state)
+    puts = []
+    for ss in shard_states:
+      if ss.active:
+        ss.set_for_failure()
+        puts.append(ss)
+    config = util.create_datastore_write_config(state.mapreduce_spec)
+    db.put(puts, config=config)
+    # Put mr_state only after all shard_states are put.
+    db.put(state, config=config)
 
   def handle(self):
     """Handle request."""
@@ -979,11 +1008,10 @@ class ControllerCallbackHandler(base_handler.HugeTaskHandler):
         model.MapreduceSpec.PARAM_DONE_CALLBACK)
     done_task = None
     if done_callback:
-      headers = {"Host": util._get_task_host(),
-                 "Mapreduce-Id": mapreduce_spec.mapreduce_id}
       done_task = taskqueue.Task(
           url=done_callback,
-          headers=headers,
+          headers=util._get_task_headers(mapreduce_spec,
+                                         util.CALLBACK_MR_ID_TASK_HEADER),
           method=mapreduce_spec.params.get("done_callback_method", "POST"))
 
     @db.transactional(retries=5)
@@ -1072,7 +1100,7 @@ class ControllerCallbackHandler(base_handler.HugeTaskHandler):
     controller_callback_task = model.HugeTask(
         url=base_path + "/controller_callback",
         name=task_name, params=task_params,
-        countdown=_CONTROLLER_PERIOD_SEC,
+        countdown=parameters._CONTROLLER_PERIOD_SEC,
         parent=mapreduce_state,
         headers=util._get_task_headers(mapreduce_spec))
 

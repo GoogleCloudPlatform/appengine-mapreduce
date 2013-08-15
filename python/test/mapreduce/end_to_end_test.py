@@ -19,6 +19,7 @@ from mapreduce import control
 from mapreduce import handlers
 from mapreduce import model
 from mapreduce import output_writers
+from mapreduce import parameters
 from mapreduce import test_support
 from testlib import testutil
 from google.appengine.ext import ndb
@@ -156,11 +157,11 @@ class EndToEndTest(testutil.HandlerTestBase):
     testutil.HandlerTestBase.setUp(self)
     TestHandler.reset()
     TestOutputWriter.reset()
-    self.original_slice_duration = handlers._SLICE_DURATION_SEC
+    self.original_slice_duration = parameters._SLICE_DURATION_SEC
     SerializableHandler.reset()
 
   def tearDown(self):
-    handlers._SLICE_DURATION_SEC = self.original_slice_duration
+    parameters._SLICE_DURATION_SEC = self.original_slice_duration
 
   def testHandlerSerialization(self):
     """Test serializable handler works with MR and shard retry."""
@@ -170,7 +171,7 @@ class EndToEndTest(testutil.HandlerTestBase):
       TestEntity(int_property=-1).put()
 
     # Force handler to serialize on every call.
-    handlers._SLICE_DURATION_SEC = 0
+    parameters._SLICE_DURATION_SEC = 0
 
     control.start_map(
         "test_map",

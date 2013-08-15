@@ -31,6 +31,7 @@ __all__ = [
     "total_seconds",
     "try_serialize_handler",
     "try_deserialize_handler",
+    "CALLBACK_MR_ID_TASK_HEADER",
     ]
 
 import inspect
@@ -41,9 +42,12 @@ import types
 from google.appengine.datastore import datastore_rpc
 from mapreduce import parameters
 
-# Taskqueue task header for mr id.
+# Taskqueue task header for mr id. Use internal by MR.
 _MR_ID_TASK_HEADER = "AE-MR-ID"
 _MR_SHARD_ID_TASK_HEADER = "AE-MR-SHARD-ID"
+
+# Callback task MR ID task header
+CALLBACK_MR_ID_TASK_HEADER = "Mapreduce-Id"
 
 
 def _get_task_host():
@@ -71,16 +75,17 @@ def _get_task_host():
   return "%s.%s.%s" % (version, module, default_host)
 
 
-def _get_task_headers(mr_spec):
+def _get_task_headers(mr_spec, mr_id_header_key=_MR_ID_TASK_HEADER):
   """Get headers for all mr tasks.
 
   Args:
     mr_spec: an instance of model.MapreduceSpec.
+    mr_id_header_key: the key to set mr id with.
 
   Returns:
     A dictionary of all headers.
   """
-  return {_MR_ID_TASK_HEADER: mr_spec.mapreduce_id,
+  return {mr_id_header_key: mr_spec.mapreduce_id,
           "Host": _get_task_host()}
 
 
