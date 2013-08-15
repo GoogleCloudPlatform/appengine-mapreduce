@@ -41,6 +41,48 @@ import types
 from google.appengine.datastore import datastore_rpc
 from mapreduce import parameters
 
+# Taskqueue task header for mr id.
+_MR_ID_TASK_HEADER = "AE-MR-ID"
+_MR_SHARD_ID_TASK_HEADER = "AE-MR-SHARD-ID"
+
+
+def _get_task_host():
+  """Get the Host header value for all mr tasks.
+
+  Task Host header determines which instance this task would be routed to.
+
+  Current version id format is: v7.368834058928280579
+  Current module id is just the module's name. It could be "default"
+  Default version hostname is app_id.appspot.com
+
+  Returns:
+    A complete host name is of format version.module.app_id.appspot.com
+  If module is the default module, just version.app_id.appspot.com. The reason
+  is if an app doesn't have modules enabled and the url is
+  "version.default.app_id", "version" is ignored and "default" is used as
+  version. If "default" version doesn't exist, the url is routed to the
+  default version.
+  """
+  version = os.environ["CURRENT_VERSION_ID"].split(".")[0]
+  default_host = os.environ["DEFAULT_VERSION_HOSTNAME"]
+  module = os.environ["CURRENT_MODULE_ID"]
+  if os.environ["CURRENT_MODULE_ID"] == "default":
+    return "%s.%s" % (version, default_host)
+  return "%s.%s.%s" % (version, module, default_host)
+
+
+def _get_task_headers(mr_spec):
+  """Get headers for all mr tasks.
+
+  Args:
+    mr_spec: an instance of model.MapreduceSpec.
+
+  Returns:
+    A dictionary of all headers.
+  """
+  return {_MR_ID_TASK_HEADER: mr_spec.mapreduce_id,
+          "Host": _get_task_host()}
+
 
 def _enum(**enums):
   """Helper to create enum."""

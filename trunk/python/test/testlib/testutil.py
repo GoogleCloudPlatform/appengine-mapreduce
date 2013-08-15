@@ -103,17 +103,24 @@ class HandlerTestBase(unittest.TestCase):
 
     self.appid = "testapp"
     self.version_id = "1.23456789"
-    os.environ["APPLICATION_ID"] = self.appid
-    os.environ["CURRENT_VERSION_ID"] = self.version_id
-    os.environ["HTTP_HOST"] = "localhost"
+    self.module_id = "foo_module"
+    self.host = "1.foo_module.testapp.appspot.com"
 
     self.testbed = testbed.Testbed()
     self.testbed.activate()
+
+    os.environ["APPLICATION_ID"] = self.appid
+    os.environ["CURRENT_VERSION_ID"] = self.version_id
+    os.environ["CURRENT_MODULE_ID"] = self.module_id
+    os.environ["DEFAULT_VERSION_HOSTNAME"] = "%s.appspot.com" % self.appid
+    os.environ["HTTP_HOST"] = self.host
+
     self.testbed.init_app_identity_stub()
     self.testbed.init_blobstore_stub()
     # HRD with no eventual consistency.
     policy = datastore_stub_util.PseudoRandomHRConsistencyPolicy(probability=1)
     self.testbed.init_datastore_v3_stub(consistency_policy=policy)
+    self.testbed.init_logservice_stub()
     self.testbed.init_files_stub()
     self.testbed.init_memcache_stub()
     self.testbed.init_taskqueue_stub()
@@ -136,7 +143,15 @@ class HandlerTestBase(unittest.TestCase):
       self.mox.VerifyAll()
     finally:
       self.mox.UnsetStubs()
+
+    del os.environ["APPLICATION_ID"]
+    del os.environ["CURRENT_VERSION_ID"]
+    del os.environ["CURRENT_MODULE_ID"]
+    del os.environ["DEFAULT_VERSION_HOSTNAME"]
+    del os.environ["HTTP_HOST"]
+
     self.testbed.deactivate()
+
     unittest.TestCase.tearDown(self)
 
   def assertTaskStarted(self, queue="default"):

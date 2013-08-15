@@ -728,13 +728,17 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
         tstate.slice_id,
         tstate.retries)
 
+    headers = util._get_task_headers(tstate.mapreduce_spec)
+    headers[util._MR_SHARD_ID_TASK_HEADER] = tstate.shard_id
+
     worker_task = model.HugeTask(
         url=base_path + "/worker_callback",
         params=tstate.to_dict(),
         name=task_name,
         eta=eta,
         countdown=countdown,
-        parent=shard_state)
+        parent=shard_state,
+        headers=headers)
     return worker_task
 
   @classmethod
@@ -975,9 +979,11 @@ class ControllerCallbackHandler(base_handler.HugeTaskHandler):
         model.MapreduceSpec.PARAM_DONE_CALLBACK)
     done_task = None
     if done_callback:
+      headers = {"Host": util._get_task_host(),
+                 "Mapreduce-Id": mapreduce_spec.mapreduce_id}
       done_task = taskqueue.Task(
           url=done_callback,
-          headers={"Mapreduce-Id": mapreduce_spec.mapreduce_id},
+          headers=headers,
           method=mapreduce_spec.params.get("done_callback_method", "POST"))
 
     @db.transactional(retries=5)
@@ -1067,7 +1073,8 @@ class ControllerCallbackHandler(base_handler.HugeTaskHandler):
         url=base_path + "/controller_callback",
         name=task_name, params=task_params,
         countdown=_CONTROLLER_PERIOD_SEC,
-        parent=mapreduce_state)
+        parent=mapreduce_state,
+        headers=util._get_task_headers(mapreduce_spec))
 
     if not _run_task_hook(mapreduce_spec.get_hooks(),
                           "enqueue_controller_task",
@@ -1483,6 +1490,7 @@ class StartJobHandler(base_handler.PostJsonHandler):
     # Task is not named so that it can be added within a transaction.
     kickoff_task = taskqueue.Task(
         url=base_path + "/kickoffjob_callback",
+        headers=util._get_task_headers(mapreduce_spec),
         params=params,
         eta=eta,
         countdown=countdown)
@@ -1524,8 +1532,9 @@ class FinalizeJobHandler(base_handler.TaskQueueHandler):
     finalize_task = taskqueue.Task(
         name=task_name,
         url=base_path + "/finalizejob_callback",
-        params={"mapreduce_id": mapreduce_spec.mapreduce_id})
-    queue_name = os.environ.get("HTTP_X_APPENGINE_QUEUENAME", "default")
+        params={"mapreduce_id": mapreduce_spec.mapreduce_id},
+        headers=util._get_task_headers(mapreduce_spec))
+    queue_name = util.get_queue_name(None)
     if not _run_task_hook(mapreduce_spec.get_hooks(),
                           "enqueue_controller_task",
                           finalize_task,

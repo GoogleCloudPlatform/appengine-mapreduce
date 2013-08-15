@@ -23,6 +23,8 @@ import datetime
 import os
 import unittest
 
+from google.appengine.api import taskqueue
+from mapreduce import model
 from mapreduce import parameters
 from mapreduce import util
 
@@ -195,6 +197,43 @@ class IsGeneratorFunctionTest(unittest.TestCase):
 
   def testNotGenerator(self):
     self.assertFalse(util.is_generator(test_handler_function))
+
+
+class GetTaskHeadersTest(unittest.TestCase):
+
+  def setUp(self):
+    super(GetTaskHeadersTest, self).setUp()
+    os.environ["CURRENT_VERSION_ID"] = "v7.1"
+    os.environ["CURRENT_MODULE_ID"] = "foo-module"
+    os.environ["DEFAULT_VERSION_HOSTNAME"] = "foo.appspot.com"
+
+  def testGetTaskHost(self):
+    self.assertEqual("v7.foo-module.foo.appspot.com", util._get_task_host())
+    task = taskqueue.Task(url="/relative_url",
+                          headers={"Host": util._get_task_host()})
+    self.assertEqual("v7.foo-module.foo.appspot.com",
+                     task.headers["Host"])
+    self.assertEqual("v7.foo-module", task.target)
+
+  def testGetTaskHostDefaultModule(self):
+    os.environ["CURRENT_MODULE_ID"] = "default"
+    self.assertEqual("v7.foo.appspot.com", util._get_task_host())
+    task = taskqueue.Task(url="/relative_url",
+                          headers={"Host": util._get_task_host()})
+    self.assertEqual("v7.foo.appspot.com",
+                     task.headers["Host"])
+    self.assertEqual("v7", task.target)
+
+  def testGetTaskHeaders(self):
+    mr_spec = model.MapreduceSpec(
+        name="foo", mapreduce_id="foo_id",
+        mapper_spec=model.MapperSpec("foo", "foo", {}, 8).to_json())
+    task = taskqueue.Task(url="/relative_url",
+                          headers=util._get_task_headers(mr_spec))
+    self.assertEqual("foo_id", task.headers[util._MR_ID_TASK_HEADER])
+    self.assertEqual("v7.foo-module.foo.appspot.com",
+                     task.headers["Host"])
+    self.assertEqual("v7.foo-module", task.target)
 
 
 class GetShortNameTest(unittest.TestCase):

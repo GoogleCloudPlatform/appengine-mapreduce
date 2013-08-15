@@ -50,7 +50,6 @@ from google.appengine.api.memcache import memcache_stub
 from google.appengine.api.taskqueue import taskqueue_stub
 from google.appengine.ext import db
 from google.appengine.ext import key_range
-from google.appengine.ext import testbed
 from mapreduce import context
 from mapreduce import control
 from mapreduce import datastore_range_iterators as db_iters
@@ -63,6 +62,7 @@ from mapreduce import model
 from mapreduce import operation
 from mapreduce import output_writers
 from mapreduce import test_support
+from mapreduce import util
 from google.appengine.ext.webapp import mock_webapp
 
 
@@ -852,6 +852,10 @@ class StartJobHandlerFunctionalTest(testutil.HandlerTestBase):
     task = tasks[0]
     task_mr_id = test_support.decode_task_payload(task).get("mapreduce_id")
     self.assertEqual(mr_id, task_mr_id)
+    # Check task headers.
+    headers = dict(task["headers"])
+    self.assertEqual(mr_id, headers[util._MR_ID_TASK_HEADER])
+    self.assertTrue(headers["Host"], self.host)
     self.assertEqual("/foo/kickoffjob_callback", task["url"])
 
   def testSmoke(self):
@@ -1020,6 +1024,10 @@ class KickOffJobHandlerTest(testutil.HandlerTestBase):
     controller_tasks = 0
     for task in tasks:
       self.assertEqual(self.QUEUE, task["queue_name"])
+      # Check task headers.
+      headers = dict(task["headers"])
+      self.assertEqual(self.mr_id, headers[util._MR_ID_TASK_HEADER])
+      self.assertEqual(self.host, headers["Host"])
       if task["url"] == "/foo/worker_callback":
         worker_tasks += 1
       if task["url"] == "/foo/controller_callback":
@@ -1128,7 +1136,7 @@ class KickOffJobHandlerTest(testutil.HandlerTestBase):
       self.assertEqual(o, n)
 
 
-class MapperWorkerCallbackHandlerLeaseTest(unittest.TestCase):
+class MapperWorkerCallbackHandlerLeaseTest(testutil.HandlerTestBase):
   """Test lease related logics of handlers.MapperWorkerCallbackHandler.
 
   These tests creates a WorkerHandler for the same shard.
@@ -1146,16 +1154,7 @@ class MapperWorkerCallbackHandlerLeaseTest(unittest.TestCase):
 
   def setUp(self):
     super(MapperWorkerCallbackHandlerLeaseTest, self).setUp()
-    self.testbed = testbed.Testbed()
-    self.testbed.activate()
-    self.testbed.init_datastore_v3_stub()
-    self.testbed.init_files_stub()
-    self.testbed.init_taskqueue_stub()
-    self.testbed.init_logservice_stub()
-
     os.environ["REQUEST_LOG_ID"] = self.CURRENT_REQUEST_ID
-    # TODO(user): Remove after testbed set this.
-    os.environ["CURRENT_MODULE_ID"] = "foo_module"
 
     self.mr_spec = None
     self._init_job()
@@ -1170,7 +1169,6 @@ class MapperWorkerCallbackHandlerLeaseTest(unittest.TestCase):
     handlers._SLICE_DURATION_SEC = 0
 
   def tearDown(self):
-    self.testbed.deactivate()
     handlers._SLICE_DURATION_SEC = self._original_duration
     super(MapperWorkerCallbackHandlerLeaseTest, self).tearDown()
 
@@ -1688,6 +1686,12 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
 
     tasks = self.taskqueue.GetTasks("default")
     self.assertEquals(1, len(tasks))
+    # Verify task headers.
+    headers = dict(tasks[0]["headers"])
+    self.assertEqual(self.mapreduce_id, headers[util._MR_ID_TASK_HEADER])
+    self.assertEqual(self.shard_id, headers[util._MR_SHARD_ID_TASK_HEADER])
+    self.assertEqual(self.host, headers["Host"])
+
     self.verify_shard_task(tasks[0], self.shard_id, 123)
 
   def testScheduleSlice_Eta(self):
@@ -2074,6 +2078,7 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
     self.assertEquals("POST", task["method"])
     headers = dict(task["headers"])
     self.assertEquals(self.mapreduce_id, headers["Mapreduce-Id"])
+    self.assertEqual(self.host, headers["Host"])
 
   def testCSRF(self):
     """Tests that that handler only accepts requests from the task queue."""
@@ -2153,6 +2158,10 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
     # new task should be spawned
     tasks = self.taskqueue.GetTasks("default")
     self.assertEquals(1, len(tasks))
+    for task in tasks:
+      headers = dict(task["headers"])
+      self.assertEqual(self.mapreduce_id, headers[util._MR_ID_TASK_HEADER])
+      self.assertEqual(self.host, headers["Host"])
     self.verify_controller_task(tasks[0], shard_count=3)
 
   def testMissingShardState(self):
@@ -2202,6 +2211,9 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
     # Finalize task should be spawned.
     self.assertEquals(1, len(tasks))
     self.assertEquals("/mapreduce/finalizejob_callback", tasks[0]["url"])
+    headers = dict(tasks[0]["headers"])
+    self.assertEqual(self.mapreduce_id, headers[util._MR_ID_TASK_HEADER])
+    self.assertEqual(self.host, headers["Host"])
 
     # Done Callback task should be spawned
     self.verify_done_task()
