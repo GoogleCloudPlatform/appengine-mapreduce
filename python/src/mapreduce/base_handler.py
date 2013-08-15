@@ -68,8 +68,13 @@ class TaskQueueHandler(BaseHandler):
   """
 
   def __init__(self, *args, **kwargs):
-    super(TaskQueueHandler, self).__init__(*args, **kwargs)
+    # webapp framework invokes initialize after __init__.
+    # webapp2 framework invokes initialize within __init__.
+    # Python27 runtime swap webapp with webapp2 underneath us.
+    # Since initialize will conditionally change this field,
+    # it needs to be set before calling super's __init__.
     self._preprocess_success = False
+    super(TaskQueueHandler, self).__init__(*args, **kwargs)
 
   def initialize(self, request, response):
     """Initialize.
