@@ -1145,6 +1145,10 @@ class ShardState(db.Model):
     self.slice_retries = 0
     self.acquired_once = False
 
+  def set_for_failure(self):
+    self.active = False
+    self.result_status = self.RESULT_FAILED
+
   def set_for_abort(self):
     self.active = False
     self.result_status = self.RESULT_ABORTED
