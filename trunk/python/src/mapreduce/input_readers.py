@@ -25,9 +25,9 @@ __all__ = [
     "BlobstoreLineInputReader",
     "BlobstoreZipInputReader",
     "BlobstoreZipLineInputReader",
+    "ConsistentKeyReader",
     "COUNTER_IO_READ_BYTES",
     "COUNTER_IO_READ_MSEC",
-    "ConsistentKeyReader",
     "DatastoreEntityInputReader",
     "DatastoreInputReader",
     "DatastoreKeyInputReader",
@@ -855,7 +855,7 @@ class DatastoreKeyInputReader(RawDatastoreInputReader):
 DatastoreEntityInputReader = RawDatastoreInputReader
 
 
-# TODO(user): Remove this after the only dependency ConsistentKeyReader is
+# TODO(user): Remove this after the only dependency GroomerMarkReader is
 # refactored to use megastore safetime.
 class _OldAbstractDatastoreInputReader(InputReader):
   """Abstract base class for classes that iterate over datastore entities.
@@ -1969,196 +1969,6 @@ class RandomStringInputReader(InputReader):
     return {self.COUNT: self._count, self.STRING_LENGTH: self._string_length}
 
 
-class ConsistentKeyReader(_OldAbstractDatastoreInputReader):
-  """A key reader which reads consistent data from datastore.
-
-  Datastore might have entities which were written, but not visible through
-  queries for some time. Typically these entities can be only read inside
-  transaction until they are 'applied'.
-
-  This reader reads all keys even if they are not visible. It might take
-  significant time to start yielding some data because it has to apply all
-  modifications created before its start.
-  """
-  START_TIME_US_PARAM = "start_time_us"
-  UNAPPLIED_LOG_FILTER = "__unapplied_log_timestamp_us__ <"
-  DUMMY_KIND = "DUMMY_KIND"
-  DUMMY_ID = 106275677020293L
-  UNAPPLIED_QUERY_DEADLINE = 270  # Max supported by datastore.
-
-  def _get_unapplied_jobs_accross_namespaces(self,
-                                             namespace_start,
-                                             namespace_end,
-                                             app):
-    filters = {"__key__ >=": db.Key.from_path("__namespace__",
-                                              namespace_start or 1,
-                                              _app=app),
-               "__key__ <=": db.Key.from_path("__namespace__",
-                                              namespace_end or 1,
-                                              _app=app),
-               self.UNAPPLIED_LOG_FILTER: self.start_time_us}
-    unapplied_query = datastore.Query(filters=filters, keys_only=True, _app=app)
-    return unapplied_query.Get(
-        limit=self._batch_size,
-        config=datastore_rpc.Configuration(
-            deadline=self.UNAPPLIED_QUERY_DEADLINE))
-
-  def _iter_ns_range(self):
-    while True:
-      unapplied_jobs = self._get_unapplied_jobs_accross_namespaces(
-          self._ns_range.namespace_start,
-          self._ns_range.namespace_end,
-          self._ns_range.app)
-
-      if not unapplied_jobs:
-        break
-
-      self._apply_jobs(unapplied_jobs)
-
-    for o in super(ConsistentKeyReader, self)._iter_ns_range():
-      yield o
-
-  def _iter_key_range(self, k_range):
-    assert hasattr(self, "start_time_us"), "start_time_us property was not set"
-    if self._ns_range is None:
-      # _iter_ns_range will have already have dealt with unapplied jobs so only
-      # handle the case where it would not have been called.
-      self._apply_key_range(k_range)
-
-    raw_entity_kind = self._get_raw_entity_kind(self._entity_kind)
-    query = k_range.make_ascending_datastore_query(
-        raw_entity_kind, keys_only=True, filters=self._filters)
-    for key in query.Run(
-        config=datastore_query.QueryOptions(batch_size=self._batch_size)):
-      yield key, key
-
-  def _apply_key_range(self, k_range):
-    """Apply all jobs in the given KeyRange."""
-    # The strategy used here will not work if the entire key range cannot be
-    # applied before the task times-out because the results of incremental work
-    # are not checkpointed. It also assumes that the entire key range can be
-    # queried without timing-out, which may not be the case.
-    # See b/5201059.
-    apply_range = copy.deepcopy(k_range)
-    while True:
-      # Creates an unapplied query and fetches unapplied jobs in the result
-      # range. self.split() ensures that the generated KeyRanges cover the
-      # entire possible key range.
-      unapplied_query = self._make_unapplied_query(apply_range)
-      unapplied_jobs = unapplied_query.Get(
-          limit=self._batch_size,
-          config=datastore_rpc.Configuration(
-              deadline=self.UNAPPLIED_QUERY_DEADLINE))
-      if not unapplied_jobs:
-        break
-      self._apply_jobs(unapplied_jobs)
-      # Avoid requerying parts of the key range that have already been
-      # applied.
-      apply_range.advance(unapplied_jobs[-1])
-
-  def _make_unapplied_query(self, k_range):
-    """Returns a datastore.Query that finds the unapplied keys in k_range."""
-    unapplied_query = k_range.make_ascending_datastore_query(
-        kind=None, keys_only=True)
-    unapplied_query[
-        ConsistentKeyReader.UNAPPLIED_LOG_FILTER] = self.start_time_us
-    return unapplied_query
-
-  def _apply_jobs(self, unapplied_jobs):
-    """Apply all jobs implied by the given keys."""
-    # There were some unapplied jobs. Roll them forward.
-    keys_to_apply = []
-    for key in unapplied_jobs:
-      # To apply the entity group we need to read something from it.
-      # We use dummy kind and id because we don't actually need any data.
-      path = key.to_path() + [ConsistentKeyReader.DUMMY_KIND,
-                              ConsistentKeyReader.DUMMY_ID]
-      keys_to_apply.append(
-          db.Key.from_path(_app=key.app(), namespace=key.namespace(), *path))
-    db.get(keys_to_apply, config=datastore_rpc.Configuration(
-        deadline=self.UNAPPLIED_QUERY_DEADLINE,
-        read_policy=datastore_rpc.Configuration.APPLY_ALL_JOBS_CONSISTENCY))
-
-  @classmethod
-  def _split_input_from_namespace(cls,
-                                  app,
-                                  namespace,
-                                  entity_kind_name,
-                                  shard_count):
-    key_ranges = super(ConsistentKeyReader, cls)._split_input_from_namespace(
-        app, namespace, entity_kind_name, shard_count)
-    assert len(key_ranges) == shard_count
-
-    # The KeyRanges calculated by the base class may not include keys for
-    # entities that have unapplied jobs. So use an open key range for the first
-    # and last KeyRanges to ensure that they will be processed.
-    try:
-      last_key_range_index = key_ranges.index(None) - 1
-    except ValueError:
-      last_key_range_index = shard_count - 1
-
-    if last_key_range_index != -1:
-      key_ranges[0].key_start = None
-      key_ranges[0].include_start = False
-      key_ranges[last_key_range_index].key_end = None
-      key_ranges[last_key_range_index].include_end = False
-    return key_ranges
-
-  @classmethod
-  def _split_input_from_params(cls, app, namespaces, entity_kind_name,
-                               params, shard_count):
-    readers = super(ConsistentKeyReader, cls)._split_input_from_params(
-        app,
-        namespaces,
-        entity_kind_name,
-        params,
-        shard_count)
-    # We always produce at least one namespace range because:
-    # a) there might be unapplied entities
-    # b) it simplifies mapper code
-    if not readers:
-      readers = [cls(entity_kind_name,
-                     key_ranges=None,
-                     ns_range=namespace_range.NamespaceRange(),
-                     batch_size=shard_count)]
-
-    return readers
-
-  @classmethod
-  def split_input(cls, mapper_spec):
-    """Splits input into key ranges."""
-    readers = super(ConsistentKeyReader, cls).split_input(mapper_spec)
-    start_time_us = _get_params(mapper_spec).get(
-        cls.START_TIME_US_PARAM, long(time.time() * 1e6))
-    for reader in readers:
-      reader.start_time_us = start_time_us
-    return readers
-
-  def to_json(self):
-    """Serializes all the data in this reader into json form.
-
-    Returns:
-      all the data in json-compatible map.
-    """
-    json_dict = super(ConsistentKeyReader, self).to_json()
-    json_dict[self.START_TIME_US_PARAM] = self.start_time_us
-    return json_dict
-
-  @classmethod
-  def from_json(cls, json):
-    """Create new ConsistentKeyReader from the json, encoded by to_json.
-
-    Args:
-      json: json map representation of ConsistentKeyReader.
-
-    Returns:
-      an instance of ConsistentKeyReader with all data deserialized from json.
-    """
-    reader = super(ConsistentKeyReader, cls).from_json(json)
-    reader.start_time_us = json[cls.START_TIME_US_PARAM]
-    return reader
-
-
 # TODO(user): This reader always produces only one shard, because
 # namespace entities use the mix of ids/names, and KeyRange-based splitting
 # doesn't work satisfactory in this case.
@@ -2832,3 +2642,8 @@ class _GoogleCloudStorageRecordInputReader(_GoogleCloudStorageInputReader):
       except EOFError:
         self._cur_handle = None
         self._record_reader = None
+
+
+# For backward compatibility.
+# TODO(user): remove after 184.
+ConsistentKeyReader = DatastoreKeyInputReader
