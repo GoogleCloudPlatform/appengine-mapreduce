@@ -28,6 +28,8 @@ import re
 from mapreduce import main
 from google.appengine.ext.webapp import mock_webapp
 
+# TODO(user): Add tests for this file.
+
 
 def decode_task_payload(task):
   """Decodes POST task payload.
@@ -76,6 +78,7 @@ def execute_task(task, retries=0, handlers_map=None):
   Raises:
     Exception: whatever the task raises.
   """
+  # Find the handler class
   if not handlers_map:
     handlers_map = main.create_handlers_map()
 
@@ -92,7 +95,25 @@ def execute_task(task, retries=0, handlers_map=None):
   request = mock_webapp.MockRequest()
   request.set_url(url)
 
-  request.environ["HTTP_HOST"] = "myapp.appspot.com"
+  # Set dependent env vars if test hasn't set them.
+  version = "mr-test-support-version.1"
+  module = "mr-test-support-module"
+  default_version_hostname = "mr-test-support.appspot.com"
+  host = "%s.%s.%s" % (version.split(".")[0],
+                       module,
+                       default_version_hostname)
+
+  if "CURRENT_VERSION_ID" not in os.environ:
+    request.environ["CURRENT_VERSION_ID"] = version
+  if "DEFAULT_VERSION_HOSTNAME" not in os.environ:
+    request.environ["DEFAULT_VERSION_HOSTNAME"] = (
+        default_version_hostname)
+  if "CURRENT_MODULE_ID" not in os.environ:
+    request.environ["CURRENT_MODULE_ID"] = module
+  if "HTTP_HOST" not in os.environ:
+    request.environ["HTTP_HOST"] = host
+
+  # Set taskqueue specific headers and env vars.
   for k, v in task.get("headers", []):
     request.headers[k] = v
     environ_key = "HTTP_" + k.replace("-", "_").upper()
