@@ -158,21 +158,20 @@ class FileOutputWriterTest(testutil.HandlerTestBase):
         self.create_mapper_spec(
             params={"output_sharding": "foo", "filesystem": "blobstore"}))
 
-  def testInitJob_NoSharding(self):
-    mapreduce_state = self.create_mapreduce_state(
-        params={"filesystem": "blobstore"})
-    output_writers.FileOutputWriter.init_job(mapreduce_state)
-    self.assertTrue(mapreduce_state.writer_state)
-    filenames = output_writers.FileOutputWriter.get_filenames(mapreduce_state)
-    self.assertEqual(1, len(filenames))
-    self.assertTrue(filenames[0].startswith("/blobstore/writable:"))
+  def testNoShardingSpecified(self):
+    """Test default output_sharding is one shared output file."""
+    self.assertEqual(
+        output_writers.FileOutputWriter.OUTPUT_SHARDING_NONE,
+        output_writers.FileOutputWriter._get_output_sharding(
+            mapper_spec=self.create_mapper_spec(params={"filesystem": "gs"})))
 
   def testInitJob_ShardingNone(self):
     mapreduce_state = self.create_mapreduce_state(
         params={"output_sharding": "none", "filesystem": "blobstore"})
     output_writers.FileOutputWriter.init_job(mapreduce_state)
     self.assertTrue(mapreduce_state.writer_state)
-    filenames = output_writers.FileOutputWriter.get_filenames(mapreduce_state)
+    filenames = output_writers.FileOutputWriter._State.from_json(
+        mapreduce_state.writer_state).filenames
     self.assertEqual(1, len(filenames))
     self.assertTrue(filenames[0].startswith("/blobstore/writable:"))
 
@@ -181,7 +180,8 @@ class FileOutputWriterTest(testutil.HandlerTestBase):
         params={"output_sharding": "input", "filesystem": "blobstore"})
     output_writers.FileOutputWriter.init_job(mapreduce_state)
     self.assertTrue(mapreduce_state.writer_state)
-    filenames = output_writers.FileOutputWriter.get_filenames(mapreduce_state)
+    filenames = output_writers.FileOutputWriter._State.from_json(
+        mapreduce_state.writer_state).filenames
     self.assertEqual(0, len(filenames))
 
   def testInitJob_GoogleStorage(self):
@@ -197,6 +197,17 @@ class FileOutputWriterTest(testutil.HandlerTestBase):
     m.UnsetStubs()
     m.VerifyAll()
     self.assertTrue(mapreduce_state.writer_state)
+
+  def testGetFilenamesNoInput(self):
+    """Tests get_filenames when no other writer's methods are called.
+
+    Emulates the zero input case.
+
+    Other tests on get_filenames see output_writers_end_to_end_test.
+    """
+    self.assertEqual(
+        [], output_writers.FileOutputWriter.get_filenames(
+            self.create_mapreduce_state(params={"filesystem": "blobstore"})))
 
   def testValidate_MissingBucketParam(self):
     self.assertRaises(
@@ -322,8 +333,9 @@ class GoogleCloudStorageOutputWriterTest(GoogleCloudStorageOutputTestBase):
     for shard_num in range(self.NUM_SHARDS):
       shard = self.create_shard_state(shard_num)
       writer = self.WRITER_CLS.create(mapreduce_state, shard)
-      shard.put()
+      shard.result_status = model.ShardState.RESULT_SUCCESS
       writer.finalize(None, shard)
+      shard.put()
     filenames = self.WRITER_CLS.get_filenames(mapreduce_state)
     # Verify we have the correct number of filenames
     self.assertEqual(self.NUM_SHARDS, len(filenames))
@@ -353,14 +365,13 @@ class GoogleCloudStorageOutputWriterTest(GoogleCloudStorageOutputTestBase):
 
     # Create the writer for the 1st attempt
     writer = self.WRITER_CLS.create(mapreduce_state, shard_state)
-    filename = self.WRITER_CLS._get_filename(
-        shard_state)
+    filename = writer._filename
     writer.write("badData", None)
 
     # Test re-creating the writer for a retry
     shard_state.reset_for_retry()
     writer = self.WRITER_CLS.create(mapreduce_state, shard_state)
-    new_filename = self.WRITER_CLS._get_filename(shard_state)
+    new_filename = writer._filename
     good_data = "goodData"
     writer.write(good_data, None)
     writer.finalize(None, shard_state)
@@ -433,6 +444,17 @@ class GoogleCloudStorageOutputWriterTest(GoogleCloudStorageOutputTestBase):
         output_writers.COUNTER_IO_WRITE_BYTES))
     self.assertTrue(shard_state.counters_map.get(
         output_writers.COUNTER_IO_WRITE_MSEC) > 0)
+
+  def testGetFilenamesNoInput(self):
+    """Tests get_filenames when no other writer's methods are called.
+
+    Emulates the zero input case.
+
+    Other tests on get_filenames see output_writers_end_to_end_test.
+    """
+    mapreduce_state = self.create_mapreduce_state(
+        output_params={self.WRITER_CLS.BUCKET_NAME_PARAM: "test"})
+    self.assertEqual([], self.WRITER_CLS.get_filenames(mapreduce_state))
 
 
 class GoogleCloudStorageRecordOutputWriterTest(

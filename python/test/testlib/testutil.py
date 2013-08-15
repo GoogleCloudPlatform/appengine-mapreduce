@@ -35,6 +35,7 @@ import sys
 import unittest
 
 from google.appengine.api import queueinfo
+from google.appengine.datastore import datastore_stub_util
 from google.appengine.ext import testbed
 
 # TODO(user): Cleanup imports if/when cloudstorage becomes part of runtime.
@@ -110,7 +111,9 @@ class HandlerTestBase(unittest.TestCase):
     self.testbed.activate()
     self.testbed.init_app_identity_stub()
     self.testbed.init_blobstore_stub()
-    self.testbed.init_datastore_v3_stub()
+    # HRD with no eventual consistency.
+    policy = datastore_stub_util.PseudoRandomHRConsistencyPolicy(probability=1)
+    self.testbed.init_datastore_v3_stub(consistency_policy=policy)
     self.testbed.init_files_stub()
     self.testbed.init_memcache_stub()
     self.testbed.init_taskqueue_stub()

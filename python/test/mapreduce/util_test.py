@@ -20,8 +20,10 @@
 # pylint: disable=g-bad-name
 
 import datetime
+import os
 import unittest
 
+from mapreduce import parameters
 from mapreduce import util
 
 
@@ -145,6 +147,18 @@ class ForNameTest(unittest.TestCase):
           "Could not find 'this_is_a_bad_module_name' on path "))
     else:
       self.fail("Did not raise exception")
+
+
+class TestGetQueueName(unittest.TestCase):
+
+  def testGetQueueName(self):
+    self.assertEqual("foo", util.get_queue_name("foo"))
+
+    os.environ["HTTP_X_APPENGINE_QUEUENAME"] = "foo"
+    self.assertEqual("foo", util.get_queue_name(None))
+
+    os.environ["HTTP_X_APPENGINE_QUEUENAME"] = "__cron"
+    self.assertEqual(parameters.DEFAULT_QUEUE_NAME, util.get_queue_name(None))
 
 
 class SerializeHandlerTest(unittest.TestCase):
