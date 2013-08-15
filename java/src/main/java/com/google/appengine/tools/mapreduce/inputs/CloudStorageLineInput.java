@@ -5,7 +5,7 @@ import com.google.appengine.tools.cloudstorage.GcsFilename;
 /**
  * Renamed to GoogleCloudStorageLineInput
  *
- * @Deprecated Use {@link GoogleCloudStorageLineInput}. This class will be removed in a future
+ * @deprecated Use {@link GoogleCloudStorageLineInput}. This class will be removed in a future
  *             release.
  */
 @Deprecated
