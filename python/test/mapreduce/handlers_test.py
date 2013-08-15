@@ -814,8 +814,47 @@ class StartJobHandlerTest(testutil.HandlerTestBase):
     self.assertRaises(ImportError, self.handler.handle)
 
 
+class StartJobHandlerTransactionalStartTest(testutil.HandlerTestBase):
+  """Test handlers.StartJobHandler start_map with and without transactions."""
+
+  def generateStartMapParams(self, transactional):
+    mapper_spec = model.MapperSpec(
+        "__main__.TestMap",
+        "mapreduce.input_readers.DatastoreInputReader",
+        {"entity_kind": "__main__.TestKind"},
+        1)
+    return {"name": "dummyJob", "mapper_spec": mapper_spec,
+            "mapreduce_params": {}, "base_path": "",
+            "transactional": transactional}
+
+  @db.non_transactional
+  def checkMapreduceId(self, mapreduce_id):
+    self.assertNotEqual(None, model.MapreduceState.get_by_job_id(mapreduce_id))
+
+  def testStartMapNoTransaction(self):
+    # Call _start_map (but do not run any tasks, and verify the state is
+    # created in datastore
+    TestKind().put()
+    self.checkMapreduceId(handlers.StartJobHandler._start_map(
+        **self.generateStartMapParams(False)))
+
+  @db.transactional(xg=False)
+  def testStartMapNoXgTransaction(self):
+    TestKind().put()
+    self.checkMapreduceId(handlers.StartJobHandler._start_map(
+        **self.generateStartMapParams(True)))
+
+  # TODO(user): Enable test when HRD datastore is used in testing
+  @db.transactional(xg=True)
+  def disabled_testStartMapXgTransaction(self):
+    for _ in range(5):
+      TestKind().put()
+    self.checkMapreduceId(handlers.StartJobHandler._start_map(
+        **self.generateStartMapParams(True)))
+
+
 class KickOffJobHandlerTest(MapreduceHandlerTestBase):
-  """Test handlers.StartJobHandler."""
+  """Test handlers.KickOffJobHandler."""
 
   def setUp(self):
     """Sets up the test harness."""

@@ -1354,7 +1354,11 @@ class StartJobHandler(base_handler.PostJsonHandler):
     finally:
       context.Context._set(None)
 
-    if not transactional:
+    # Temporary fix for b/9556735
+    # Run outside transaction in case the existing transaction is not xg or xg
+    # is already (or will) spanning 5 entity groups.
+    @db.non_transactional
+    def _txn():
       # Save state in datastore so that UI can see it.
       state = model.MapreduceState.create_new(mapreduce_spec.mapreduce_id)
       state.mapreduce_spec = mapreduce_spec
@@ -1362,8 +1366,11 @@ class StartJobHandler(base_handler.PostJsonHandler):
       state.active_shards = mapper_spec.shard_count
       if _app:
         state.app_id = _app
-      config = util.create_datastore_write_config(mapreduce_spec)
-      state.put(config=config)
+      state.put(config=util.create_datastore_write_config(mapreduce_spec))
+      return state
+
+    state = _txn()
+    if not transactional:
       parent_entity = state
 
     cls._add_kickoff_task(
