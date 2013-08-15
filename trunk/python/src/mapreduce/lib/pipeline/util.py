@@ -25,6 +25,7 @@ __all__ = ["for_name",
 
 import datetime
 import inspect
+import logging
 import os
 
 # Relative imports
@@ -41,13 +42,22 @@ def _get_task_target():
 
   Returns:
     A complete target name is of format version.module. If module is the
-  default module, just version.
+  default module, just version. None if target can not be determined.
   """
   # Break circular dependency.
   # pylint: disable=g-import-not-at-top
   import pipeline
   if pipeline._TEST_MODE:
     return None
+
+  # Further protect against test cases that doesn't set env vars
+  # propertly.
+  if ("CURRENT_VERSION_ID" not in os.environ or
+      "CURRENT_MODULE_ID" not in os.environ):
+    logging.warning("Running Pipeline in non TEST_MODE but important "
+                    "env vars are not set.")
+    return None
+
   version = os.environ["CURRENT_VERSION_ID"].split(".")[0]
   module = os.environ["CURRENT_MODULE_ID"]
   if module == "default":
