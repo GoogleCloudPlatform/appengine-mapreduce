@@ -879,7 +879,7 @@ class StartJobHandlerFunctionalTest(testutil.HandlerTestBase):
           base_path="/foo",
           mapreduce_params=self.MAPREDUCE_SPEC_PARAMS,
           queue_name=self.QUEUE,
-          transactional=True)
+          in_xg_transaction=True)
     mr_id = txn()
 
     self.assertSuccess(mr_id)
@@ -896,7 +896,7 @@ class StartJobHandlerFunctionalTest(testutil.HandlerTestBase):
           base_path="/foo",
           mapreduce_params=self.MAPREDUCE_SPEC_PARAMS,
           queue_name=self.QUEUE,
-          transactional=False)
+          in_xg_transaction=False)
     mr_id = txn()
 
     self.assertSuccess(mr_id)

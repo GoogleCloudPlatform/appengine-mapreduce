@@ -295,7 +295,7 @@ class ControlTest(testutil.HandlerTestBase):
           mapreduce_parameters={"foo": "bar"},
           base_path="/mapreduce_base_path",
           queue_name=self.QUEUE_NAME,
-          transactional=True)
+          in_xg_transaction=True)
     mapreduce_id = tx()
     self.validate_map_started(mapreduce_id)
 
@@ -326,7 +326,7 @@ class ControlTest(testutil.HandlerTestBase):
           mapreduce_parameters={"foo": "bar"},
           base_path="/mapreduce_base_path",
           queue_name=self.QUEUE_NAME,
-          transactional=True)
+          in_xg_transaction=True)
     mapreduce_id = tx()
     self.validate_map_started(mapreduce_id)
 

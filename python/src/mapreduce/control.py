@@ -44,7 +44,7 @@ def start_map(name,
               countdown=None,
               hooks_class_name=None,
               _app=None,
-              transactional=False):
+              in_xg_transaction=False):
   """Start a new, mapper-only mapreduce.
 
   Args:
@@ -66,9 +66,9 @@ def start_map(name,
     countdown: time in seconds into the future that this MR should execute.
       Defaults to zero.
     hooks_class_name: fully qualified name of a hooks.Hooks subclass.
-    transactional: controls what transaction scope to use to start this MR job.
-      If True, there has to be an already opened cross-group transaction scope.
-      MR will use one entity group from it.
+    in_xg_transaction: controls what transaction scope to use to start this MR
+      job. If True, there has to be an already opened cross-group transaction
+      scope. MR will use one entity group from it.
       If False, MR will create an independent transaction to start the job
       regardless of any existing transaction scopes.
 
@@ -92,7 +92,7 @@ def start_map(name,
                                  shard_count,
                                  output_writer_spec=output_writer_spec)
 
-  if transactional and not db.is_in_transaction():
+  if in_xg_transaction and not db.is_in_transaction():
     logging.warning("Expects an opened xg transaction to start mapreduce "
                     "when transactional is True.")
 
@@ -106,4 +106,4 @@ def start_map(name,
       countdown=countdown,
       hooks_class_name=hooks_class_name,
       _app=_app,
-      transactional=transactional)
+      in_xg_transaction=in_xg_transaction)
