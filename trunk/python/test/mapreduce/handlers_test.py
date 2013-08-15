@@ -74,18 +74,20 @@ PARAM_DONE_CALLBACK_QUEUE = model.MapreduceSpec.PARAM_DONE_CALLBACK_QUEUE
 class TestHooks(hooks.Hooks):
   """Test hooks class."""
 
+  enqueue_worker_task_calls = []
+  enqueue_done_task_calls = []
+  enqueue_controller_task_calls = []
+  enqueue_kickoff_task_calls = []
+
   def __init__(self, mapper):
     super(TestHooks, self).__init__(mapper)
-    TestHooks.enqueue_worker_task_calls = []
-    TestHooks.enqueue_done_task_calls = []
-    TestHooks.enqueue_controller_task_calls = []
 
   def enqueue_worker_task(self, task, queue_name):
     self.enqueue_worker_task_calls.append((task, queue_name))
     task.add(queue_name=queue_name)
 
   def enqueue_kickoff_task(self, task, queue_name):
-    # Tested by control_test.ControlTest.testStartMap_Hooks.
+    self.enqueue_kickoff_task_calls.append((task, queue_name))
     task.add(queue_name=queue_name)
 
   def enqueue_done_task(self, task, queue_name):
@@ -95,6 +97,13 @@ class TestHooks(hooks.Hooks):
   def enqueue_controller_task(self, task, queue_name):
     self.enqueue_controller_task_calls.append((task, queue_name))
     task.add(queue_name=queue_name)
+
+  @classmethod
+  def reset(cls):
+    cls.enqueue_worker_task_calls = []
+    cls.enqueue_done_task_calls = []
+    cls.enqueue_controller_task_calls = []
+    cls.enqueue_kickoff_task_calls = []
 
 
 class TestKind(db.Model):
@@ -165,7 +174,7 @@ class TestOperation(operation.Operation):
   def __init__(self, entity):
     self.entity = entity
 
-  def __call__(self, context):
+  def __call__(self, cxt):
     TestOperation.processed_keys.append(str(self.entity.key()))
 
   @classmethod
@@ -234,6 +243,12 @@ class InputReader(input_readers.DatastoreInputReader):
   """Test input reader which records number of yields."""
 
   yields = 0
+  # Used to uniquely identity an input reader instance across serializations.
+  next_instance_id = 0
+
+  def __init__(self, iterator, instance_id=None):
+    super(InputReader, self).__init__(iterator)
+    self.instance_id = instance_id
 
   def __iter__(self):
     for entity in input_readers.DatastoreInputReader.__iter__(self):
@@ -251,11 +266,33 @@ class InputReader(input_readers.DatastoreInputReader):
     iters = [db_iters.RangeIteratorFactory.create_key_ranges_iterator(
         r, query_spec, cls._KEY_RANGE_ITER_CLS) for r in k_ranges]
 
-    return [cls(i) for i in iters]
+    results = []
+    for i in iters:
+      results.append(cls(i, cls.next_instance_id))
+      cls.next_instance_id += 1
+    return results
+
+  def to_json(self):
+    return {"iter": self._iter.to_json(),
+            "instance_id": self.instance_id}
+
+  @classmethod
+  def from_json(cls, json):
+    """Create new DatastoreInputReader from json, encoded by to_json.
+
+    Args:
+      json: json representation of DatastoreInputReader.
+
+    Returns:
+      an instance of DatastoreInputReader with all data deserialized from json.
+    """
+    return cls(db_iters.RangeIteratorFactory.from_json(json["iter"]),
+               json["instance_id"])
 
   @classmethod
   def reset(cls):
     cls.yields = 0
+    cls.next_instance_id = 0
 
 
 class EmptyInputReader(input_readers.DatastoreInputReader):
@@ -337,16 +374,6 @@ class MatchesContext(mox.Comparator):
     return "MatchesContext(%s)" % self.kwargs
 
 
-class FixedShardSizeInputReader(input_readers.DatastoreInputReader):
-  """Test reader which truncates the list of readers to specified size."""
-  readers_size = 3
-
-  @classmethod
-  def split_input(cls, mapper_spec):
-    readers = input_readers.DatastoreInputReader.split_input(mapper_spec)
-    return readers[:cls.readers_size]
-
-
 ENTITY_KIND = "__main__.TestEntity"
 MAPPER_HANDLER_SPEC = __name__ + "." + TestHandler.__name__
 
@@ -364,6 +391,7 @@ class MapreduceHandlerTestBase(testutil.HandlerTestBase):
     testutil.HandlerTestBase.setUp(self)
     TestHandler.reset()
     TestOutputWriter.reset()
+    TestHooks.reset()
 
   def find_task_by_name(self, tasks, name):
     """Find a task with given name.
@@ -595,7 +623,21 @@ class MapreduceHandlerTestBase(testutil.HandlerTestBase):
 
 
 class StartJobHandlerTest(testutil.HandlerTestBase):
-  """Test handlers.StartJobHandler."""
+  """Test handlers.StartJobHandler.
+
+  This class mostly tests request handling and parameter parsing aspect of the
+  handler.
+  """
+
+  NAME = "my_job"
+  HANDLER_SPEC = MAPPER_HANDLER_SPEC
+  ENTITY_KIND = __name__ + "." + TestEntity.__name__
+  INPUT_READER_SPEC = ("mapreduce.input_readers."
+                       "DatastoreInputReader")
+  OUTPUT_WRITER_SPEC = __name__ + ".TestOutputWriter"
+  SHARD_COUNT = "9"
+  PROCESSING_RATE = "1234"
+  QUEUE = "crazy-queue"
 
   def setUp(self):
     """Sets up the test harness."""
@@ -605,26 +647,24 @@ class StartJobHandlerTest(testutil.HandlerTestBase):
                             mock_webapp.MockResponse())
 
     self.handler.request.path = "/mapreduce/command/start_job"
-    self.handler.request.set("name", "my job")
-    self.handler.request.set(
-        "mapper_input_reader",
-        "mapreduce.input_readers.DatastoreInputReader")
-    self.handler.request.set("mapper_handler", MAPPER_HANDLER_SPEC)
+    self.handler.request.set("name", self.NAME)
+    self.handler.request.set("mapper_handler", self.HANDLER_SPEC)
+    self.handler.request.set("mapper_input_reader", self.INPUT_READER_SPEC)
+    self.handler.request.set("mapper_output_writer", self.OUTPUT_WRITER_SPEC)
+    self.handler.request.set("mapper_params.shard_count", self.SHARD_COUNT)
     self.handler.request.set("mapper_params.entity_kind",
-                             (__name__ + "." + TestEntity.__name__))
+                             self.ENTITY_KIND)
+    self.handler.request.set("mapper_params.processing_rate",
+                             self.PROCESSING_RATE)
+    self.handler.request.set("mapper_params.queue_name", self.QUEUE)
 
     self.handler.request.headers["X-Requested-With"] = "XMLHttpRequest"
-
-  def get_mapreduce_spec(self, task):
-    """Get mapreduce spec form kickoff task payload."""
-    payload = test_support.decode_task_payload(task)
-    return model.MapreduceSpec.from_json_str(payload["mapreduce_spec"])
 
   def testCSRF(self):
     """Tests that that handler only accepts AJAX requests."""
     del self.handler.request.headers["X-Requested-With"]
     self.handler.post()
-    self.assertEquals(403, self.handler.response.status)
+    self.assertEquals(httplib.FORBIDDEN, self.handler.response.status)
 
   def testSmoke(self):
     """Verifies main execution path of starting scan over several entities."""
@@ -632,26 +672,49 @@ class StartJobHandlerTest(testutil.HandlerTestBase):
       TestEntity().put()
     self.handler.post()
 
+    tasks = self.taskqueue.GetTasks(self.QUEUE)
     # Only kickoff task should be there.
-    tasks = self.taskqueue.GetTasks("default")
     self.assertEquals(1, len(tasks))
-    mapreduce_spec = self.get_mapreduce_spec(tasks[0])
-    self.assertTrue(mapreduce_spec)
-    self.assertEquals(MAPPER_HANDLER_SPEC, mapreduce_spec.mapper.handler_spec)
+    task_mr_id = test_support.decode_task_payload(tasks[0]).get("mapreduce_id")
 
-  def testSmokeOtherApp(self):
+    # Verify mr id is generated.
+    mapreduce_id = self.handler.json_response["mapreduce_id"]
+    self.assertTrue(mapreduce_id)
+    self.assertEqual(task_mr_id, mapreduce_id)
+
+    # Verify state is created.
+    state = model.MapreduceState.get_by_job_id(
+        self.handler.json_response["mapreduce_id"])
+    self.assertTrue(state)
+    self.assertTrue(state.active)
+    self.assertEqual(0, state.active_shards)
+
+    # Verify mapreduce spec.
+    self.assertEqual(self.HANDLER_SPEC,
+                     state.mapreduce_spec.mapper.handler_spec)
+    self.assertEqual(self.NAME, state.mapreduce_spec.name)
+    self.assertEqual(self.INPUT_READER_SPEC,
+                     state.mapreduce_spec.mapper.input_reader_spec)
+    self.assertEqual(self.OUTPUT_WRITER_SPEC,
+                     state.mapreduce_spec.mapper.output_writer_spec)
+    self.assertEqual(int(self.SHARD_COUNT),
+                     state.mapreduce_spec.mapper.shard_count)
+    self.assertEqual(int(self.PROCESSING_RATE),
+                     state.mapreduce_spec.mapper.params["processing_rate"])
+    self.assertEqual(self.QUEUE,
+                     state.mapreduce_spec.mapper.params["queue_name"])
+
+  def testOtherApp(self):
     """Verifies main execution path of starting scan over several entities."""
     apiproxy_stub_map.apiproxy.GetStub("datastore_v3").SetTrusted(True)
     self.handler.request.set("mapper_params._app", "otherapp")
     TestEntity(_app="otherapp").put()
     self.handler.post()
 
-    # Only kickoff task should be there.
-    tasks = self.taskqueue.GetTasks("default")
-    self.assertEquals(1, len(tasks))
-    payload = test_support.decode_task_payload(tasks[0])
-    self.assertEquals("otherapp", payload["app"])
-    self.assertTrue(self.get_mapreduce_spec(tasks[0]))
+    # Verify state is created.
+    state = model.MapreduceState.get_by_job_id(
+        self.handler.json_response["mapreduce_id"])
+    self.assertEqual("otherapp", state.app_id)
 
   def testRequiredParams(self):
     """Tests that required parameters are enforced."""
@@ -688,21 +751,15 @@ class StartJobHandlerTest(testutil.HandlerTestBase):
                              __name__ + ".test_param_validator_success")
     self.handler.post()
 
-    tasks = self.taskqueue.GetTasks("default")
-    self.assertEquals(1, len(tasks))
-    mapreduce_spec = self.get_mapreduce_spec(tasks[0])
-    params = mapreduce_spec.mapper.params
+    state = model.MapreduceState.get_by_job_id(
+        self.handler.json_response["mapreduce_id"])
+    params = state.mapreduce_spec.mapper.params
 
     self.assertEquals(["red", "blue"], params["one"])
     self.assertEquals("green", params["two"])
 
     # From the validator function
     self.assertEquals("good", params["test"])
-
-    # Defaults always present.
-    self.assertEquals(model._DEFAULT_PROCESSING_RATE_PER_SEC,
-                      params["processing_rate"])
-    self.assertEquals("default", params["queue_name"])
 
   def testMapreduceParameters(self):
     """Tests propagation of user-supplied mapreduce parameters."""
@@ -713,9 +770,9 @@ class StartJobHandlerTest(testutil.HandlerTestBase):
                              __name__ + ".test_param_validator_success")
     self.handler.post()
 
-    kickoff_task = self.taskqueue.GetTasks("default")[0]
-    mapreduce_spec = self.get_mapreduce_spec(kickoff_task)
-    params = mapreduce_spec.params
+    state = model.MapreduceState.get_by_job_id(
+        self.handler.json_response["mapreduce_id"])
+    params = state.mapreduce_spec.params
     self.assertEquals(["red", "blue"], params["one"])
     self.assertEquals("green", params["two"])
 
@@ -737,68 +794,6 @@ class StartJobHandlerTest(testutil.HandlerTestBase):
     self.handler.request.set("mapper_params_validator", "does_not_exist")
     self.assertRaises(ImportError, self.handler.handle)
 
-  def testHandlerUnknown(self):
-    """Tests when the handler function cannot be found."""
-    self.handler.request.set("mapper_handler", "does_not_exist")
-    self.assertRaises(ImportError, self.handler.handle)
-
-  def testInputReaderUnknown(self):
-    """Tests when the input reader function cannot be found."""
-    self.handler.request.set("mapper_input_reader", "does_not_exist")
-    self.assertRaises(ImportError, self.handler.handle)
-
-  def testQueueName(self):
-    """Tests that the optional queue_name parameter is used."""
-    TestEntity().put()
-    self.handler.request.set("mapper_params.queue_name", "crazy-queue")
-    self.handler.post()
-
-    tasks = self.taskqueue.GetTasks("crazy-queue")
-    self.assertEquals(1, len(tasks))
-    mapreduce_spec = self.get_mapreduce_spec(tasks[0])
-    self.assertEquals(
-        "crazy-queue",
-        mapreduce_spec.mapper.params["queue_name"])
-    self.assertEquals(0, len(self.taskqueue.GetTasks("default")))
-
-  def testProcessingRate(self):
-    """Tests that the optional processing rate parameter is used."""
-    TestEntity().put()
-    self.handler.request.set("mapper_params.processing_rate", "1234")
-    self.handler.post()
-
-    tasks = self.taskqueue.GetTasks("default")
-    self.assertEquals(1, len(tasks))
-    mapreduce_spec = self.get_mapreduce_spec(tasks[0])
-
-    self.assertEquals(
-        1234,
-        mapreduce_spec.mapper.params["processing_rate"])
-
-  def testShardCount(self):
-    """Tests that the optional shard count parameter is used."""
-    TestEntity().put()
-    self.handler.request.set("mapper_params.shard_count", "9")
-    self.handler.post()
-
-    tasks = self.taskqueue.GetTasks("default")
-    self.assertEquals(1, len(tasks))
-    mapreduce_spec = self.get_mapreduce_spec(tasks[0])
-    self.assertEquals(9, mapreduce_spec.mapper.shard_count)
-
-  def testOutputWriter(self):
-    """Tests setting output writer parameter."""
-    TestEntity().put()
-    self.handler.request.set("mapper_output_writer",
-                             __name__ + ".TestOutputWriter")
-    self.handler.handle()
-
-    tasks = self.taskqueue.GetTasks("default")
-    self.assertEquals(1, len(tasks))
-    mapreduce_spec = self.get_mapreduce_spec(tasks[0])
-    self.assertEquals("__main__.TestOutputWriter",
-                      mapreduce_spec.mapper.output_writer_spec)
-
   def testOutputWriterValidateFails(self):
     TestEntity().put()
     self.handler.request.set("mapper_output_writer",
@@ -807,201 +802,330 @@ class StartJobHandlerTest(testutil.HandlerTestBase):
                              "true")
     self.assertRaises(Exception, self.handler.handle)
 
-  def testInvalidOutputWriter(self):
-    """Tests setting output writer parameter."""
-    TestEntity().put()
-    self.handler.request.set("mapper_output_writer", "Foo")
-    self.assertRaises(ImportError, self.handler.handle)
 
+class StartJobHandlerFunctionalTest(testutil.HandlerTestBase):
+  """Test _start_map function.
 
-class StartJobHandlerTransactionalStartTest(testutil.HandlerTestBase):
-  """Test handlers.StartJobHandler start_map with and without transactions."""
+  Since this function is often called separately from the handler as well as
+  by the handler directly.
+  """
 
-  def generateStartMapParams(self, transactional):
-    mapper_spec = model.MapperSpec(
-        "__main__.TestMap",
-        "mapreduce.input_readers.DatastoreInputReader",
-        {"entity_kind": "__main__.TestKind"},
-        1)
-    return {"name": "dummyJob", "mapper_spec": mapper_spec,
-            "mapreduce_params": {}, "base_path": "",
-            "transactional": transactional}
-
-  @db.non_transactional
-  def checkMapreduceId(self, mapreduce_id):
-    self.assertNotEqual(None, model.MapreduceState.get_by_job_id(mapreduce_id))
-
-  def testStartMapNoTransaction(self):
-    # Call _start_map (but do not run any tasks, and verify the state is
-    # created in datastore
-    TestKind().put()
-    self.checkMapreduceId(handlers.StartJobHandler._start_map(
-        **self.generateStartMapParams(False)))
-
-  @db.transactional(xg=False)
-  def testStartMapNoXgTransaction(self):
-    TestKind().put()
-    self.checkMapreduceId(handlers.StartJobHandler._start_map(
-        **self.generateStartMapParams(True)))
-
-  # TODO(user): Enable test when HRD datastore is used in testing
-  @db.transactional(xg=True)
-  def disabled_testStartMapXgTransaction(self):
-    for _ in range(5):
-      TestKind().put()
-    self.checkMapreduceId(handlers.StartJobHandler._start_map(
-        **self.generateStartMapParams(True)))
-
-
-class KickOffJobHandlerTest(MapreduceHandlerTestBase):
-  """Test handlers.KickOffJobHandler."""
+  NAME = "my_job"
+  HANLDER_SPEC = MAPPER_HANDLER_SPEC
+  ENTITY_KIND = __name__ + "." + TestEntity.__name__
+  INPUT_READER_SPEC = ("mapreduce.input_readers."
+                       "DatastoreInputReader")
+  OUTPUT_WRITER_SPEC = __name__ + ".TestOutputWriter"
+  SHARD_COUNT = "9"
+  QUEUE = "crazy-queue"
+  MAPREDUCE_SPEC_PARAMS = {"foo": "bar"}
+  HOOKS = __name__ + ".TestHooks"
 
   def setUp(self):
-    """Sets up the test harness."""
-    MapreduceHandlerTestBase.setUp(self)
+    super(StartJobHandlerFunctionalTest, self).setUp()
+    self.mapper_spec = model.MapperSpec(
+        handler_spec=self.HANLDER_SPEC,
+        input_reader_spec=self.INPUT_READER_SPEC,
+        params={"entity_kind": self.ENTITY_KIND},
+        shard_count=self.SHARD_COUNT,
+        output_writer_spec=self.OUTPUT_WRITER_SPEC)
+    TestHooks.reset()
 
-    self.mapreduce_id = "mapreduce0"
-    self.mapreduce_spec = self.create_mapreduce_spec(self.mapreduce_id)
+  def assertSuccess(self, mr_id, hooks_class_name=None):
+    # Create spec from test setup data.
+    mapreduce_spec = model.MapreduceSpec(
+        name=self.NAME,
+        mapreduce_id=mr_id,
+        mapper_spec=self.mapper_spec.to_json(),
+        params=self.MAPREDUCE_SPEC_PARAMS,
+        hooks_class_name=hooks_class_name)
 
-  def enqueue_task_and_run(self, queue="default", app=None):
-    handlers.StartJobHandler._add_kickoff_task(
-        "/mapreduce", self.mapreduce_spec, None, None, None, queue, False, app)
-    tasks = self.taskqueue.GetTasks(queue)
-    self.assertEqual(1, len(tasks))
-    self.taskqueue.FlushQueue(queue)
-    self.handler = test_support.execute_task(tasks[0])
+    # Verify state.
+    state = model.MapreduceState.get_by_job_id(mr_id)
+    self.assertEqual(mapreduce_spec, state.mapreduce_spec)
+    self.assertTrue(state.active)
+    self.assertEqual(0, state.active_shards)
+
+    # Verify task.
+    tasks = self.taskqueue.GetTasks(self.QUEUE)
+    self.assertEquals(1, len(tasks))
+    task = tasks[0]
+    task_mr_id = test_support.decode_task_payload(task).get("mapreduce_id")
+    self.assertEqual(mr_id, task_mr_id)
+    self.assertEqual("/foo/kickoffjob_callback", task["url"])
 
   def testSmoke(self):
-    """Verifies main execution path of starting scan over several entities."""
-    for i in range(100):
+    mr_id = handlers.StartJobHandler._start_map(
+        self.NAME, self.mapper_spec,
+        base_path="/foo",
+        mapreduce_params=self.MAPREDUCE_SPEC_PARAMS,
+        queue_name=self.QUEUE)
+
+    self.assertSuccess(mr_id)
+
+  def testStartWithOpenedTxn(self):
+    @db.transactional(xg=True)
+    def txn():
+      # Four dummy entities to fill transaction.
+      for _ in range(4):
+        TestEntity().put()
+      return handlers.StartJobHandler._start_map(
+          self.NAME, self.mapper_spec,
+          base_path="/foo",
+          mapreduce_params=self.MAPREDUCE_SPEC_PARAMS,
+          queue_name=self.QUEUE,
+          transactional=True)
+    mr_id = txn()
+
+    self.assertSuccess(mr_id)
+
+  def testStartWithIndependentTxn(self):
+    """Tests MR uses independent txn."""
+    # Tests MR txn doesn't interfere with outer one.
+    @db.transactional()
+    def txn():
+      # Put a dummy entity to fill the transaction.
       TestEntity().put()
-    self.enqueue_task_and_run()
-    shard_count = 8
+      return handlers.StartJobHandler._start_map(
+          self.NAME, self.mapper_spec,
+          base_path="/foo",
+          mapreduce_params=self.MAPREDUCE_SPEC_PARAMS,
+          queue_name=self.QUEUE,
+          transactional=False)
+    mr_id = txn()
 
-    state = model.MapreduceState.all()[0]
-    self.assertTrue(state)
-    self.assertTrue(state.active)
+    self.assertSuccess(mr_id)
 
-    tasks = self.taskqueue.GetTasks("default")
-    self.assertEquals(shard_count + 1, len(tasks))
+  def testWithHooks(self):
+    mr_id = handlers.StartJobHandler._start_map(
+        self.NAME, self.mapper_spec,
+        base_path="/foo",
+        mapreduce_params=self.MAPREDUCE_SPEC_PARAMS,
+        queue_name=self.QUEUE,
+        hooks_class_name=self.HOOKS)
 
-    for i in xrange(shard_count):
-      shard_id = model.ShardState.shard_id_from_number(self.mapreduce_id, i)
-      task_name = handlers.MapperWorkerCallbackHandler.get_task_name(
-          shard_id, 0)
+    self.assertSuccess(mr_id, self.HOOKS)
+    self.assertEqual(1, len(TestHooks.enqueue_kickoff_task_calls))
 
-      shard_task = self.find_task_by_name(tasks, task_name)
-      self.assertTrue(shard_task)
-      tasks.remove(shard_task)
-      self.verify_shard_task(shard_task, shard_id, shard_count=8)
+  def testOtherApp(self):
+    mr_id = handlers.StartJobHandler._start_map(
+        self.NAME, self.mapper_spec,
+        base_path="/foo",
+        mapreduce_params=self.MAPREDUCE_SPEC_PARAMS,
+        queue_name=self.QUEUE,
+        _app="otherapp")
 
-      self.verify_shard_state(
-          model.ShardState.get_by_shard_id(shard_id))
+    self.assertSuccess(mr_id)
+    state = model.MapreduceState.get_by_job_id(mr_id)
+    self.assertEqual("otherapp", state.app_id)
 
-    # only update task should be left in tasks array
-    self.assertEquals(1, len(tasks))
-    self.verify_controller_task(tasks[0], shard_count=8)
-
-  def testHooks(self):
-    """Verifies main execution path with a hooks class installed."""
-    for i in range(100):
-      TestEntity().put()
-    self.mapreduce_spec.hooks_class_name = __name__ + "." + TestHooks.__name__
-    self.enqueue_task_and_run()
-
-    self.assertEquals(8, len(TestHooks.enqueue_worker_task_calls))
-    self.assertEquals(1, len(TestHooks.enqueue_controller_task_calls))
-    task, queue_name = TestHooks.enqueue_controller_task_calls[0]
-    self.assertEquals("default", queue_name)
-    self.assertEquals("/mapreduce/controller_callback", task.url)
+  def testHandlerUnknown(self):
+    """Tests when the handler function cannot be found."""
+    self.mapper_spec.handler_spec = "does_not_exists"
+    self.assertRaises(ImportError, handlers.StartJobHandler._start_map,
+                      self.NAME, self.mapper_spec, {},
+                      base_path="/foo", queue_name=self.QUEUE)
 
   def testInputReaderUnknown(self):
     """Tests when the input reader function cannot be found."""
-    self.mapreduce_spec.mapper.input_reader_spec = "does_not_exist"
+    self.mapper_spec.input_reader_spec = "does_not_exists"
+    self.assertRaises(ImportError, handlers.StartJobHandler._start_map,
+                      self.NAME, self.mapper_spec, {},
+                      base_path="/foo", queue_name=self.QUEUE)
 
-    self.assertRaises(ImportError, self.enqueue_task_and_run)
+  def testInvalidOutputWriter(self):
+    """Tests setting output writer parameter."""
+    self.mapper_spec.output_writer_spec = "does_not_exists"
+    self.assertRaises(ImportError, handlers.StartJobHandler._start_map,
+                      self.NAME, self.mapper_spec, {},
+                      base_path="/foo", queue_name=self.QUEUE)
 
-  def testQueueName(self):
-    """Tests that the optional queue_name parameter is used."""
-    os.environ["HTTP_X_APPENGINE_QUEUENAME"] = "crazy-queue"
-    TestEntity().put()
-    self.enqueue_task_and_run(queue="crazy-queue")
-    del os.environ["HTTP_X_APPENGINE_QUEUENAME"]
 
-    self.assertEquals(0, len(self.taskqueue.GetTasks("default")))
-    self.assertEquals(9, len(self.taskqueue.GetTasks("crazy-queue")))
+class KickOffJobHandlerTest(testutil.HandlerTestBase):
+  """Test handlers.StartJobHandler."""
 
-  def testNoInputReader(self):
-    """Test split input returned no input reader."""
-    self.mapreduce_spec = self.create_mapreduce_spec(
-        self.mapreduce_id,
-        input_reader_spec=__name__ + "." + "EmptyInputReader")
-    self.enqueue_task_and_run()
+  NAME = "my_job"
+  HANLDER_SPEC = MAPPER_HANDLER_SPEC
+  ENTITY_KIND = __name__ + "." + TestEntity.__name__
+  INPUT_READER_SPEC = __name__ + ".InputReader"
+  OUTPUT_WRITER_SPEC = __name__ + ".TestOutputWriter"
+  SHARD_COUNT = "9"
+  QUEUE = "crazy-queue"
+  MAPREDUCE_SPEC_PARAMS = {"foo": "bar"}
+  HOOKS = __name__ + ".TestHooks"
 
-    state = model.MapreduceState.get_by_job_id(self.mapreduce_id)
+  def setUp(self):
+    super(KickOffJobHandlerTest, self).setUp()
+    TestHooks.reset()
+    InputReader.reset()
+    TestOutputWriter.reset()
+
+  def tearDown(self):
+    super(KickOffJobHandlerTest, self).tearDown()
+
+  def createDummyHandler(self):
+    self.handler = handlers.KickOffJobHandler()
+    request = mock_webapp.MockRequest()
+    request.headers["X-AppEngine-QueueName"] = self.QUEUE
+    request.path = "/mapreduce/kickoff_callback"
+    self.handler.initialize(request,
+                            mock_webapp.MockResponse())
+
+  def testInvalidMRState(self):
+    self.createDummyHandler()
+    # No mr_state exists.
+    self.handler.request.set("mapreduce_id", "foo_id")
+    self.handler.post()
+    self.assertEqual(0, len(self.taskqueue.GetTasks(self.QUEUE)))
+
+    # mr_state is not active.
+    state = model.MapreduceState.create_new("foo_id")
+    state.active = False
+    state.put()
+    self.handler.post()
+    self.assertEqual(0, len(self.taskqueue.GetTasks(self.QUEUE)))
+
+  def setUpValidState(self, hooks_class_name=None):
+    self.mapper_spec = model.MapperSpec(
+        handler_spec=self.HANLDER_SPEC,
+        input_reader_spec=self.INPUT_READER_SPEC,
+        params={"entity_kind": self.ENTITY_KIND},
+        shard_count=self.SHARD_COUNT,
+        output_writer_spec=self.OUTPUT_WRITER_SPEC)
+
+    for _ in range(10):
+      TestEntity().put()
+
+    # Use StartJobHandler for setup.
+    self.mr_id = handlers.StartJobHandler._start_map(
+        self.NAME, self.mapper_spec,
+        base_path="/foo",
+        mapreduce_params=self.MAPREDUCE_SPEC_PARAMS,
+        queue_name=self.QUEUE,
+        hooks_class_name=hooks_class_name)
+
+  def assertSuccess(self):
+    # Verify states and that input reader split has been called.
+    state = model.MapreduceState.get_by_job_id(self.mr_id)
+    self.assertTrue(state.active)
+    self.assertTrue(int(self.SHARD_COUNT), state.active_shards)
+    shard_states = model.ShardState.find_by_mapreduce_state(state)
+    self.assertEqual(int(self.SHARD_COUNT), len(shard_states))
+    for ss in shard_states:
+      self.assertTrue(ss.active)
+
+    # Verify tasks.
+    tasks = self.taskqueue.GetTasks(self.QUEUE)
+    worker_tasks = 0
+    controller_tasks = 0
+    for task in tasks:
+      self.assertEqual(self.QUEUE, task["queue_name"])
+      if task["url"] == "/foo/worker_callback":
+        worker_tasks += 1
+      if task["url"] == "/foo/controller_callback":
+        controller_tasks += 1
+    self.assertEqual(int(self.SHARD_COUNT), worker_tasks)
+    self.assertEqual(1, controller_tasks)
+
+  def testSmoke(self):
+    self.setUpValidState()
+    test_support.execute_all_tasks(self.taskqueue, self.QUEUE)
+
+    self.assertSuccess()
+
+    # Verify output writers has been created.
+    self.assertEqual(
+        ["init_job", "create-0", "create-1", "create-2", "create-3",
+         "create-4", "create-5", "create-6", "create-7", "create-8"],
+        TestOutputWriter.events)
+
+  def testWithHooks(self):
+    self.setUpValidState(self.HOOKS)
+    test_support.execute_all_tasks(self.taskqueue, self.QUEUE)
+
+    self.assertSuccess()
+    self.assertEqual(1, len(TestHooks.enqueue_controller_task_calls))
+    self.assertEqual(int(self.SHARD_COUNT),
+                     len(TestHooks.enqueue_worker_task_calls))
+
+  def testNoInput(self):
+    self.INPUT_READER_SPEC = __name__ + ".EmptyInputReader"
+    self.setUpValidState()
+    test_support.execute_all_tasks(self.taskqueue, self.QUEUE)
+    state = model.MapreduceState.get_by_job_id(self.mr_id)
     self.assertFalse(state.active)
     self.assertEqual(model.MapreduceState.RESULT_SUCCESS, state.result_status)
-    self.assertEqual(0, state.active_shards)
 
-  def testNoData(self):
-    """Test no data exists for input reader to consume."""
-    self.enqueue_task_and_run()
-    self.assertEquals(9, len(self.taskqueue.GetTasks("default")))
+  def testGetInputReaders(self):
+    self.createDummyHandler()
+    self.setUpValidState()
+    state = model.MapreduceState.get_by_job_id(self.mr_id)
+    readers, serialized_readers_entity = (
+        self.handler._get_input_readers(state))
 
-    state = model.MapreduceState.get_by_job_id(self.mapreduce_id)
-    self.assertTrue(state.active)
-    self.assertEquals(8, state.active_shards)
+    self.assertEqual(int(self.SHARD_COUNT), len(readers))
+    self.assertEqual(int(self.SHARD_COUNT), state.active_shards)
+    self.assertEqual(int(self.SHARD_COUNT),
+                     state.mapreduce_spec.mapper.shard_count)
+    self.assertTrue(self.handler._save_states(state, serialized_readers_entity))
 
-  def testDifferentShardCount(self):
-    """Verifies the case when input reader created diffrent shard number."""
-    for _ in range(100):
-      TestEntity().put()
-    self.mapreduce_spec.mapper.input_reader_spec = (
-        __name__ + ".FixedShardSizeInputReader")
-    self.enqueue_task_and_run()
+    # Call again to test idempotency.
+    new_readers, new_serialized_readers_entity = (
+        self.handler._get_input_readers(state))
+    # Serialized new readers should be the same as serialized old ones.
+    self.assertEqual(serialized_readers_entity.payload,
+                     new_serialized_readers_entity.payload)
+    self.assertEqual(simplejson.dumps([i.to_json_str() for i in new_readers]),
+                     serialized_readers_entity.payload)
 
-    shard_count = FixedShardSizeInputReader.readers_size
-    tasks = self.taskqueue.GetTasks("default")
-    self.assertEquals(shard_count + 1, len(tasks))
+  def testSaveState(self):
+    self.createDummyHandler()
+    self.setUpValidState()
+    state = model.MapreduceState.get_by_job_id(self.mr_id)
+    _, serialized_readers_entity = (
+        self.handler._get_input_readers(state))
+    self.assertTrue(self.handler._save_states(state, serialized_readers_entity))
+    # Call again to test idempotency.
+    self.assertEqual(
+        None, self.handler._save_states(state, serialized_readers_entity))
 
-    for i in xrange(shard_count):
-      shard_id = model.ShardState.shard_id_from_number(self.mapreduce_id, i)
-      task_name = handlers.MapperWorkerCallbackHandler.get_task_name(
-          shard_id, 0)
+  def testScheduleShards(self):
+    self.createDummyHandler()
+    self.setUpValidState()
+    self.taskqueue.FlushQueue(self.QUEUE)
+    state = model.MapreduceState.get_by_job_id(self.mr_id)
+    readers, _ = (
+        self.handler._get_input_readers(state))
+    self.handler._schedule_shards(state.mapreduce_spec, readers, self.QUEUE,
+                                  "/foo", state)
 
-      shard_task = self.find_task_by_name(tasks, task_name)
-      self.assertTrue(shard_task)
-      tasks.remove(shard_task)
-      self.verify_shard_task(shard_task, shard_id, shard_count=shard_count)
+    shard_states = model.ShardState.find_by_mapreduce_state(state)
+    self.assertEqual(int(self.SHARD_COUNT), len(shard_states))
+    for ss in shard_states:
+      self.assertTrue(ss.active)
 
-      self.verify_shard_state(
-          model.ShardState.get_by_shard_id(shard_id))
-
-    # only update task should be left in tasks list
-    self.assertEquals(1, len(tasks))
-    self.verify_controller_task(tasks[0], shard_count=shard_count)
-
-  def testAppParam(self):
-    """Tests that app parameter is correctly passed in the state."""
-    self.enqueue_task_and_run(app="otherapp")
-
-    state = model.MapreduceState.all()[0]
-    self.assertTrue(state)
-    self.assertEquals("otherapp", state.app_id)
-
-  def testOutputWriter(self):
-    """Test output writer initialization."""
-    for _ in range(100):
-      TestEntity().put()
-
-    self.mapreduce_spec.mapper.output_writer_spec = (
-        __name__ + ".TestOutputWriter")
-    self.enqueue_task_and_run()
-
-    self.assertEquals(
-        ["init_job", "create-0", "create-1", "create-2", "create-3",
-         "create-4", "create-5", "create-6", "create-7",],
+    # Verify output writers has been created.
+    self.assertEqual(
+        ["create-0", "create-1", "create-2", "create-3",
+         "create-4", "create-5", "create-6", "create-7", "create-8"],
         TestOutputWriter.events)
+
+    # Verify tasks.
+    tasks = self.taskqueue.GetTasks(self.QUEUE)
+    worker_tasks = 0
+    for task in tasks:
+      self.assertEqual("/foo/worker_callback", task["url"])
+      worker_tasks += 1
+    self.assertEqual(int(self.SHARD_COUNT), worker_tasks)
+
+    # Call again to test idempotency.
+    self.handler._schedule_shards(state.mapreduce_spec, readers, self.QUEUE,
+                                  "/foo", state)
+    self.assertEqual(int(self.SHARD_COUNT),
+                     len(self.taskqueue.GetTasks(self.QUEUE)))
+    new_shard_states = model.ShardState.find_by_mapreduce_state(state)
+    for o, n in zip(shard_states, new_shard_states):
+      self.assertEqual(o, n)
 
 
 class MapperWorkerCallbackHandlerLeaseTest(unittest.TestCase):
@@ -1390,7 +1514,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
     """Tests that that handler only accepts requests from the task queue."""
     del self.handler.request.headers["X-AppEngine-QueueName"]
     self.handler.post()
-    self.assertEquals(403, self.handler.response.status)
+    self.assertEquals(httplib.FORBIDDEN, self.handler.response.status)
 
   def testSmoke(self):
     """Test main execution path of entity scanning.
@@ -1930,6 +2054,7 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
     self.mapreduce_state.mapreduce_spec = mapreduce_spec
     self.mapreduce_state.chart_url = "http://chart.apis.google.com/chart?"
     self.mapreduce_state.active = True
+    self.mapreduce_state.active_shards = 3
     self.mapreduce_state.put()
 
     self.verify_mapreduce_state(self.mapreduce_state, shard_count=3)
@@ -1954,7 +2079,7 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
     """Tests that that handler only accepts requests from the task queue."""
     del self.handler.request.headers["X-AppEngine-QueueName"]
     self.handler.post()
-    self.assertEquals(403, self.handler.response.status)
+    self.assertEquals(httplib.FORBIDDEN, self.handler.response.status)
 
   def testStateUpdateIsCmpAndSet(self):
     """Verify updating model.MapreduceState is cmp and set."""
@@ -2297,7 +2422,7 @@ class CleanUpJobTest(testutil.HandlerTestBase):
     """Test that we check the X-Requested-With header."""
     del self.handler.request.headers["X-Requested-With"]
     self.handler.post()
-    self.assertEquals(403, self.handler.response.status)
+    self.assertEquals(httplib.FORBIDDEN, self.handler.response.status)
 
   def testBasic(self):
     """Tests cleaning up the job.

@@ -23,6 +23,7 @@
 __all__ = [
     "create_datastore_write_config",
     "for_name",
+    "get_queue_name",
     "get_short_name",
     "handler_for_name",
     "is_generator",
@@ -33,15 +34,47 @@ __all__ = [
     ]
 
 import inspect
+import os
 import pickle
 import types
 
 from google.appengine.datastore import datastore_rpc
+from mapreduce import parameters
 
 
 def _enum(**enums):
   """Helper to create enum."""
   return type("Enum", (), enums)
+
+
+def get_queue_name(queue_name):
+  """Determine which queue MR should run on.
+
+  How to choose the queue:
+  1. If user provided one, use that.
+  2. If we are starting a mr from taskqueue, inherit that queue.
+     If it's a special queue, fall back to the default queue.
+  3. Default queue.
+
+  If user is using any MR pipeline interface, pipeline.start takes a
+  "queue_name" argument. The pipeline will run on that queue and MR will
+  simply inherit the queue_name.
+
+  Args:
+    queue_name: queue_name from user. Maybe None.
+
+  Returns:
+    The queue name to run on.
+  """
+  if queue_name:
+    return queue_name
+  queue_name = os.environ.get("HTTP_X_APPENGINE_QUEUENAME",
+                              parameters.DEFAULT_QUEUE_NAME)
+  if len(queue_name) > 1 and queue_name[0:2] == "__":
+    # We are currently in some special queue. E.g. __cron.
+    return parameters.DEFAULT_QUEUE_NAME
+  else:
+    return queue_name
 
 
 def total_seconds(td):

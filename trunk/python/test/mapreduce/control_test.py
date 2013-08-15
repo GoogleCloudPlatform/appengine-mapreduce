@@ -82,11 +82,9 @@ class ControlTest(testutil.HandlerTestBase):
     task = tasks[0]
     self.assertEquals("/mapreduce_base_path/kickoffjob_callback", task["url"])
     handler = test_support.execute_task(task)
-    mapreduce_spec = model.MapreduceSpec.from_json_str(
-        handler.request.get("mapreduce_spec"))
-    self.assertTrue(mapreduce_spec)
-    self.assertEquals(mapreduce_id, mapreduce_spec.mapreduce_id)
-    self.assertEquals({"foo": "bar"}, mapreduce_spec.params)
+    self.assertEqual(mapreduce_id, handler.request.get("mapreduce_id"))
+    state = model.MapreduceState.get_by_job_id(mapreduce_id)
+    self.assertEqual(state.mapreduce_spec.params, {"foo": "bar"})
 
     return task["eta"]
 
@@ -134,28 +132,6 @@ class ControlTest(testutil.HandlerTestBase):
       del os.environ["HTTP_X_APPENGINE_QUEUENAME"]
 
     self.validate_map_started(mapreduce_id)
-
-  def testStartMap_Cron(self):
-    """Test that the start_map works from cron."""
-    TestEntity().put()
-
-    shard_count = 4
-    os.environ["HTTP_X_APPENGINE_QUEUENAME"] = "__cron"
-    try:
-      mapreduce_id = control.start_map(
-          "test_map",
-          __name__ + ".test_handler",
-          "mapreduce.input_readers.DatastoreInputReader",
-          {
-              "entity_kind": __name__ + "." + TestEntity.__name__,
-          },
-          shard_count,
-          mapreduce_parameters={"foo": "bar"},
-          base_path="/mapreduce_base_path")
-    finally:
-      del os.environ["HTTP_X_APPENGINE_QUEUENAME"]
-
-    self.validate_map_started(mapreduce_id, queue_name="default")
 
   def testStartMap_Countdown(self):
     """Test that MR can be scheduled into the future.
@@ -304,7 +280,10 @@ class ControlTest(testutil.HandlerTestBase):
     shard_count = 4
     mapreduce_id = ""
 
+    @db.transactional(xg=True)
     def tx():
+      some_entity = TestEntity()
+      some_entity.put()
       return control.start_map(
           "test_map",
           __name__ + ".test_handler",
@@ -317,7 +296,7 @@ class ControlTest(testutil.HandlerTestBase):
           base_path="/mapreduce_base_path",
           queue_name=self.QUEUE_NAME,
           transactional=True)
-    mapreduce_id = db.run_in_transaction(tx)
+    mapreduce_id = tx()
     self.validate_map_started(mapreduce_id)
 
   def testStartMapTransactional_HugePayload(self):
@@ -331,9 +310,10 @@ class ControlTest(testutil.HandlerTestBase):
     shard_count = 4
     mapreduce_id = ""
 
+    @db.transactional(xg=True)
     def tx():
-      root_entity = TestEntity()
-      root_entity.put()
+      some_entity = TestEntity()
+      some_entity.put()
       return control.start_map(
           "test_map",
           __name__ + ".test_handler",
@@ -346,9 +326,8 @@ class ControlTest(testutil.HandlerTestBase):
           mapreduce_parameters={"foo": "bar"},
           base_path="/mapreduce_base_path",
           queue_name=self.QUEUE_NAME,
-          transactional=True,
-          transactional_parent=root_entity)
-    mapreduce_id = db.run_in_transaction(tx)
+          transactional=True)
+    mapreduce_id = tx()
     self.validate_map_started(mapreduce_id)
 
 

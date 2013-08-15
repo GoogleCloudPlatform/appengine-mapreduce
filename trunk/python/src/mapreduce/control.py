@@ -24,19 +24,18 @@ __all__ = ["start_map"]
 
 import logging
 
+from google.appengine.ext import db
 from mapreduce import handlers
 from mapreduce import model
 from mapreduce import parameters
-
-
-_DEFAULT_SHARD_COUNT = 8
+from mapreduce import util
 
 
 def start_map(name,
               handler_spec,
               reader_spec,
               mapper_parameters,
-              shard_count=_DEFAULT_SHARD_COUNT,
+              shard_count=None,
               output_writer_spec=None,
               mapreduce_parameters=None,
               base_path=None,
@@ -45,8 +44,7 @@ def start_map(name,
               countdown=None,
               hooks_class_name=None,
               _app=None,
-              transactional=False,
-              transactional_parent=None):
+              transactional=False):
   """Start a new, mapper-only mapreduce.
 
   Args:
@@ -60,27 +58,27 @@ def start_map(name,
       whole job.
     base_path: base path of mapreduce library handler specified in app.yaml.
       "/mapreduce" by default.
-    queue_name: executor queue name to be used for mapreduce tasks. If
-      unspecified it will be the "default" queue or inherit the queue of
-      the currently running request.
+    queue_name: taskqueue queue name to be used for mapreduce tasks.
+      see util.get_queue_name.
     eta: absolute time when the MR should execute. May not be specified
       if 'countdown' is also supplied. This may be timezone-aware or
       timezone-naive.
     countdown: time in seconds into the future that this MR should execute.
       Defaults to zero.
     hooks_class_name: fully qualified name of a hooks.Hooks subclass.
-    transactional: specifies if job should be started as a part of already
-      opened transaction.
-    transactional_parent: specifies the entity which is already a part of
-      transaction. Child entity will be used to store task payload if mapreduce
-      specification is too big.
+    transactional: controls what transaction scope to use to start this MR job.
+      If True, there has to be an already opened cross-group transaction scope.
+      MR will use one entity group from it.
+      If False, MR will create an independent transaction to start the job
+      regardless of any existing transaction scopes.
 
   Returns:
     mapreduce id as string.
   """
-  if not shard_count:
-    shard_count = _DEFAULT_SHARD_COUNT
+  if shard_count is None:
+    shard_count = parameters.DEFAULT_SHARD_COUNT,
   if base_path is None:
+    # pylint: disable=protected-access
     base_path = parameters._DEFAULT_BASE_PATH
 
   if mapper_parameters:
@@ -94,24 +92,18 @@ def start_map(name,
                                  shard_count,
                                  output_writer_spec=output_writer_spec)
 
-  if transactional and not transactional_parent:
-    # We should really fail here, but there might be some customers
-    # of this code that wouldn't like this.
-    # This will cause problems only for huge job definitions.
-    logging.error(
-        "transactional_parent should be specified for transactional starts."
-        "Your job will fail to start if mapreduce specification is too big.")
+  if transactional and not db.is_in_transaction():
+    logging.warning("Expects an opened xg transaction to start mapreduce "
+                    "when transactional is True.")
 
   return handlers.StartJobHandler._start_map(
       name,
       mapper_spec,
       mapreduce_parameters or {},
       base_path=base_path,
-      queue_name=queue_name,
+      queue_name=util.get_queue_name(queue_name),
       eta=eta,
       countdown=countdown,
       hooks_class_name=hooks_class_name,
       _app=_app,
-      transactional=transactional,
-      parent_entity=transactional_parent)
-
+      transactional=transactional)

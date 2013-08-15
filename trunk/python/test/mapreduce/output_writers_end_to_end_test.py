@@ -126,22 +126,22 @@ class FileOutputWriterEndToEndTest(testutil.HandlerTestBase):
             "entity_kind": __name__ + "." + TestEntity.__name__,
             "output_sharding": "input",
             "filesystem": "gs",
+            "gs_bucket_name": "bucket"
         },
         shard_count=4,
         base_path="/mapreduce_base_path",
-        output_writer_spec=BLOBSTORE_WRITER_NAME)
+        output_writer_spec=FILE_WRITER_NAME)
 
     test_support.execute_until_empty(self.taskqueue)
 
     mapreduce_state = model.MapreduceState.get_by_job_id(mapreduce_id)
     filenames = output_writers.BlobstoreOutputWriter.get_filenames(
         mapreduce_state)
-    self.assertEqual(4, len(filenames))
+    self.assertEqual(4, len(set(filenames)))
 
     file_lengths = []
     for filename in filenames:
-      self.assertTrue(filename.startswith("/blobstore/"))
-      self.assertFalse(filename.startswith("/blobstore/writable:"))
+      self.assertTrue(filenames[0].startswith("/gs/bucket/"))
 
       with files.open(filename, "r") as f:
         data = f.read(10000000)
@@ -211,7 +211,7 @@ class BlobstoreOutputWriterEndToEndTest(testutil.HandlerTestBase):
     mapreduce_state = model.MapreduceState.get_by_job_id(mapreduce_id)
     filenames = output_writers.BlobstoreOutputWriter.get_filenames(
         mapreduce_state)
-    self.assertEqual(4, len(filenames))
+    self.assertEqual(4, len(set(filenames)))
 
     file_lengths = []
     for filename in filenames:
@@ -256,7 +256,7 @@ class GoogleCloudStorageOutputWriterEndToEndTest(testutil.CloudStorageTestBase):
     mapreduce_state = model.MapreduceState.get_by_job_id(mapreduce_id)
     filenames = self.WRITER_CLS.get_filenames(mapreduce_state)
 
-    self.assertEqual(num_shards, len(filenames))
+    self.assertEqual(num_shards, len(set(filenames)))
     total_entries = 0
     for shard in range(num_shards):
       self.assertTrue(filenames[shard].startswith("/%s/%s" % (bucket_name,
