@@ -37,13 +37,15 @@ from google.appengine.api import files
 from google.appengine.api.files import file_service_pb
 from google.appengine.api.files import records
 from google.appengine.ext import db
-from mapreduce import base_handler
 from mapreduce import context
 from mapreduce import errors
 from mapreduce import input_readers
 from mapreduce import mapper_pipeline
 from mapreduce import operation
 from mapreduce import output_writers
+from mapreduce import pipeline_base
+
+# pylint: disable=g-bad-name
 
 
 class _OutputFile(db.Model):
@@ -139,7 +141,7 @@ def _sort_records_map(records):
   entity.put()
 
 
-class _SortChunksPipeline(base_handler.PipelineBase):
+class _SortChunksPipeline(pipeline_base.PipelineBase):
   """A pipeline to sort multiple key-value files.
 
   Args:
@@ -174,7 +176,7 @@ class _SortChunksPipeline(base_handler.PipelineBase):
       yield pipeline_common.Return(result)
 
 
-class _CollectOutputFiles(base_handler.PipelineBase):
+class _CollectOutputFiles(pipeline_base.PipelineBase):
   """Collect output file names from _OutputFile entities for given jobs.
 
   Args:
@@ -192,7 +194,7 @@ class _CollectOutputFiles(base_handler.PipelineBase):
     return result
 
 
-class _CleanupOutputFiles(base_handler.PipelineBase):
+class _CleanupOutputFiles(pipeline_base.PipelineBase):
   """Cleanup _OutputFile entities for given job ids.
 
   Args:
@@ -495,7 +497,7 @@ class _HashingBlobstoreOutputWriter(output_writers.BlobstoreOutputWriterBase):
     ctx.get_pool(pool_name).append(proto.Encode())
 
 
-class _ShardOutputs(base_handler.PipelineBase):
+class _ShardOutputs(pipeline_base.PipelineBase):
   """Takes a flat list of filenames, returns a list of lists, each with
   one member each.
   """
@@ -524,7 +526,7 @@ def _merge_map(key, values, partial):
   yield proto.Encode()
 
 
-class _MergePipeline(base_handler.PipelineBase):
+class _MergePipeline(pipeline_base.PipelineBase):
   """Pipeline to merge sorted chunks.
 
   This pipeline merges together individually sorted chunks of each shard.
@@ -569,7 +571,7 @@ def _hashing_map(binary_record):
   yield (proto.key(), proto.value())
 
 
-class _HashPipeline(base_handler.PipelineBase):
+class _HashPipeline(pipeline_base.PipelineBase):
   """A pipeline to read mapper output and hash by key.
 
   Args:
@@ -596,14 +598,14 @@ class _HashPipeline(base_handler.PipelineBase):
             shards=shards)
 
 
-class _ShuffleServicePipeline(base_handler.PipelineBase):
+class _ShuffleServicePipeline(pipeline_base.PipelineBase):
   """A pipeline to invoke shuffle service.
 
   Args:
     input_files: list of file names to shuffle.
 
   Returns:
-    list of shuffled file names.
+    list of shuffled file names. Empty list if there is no input.
   """
   async = True
 
@@ -613,6 +615,17 @@ class _ShuffleServicePipeline(base_handler.PipelineBase):
       ]
 
   def run(self, job_name, input_files):
+    # Return immediately if we have no content to shuffle.
+    # Big shuffler can not handle no input.
+    empty = True
+    for filename in input_files:
+      if files.stat(filename).st_size > 0:
+        empty = False
+        break
+    if empty:
+      self.complete([])
+      return
+
     shard_number = len(input_files)
     output_files = []
     for i in range(shard_number):
@@ -651,7 +664,7 @@ class _ShuffleServicePipeline(base_handler.PipelineBase):
     return True
 
 
-class ShufflePipeline(base_handler.PipelineBase):
+class ShufflePipeline(pipeline_base.PipelineBase):
   """A pipeline to shuffle multiple key-value files.
 
   Args:
@@ -663,10 +676,13 @@ class ShufflePipeline(base_handler.PipelineBase):
       to the number of input files.
 
   Returns:
-    The list of filenames as string. Resulting files contain serialized
-    file_service_pb.KeyValues protocol messages with all values collated
-    to a single key.
+    default: a list of filenames as string. Resulting files contain
+      serialized file_service_pb.KeyValues protocol messages with
+      all values collated to a single key. When there is no output,
+      an empty list from shuffle service or a list of empty files from
+      in memory shuffler.
   """
+
   def run(self, job_name, filenames, shards=None):
     if files.shuffler.available():
       yield _ShuffleServicePipeline(job_name, filenames)

@@ -24,12 +24,17 @@ __all__ = [
 
 
 from google.appengine.api import files
-from mapreduce import base_handler
 from mapreduce import control
 from mapreduce import model
+from mapreduce import parameters
+from mapreduce import pipeline_base
+
+# pylint: disable=g-bad-name
+# pylint: disable=protected-access
 
 
-class MapperPipeline(base_handler.PipelineBase):
+class MapperPipeline(pipeline_base._OutputSlotsMixin,
+                     pipeline_base.PipelineBase):
   """Pipeline wrapper for mapper job.
 
   Args:
@@ -41,7 +46,11 @@ class MapperPipeline(base_handler.PipelineBase):
     shards: number of shards in the job as int.
 
   Returns:
-    The list of filenames mapper was outputting to.
+    default: the list of filenames produced by the mapper if there was any
+      output and the map was completed successfully.
+    result_status: one of model.MapreduceState._RESULTS.
+    job_id: mr id that can be used to query model.MapreduceState. Available
+      immediately after run returns.
   """
   async = True
 
@@ -49,11 +58,10 @@ class MapperPipeline(base_handler.PipelineBase):
   # Might also need to double filenames as named output.
   output_names = [
       # Job ID. MapreduceState.get_by_job_id can be used to load
-      # mapreduce state. Is filled immediately after job starts up.
+      # mapreduce state.
       "job_id",
       # Dictionary of final counter values. Filled when job is completed.
-      "counters",
-      ]
+      "counters"] + pipeline_base._OutputSlotsMixin.output_names
 
   def run(self,
           job_name,
@@ -77,22 +85,24 @@ class MapperPipeline(base_handler.PipelineBase):
         )
     self.fill(self.outputs.job_id, mapreduce_id)
     self.set_status(console_url="%s/detail?job_id=%s" % (
-        (base_handler._DEFAULT_BASE_PATH, mapreduce_id)))
+        (parameters._DEFAULT_BASE_PATH, mapreduce_id)))
 
   def callback(self):
     mapreduce_id = self.outputs.job_id.value
     mapreduce_state = model.MapreduceState.get_by_job_id(mapreduce_id)
     mapper_spec = mapreduce_state.mapreduce_spec.mapper
-    files = None
+    outputs = []
     output_writer_class = mapper_spec.output_writer_class()
-    if output_writer_class:
-      files = output_writer_class.get_filenames(mapreduce_state)
+    if (output_writer_class and
+        mapreduce_state.result_status == model.MapreduceState.RESULT_SUCCESS):
+      outputs = output_writer_class.get_filenames(mapreduce_state)
 
+    self.fill(self.outputs.result_status, mapreduce_state.result_status)
     self.fill(self.outputs.counters, mapreduce_state.counters_map.to_dict())
-    self.complete(files)
+    self.complete(outputs)
 
 
-class _CleanupPipeline(base_handler.PipelineBase):
+class _CleanupPipeline(pipeline_base.PipelineBase):
   """A pipeline to do a cleanup for mapreduce jobs.
 
   Args:

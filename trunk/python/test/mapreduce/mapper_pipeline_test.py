@@ -14,6 +14,7 @@ from mapreduce.lib import pipeline
 from google.appengine.api import files
 from google.appengine.ext import db
 from mapreduce import context
+from mapreduce import errors
 from mapreduce import input_readers
 from mapreduce import mapper_pipeline
 from mapreduce import model
@@ -36,6 +37,11 @@ class TestOutputEntity(db.Model):
 class RetryCount(db.Model):
   """Use to keep track of slice/shard retries."""
   retries = db.IntegerProperty()
+
+
+def test_fail_map(_):
+  """Always fail job immediately."""
+  raise errors.FailJobError()
 
 
 def test_slice_retry_map(entity):
@@ -221,13 +227,52 @@ class MapperPipelineTest(testutil.HandlerTestBase):
         "Pipeline successful:"))
 
     p = mapper_pipeline.MapperPipeline.from_id(p.pipeline_id)
-    self.assertTrue(p.outputs.job_id.value)
-
+    # Verify outputs.
+    # Counter output
     counters = p.outputs.counters.value
     self.assertTrue(counters)
     self.assertTrue(context.COUNTER_MAPPER_WALLTIME_MS in counters)
+    # Default output.
+    self.assertEqual([], p.outputs.default.value)
+    # Job id output.
+    self.assertTrue(p.outputs.job_id.filled)
+    state = model.MapreduceState.get_by_job_id(p.outputs.job_id.value)
+    self.assertEqual(model.MapreduceState.RESULT_SUCCESS, state.result_status)
+    # Result status output.
+    self.assertEqual(model.MapreduceState.RESULT_SUCCESS,
+                     p.outputs.result_status.value)
 
-  def testProcessEntites(self):
+  def testFailedMap(self):
+    for i in range(1):
+      TestEntity(data=str(i)).put()
+
+    p = mapper_pipeline.MapperPipeline(
+        "test",
+        handler_spec=__name__ + ".test_fail_map",
+        input_reader_spec=input_readers.__name__ + ".DatastoreInputReader",
+        params={
+            "input_reader": {
+                "entity_kind": __name__ + "." + TestEntity.__name__,
+            },
+        },
+        shards=5)
+    p.start()
+    test_support.execute_until_empty(self.taskqueue)
+
+    self.assertEquals(1, len(self.emails))
+    self.assertTrue(self.emails[0][1].startswith(
+        "Pipeline successful:"))
+
+    p = mapper_pipeline.MapperPipeline.from_id(p.pipeline_id)
+
+    self.assertTrue(p.outputs.job_id.filled)
+    state = model.MapreduceState.get_by_job_id(p.outputs.job_id.value)
+    self.assertEqual(model.MapreduceState.RESULT_FAILED, state.result_status)
+    self.assertEqual(model.MapreduceState.RESULT_FAILED,
+                     p.outputs.result_status.value)
+    self.assertEqual([], p.outputs.default.value)
+
+  def testProcessEntities(self):
     """Test empty mapper over non-empty dataset."""
     for _ in range(100):
       TestEntity().put()
@@ -250,12 +295,15 @@ class MapperPipelineTest(testutil.HandlerTestBase):
         "Pipeline successful:"))
 
     p = mapper_pipeline.MapperPipeline.from_id(p.pipeline_id)
-    self.assertTrue(p.outputs.job_id.value)
 
+    self.assertTrue(p.outputs.job_id.filled)
     counters = p.outputs.counters.value
     self.assertTrue(counters)
     self.assertTrue(context.COUNTER_MAPPER_WALLTIME_MS in counters)
     self.assertEquals(100, counters[context.COUNTER_MAPPER_CALLS])
+    self.assertEqual(model.MapreduceState.RESULT_SUCCESS,
+                     p.outputs.result_status.value)
+    self.assertEqual([], p.outputs.default.value)
 
   def testSliceRetry(self):
     entity_count = 200

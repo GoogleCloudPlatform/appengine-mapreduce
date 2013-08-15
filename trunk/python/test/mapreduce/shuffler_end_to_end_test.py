@@ -213,6 +213,31 @@ class ShuffleEndToEndTest(testutil.HandlerTestBase):
     """Callback function for sending mail."""
     self.emails.append((sender, subject, body, html))
 
+  def testShuffleNoData(self):
+    input_file = files.blobstore.create()
+    files.finalize(input_file)
+    input_file = files.blobstore.get_file_name(
+        files.blobstore.get_blob_key(input_file))
+
+    p = shuffler.ShufflePipeline(
+        "testjob", [input_file, input_file, input_file])
+    p.start()
+    test_support.execute_until_empty(self.taskqueue)
+
+    p = shuffler.ShufflePipeline.from_id(p.pipeline_id)
+    for filename in p.outputs.default.value:
+      self.assertEqual(0, files.stat(filename).st_size)
+
+  def testShuffleNoFile(self):
+    p = shuffler.ShufflePipeline(
+        "testjob", [])
+    p.start()
+    test_support.execute_until_empty(self.taskqueue)
+
+    p = shuffler.ShufflePipeline.from_id(p.pipeline_id)
+    for filename in p.outputs.default.value:
+      self.assertEqual(0, files.stat(filename).st_size)
+
   def testShuffleFiles(self):
     """Test shuffling multiple files."""
     input_data = [(str(i), str(i)) for i in range(100)]

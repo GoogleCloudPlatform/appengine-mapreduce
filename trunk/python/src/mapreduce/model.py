@@ -152,7 +152,7 @@ class HugeTask(object):
     elif len(compressed_payload) > self.MAX_DB_PAYLOAD:
       raise ValueError(
           "Payload from %s to big to be stored in database: %s" %
-          self.name, len(compressed_payload))
+          (self.name, len(compressed_payload)))
     # Store payload in the datastore.
     else:
       if not parent:
