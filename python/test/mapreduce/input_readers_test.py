@@ -18,11 +18,11 @@
 
 
 # Disable "Invalid method name"
-# pylint: disable-msg=C6409
+# pylint: disable=g-bad-name
 
 # os_compat must be first to ensure timezones are UTC.
 
-from google.appengine.tools import os_compat  # pylint: disable-msg=W0611
+from google.appengine.tools import os_compat  # pylint: disable=unused-import
 
 import cStringIO
 import datetime
