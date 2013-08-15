@@ -24,10 +24,11 @@ import httplib
 import logging
 from mapreduce.lib import simplejson
 
+# pylint: disable=g-import-not-at-top
 try:
-  from mapreduce.lib import pipeline
+  from mapreduce import pipeline_base
 except ImportError:
-  pipeline = None
+  pipeline_base = None
 from google.appengine.ext import webapp
 from mapreduce import errors
 from mapreduce import model
@@ -188,21 +189,8 @@ class HugeTaskHandler(TaskQueueHandler):
     self.request = self._RequestWrapper(self.request)
 
 
-# This path will be changed by build process when this is a part of SDK.
-_DEFAULT_BASE_PATH = "/mapreduce"
-_DEFAULT_PIPELINE_BASE_PATH = _DEFAULT_BASE_PATH + "/pipeline"
-
-
-if pipeline:
-  class PipelineBase(pipeline.Pipeline):
-    """Base class for all pipelines within mapreduce framework.
-
-    Rewrites base path to use pipeline library bundled with mapreduce.
-    """
-
-    def start(self, **kwargs):
-      if "base_path" not in kwargs:
-        kwargs["base_path"] = _DEFAULT_PIPELINE_BASE_PATH
-      return pipeline.Pipeline.start(self, **kwargs)
+if pipeline_base:
+  # For backward compatiblity.
+  PipelineBase = pipeline_base.PipelineBase
 else:
   PipelineBase = None

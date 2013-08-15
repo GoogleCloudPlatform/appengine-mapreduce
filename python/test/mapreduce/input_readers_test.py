@@ -2597,6 +2597,21 @@ class FileInputReaderTest(unittest.TestCase):
     input_reader = self.createReader(filenames, "lines")
     self.assertEqualsAfterJson(["l1\n", "l2\n", "l3\n"]*3, input_reader)
 
+  def testNoData(self):
+    """Test no data for input splitting."""
+    mapper_spec = model.MapperSpec(
+        "test_handler",
+        input_readers.__name__ + ".FileInputReader",
+        {
+            "input_reader": {
+                "format": "lines",
+                "files": []
+            }
+        },
+        3)
+    mr_input_readers = input_readers.FileInputReader.split_input(mapper_spec)
+    self.assertFalse(mr_input_readers)
+
   def setUpForEndToEndTest(self, num_shards):
     """Setup mox for end to end test.
 
@@ -2855,6 +2870,13 @@ class GoogleCloudStorageInputReaderTest(GoogleCloudStorageInputTestBase):
         self.READER_CLS.validate,
         self.create_mapper_spec(input_params={"bucket_name": self.test_bucket,
                                               "objects": ["1", ["2", "3"]]}))
+
+  def testSplit_NoObjectSingleShard(self):
+    readers = self.READER_CLS.split_input(
+        self.create_mapper_spec(num_shards=1,
+                                input_params={"bucket_name": self.test_bucket,
+                                              "objects": []}))
+    self.assertFalse(readers)
 
   def testSplit_SingleObjectSingleShard(self):
     readers = self.READER_CLS.split_input(

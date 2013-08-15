@@ -24,9 +24,9 @@ __all__ = ["start_map"]
 
 import logging
 
-from mapreduce import base_handler
 from mapreduce import handlers
 from mapreduce import model
+from mapreduce import parameters
 
 
 _DEFAULT_SHARD_COUNT = 8
@@ -81,7 +81,7 @@ def start_map(name,
   if not shard_count:
     shard_count = _DEFAULT_SHARD_COUNT
   if base_path is None:
-    base_path = base_handler._DEFAULT_BASE_PATH
+    base_path = parameters._DEFAULT_BASE_PATH
 
   if mapper_parameters:
     mapper_parameters = dict(mapper_parameters)

@@ -48,6 +48,9 @@ class SplitTest(unittest.TestCase):
     for filename in self.__created_files:
       os.remove(filename)
 
+  def testSplitWithNoData(self):
+    self.assertEqual(None, file_format_root.split([], 'lines', 10))
+
   def createFilesForDeepSplitTest(self):
     def _random_filename():
       return ''.join(random.choice(string.ascii_letters) for _ in range(10))

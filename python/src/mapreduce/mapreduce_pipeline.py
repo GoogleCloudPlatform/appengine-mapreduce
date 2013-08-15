@@ -37,16 +37,19 @@ from mapreduce.lib import pipeline
 from mapreduce.lib.pipeline import common as pipeline_common
 from google.appengine.api import files
 from google.appengine.api.files import file_service_pb
-from mapreduce import base_handler
 from mapreduce import context
 from mapreduce import errors
 from mapreduce import input_readers
 from mapreduce import mapper_pipeline
+from mapreduce import model
 from mapreduce import operation
 from mapreduce import output_writers
+from mapreduce import pipeline_base
 from mapreduce import shuffler
 from mapreduce import util
 
+# pylint: disable=g-bad-name
+# pylint: disable=protected-access
 
 # Mapper pipeline is extracted only to remove dependency cycle with shuffler.py
 # Reimport it back.
@@ -57,7 +60,8 @@ ShufflePipeline = shuffler.ShufflePipeline
 CleanupPipeline = mapper_pipeline._CleanupPipeline
 
 
-class MapPipeline(base_handler.PipelineBase):
+class MapPipeline(pipeline_base._OutputSlotsMixin,
+                  pipeline_base.PipelineBase):
   """Runs the map stage of MapReduce.
 
   Iterates over input reader and outputs data into key/value format
@@ -192,7 +196,8 @@ class _ReducerReader(input_readers.RecordsReader):
     return result
 
 
-class ReducePipeline(base_handler.PipelineBase):
+class ReducePipeline(pipeline_base._OutputSlotsMixin,
+                     pipeline_base.PipelineBase):
   """Runs the reduce stage of MapReduce.
 
   Merge-reads input files and runs reducer function on them.
@@ -247,7 +252,8 @@ class ReducePipeline(base_handler.PipelineBase):
         shards=shards)
 
 
-class MapreducePipeline(base_handler.PipelineBase):
+class MapreducePipeline(pipeline_base._OutputSlotsMixin,
+                        pipeline_base.PipelineBase):
   """Pipeline to execute MapReduce jobs.
 
   Args:
@@ -267,7 +273,10 @@ class MapreducePipeline(base_handler.PipelineBase):
       same as the input key.
 
   Returns:
-    filenames from output writer.
+    result_status: one of model.MapreduceState._RESULTS. Check this to see
+      if the job is successful.
+    default: a list of filenames if the mapreduce was sucesssful and
+      was outputting files. An empty list otherwise.
   """
 
   def run(self,
@@ -298,4 +307,37 @@ class MapreducePipeline(base_handler.PipelineBase):
       all_temp_files = yield pipeline_common.Extend(
           map_pipeline, shuffler_pipeline)
       yield CleanupPipeline(all_temp_files)
-    yield pipeline_common.Return(reducer_pipeline)
+
+    yield _ReturnPipeline(map_pipeline.result_status,
+                          reducer_pipeline.result_status,
+                          reducer_pipeline)
+
+
+class _ReturnPipeline(pipeline_base._OutputSlotsMixin,
+                      pipeline_base.PipelineBase):
+  """Returns Mapreduce result.
+
+  Fills outputs for MapreducePipeline. See MapreducePipeline.
+  """
+
+  output_names = ["result_status"]
+
+  def run(self,
+          map_result_status,
+          reduce_result_status,
+          reduce_outputs):
+
+    if (map_result_status == model.MapreduceState.RESULT_ABORTED or
+        reduce_result_status == model.MapreduceState.RESULT_ABORTED):
+      result_status = model.MapreduceState.RESULT_ABORTED
+    elif (map_result_status == model.MapreduceState.RESULT_FAILED or
+          reduce_result_status == model.MapreduceState.RESULT_FAILED):
+      result_status = model.MapreduceState.RESULT_FAILED
+    else:
+      result_status = model.MapreduceState.RESULT_SUCCESS
+
+    self.fill(self.outputs.result_status, result_status)
+    if result_status == model.MapreduceState.RESULT_SUCCESS:
+      yield pipeline_common.Return(reduce_outputs)
+    else:
+      yield pipeline_common.Return([])

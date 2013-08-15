@@ -171,7 +171,7 @@ class InputReader(model.JsonMixin):
         parameters to define the behavior of input readers.
 
     Returns:
-      A list of InputReaders. None when no input data can be found.
+      A list of InputReaders. None or [] when no input data can be found.
     """
     raise NotImplementedError("split_input() not implemented in %s" % cls)
 
@@ -328,6 +328,8 @@ class FileInputReader(InputReader):
                                                params[cls.FORMAT_PARAM],
                                                mapper_spec.shard_count)
 
+    if file_format_roots is None:
+      return []
     return [cls(root) for root in file_format_roots]
 
   @classmethod
