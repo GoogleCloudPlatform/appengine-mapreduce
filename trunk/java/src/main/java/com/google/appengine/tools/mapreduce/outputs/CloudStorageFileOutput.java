@@ -3,7 +3,7 @@ package com.google.appengine.tools.mapreduce.outputs;
 /**
  * Renamed to GoogleCloudStorageFileOutput
  *
- * @Deprecated Use {@link GoogleCloudStorageFileOutput}. This class will be removed in a future
+ * @deprecated Use {@link GoogleCloudStorageFileOutput}. This class will be removed in a future
  *             release.
  */
 @Deprecated
