@@ -1429,7 +1429,7 @@ class StartJobHandler(base_handler.PostJsonHandler):
                  countdown=None,
                  hooks_class_name=None,
                  _app=None,
-                 transactional=False):
+                 in_xg_transaction=False):
     # pylint: disable=g-doc-args
     # pylint: disable=g-doc-return-or-yield
     """See control.start_map.
@@ -1470,7 +1470,7 @@ class StartJobHandler(base_handler.PostJsonHandler):
       context.Context._set(None)
 
     # Save states and enqueue task.
-    if transactional:
+    if in_xg_transaction:
       propagation = db.MANDATORY
     else:
       propagation = db.INDEPENDENT
