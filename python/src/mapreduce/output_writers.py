@@ -633,6 +633,12 @@ class FileOutputWriterBase(OutputWriter):
     if output_sharding != cls.OUTPUT_SHARDING_INPUT_SHARDS:
       state = cls._State.from_json(mapreduce_state.writer_state)
       files.finalize(state.filenames[0])
+    # Keep writing for 183 clients.
+    # TODO(user): Remove after 184 is out.
+    finalized_filenames = cls.get_filenames(mapreduce_state)
+    state = cls._State(finalized_filenames, [])
+    mapreduce_state.writer_state = state.to_json()
+    # End.
 
   @classmethod
   def from_json(cls, state):
@@ -644,7 +650,12 @@ class FileOutputWriterBase(OutputWriter):
     Returns:
       An instance of the OutputWriter configured using the values of json.
     """
-    return cls(state["filename"], state["request_filename"])
+    if "request_filename" in state:
+      return cls(state["filename"], state["request_filename"])
+    # Consumer falls back to 183.
+    # TODO(user): Remove after 184 is out.
+    return cls(state["filename"], None)
+    # End
 
   def to_json(self):
     """Returns writer state to serialize in json.
@@ -700,6 +711,11 @@ class FileOutputWriterBase(OutputWriter):
                                   request_filename,
                                   mime_type,
                                   acl=acl)
+      # Keep writing for 183 clients.
+      # TODO(user): Remove after 184 is out.
+      state = cls._State([filename], [request_filename])
+      shard_state.writer_state = state.to_json()
+      # End
     else:
       state = cls._State.from_json(mapreduce_state.writer_state)
       filename = state.filenames[0]
@@ -716,6 +732,12 @@ class FileOutputWriterBase(OutputWriter):
     mapreduce_spec = ctx.mapreduce_spec
     output_sharding = self.__class__._get_output_sharding(
         mapper_spec=mapreduce_spec.mapper)
+    # Consumer falls back to 183.
+    # TODO(user): Remove after 184 is out.
+    if self._request_filename is None or hasattr(self, "_183_test"):
+      writer_state = self._State.from_json(shard_state.writer_state)
+      self._request_filename = writer_state.request_filenames[0]
+    # End.
     if output_sharding == self.OUTPUT_SHARDING_INPUT_SHARDS:
       filesystem = self._get_filesystem(mapreduce_spec.mapper)
       files.finalize(self._filename)
@@ -745,8 +767,14 @@ class FileOutputWriterBase(OutputWriter):
           model.MapreduceState.RESULT_SUCCESS):
         state = cls._State.from_json(mapreduce_state.writer_state)
         filesystem = cls._get_filesystem(mapreduce_state.mapreduce_spec.mapper)
-        finalized_filenames = [cls._get_finalized_filename(
-            filesystem, state.filenames[0], state.request_filenames[0])]
+        # 183 compat.
+        # TODO(user): Remove after 184 is out.
+        if not state.request_filenames:
+          finalized_filenames = state.filenames
+        else:
+        # End.
+          finalized_filenames = [cls._get_finalized_filename(
+              filesystem, state.filenames[0], state.request_filenames[0])]
     else:
       shards = model.ShardState.find_by_mapreduce_state(mapreduce_state)
       for shard in shards:

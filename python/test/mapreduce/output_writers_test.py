@@ -216,6 +216,11 @@ class FileOutputWriterTest(testutil.HandlerTestBase):
         self.create_mapper_spec(
             params={"filesystem": "gs", "bucket_name": "foo"}))
 
+  def testFromJson183Compat(self):
+    writer = output_writers.FileOutputWriter.from_json({"filename": "foo"})
+    self.assertEqual("foo", writer._filename)
+    self.assertEqual(None, writer._request_filename)
+
 
 class GoogleCloudStorageOutputTestBase(testutil.CloudStorageTestBase):
   """Base class for running output tests with Google Cloud Storage.

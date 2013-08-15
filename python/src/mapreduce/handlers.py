@@ -1272,6 +1272,13 @@ class KickOffJobHandler(base_handler.TaskQueueHandler):
       shard_state.shard_description = str(input_reader)
       shard_states.append(shard_state)
 
+    # Create output writers.
+    writer_class = spec.mapper.output_writer_class()
+    writers = [None] * len(readers)
+    if writer_class:
+      for shard_number, shard_state in enumerate(shard_states):
+        writers[shard_number] = writer_class.create(mr_state, shard_state)
+
     # Retrieves already existing shard states.
     existing_shard_states = db.get(shard.key() for shard in shard_states)
     existing_shard_keys = set(shard.key() for shard in existing_shard_states
@@ -1282,12 +1289,17 @@ class KickOffJobHandler(base_handler.TaskQueueHandler):
             if shard.key() not in existing_shard_keys),
            config=util.create_datastore_write_config(spec))
 
+    # Temporary moved to before saving shard state to allow the writer to
+    # modify shard state and maintain backwards compatibility
+    # for at least one release
+    # **Start**
     # Create output writers.
-    writer_class = spec.mapper.output_writer_class()
-    writers = [None] * len(readers)
-    if writer_class:
-      for shard_number, shard_state in enumerate(shard_states):
-        writers[shard_number] = writer_class.create(mr_state, shard_state)
+    # writer_class = spec.mapper.output_writer_class()
+    # writers = [None] * len(readers)
+    # if writer_class:
+    #   for shard_number, shard_state in enumerate(shard_states):
+    #     writers[shard_number] = writer_class.create(mr_state, shard_state)
+    # **End**
 
     # Schedule ALL shard tasks.
     # Since each task is named, _add_task will fall back gracefully if a
