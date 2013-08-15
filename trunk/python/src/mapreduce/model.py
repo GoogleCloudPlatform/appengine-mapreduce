@@ -1218,8 +1218,12 @@ class ShardState(db.Model):
     return cls.get_by_key_name(shard_id)
 
   @classmethod
+  @db.non_transactional
   def find_by_mapreduce_state(cls, mapreduce_state):
     """Find all shard states for given mapreduce.
+
+    Never runs within a transaction since it may touch >5 entity groups (one
+    for each shard).
 
     Args:
       mapreduce_state: MapreduceState instance
