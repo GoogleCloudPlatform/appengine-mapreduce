@@ -17,6 +17,7 @@ import com.google.common.collect.ImmutableList;
 import java.io.Serializable;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.logging.Logger;
 
 /**
@@ -108,38 +109,36 @@ class ShardedJobRunner<T extends IncrementalTask<T, R>, R extends Serializable> 
     return IncrementalTaskState.Serializer.<T, R>fromEntity(entity);
   }
 
-  private List<IncrementalTaskState<T, R>> lookupTasks(ShardedJobState<?, ?> jobState) {
+  private Map<Key, Entity> lookupTasks(ShardedJobState<?, ?> jobState) {
     ImmutableList.Builder<Key> b = ImmutableList.builder();
     for (int i = 0; i < jobState.getTotalTaskCount(); i++) {
      b.add(IncrementalTaskState.Serializer.makeKey(getTaskId(jobState.getJobId(), i)));
     }
     List<Key> keys = b.build();
-    Map<Key, Entity> entities = DATASTORE.get(keys);
-    ImmutableList.Builder<IncrementalTaskState<T, R>> out = ImmutableList.builder();
-    // Iterate over keys rather than entities.entrySet() to ensure ordering.
-    for (Key key : keys) {
-      Entity entity = entities.get(key);
-      Preconditions.checkState(entity != null, "%s: Missing task: %s", this, key);
-      out.add(IncrementalTaskState.Serializer.<T, R>fromEntity(entity));
-    }
-    return out.build();
+    return DATASTORE.get(keys);
   }
 
-  private int countActiveTasks(List<IncrementalTaskState<T, R>> taskStates) {
+  private int countActiveTasks(ShardedJobState<?, ?> jobState) {
     int count = 0;
-    for (IncrementalTaskState<?, ?> taskState : taskStates) {
-      if (taskState.getNextTask() != null) {
+    Map<Key, Entity> tasks = lookupTasks(jobState);
+    for (Entry<Key, Entity> entry : tasks.entrySet()) {
+      Entity entity = entry.getValue();
+      Preconditions.checkState(entity != null, "%s: Missing task: %s", this, entry.getKey());
+      if (IncrementalTaskState.Serializer.hasNextTask(entity)) {
         count++;
       }
     }
     return count;
   }
 
-  private R aggregateState(ShardedJobController<T, R> controller,
-      List<IncrementalTaskState<T, R>> taskStates) {
+  private R aggregateState(ShardedJobController<T, R> controller, ShardedJobState<?, ?> jobState) {
     ImmutableList.Builder<R> results = ImmutableList.builder();
-    for (IncrementalTaskState<T, R> taskState : taskStates) {
-      results.add(taskState.getPartialResult());
+    Map<Key, Entity> tasks = lookupTasks(jobState);
+    for (Entry<Key, Entity> entry : tasks.entrySet()) {
+      Entity entity = entry.getValue();
+      Preconditions.checkState(entity != null, "%s: Missing task: %s", this, entry.getKey());
+      IncrementalTaskState<T, R> state = IncrementalTaskState.Serializer.<T, R>fromEntity(entity);
+      results.add(state.getPartialResult());
     }
     return controller.combineResults(results.build());
   }
@@ -196,14 +195,13 @@ class ShardedJobRunner<T extends IncrementalTask<T, R>, R extends Serializable> 
 
     long currentPollTimeMillis = System.currentTimeMillis();
 
-    List<IncrementalTaskState<T, R>> taskStates = lookupTasks(jobState);
-    int activeTasks = countActiveTasks(taskStates);
+    int activeTasks = countActiveTasks(jobState);
 
     jobState.setMostRecentUpdateTimeMillis(currentPollTimeMillis);
     jobState.setActiveTaskCount(activeTasks);
     if (activeTasks == 0) {
       jobState.setStatus(Status.DONE);
-      R aggregateResult = aggregateState(jobState.getController(), taskStates);
+      R aggregateResult = aggregateState(jobState.getController(), jobState);
       jobState.getController().completed(aggregateResult);
     } else {
       jobState.setNextSequenceNumber(sequenceNumber + 1);
@@ -427,8 +425,7 @@ class ShardedJobRunner<T extends IncrementalTask<T, R>, R extends Serializable> 
     // in one entity.  The stored value is always null.
     Preconditions.checkState(jobState.getAggregateResult() == null,
         "%s: Non-null aggregate result: %s", jobState, jobState.getAggregateResult());
-    List<IncrementalTaskState<T, R>> taskStates = lookupTasks(jobState);
-    R aggregateResult = aggregateState(jobState.getController(), taskStates);
+    R aggregateResult = aggregateState(jobState.getController(), jobState);
     jobState.setAggregateResult(aggregateResult);
     return jobState;
   }
