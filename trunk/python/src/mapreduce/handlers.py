@@ -1134,6 +1134,8 @@ class KickOffJobHandler(base_handler.TaskQueueHandler):
     """Handles kick off request."""
     # Get and verify mr state.
     mr_id = self.request.get("mapreduce_id")
+    # Log the mr_id since this is started in an unnamed task
+    logging.info("Processing kickoff for job %s", mr_id)
     state = model.MapreduceState.get_by_job_id(mr_id)
     if not self._check_mr_state(state, mr_id):
       return
