@@ -106,7 +106,8 @@ class HugeTask(object):
                name=None,
                eta=None,
                countdown=None,
-               parent=None):
+               parent=None,
+               headers=None):
     """Init.
 
     Args:
@@ -116,6 +117,7 @@ class HugeTask(object):
       eta: task eta.
       countdown: task countdown.
       parent: parent entity of huge task's payload.
+      headers: a dict of headers for the task.
 
     Raises:
       ValueError: when payload is too big even for datastore, or parent is
@@ -129,6 +131,8 @@ class HugeTask(object):
         "Content-Type": "application/octet-stream",
         self.PAYLOAD_VERSION_HEADER: self.PAYLOAD_VERSION
     }
+    if headers:
+      self._headers.update(headers)
 
     # TODO(user): Find a more space efficient way than urlencoding.
     payload_str = urllib.urlencode(params)

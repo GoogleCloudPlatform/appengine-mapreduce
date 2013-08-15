@@ -52,6 +52,8 @@ from mapreduce.lib import simplejson
 import status_ui
 import util as mr_util
 
+# pylint: disable=g-bad-name
+# pylint: disable=protected-access
 
 # For convenience
 _PipelineRecord = models._PipelineRecord
@@ -74,6 +76,7 @@ _StatusRecord = models._StatusRecord
 #   barriers will fire but do nothing because the Pipeline is not ready.
 
 ################################################################################
+
 
 class Error(Exception):
   """Base class for exceptions in this module."""
@@ -143,6 +146,7 @@ _MAX_JSON_SIZE = 900000
 _ENFORCE_AUTH = True
 
 ################################################################################
+
 
 class Slot(object):
   """An output that is filled by a Pipeline as it executes."""
@@ -430,6 +434,9 @@ class Pipeline(object):
     self._context = None
     self._result_status = None
     self._set_class_path()
+    # Introspectively set the target so pipelines stick to the version it
+    # started.
+    self.target = mr_util._get_task_target()
 
     if _TEST_MODE:
       self._context = _PipelineContext('', 'default', '')
@@ -1294,18 +1301,18 @@ def _generate_args(pipeline, future, queue_name, base_path):
         None if the params data size was small enough to fit in the entity.
   """
   params = {
-    'args': [],
-    'kwargs': {},
-    'after_all': [],
-    'output_slots': {},
-    'class_path': pipeline._class_path,
-    'queue_name': queue_name,
-    'base_path': base_path,
-    'backoff_seconds': pipeline.backoff_seconds,
-    'backoff_factor': pipeline.backoff_factor,
-    'max_attempts': pipeline.max_attempts,
-    'task_retry': pipeline.task_retry,
-    'target': pipeline.target,
+      'args': [],
+      'kwargs': {},
+      'after_all': [],
+      'output_slots': {},
+      'class_path': pipeline._class_path,
+      'queue_name': queue_name,
+      'base_path': base_path,
+      'backoff_seconds': pipeline.backoff_seconds,
+      'backoff_factor': pipeline.backoff_factor,
+      'max_attempts': pipeline.max_attempts,
+      'task_retry': pipeline.task_retry,
+      'target': pipeline.target,
   }
   dependent_slots = set()
 
@@ -2344,7 +2351,7 @@ class _PipelineContext(object):
             pipeline_key.name())
         raise db.Rollback()
       if pipeline_record.status not in (
-             _PipelineRecord.WAITING, _PipelineRecord.RUN):
+          _PipelineRecord.WAITING, _PipelineRecord.RUN):
         logging.warning(
             'Tried to mark pipeline ID "%s" as complete, found bad state: %s',
             pipeline_key.name(), pipeline_record.status)
@@ -2373,14 +2380,15 @@ class _PipelineContext(object):
             pipeline_key.name())
         raise db.Rollback()
       if pipeline_record.status not in (
-             _PipelineRecord.WAITING, _PipelineRecord.RUN):
+          _PipelineRecord.WAITING, _PipelineRecord.RUN):
         logging.warning(
             'Tried to retry pipeline ID "%s", found bad state: %s',
             pipeline_key.name(), pipeline_record.status)
         raise db.Rollback()
 
       params = pipeline_record.params
-      offset_seconds = (params['backoff_seconds'] *
+      offset_seconds = (
+          params['backoff_seconds'] *
           (params['backoff_factor'] ** pipeline_record.current_attempt))
       pipeline_record.next_retry_time = (
           self._gettime() + datetime.timedelta(seconds=offset_seconds))
@@ -2391,7 +2399,7 @@ class _PipelineContext(object):
       if pipeline_record.current_attempt >= pipeline_record.max_attempts:
         root_pipeline_key = (
             _PipelineRecord.root_pipeline.get_value_for_datastore(
-            pipeline_record))
+                pipeline_record))
         logging.warning(
             'Giving up on pipeline ID "%s" after %d attempt(s); causing abort '
             'all the way to the root pipeline ID "%s"', pipeline_key.name(),
@@ -2434,7 +2442,7 @@ class _PipelineContext(object):
             pipeline_key.name())
         raise db.Rollback()
       if pipeline_record.status not in (
-             _PipelineRecord.WAITING, _PipelineRecord.RUN):
+          _PipelineRecord.WAITING, _PipelineRecord.RUN):
         logging.warning(
             'Tried to abort pipeline ID "%s", found bad state: %s',
             pipeline_key.name(), pipeline_record.status)
@@ -2447,6 +2455,7 @@ class _PipelineContext(object):
     db.run_in_transaction(txn)
 
 ################################################################################
+
 
 class _BarrierHandler(webapp.RequestHandler):
   """Request handler for triggering barriers."""
@@ -2860,8 +2869,8 @@ def _get_internal_slot(slot_key=None,
     output['status'] = 'filled'
     output['fillTimeMs'] = _get_timestamp_ms(slot_record.fill_time)
     output['value'] = slot_record.value
-    filler_pipeline_key = \
-        _SlotRecord.filler.get_value_for_datastore(slot_record)
+    filler_pipeline_key = (
+        _SlotRecord.filler.get_value_for_datastore(slot_record))
   else:
     output['status'] = 'waiting'
 
