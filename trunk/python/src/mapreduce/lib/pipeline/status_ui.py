@@ -18,6 +18,7 @@
 
 import logging
 import os
+import pkgutil
 import traceback
 
 from google.appengine.api import users
@@ -88,7 +89,11 @@ class _StatusUiHandler(webapp.RequestHandler):
     if not pipeline._DEBUG:
       self.response.headers["Cache-Control"] = "public, max-age=300"
     self.response.headers["Content-Type"] = content_type
-    self.response.out.write(open(path, 'rb').read())
+    try:
+      data = pkgutil.get_data(__name__, relative_path)
+    except AttributeError:  # Python < 2.6.
+      data = None
+    self.response.out.write(data or open(path, 'rb').read())
 
 
 class _BaseRpcHandler(webapp.RequestHandler):
