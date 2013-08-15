@@ -36,6 +36,7 @@ from google.appengine.ext import ndb
 from google.appengine import runtime
 from google.appengine.api import datastore_errors
 from google.appengine.api import logservice
+from google.appengine.api import modules
 from google.appengine.api import taskqueue
 from google.appengine.ext import db
 from mapreduce import base_handler
@@ -47,16 +48,6 @@ from mapreduce import operation
 from mapreduce import parameters
 from mapreduce import util
 from google.appengine.runtime import apiproxy_errors
-
-
-# TODO(user): Remove once the Modules API is live in production.
-using_modules = True
-try:
-  from google.appengine.api import modules
-except ImportError:
-  # The GAE runtime still has the Servers API, use that instead.
-  using_modules = False
-  from google.appengine.api import servers
 
 
 # TODO(user): find a proper value for this.
@@ -256,21 +247,11 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
     assert shard_state.slice_start_time is not None
     assert shard_state.slice_request_id is not None
     request_ids = [shard_state.slice_request_id]
-    try:
-      logs = list(logservice.fetch(request_ids=request_ids))
-    except logservice.InvalidArgumentError:
-      # TODO(user): Remove after the bug/8173230 is fixed.
-      global using_modules
-      if using_modules:
-        logs = list(logservice.fetch(
-            request_ids=request_ids,
-            module_versions=[(modules.get_current_module_name(),
-                              modules.get_current_version_name())]))
-      else:
-        logs = list(logservice.fetch(
-            request_ids=request_ids,
-            server_versions=[(servers.get_current_server_name(),
-                              servers.get_current_version_name())]))
+    logs = list(logservice.fetch(
+        request_ids=request_ids,
+        # TODO(user): Remove after b/8173230 is fixed.
+        module_versions=[(os.environ["CURRENT_MODULE_ID"],
+                          modules.get_current_version_name())]))
 
     if not logs or not logs[0].finished:
       return False
