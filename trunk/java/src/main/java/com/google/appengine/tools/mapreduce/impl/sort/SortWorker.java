@@ -4,6 +4,7 @@ import com.google.appengine.tools.mapreduce.KeyValue;
 import com.google.appengine.tools.mapreduce.Worker;
 import com.google.appengine.tools.mapreduce.impl.MapReduceConstants;
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Stopwatch;
 import com.google.common.collect.ImmutableList;
 
 import it.unimi.dsi.fastutil.Arrays;
@@ -14,6 +15,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
 
 /**
@@ -49,17 +51,19 @@ public class SortWorker extends Worker<SortContext> {
   private transient LexicographicalComparator comparator;
 
   private final class IndexedComparator implements IntComparator {
-    private LexicographicalComparator comp;
-
-    public IndexedComparator(LexicographicalComparator comp) {
-      this.comp = comp;
-    }
 
     @Override
     public int compare(int a, int b) {
-      ByteBuffer aKey = getKeyFromPointer(a);
-      ByteBuffer bKey = getKeyFromPointer(b);
-      return comp.compare(aKey, bKey);
+      int origionalLimit = memoryBuffer.limit();
+      memoryBuffer.limit(memoryBuffer.capacity());
+      int pointerOffset = computePointerOffset(a);
+      int aPos = memoryBuffer.getInt(pointerOffset);
+      int aLen = memoryBuffer.getInt(pointerOffset + 4) - aPos;
+      pointerOffset = computePointerOffset(b);
+      int bPos = memoryBuffer.getInt(pointerOffset);
+      int bLen = memoryBuffer.getInt(pointerOffset + 4) - bPos;
+      memoryBuffer.limit(origionalLimit);
+      return LexicographicalComparator.compare(memoryBuffer, aPos, aLen, memoryBuffer, bPos, bLen);
     }
 
     @Override
@@ -88,13 +92,23 @@ public class SortWorker extends Worker<SortContext> {
 
   @Override
   public void endSlice() {
+    Stopwatch stopwatch = Stopwatch.createStarted();
     sortData();
+    log.info(
+        "Sorted " + valuesHeld + " items in " + stopwatch.elapsed(TimeUnit.MILLISECONDS) + "ms");
     try {
+      stopwatch.reset().start();
       writeOutData();
+      log.info("Wrote " + getStoredSize() + " bytes of data in "
+          + stopwatch.elapsed(TimeUnit.MILLISECONDS) + "ms");
     } catch (IOException e) {
       throw new RuntimeException(e);
     }
     memoryBuffer = null;
+  }
+
+  private int getStoredSize() {
+    return memoryBuffer.position();
   }
 
   /**
@@ -102,7 +116,7 @@ public class SortWorker extends Worker<SortContext> {
    * keys.
    */
   private void sortData() {
-    Arrays.quickSort(0, valuesHeld, new IndexedComparator(comparator), new IndexedSwapper());
+    Arrays.quickSort(0, valuesHeld, new IndexedComparator(), new IndexedSwapper());
   }
 
   /**
@@ -169,7 +183,7 @@ public class SortWorker extends Worker<SortContext> {
       }
     }
     if (values.size() > 0) {
-      localContext.emit(key.slice(), new ArrayList<ByteBuffer>(values));
+      localContext.emit(key, new ArrayList<ByteBuffer>(values));
       values.clear();
     }
   }
@@ -201,10 +215,13 @@ public class SortWorker extends Worker<SortContext> {
   /**
    * Get a key given the index of its pointer.
    */
-  ByteBuffer getKeyFromPointer(int index) {
-    ByteBuffer pointer = readPointer(index);
-    int keyPos = pointer.getInt();
-    int valuePos = pointer.getInt();
+  final ByteBuffer getKeyFromPointer(int index) {
+    int origionalLimit = memoryBuffer.limit();
+    memoryBuffer.limit(memoryBuffer.capacity());
+    int pointerOffset = computePointerOffset(index);
+    int keyPos =  memoryBuffer.getInt(pointerOffset);
+    int valuePos =  memoryBuffer.getInt(pointerOffset + 4);
+    memoryBuffer.limit(origionalLimit);
     assert valuePos >= keyPos;
     ByteBuffer key = sliceOutRange(keyPos, valuePos);
     return key;
@@ -213,11 +230,14 @@ public class SortWorker extends Worker<SortContext> {
   /**
    * Get a key and its value given the index of its pointer.
    */
-  KeyValue<ByteBuffer, ByteBuffer> getKeyValueFromPointer(int index) {
-    ByteBuffer pointer = readPointer(index);
-    int keyPos = pointer.getInt();
-    int valuePos = pointer.getInt();
-    int valueLength = pointer.getInt();
+  final KeyValue<ByteBuffer, ByteBuffer> getKeyValueFromPointer(int index) {
+    int origionalLimit = memoryBuffer.limit();
+    memoryBuffer.limit(memoryBuffer.capacity());
+    int pointerOffset = computePointerOffset(index);
+    int keyPos =  memoryBuffer.getInt(pointerOffset);
+    int valuePos =  memoryBuffer.getInt(pointerOffset + 4);
+    int valueLength = memoryBuffer.getInt(pointerOffset + 8);
+    memoryBuffer.limit(origionalLimit);
     assert valuePos >= keyPos;
     ByteBuffer key = sliceOutRange(keyPos, valuePos);
     ByteBuffer value = sliceOutRange(valuePos, valuePos + valueLength);
@@ -243,10 +263,11 @@ public class SortWorker extends Worker<SortContext> {
   /**
    * Place the pointer at indexA in indexB and vice versa.
    */
-  void swapPointers(int indexA, int indexB) {
+  final void swapPointers(int indexA, int indexB) {
     assert indexA >= 0 && indexA < valuesHeld;
     assert indexB >= 0 && indexB < valuesHeld;
-    ByteBuffer a = readPointer(indexA);
+
+    ByteBuffer a = copyPointer(indexA);
     ByteBuffer b = readPointer(indexB);
     writePointer(indexA, b);
     writePointer(indexB, a);
@@ -260,7 +281,7 @@ public class SortWorker extends Worker<SortContext> {
   private void writePointer(int index, ByteBuffer pointer) {
     int limit = memoryBuffer.limit();
     int pos = memoryBuffer.position();
-    int pointerOffset = memoryBuffer.capacity() - (index + 1) * POINTER_SIZE_BYTES;
+    int pointerOffset = computePointerOffset(index);
     memoryBuffer.limit(pointerOffset + POINTER_SIZE_BYTES);
     memoryBuffer.position(pointerOffset);
     memoryBuffer.put(pointer);
@@ -269,15 +290,28 @@ public class SortWorker extends Worker<SortContext> {
   }
 
   /**
+   * Given an index for a pointer returns it's offset in memoryBuffer
+   */
+  private final int computePointerOffset(int index) {
+    return memoryBuffer.capacity() - (index + 1) * POINTER_SIZE_BYTES;
+  }
+
+  /**
    * Read a pointer from the specified index.
    */
-  ByteBuffer readPointer(int index) {
-    int pointerOffset = memoryBuffer.capacity() - (index + 1) * POINTER_SIZE_BYTES;
-    ByteBuffer pointer = sliceOutRange(pointerOffset, pointerOffset + POINTER_SIZE_BYTES);
+  final ByteBuffer readPointer(int index) {
+    int pointerOffset = computePointerOffset(index);
+    return sliceOutRange(pointerOffset, pointerOffset + POINTER_SIZE_BYTES);
+  }
+
+  /**
+   * Get a Copy of a pointer
+   */
+  final ByteBuffer copyPointer(int index) {
+    ByteBuffer pointer = readPointer(index);
     // Making a copy for so that someone can modify the underlying impl
     ByteBuffer result = ByteBuffer.allocate(pointer.capacity());
     result.put(pointer);
-    pointer.rewind();
     result.flip();
     return result;
   }
@@ -285,7 +319,7 @@ public class SortWorker extends Worker<SortContext> {
   /**
    * Add a pointer to the key value pair with the provided parameters.
    */
-  void addPointer(int keyPos, int keySize, int valuePos, int valueSize) {
+  final void addPointer(int keyPos, int keySize, int valuePos, int valueSize) {
     assert keyPos + keySize == valuePos;
     int start = memoryBuffer.limit() - POINTER_SIZE_BYTES;
     memoryBuffer.putInt(start, keyPos);
