@@ -143,7 +143,7 @@ class TestOutputWriter(output_writers.OutputWriter):
   def from_json(cls, json_dict):
     return cls(json_dict["filename"])
 
-  def write(self, data, ctx):
+  def write(self, data):
     self.file_contents[self.filename].append(data)
 
   def finalize(self, ctx, shard_number):

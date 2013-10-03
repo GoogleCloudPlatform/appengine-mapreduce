@@ -343,7 +343,8 @@ class TestOutputWriter(output_writers.OutputWriter):
   def from_json(cls, json_dict):
     return cls()
 
-  def write(self, data, ctx):
+  def write(self, data):
+    ctx = context.get()
     assert isinstance(ctx, context.Context)
     self.events.append("write-" + str(data))
 
@@ -1164,6 +1165,9 @@ class MapperWorkerCallbackHandlerLeaseTest(testutil.HandlerTestBase):
     self.shard_state = None
     self._init_shard()
 
+    self.mr_state = None
+    self._init_mr_state()
+
     self._original_duration = parameters._SLICE_DURATION_SEC
     # Make sure handler can process at most one entity and thus
     # shard will still be in active state after one call.
@@ -1193,6 +1197,11 @@ class MapperWorkerCallbackHandlerLeaseTest(testutil.HandlerTestBase):
     self.shard_state.slice_id = self.CURRENT_SLICE_ID
     self.shard_state.put()
     self.shard_id = self.shard_state.shard_id
+
+  def _init_mr_state(self):
+    self.mr_state = model.MapreduceState.create_new(mapreduce_id="mapreduce_id")
+    self.mr_state.mapreduce_spec = self.mr_spec
+    self.mr_state.put()
 
   def _create_handler(self, slice_id=CURRENT_SLICE_ID):
     """Create a handler instance with payload for a particular slice."""
@@ -1316,7 +1325,8 @@ class MapperWorkerCallbackHandlerLeaseTest(testutil.HandlerTestBase):
     self.assertEqual(httplib.SERVICE_UNAVAILABLE, handler.response.status)
 
   def testRequestHasTimedOut(self):
-    self.shard_state.slice_start_time = datetime.datetime(2000, 1, 1)
+    slice_start_time = datetime.datetime(2000, 1, 1)
+    self.shard_state.slice_start_time = slice_start_time
     self.shard_state.slice_request_id = self.PREVIOUS_REQUEST_ID
     self.shard_state.put()
     handler, tstate = self._create_handler()
@@ -1338,8 +1348,7 @@ class MapperWorkerCallbackHandlerLeaseTest(testutil.HandlerTestBase):
     self.assertTrue(shard_state.active)
     self.assertEqual(self.CURRENT_SLICE_ID, shard_state.slice_id)
     self.assertEqual(self.CURRENT_REQUEST_ID, shard_state.slice_request_id)
-    self.assertTrue(shard_state.slice_start_time >
-                    self.shard_state.slice_start_time)
+    self.assertTrue(shard_state.slice_start_time > slice_start_time)
 
   def testContentionWhenAcquireLease(self):
     # Shard has moved on AFTER we got shard state.
@@ -1356,7 +1365,8 @@ class MapperWorkerCallbackHandlerLeaseTest(testutil.HandlerTestBase):
 
   def testAcquireLeaseSuccess(self):
     # lease acquired a long time ago.
-    self.shard_state.slice_start_time = datetime.datetime(2000, 1, 1)
+    slice_start_time = datetime.datetime(2000, 1, 1)
+    self.shard_state.slice_start_time = slice_start_time
     self.shard_state.slice_request_id = self.PREVIOUS_REQUEST_ID
     self.shard_state.put()
     handler, tstate = self._create_handler()
@@ -1371,8 +1381,8 @@ class MapperWorkerCallbackHandlerLeaseTest(testutil.HandlerTestBase):
     self.assertTrue(shard_state.active)
     self.assertEqual(self.CURRENT_SLICE_ID, shard_state.slice_id)
     self.assertEqual(self.CURRENT_REQUEST_ID, shard_state.slice_request_id)
-    self.assertTrue(shard_state.slice_start_time >
-                    self.shard_state.slice_start_time)
+    self.assertTrue(shard_state.slice_start_time > slice_start_time)
+    self.assertEqual(shard_state, self.shard_state)
 
   def testLeaseFreedOnSuccess(self):
     self.shard_state.slice_start_time = datetime.datetime(2000, 1, 1)
@@ -1919,8 +1929,6 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
 
     # Record calls
     context.Context._set(mox.IsA(context.Context))
-    # Context should not be flushed on error
-    context.Context._set(None)
 
     m.ReplayAll()
     try: # test, verify
@@ -1954,8 +1962,6 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
 
     # Record calls
     context.Context._set(mox.IsA(context.Context))
-    # Context should not be flushed on error
-    context.Context._set(None)
 
     m.ReplayAll()
     try: # test, verify
@@ -1988,7 +1994,6 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
     m.StubOutWithMock(context.Context, "_set", use_mock_anything=True)
 
     context.Context._set(MatchesContext(task_retry_count=5))
-    context.Context._set(None)
 
     m.ReplayAll()
     try: # test, verify
@@ -2009,7 +2014,6 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
     # Record calls
     context.Context._set(mox.IsA(context.Context))
     context.Context.flush()
-    context.Context._set(None)
 
     m.ReplayAll()
     try: # test, verify

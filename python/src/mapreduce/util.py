@@ -39,6 +39,8 @@ import os
 import pickle
 import types
 
+from google.appengine.ext import ndb
+
 from google.appengine.datastore import datastore_rpc
 from mapreduce import parameters
 
@@ -334,3 +336,16 @@ def create_datastore_write_config(mapreduce_spec):
   else:
     # dev server doesn't support force_writes.
     return datastore_rpc.Configuration()
+
+
+def _set_ndb_cache_policy():
+  """Tell NDB to never cache anything in memcache or in-process.
+
+  This ensures that entities fetched from Datastore input_readers via NDB
+  will not bloat up the request memory size and Datastore Puts will avoid
+  doing calls to memcache. Without this you get soft memory limit exits,
+  which hurts overall throughput.
+  """
+  ndb_ctx = ndb.get_context()
+  ndb_ctx.set_cache_policy(lambda key: False)
+  ndb_ctx.set_memcache_policy(lambda key: False)
