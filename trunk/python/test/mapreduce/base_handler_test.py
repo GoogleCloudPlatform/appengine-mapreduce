@@ -28,6 +28,15 @@ from mapreduce import status
 from mapreduce import util
 from google.appengine.ext.webapp import mock_webapp
 
+
+# pylint: disable=g-import-not-at-top
+# TODO(user): Cleanup imports if/when cloudstorage becomes part of runtime.
+try:
+  from cloudstorage import api_utils
+  enable_cloudstorage_tests = True
+except ImportError:
+  enable_cloudstorage_tests = False
+
 # pylint: disable=g-bad-name
 
 
@@ -63,6 +72,11 @@ class TaskQueueHandlerTest(unittest.TestCase):
   def init(self):
     self.handler.initialize(self.request,
                             mock_webapp.MockResponse())
+
+  def testDefaultRetryParams(self):
+    if not enable_cloudstorage_tests:
+      return
+    self.assertTrue(api_utils._get_default_retry_params().save_access_token)
 
   def testPostNoTaskQueueHeader(self):
     """Test calling post() without valid taskqueue header."""

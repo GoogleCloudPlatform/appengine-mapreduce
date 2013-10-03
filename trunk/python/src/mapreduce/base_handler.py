@@ -20,16 +20,22 @@
 
 # pylint: disable=protected-access
 # pylint: disable=g-bad-name
+# pylint: disable=g-import-not-at-top
 
 import httplib
 import logging
 from mapreduce.lib import simplejson
 
-# pylint: disable=g-import-not-at-top
+
 try:
   from mapreduce import pipeline_base
 except ImportError:
   pipeline_base = None
+try:
+  import cloudstorage
+except ImportError:
+  cloudstorage = None
+
 from google.appengine.ext import webapp
 from mapreduce import errors
 from mapreduce import model
@@ -75,6 +81,9 @@ class TaskQueueHandler(BaseHandler):
     # it needs to be set before calling super's __init__.
     self._preprocess_success = False
     super(TaskQueueHandler, self).__init__(*args, **kwargs)
+    if cloudstorage:
+      cloudstorage.set_default_retry_params(
+          cloudstorage.RetryParams(save_access_token=True))
 
   def initialize(self, request, response):
     """Initialize.
