@@ -66,12 +66,13 @@ public class MapReduceSettings implements Serializable {
     return this;
   }
 
-  public String getBucketName() {
+  /*Nullable*/ public String getBucketName() {
     return bucketName;
   }
-  
-  public void setBucketName(String bucketName) {
+
+  public MapReduceSettings setBucketName(/*Nullable*/ String bucketName) {
     this.bucketName = bucketName;
+    return this;
   }
 
   public int getMillisPerSlice() {
