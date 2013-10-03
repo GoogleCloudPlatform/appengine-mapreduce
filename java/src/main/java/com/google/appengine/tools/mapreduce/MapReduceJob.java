@@ -23,6 +23,7 @@ import com.google.appengine.tools.mapreduce.impl.GoogleCloudStorageReduceInput;
 import com.google.appengine.tools.mapreduce.impl.GoogleCloudStorageSortInput;
 import com.google.appengine.tools.mapreduce.impl.GoogleCloudStorageSortOutput;
 import com.google.appengine.tools.mapreduce.impl.HashingSharder;
+import com.google.appengine.tools.mapreduce.impl.MapReduceConstants;
 import com.google.appengine.tools.mapreduce.impl.MapReduceResultImpl;
 import com.google.appengine.tools.mapreduce.impl.MapShardTask;
 import com.google.appengine.tools.mapreduce.impl.ReduceShardTask;
@@ -508,7 +509,8 @@ public class MapReduceJob<I, K, V, O, R>
    */
   private static class CleanupFilesJob extends Job1<Void, GoogleCloudStorageFileSet> {
     private static final long serialVersionUID = 1386781994496334846L;
-    private static final GcsService gcs = GcsServiceFactory.createGcsService();
+    private static final GcsService gcs =
+        GcsServiceFactory.createGcsService(MapReduceConstants.GCS_RETRY_PARAMETERS);
     private final String mrJobId;
 
     private CleanupFilesJob(String mrJobId) {
