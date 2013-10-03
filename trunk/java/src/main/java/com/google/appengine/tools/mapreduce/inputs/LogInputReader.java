@@ -22,7 +22,7 @@ public class LogInputReader extends InputReader<RequestLogs> implements Serializ
   private static final Logger log = Logger.getLogger(LogInputReader.class.getName());
 
   @VisibleForTesting
-  protected LogQuery shardLogQuery;
+  protected final LogQuery shardLogQuery;
   private transient RequestLogs lastLog;
   private String lastOffset; // Used to restart log iterator in the correct location on new slice
   private transient Iterator<RequestLogs> logIterator;
@@ -38,8 +38,12 @@ public class LogInputReader extends InputReader<RequestLogs> implements Serializ
         "EndTime must be later than StartTime (%d>%d)", shardLogQuery.getEndTimeUsec(),
         shardLogQuery.getStartTimeUsec());
     this.shardLogQuery = shardLogQuery;
-    this.lastOffset = null;
-    this.lastLog = null;
+  }
+  
+  @Override
+  public void open() {
+    lastOffset = null;
+    lastLog = null;
   }
 
   /**

@@ -102,6 +102,7 @@ public class GoogleCloudStorageLevelDbInputReaderTest extends TestCase {
     writeData(filename, new ByteBufferGenerator(100));
     GoogleCloudStorageLevelDbInputReader reader =
         new GoogleCloudStorageLevelDbInputReader(filename, BLOCK_SIZE * 2);
+    reader.open();
     ByteBufferGenerator expected = new ByteBufferGenerator(100);
     reader.beginSlice();
     while (expected.hasNext()) {
@@ -116,6 +117,7 @@ public class GoogleCloudStorageLevelDbInputReaderTest extends TestCase {
     writeData(filename, new ByteBufferGenerator(100));
     GoogleCloudStorageLevelDbInputReader reader =
         new GoogleCloudStorageLevelDbInputReader(filename, BLOCK_SIZE * 2);
+    reader.open();
     ByteBufferGenerator expected = new ByteBufferGenerator(100);
     while (expected.hasNext()) {
       reader = reconstruct(reader);

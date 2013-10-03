@@ -35,6 +35,26 @@ import java.util.NoSuchElementException;
  *
  */
 public class LineInputReaderTest extends TestCase {
+
+  private static class TestLineInputReader extends LineInputStream {
+
+    private boolean skipFirstTerminator;
+
+    TestLineInputReader(InputStream input, long length, boolean skipFirstTerminator,
+        byte separator) {
+      super(new CountingInputStream(input), length, separator);
+      this.skipFirstTerminator = skipFirstTerminator;
+    }
+
+    @Override
+    public byte[] next() {
+      if (getBytesCount() == 0 && skipFirstTerminator) {
+        super.next();
+      }
+      return super.next();
+    }
+  }
+
 // ------------------------------ FIELDS ------------------------------
 
   InputStream input;
@@ -129,8 +149,8 @@ public class LineInputReaderTest extends TestCase {
     CountingInputStream countingInputStream =
         new CountingInputStream(new ExceptionThrowingInputStream(
             new BufferedInputStream(new NonResetableByteArrayInputStream(content)), 11));
-    LineInputReader iterator =
-        new LineInputReader(countingInputStream, content.length, false, (byte) 0);
+    LineInputStream iterator =
+        new TestLineInputReader(countingInputStream, content.length, false, (byte) 0);
 
     byte[] next = iterator.next();
     assertNotNull(next);
@@ -150,8 +170,8 @@ public class LineInputReaderTest extends TestCase {
       int expectedIndexEnd) throws IOException {
     input.skip(start);
     CountingInputStream countingInputStream = new CountingInputStream(input);
-    LineInputReader iterator =
-        new LineInputReader(countingInputStream, end - start, skipFirstTerminator, (byte) -1);
+    LineInputStream iterator =
+        new TestLineInputReader(countingInputStream, end - start, skipFirstTerminator, (byte) -1);
     int totalCount = 0;
     try {
       while (true) {

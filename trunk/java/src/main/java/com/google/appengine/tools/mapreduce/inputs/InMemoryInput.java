@@ -46,6 +46,11 @@ public class InMemoryInput<I> extends Input<I> {
       return ((double) pos) / results.size();
     }
 
+    @Override
+    public void open() throws IOException {
+      pos = 0;
+    }
+
   }
 
   public InMemoryInput(List<List<I>> input) {

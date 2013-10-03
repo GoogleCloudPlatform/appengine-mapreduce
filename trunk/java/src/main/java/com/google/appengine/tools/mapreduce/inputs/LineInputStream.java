@@ -16,6 +16,9 @@
 
 package com.google.appengine.tools.mapreduce.inputs;
 
+import com.google.apphosting.api.AppEngineInternal;
+import com.google.common.io.CountingInputStream;
+
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -28,57 +31,56 @@ import java.util.logging.Logger;
  * A reader to return one line at a time from an underlying input stream.
  *
  */
-class LineInputReader extends StreamInputReader<byte[]> {
+@AppEngineInternal
+class LineInputStream {
 
-  private static final long serialVersionUID = -1047037533107945060L;
-  private static final Logger log = Logger.getLogger(LineInputReader.class.getName());
+  private static final Logger log = Logger.getLogger(LineInputStream.class.getName());
   private static final int INITIAL_BUFFER_SIZE = 10000;
 
-  private final boolean skipFirstTerminator;
-  private final byte separator;
+  private final int separator;
+  private final CountingInputStream in;
+  private final long lengthToRead;
 
-  // Note: length may be a negative value when we are reading beyond the split boundary.
-  LineInputReader(
-      InputStream input, long length, boolean skipFirstTerminator, byte separator) {
-    super(input, length);
-    this.skipFirstTerminator = skipFirstTerminator;
-    this.separator = separator;
+  LineInputStream(InputStream in, long lengthToRead, byte separator) {
+    this.in = new CountingInputStream(in);
+    this.lengthToRead = lengthToRead;
+    this.separator = (separator & 0xff);
   }
 
-  @Override
   public byte[] next() {
     try {
-      if (getBytesRead() == 0 && skipFirstTerminator) {
-        // skip the first record
-        copyUntilNextRecord(null);
-      }
-      // we are reading one record after split-end
-      // and are skipping first record for all splits except for the leading one.
-      // check if we read one byte ahead of the split.
-      if (getBytesRead() - 1 >= length) {
+      // we are reading one record after lengthToRead because the splits are not assumed to be
+      // aligned to separators in the file.
+      long recordStart = in.getCount();
+      if (recordStart - 1 >= lengthToRead) {
         throw new NoSuchElementException();
       }
-      long recordStart = getBytesRead();
       ByteArrayOutputStream tempBuffer = new ByteArrayOutputStream(INITIAL_BUFFER_SIZE);
       copyUntilNextRecord(tempBuffer);
-      return  tempBuffer.toByteArray();
+      return tempBuffer.toByteArray();
     } catch (IOException e) {
       log.log(Level.WARNING, "Failed to read next record", e);
       throw new RuntimeException("Failed to read next record", e);
     }
   }
 
+  public long getBytesCount() {
+    return in.getCount();
+  }
+
   private void copyUntilNextRecord(OutputStream out) throws IOException {
-    int value = read();
+    int value = in.read();
     if (value == -1) {
       throw new NoSuchElementException();
     }
-    while ((value != (separator & 0xff)) && value != -1) {
-      if (out != null) {
-        out.write(value);
-      }
-      value = read();
+    while (value != separator && value != -1) {
+      out.write(value);
+      value = in.read();
     }
+  }
+
+  public void close() throws IOException {
+    in.close();
   }
 
 }

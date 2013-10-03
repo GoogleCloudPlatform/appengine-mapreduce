@@ -13,11 +13,13 @@ import com.google.appengine.tools.mapreduce.Marshaller;
 import com.google.appengine.tools.mapreduce.Marshallers;
 import com.google.appengine.tools.mapreduce.inputs.ConcatenatingInputReader;
 import com.google.appengine.tools.mapreduce.inputs.GoogleCloudStorageLevelDbInputReader;
+import com.google.appengine.tools.mapreduce.inputs.ForwardingInputReader;
 import com.google.appengine.tools.mapreduce.inputs.UnmarshallingInputReader;
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -32,36 +34,30 @@ public class GoogleCloudStorageSortInput extends Input<KeyValue<ByteBuffer, Byte
 
   private List<GoogleCloudStorageFileSet> filenames;
 
-  private static class ReaderCreatorImpl implements
-      ConcatenatingInputReader.ReaderCreator<KeyValue<ByteBuffer, ByteBuffer>> {
+  private static class ReaderImpl extends ForwardingInputReader<KeyValue<ByteBuffer, ByteBuffer>> {
 
-    private static final long serialVersionUID = 2949471237868897860L;
-    private GoogleCloudStorageFileSet filenames;
-    private int index;
+    private static final long serialVersionUID = 3310058647644865812L;
+    private final GcsFilename file;
+    private InputReader<KeyValue<ByteBuffer, ByteBuffer>> reader;
 
-    ReaderCreatorImpl(GoogleCloudStorageFileSet filenames) {
-      this.filenames = Preconditions.checkNotNull(filenames);
-      this.index = -1;
+    private ReaderImpl(GcsFilename file) {
+      this.file = file;
     }
 
     @Override
-    public InputReader<KeyValue<ByteBuffer, ByteBuffer>> createNextReader() {
+    public void open() throws IOException {
       Marshaller<ByteBuffer> identity = Marshallers.getByteBufferMarshaller();
       Marshaller<KeyValue<ByteBuffer, ByteBuffer>> marshaller =
           new KeyValueMarshaller<ByteBuffer, ByteBuffer>(identity, identity);
-      index++;
-      if (index >= filenames.getNumFiles()) {
-        return null;
-      }
-      GcsFilename file = filenames.getFile(index);
       GoogleCloudStorageLevelDbInputReader in = new GoogleCloudStorageLevelDbInputReader(file,
           MapReduceConstants.INPUT_BUFFER_SIZE);
-      return new UnmarshallingInputReader<KeyValue<ByteBuffer, ByteBuffer>>(in, marshaller);
+      reader =  new UnmarshallingInputReader<KeyValue<ByteBuffer, ByteBuffer>>(in, marshaller);
+      reader.open();
     }
 
     @Override
-    public int estimateTotalNumberOfReaders() {
-      return filenames.getNumFiles();
+    protected InputReader<KeyValue<ByteBuffer, ByteBuffer>> getDelegate() {
+      return reader;
     }
   }
 
@@ -74,9 +70,12 @@ public class GoogleCloudStorageSortInput extends Input<KeyValue<ByteBuffer, Byte
     Marshaller<ByteBuffer> idenity = Marshallers.getByteBufferMarshaller();
     ImmutableList.Builder<InputReader<KeyValue<ByteBuffer, ByteBuffer>>> out =
         ImmutableList.builder();
-    for (GoogleCloudStorageFileSet shard : filenames) {
-      out.add(new ConcatenatingInputReader<KeyValue<ByteBuffer, ByteBuffer>>(
-          new ReaderCreatorImpl(shard)));
+    for (GoogleCloudStorageFileSet filesForShard : filenames) {
+      List<ReaderImpl> readersForShard = new ArrayList<ReaderImpl>(filesForShard.getNumFiles());
+      for (GcsFilename file : filesForShard.getAllFiles()) {
+        readersForShard.add(new ReaderImpl(file));
+      }
+      out.add(new ConcatenatingInputReader<KeyValue<ByteBuffer, ByteBuffer>>(readersForShard));
     }
     return out.build();
   }
