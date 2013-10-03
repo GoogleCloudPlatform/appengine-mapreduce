@@ -2551,6 +2551,94 @@ class GoogleCloudStorageInputTestBase(testutil.CloudStorageTestBase):
     test_file.close()
 
 
+class GoogleCloudStorageInputReaderWithDelimiterTest(
+    GoogleCloudStorageInputTestBase):
+  """Tests for GoogleCloudStorageInputReader."""
+
+  READER_CLS = input_readers._GoogleCloudStorageInputReader
+  READER_NAME = input_readers.__name__ + "." + READER_CLS.__name__
+
+  def setUp(self):
+    super(GoogleCloudStorageInputReaderWithDelimiterTest, self).setUp()
+
+    # create some test content
+    self.test_bucket = "testing"
+    self.test_num_files = 20
+    self.test_filenames = []
+    for file_num in range(self.test_num_files):
+      filename = "/%s/file-%03d" % (self.test_bucket, file_num)
+      self.test_filenames.append(filename)
+      self.create_test_file(filename, "foo")
+
+    # Set up more directories for testing.
+    self.file_per_dir = 2
+    self.dirs = 20
+    self.filenames_in_first_10_dirs = []
+    for d in range(self.dirs):
+      for file_num in range(self.file_per_dir):
+        filename = "/%s/dir-%02d/file-%03d" % (self.test_bucket, d, file_num)
+        if d < 10:
+          self.filenames_in_first_10_dirs.append(filename)
+        self.create_test_file(filename, "foo")
+
+  def testValidate_InvalidDelimiter(self):
+    self.assertRaises(
+        errors.BadReaderParamsError,
+        self.READER_CLS.validate,
+        self.create_mapper_spec(input_params={"bucket_name": self.test_bucket,
+                                              "delimiter": 1,
+                                              "objects": ["file"]}))
+
+  def testSerialization(self):
+    # Grab all files in the first 10 directories and all other files.
+    readers = self.READER_CLS.split_input(
+        self.create_mapper_spec(num_shards=1,
+                                input_params={"bucket_name": self.test_bucket,
+                                              "objects": ["dir-0*", "file*"],
+                                              "delimiter": "/"}))
+    self.assertEqual(1, len(readers))
+    reader = readers[0]
+    self.assertEqual(10 + self.test_num_files, len(reader._filenames))
+    result_filenames = []
+    while True:
+      # Read one file and immediately serialize.
+      reader = self.READER_CLS.from_json_str(reader.to_json_str())
+      try:
+        result_filenames.append(reader.next().name)
+      except StopIteration:
+        break
+    self.assertEqual(self.file_per_dir * 10 + self.test_num_files,
+                     len(result_filenames))
+    self.assertEqual(self.filenames_in_first_10_dirs + self.test_filenames,
+                     result_filenames)
+
+  def testSplit(self):
+    # Grab all files in the first 10 directories.
+    readers = self.READER_CLS.split_input(
+        self.create_mapper_spec(num_shards=1,
+                                input_params={"bucket_name": self.test_bucket,
+                                              "objects": ["dir-0*"],
+                                              "delimiter": "/"}))
+    self.assertEqual(1, len(readers))
+    reader = readers[0]
+    self.assertEqual(10, len(reader._filenames))
+    result_filenames = [f.name for f in reader]
+    self.assertEqual(self.file_per_dir * 10, len(result_filenames))
+    self.assertEqual(self.filenames_in_first_10_dirs, result_filenames)
+
+    # Grab all files.
+    readers = self.READER_CLS.split_input(
+        self.create_mapper_spec(num_shards=1,
+                                input_params={"bucket_name": self.test_bucket,
+                                              "objects": ["*"],
+                                              "delimiter": "/"}))
+    self.assertEqual(1, len(readers))
+    reader = readers[0]
+    self.assertEqual(self.dirs + self.test_num_files, len(reader._filenames))
+    self.assertEqual(self.file_per_dir * self.dirs + self.test_num_files,
+                     len([f for f in reader]))
+
+
 class GoogleCloudStorageInputReaderTest(GoogleCloudStorageInputTestBase):
   """Tests for GoogleCloudStorageInputReader."""
 
@@ -2564,11 +2652,13 @@ class GoogleCloudStorageInputReaderTest(GoogleCloudStorageInputTestBase):
     self.test_bucket = "testing"
     self.test_content = []
     self.test_num_files = 20
+    self.test_filenames = []
     for file_num in range(self.test_num_files):
       content = "Dummy Content %03d" % file_num
       self.test_content.append(content)
-      self.create_test_file("/%s/file-%03d" % (self.test_bucket, file_num),
-                            content)
+      filename = "/%s/file-%03d" % (self.test_bucket, file_num)
+      self.test_filenames.append(filename)
+      self.create_test_file(filename, content)
 
   def testValidate_NoParams(self):
     self.assertRaises(
@@ -2713,6 +2803,22 @@ class GoogleCloudStorageInputReaderTest(GoogleCloudStorageInputTestBase):
     self.assertEqual(len(self.test_content), len(found_content))
     for content in self.test_content:
       self.assertTrue(content in found_content)
+
+  def testNextWithMissingFiles(self):
+    readers = self.READER_CLS.split_input(
+        self.create_mapper_spec(num_shards=1,
+                                input_params={"bucket_name": self.test_bucket,
+                                              "objects": ["file-*"]}))
+    self.assertEqual(1, len(readers))
+    # Remove the first and second to last files.
+    cloudstorage.delete(self.test_filenames[0])
+    cloudstorage.delete(self.test_filenames[-2])
+    del self.test_filenames[0]
+    del self.test_filenames[-2]
+
+    reader_files = list(readers[0])
+    self.assertEqual(len(self.test_filenames), len(reader_files))
+    self.assertEqual(self.test_filenames, [f.name for f in reader_files])
 
   def testSerialization(self):
     readers = self.READER_CLS.split_input(
