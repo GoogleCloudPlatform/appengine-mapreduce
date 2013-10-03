@@ -4,6 +4,7 @@ package com.google.appengine.tools.mapreduce.impl;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
+import com.google.appengine.tools.mapreduce.Counters;
 import com.google.appengine.tools.mapreduce.InputReader;
 import com.google.appengine.tools.mapreduce.KeyValue;
 import com.google.appengine.tools.mapreduce.MapReduceResult;
@@ -12,7 +13,6 @@ import com.google.appengine.tools.mapreduce.MapperContext;
 import com.google.appengine.tools.mapreduce.Output;
 import com.google.appengine.tools.mapreduce.OutputWriter;
 import com.google.appengine.tools.mapreduce.ReducerContext;
-import com.google.appengine.tools.mapreduce.ReducerInput;
 import com.google.appengine.tools.mapreduce.impl.shardedjob.InProcessShardedJobRunner;
 import com.google.appengine.tools.mapreduce.outputs.InMemoryOutput;
 import com.google.common.base.Preconditions;
@@ -22,6 +22,7 @@ import java.io.IOException;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.Iterator;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Random;
@@ -45,9 +46,9 @@ public class InProcessMapReduce<I, K, V, O, R> {
 
   static class MapResult<K, V> {
     private final List<List<KeyValue<K, V>>> mapShardOutputs;
-    private final CountersImpl counters;
+    private final Counters counters;
 
-    public MapResult(List<List<KeyValue<K, V>>> mapShardOutputs, CountersImpl counters) {
+    public MapResult(List<List<KeyValue<K, V>>> mapShardOutputs, Counters counters) {
       this.mapShardOutputs = checkNotNull(mapShardOutputs, "Null mapShardOutputs");
       this.counters = checkNotNull(counters, "Null counters");
     }
@@ -56,7 +57,7 @@ public class InProcessMapReduce<I, K, V, O, R> {
       return mapShardOutputs;
     }
 
-    public CountersImpl getCounters() {
+    public Counters getCounters() {
       return counters;
     }
 
@@ -95,7 +96,6 @@ public class InProcessMapReduce<I, K, V, O, R> {
           Long.MAX_VALUE);
       tasks.add(task);
     }
-    final CountersImpl counters[] = new CountersImpl[1];
     WorkerResult<KeyValue<K, V>> result = InProcessShardedJobRunner.runJob(
         tasks.build(), new AbstractWorkerController<
             WorkerShardTask<I, KeyValue<K, V>, MapperContext<K, V>>, KeyValue<K, V>>(
@@ -105,7 +105,6 @@ public class InProcessMapReduce<I, K, V, O, R> {
 
           @Override
           public void completed(WorkerResult<KeyValue<K, V>> finalCombinedResult) {
-            counters[0] = finalCombinedResult.getCounters();
           }
         });
     log.info("Map phase completed");
@@ -121,9 +120,9 @@ public class InProcessMapReduce<I, K, V, O, R> {
     return out;
   }
 
-  InputReader<KeyValue<K, ReducerInput<V>>> getReducerInputReader(
+  InputReader<KeyValue<K, Iterator<V>>> getReducerInputReader(
       final List<KeyValue<K, List<V>>> data) {
-    return new InputReader<KeyValue<K, ReducerInput<V>>>() {
+    return new InputReader<KeyValue<K, Iterator<V>>>() {
       // Not really meant to be serialized, but avoid warning.
       private static final long serialVersionUID = 310424169122893265L;
       int i = 0;
@@ -134,12 +133,12 @@ public class InProcessMapReduce<I, K, V, O, R> {
       }
 
       @Override
-      public KeyValue<K, ReducerInput<V>> next() {
+      public KeyValue<K, Iterator<V>> next() {
         if (i >= data.size()) {
           throw new NoSuchElementException();
         }
-        KeyValue<K, ReducerInput<V>> result =
-            KeyValue.of(data.get(i).getKey(), ReducerInputs.fromIterable(data.get(i).getValue()));
+        KeyValue<K, Iterator<V>> result =
+            KeyValue.of(data.get(i).getKey(), data.get(i).getValue().iterator());
         i++;
         return result;
       }
@@ -147,7 +146,7 @@ public class InProcessMapReduce<I, K, V, O, R> {
   }
 
   MapReduceResult<R> reduce(List<List<KeyValue<K, List<V>>>> inputs, Output<O, R> output,
-      List<? extends OutputWriter<O>> outputs, CountersImpl mapCounters) throws IOException {
+      List<? extends OutputWriter<O>> outputs, Counters mapCounters) throws IOException {
     Preconditions.checkArgument(inputs.size() == outputs.size(), "%s reduce inputs, %s outputs",
         inputs.size(), outputs.size());
     log.info("Reduce phase started");
@@ -161,10 +160,10 @@ public class InProcessMapReduce<I, K, V, O, R> {
           outputs.get(shard),
           Long.MAX_VALUE));
     }
-    final CountersImpl[] counters = new CountersImpl[1];
-    WorkerResult<O> result = InProcessShardedJobRunner.runJob(
+    final Counters[] counters = new Counters[1];
+    InProcessShardedJobRunner.runJob(
         tasks.build(), new AbstractWorkerController<
-            WorkerShardTask<KeyValue<K, ReducerInput<V>>, O, ReducerContext<O>>, O>(
+            WorkerShardTask<KeyValue<K, Iterator<V>>, O, ReducerContext<O>>, O>(
             mrSpec.getJobName() + "-reduce") {
           // Not really meant to be serialized, but avoid warning.
           private static final long serialVersionUID = 575338448598450119L;
@@ -177,7 +176,7 @@ public class InProcessMapReduce<I, K, V, O, R> {
     log.info("Reduce phase completed, reduce counters=" + counters[0]);
     counters[0].addAll(mapCounters);
     log.info("combined counters=" + counters[0]);
-    return new ResultAndCounters<R>(output.finish(outputs), counters[0]);
+    return new MapReduceResultImpl<R>(output.finish(outputs), counters[0]);
   }
 
   private static final DateFormat DATE_FORMAT = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");

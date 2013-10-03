@@ -17,6 +17,16 @@ public final class CounterNames {
   public static final String MAPPER_WALLTIME_MILLIS = "mapper-walltime-msec";
 
   /**
+   * Number of times sort function was called.
+   */
+  public static final String SORT_CALLS = "sort-calls";
+
+  /**
+   * Total time in milliseconds spent in sort function.
+   */
+  public static final String SORT_WALLTIME_MILLIS = "sort-walltime-msec";
+
+  /**
    * Number of times reduce function was called.
    */
   public static final String REDUCER_CALLS = "reducer-calls";

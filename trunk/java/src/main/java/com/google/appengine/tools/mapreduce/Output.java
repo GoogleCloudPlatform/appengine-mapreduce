@@ -3,6 +3,7 @@ package com.google.appengine.tools.mapreduce;
 
 import java.io.IOException;
 import java.io.Serializable;
+import java.util.Collection;
 import java.util.List;
 
 /**
@@ -26,9 +27,17 @@ public abstract class Output<O, R> implements Serializable {
    * responsibility to determine an appropriate number of writers to split into.
    * This could be specified by the user or algorithmically determined.
    *
-   * <p>The number of output writers returned determines the number of reduce shards.
+   * <p>The number of output writers returned is equal to the number of shards.
    */
-  public abstract List<? extends OutputWriter<O>> createWriters() throws IOException;
+  public abstract List<? extends OutputWriter<O>> createWriters();
+  
+  /**
+   * When this class is used for a reduce output, this method will determine the number of reduce
+   * shards.
+   *
+   * @return The number of writers that will be created if createWriters() is called.
+   */
+  public abstract int getNumShards();
 
   /**
    * Returns a result to be made available through
@@ -48,6 +57,6 @@ public abstract class Output<O, R> implements Serializable {
    * {@link #createWriters} returned (modulo serialization -- typically,
    * {@code getWriter} will have been called in a different JVM).
    */
-  public abstract R finish(List<? extends OutputWriter<O>> writers) throws IOException;
+  public abstract R finish(Collection<? extends OutputWriter<O>> writers) throws IOException;
 
 }

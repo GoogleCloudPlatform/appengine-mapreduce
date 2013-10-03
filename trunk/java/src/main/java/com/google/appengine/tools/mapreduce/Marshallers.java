@@ -2,12 +2,14 @@
 
 package com.google.appengine.tools.mapreduce;
 
+import com.google.appengine.tools.mapreduce.impl.KeyValueMarshaller;
 import com.google.appengine.tools.mapreduce.impl.util.SerializationUtil;
+import com.google.common.base.Charsets;
 
-import java.io.IOException;
 import java.io.Serializable;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.nio.charset.CharacterCodingException;
 
 /**
  * Some {@link Marshaller}s and related utilities.
@@ -21,12 +23,14 @@ public class Marshallers {
   private static class SerializationMarshaller<T extends Serializable> extends Marshaller<T> {
     private static final long serialVersionUID = 401446902678227352L;
 
-    @Override public ByteBuffer toBytes(T object) {
+    @Override 
+    public ByteBuffer toBytes(T object) {
       return ByteBuffer.wrap(SerializationUtil.serializeToByteArrayNoHeader(object));
     }
 
     @SuppressWarnings("unchecked")
-    @Override public T fromBytes(ByteBuffer in) throws IOException {
+    @Override
+    public T fromBytes(ByteBuffer in) {
       return (T) SerializationUtil.deserializeFromByteBufferNoHeader(in);
     }
   }
@@ -40,39 +44,49 @@ public class Marshallers {
     return new SerializationMarshaller<T>();
   }
 
+  private static class StringMarshaller extends Marshaller<String> {
+    private static final long serialVersionUID = -7496989898703029904L;
+
+    @Override
+    public ByteBuffer toBytes(String object) {
+      return Charsets.UTF_8.encode(object);
+    }
+
+    @Override
+    public String fromBytes(ByteBuffer b) {
+      try {
+        return Charsets.UTF_8.newDecoder().decode(b).toString();
+      } catch (CharacterCodingException e) {
+        throw new CorruptDataException("Could not decode string ", e);
+      }
+    }
+  }
+  
   /**
-   * Returns a {@code Marshaller} for {@code String}s.  It is not specified what
-   * encoding will be used.
+   * Returns a {@code Marshaller} for {@code String}s. They will be encoded in UTF-8.
    */
-  // TODO(ohler): Replace this with getUtf8StringMarshaller.  Serialization
-  // isn't that much worse in many cases (most characters from the Basic
-  // Multilingual plane are the same as UTF-8), and the overhead (typecode etc.)
-  // are just a few bytes.  But it uses "modified UTF-8", and we have no excuse
-  // to encode U+0000 as two bytes and supplementary characters as six bytes
-  // rather than four.
-  //
-  // In toBytes(), we might also want to compute the exact output array size
-  // beforehand (or at least make a conservative estimate and then one copy)
-  // rather than using a growing array.
   public static Marshaller<String> getStringMarshaller() {
-    return new SerializationMarshaller<String>();
+    return new StringMarshaller();
   }
 
   private static class LongMarshaller extends Marshaller<Long> {
     private static final long serialVersionUID = 646739857959433591L;
 
-    @Override public ByteBuffer toBytes(Long x) {
-      ByteBuffer out = ByteBuffer.allocate(8).putLong(x);
+    @Override
+    public ByteBuffer toBytes(Long x) {
+      /* This xor is done to get an unsigned representation that sorts lexicographically */
+      ByteBuffer out = ByteBuffer.allocate(8).putLong(x ^ Long.MIN_VALUE);
       out.rewind();
       return out;
     }
 
-    @Override public Long fromBytes(ByteBuffer in) throws IOException {
+    @Override
+    public Long fromBytes(ByteBuffer in) {
       if (in.remaining() != 8) {
-        throw new IOException("Expected 8 bytes, not " + in.remaining());
+        throw new CorruptDataException("Expected 8 bytes, not " + in.remaining());
       }
       in.order(ByteOrder.BIG_ENDIAN);
-      return in.getLong();
+      return in.getLong() ^ Long.MIN_VALUE;
     }
   }
 
@@ -87,18 +101,21 @@ public class Marshallers {
   private static class IntegerMarshaller extends Marshaller<Integer> {
     private static final long serialVersionUID = 116841732914441971L;
 
-    @Override public ByteBuffer toBytes(Integer x) {
-      ByteBuffer out = ByteBuffer.allocate(4).putInt(x);
+    @Override 
+    public ByteBuffer toBytes(Integer x) {
+      /* This xor is done to get an unsigned representation that sorts lexicographically */
+      ByteBuffer out = ByteBuffer.allocate(4).putInt(x ^ Integer.MIN_VALUE);
       out.rewind();
       return out;
     }
 
-    @Override public Integer fromBytes(ByteBuffer in) throws IOException {
+    @Override
+    public Integer fromBytes(ByteBuffer in) {
       if (in.remaining() != 4) {
-        throw new IOException("Expected 4 bytes, not " + in.remaining());
+        throw new CorruptDataException("Expected 4 bytes, not " + in.remaining());
       }
       in.order(ByteOrder.BIG_ENDIAN);
-      return in.getInt();
+      return in.getInt() ^ Integer.MIN_VALUE;
     }
   }
 
@@ -115,18 +132,20 @@ public class Marshallers {
   private static class VoidMarshaller extends Marshaller<Void> {
     private static final long serialVersionUID = 534040781414531156L;
 
-    @Override public ByteBuffer toBytes(Void x) {
+    @Override 
+    public ByteBuffer toBytes(Void x) {
       return ByteBuffer.wrap(EMPTY_BYTE_ARRAY);
     }
 
-    @Override public Void fromBytes(ByteBuffer in) throws IOException {
+    @Override 
+    public Void fromBytes(ByteBuffer in) {
       if (in.remaining() != 0) {
-        throw new IOException("Expected 0 bytes, not " + in.remaining());
+        throw new CorruptDataException("Expected 0 bytes, not " + in.remaining());
       }
       return null;
     }
   }
-
+  
   /**
    * Returns a {@code Marshaller} for {@code Void}.
    */
@@ -134,44 +153,31 @@ public class Marshallers {
     return new VoidMarshaller();
   }
 
-  private static class KeyValueMarshaller<K, V> extends Marshaller<KeyValue<K, V>> {
-    private static final long serialVersionUID = 494784801710376720L;
-
-    private final Marshaller<K> keyMarshaller;
-    private final Marshaller<V> valueMarshaller;
-
-    private KeyValueMarshaller(Marshaller<K> keyMarshaller, Marshaller<V> valueMarshaller) {
-      this.keyMarshaller = keyMarshaller;
-      this.valueMarshaller = valueMarshaller;
+  /**
+   * Does nothing. Is useful for cases where a marshaller is required but not wanted.
+   */
+  public static class ByteBufferMarshaller extends Marshaller<ByteBuffer> {
+    private static final long serialVersionUID = -8188886996472169025L;
+    
+    @Override
+    public ByteBuffer toBytes(ByteBuffer object) {
+      return object.slice();
     }
-
-    @Override public ByteBuffer toBytes(KeyValue<K, V> pair) {
-      ByteBuffer key = keyMarshaller.toBytes(pair.getKey());
-      ByteBuffer value = valueMarshaller.toBytes(pair.getValue());
-      ByteBuffer out = ByteBuffer.allocate(4 + key.remaining() + value.remaining());
-      out.putInt(key.remaining());
-      out.put(key);
-      out.put(value);
-      out.rewind();
-      return out;
+    
+    @Override
+    public ByteBuffer fromBytes(ByteBuffer b)  {
+      return b.slice();
     }
-
-    @Override public KeyValue<K, V> fromBytes(ByteBuffer in) throws IOException {
-      in.order(ByteOrder.BIG_ENDIAN);
-      int keyLength = in.getInt();
-      int oldLimit = in.limit();
-      K key;
-      try {
-        in.limit(in.position() + keyLength);
-        key = keyMarshaller.fromBytes(in.slice());
-      } finally {
-        in.limit(oldLimit);
-      }
-      in.position(in.position() + keyLength);
-      V value = valueMarshaller.fromBytes(in.slice());
-      return KeyValue.of(key, value);
-    }
+    
   }
+  
+  /**
+   * Returns a {@code Marshaller} for {@code ByteBuffer}.
+   */
+  public static Marshaller<ByteBuffer> getByteBufferMarshaller() {
+    return new ByteBufferMarshaller();
+  }
+
 
   /**
    * Returns a {@code Marshaller} for key-value pairs based on

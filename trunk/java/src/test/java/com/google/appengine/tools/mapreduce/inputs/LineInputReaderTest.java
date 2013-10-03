@@ -28,12 +28,13 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.List;
+import java.util.NoSuchElementException;
 
 /**
  * Unit test for {@code InputStreamIterator}.
  *
  */
-public class InputStreamIteratorTest extends TestCase {
+public class LineInputReaderTest extends TestCase {
 // ------------------------------ FIELDS ------------------------------
 
   InputStream input;
@@ -121,77 +122,50 @@ public class InputStreamIteratorTest extends TestCase {
         true, startIndex, startIndex + 2);
   }
 
-  /**
-   * Makes sure that the basic method of offset record pair behave correctly,
-   */
-  public void testOffsetRecordPair() throws Exception {
-    byte[] testArray1 = new byte[]{0x20, 0x40};
-    // Logically equal to array 1, but not referentially equal
-    byte[] testArray1copy = new byte[]{0x20, 0x40};
-    byte[] testArray2 = new byte[]{0x30};
-    byte[] testArray3 = new byte[0];
-    long offset1 = 10;
-    long offset2 = 4;
-    InputStreamIterator.OffsetRecordPair pair11 = new InputStreamIterator.OffsetRecordPair(
-        offset1, testArray1);
-    InputStreamIterator.OffsetRecordPair pair21 = new InputStreamIterator.OffsetRecordPair(
-        offset2, testArray1);
-    InputStreamIterator.OffsetRecordPair pair11copy = new InputStreamIterator.OffsetRecordPair(
-        offset1, testArray1copy);
-    InputStreamIterator.OffsetRecordPair pair12 = new InputStreamIterator.OffsetRecordPair(
-        offset1, testArray2);
-    InputStreamIterator.OffsetRecordPair pair13 = new InputStreamIterator.OffsetRecordPair(
-        offset1, testArray3);
-    assertEquals(pair11, pair11copy);
-    assertFalse(pair11.equals(pair21));
-    assertFalse(pair11.equals(pair12));
-    assertFalse(pair11.equals(pair13));
-    assertFalse(pair11.equals("foo"));
-    assertFalse(pair11.equals(null));
-    assertEquals(pair11.hashCode(), pair11copy.hashCode());
-  }
-
   public void testExceptionHandling() throws Exception {
     // Create an input stream than has 2 records in the first 9 bytes and exception while the 3rd
     // record is read
     byte[] content = new byte[] {1, 2, 3, 4, 0, 6, 7, 8, 0, 10, 11, 12};
-    InputStreamIterator iterator =
-        new InputStreamIterator(new CountingInputStream(new ExceptionThrowingInputStream(
-            new BufferedInputStream(new NonResetableByteArrayInputStream(content)), 11)),
-            content.length, false, (byte) 0);
+    CountingInputStream countingInputStream =
+        new CountingInputStream(new ExceptionThrowingInputStream(
+            new BufferedInputStream(new NonResetableByteArrayInputStream(content)), 11));
+    LineInputReader iterator =
+        new LineInputReader(countingInputStream, content.length, false, (byte) 0);
 
-    assertTrue(iterator.hasNext());
-    iterator.next();
-    assertTrue(iterator.hasNext());
-    iterator.next();
+    byte[] next = iterator.next();
+    assertNotNull(next);
+    next = iterator.next();
+    assertNotNull(next);
     try {
-      assertTrue(iterator.hasNext());
+      iterator.next();
       fail("Exception was not passed through");
     } catch (RuntimeException expected) {
     }
+    countingInputStream.close();
   }
 
 // -------------------------- INSTANCE METHODS --------------------------
 
-  private List<InputStreamIterator.OffsetRecordPair> readPairs(
-      long start, long end, boolean skipFirstTerminator)
-      throws IOException {
-    input.skip(start);
-    InputStreamIterator iterator = new InputStreamIterator(new CountingInputStream(input),
-        end - start, skipFirstTerminator, (byte) -1);
-    return ImmutableList.copyOf(iterator);
-  }
-
   private void test(long start, long end, boolean skipFirstTerminator, int expectedIndexStart,
       int expectedIndexEnd) throws IOException {
-    List<InputStreamIterator.OffsetRecordPair> pairs = readPairs(start, end, skipFirstTerminator);
-    assertEquals("pairs between " + start + " and " + end, expectedIndexEnd - expectedIndexStart,
-        pairs.size());
-    for (int i = 0; i < pairs.size(); i++) {
-      assertEquals(content.get(i + expectedIndexStart), new String(pairs.get(i).getRecord()));
-      assertEquals(byteContentOffsets.get(i + expectedIndexStart).longValue(),
-          pairs.get(i).getOffset() + start);
+    input.skip(start);
+    CountingInputStream countingInputStream = new CountingInputStream(input);
+    LineInputReader iterator =
+        new LineInputReader(countingInputStream, end - start, skipFirstTerminator, (byte) -1);
+    int totalCount = 0;
+    try {
+      while (true) {
+        byte[] record = iterator.next();
+        assertEquals(content.get(totalCount + expectedIndexStart), new String(record));
+        assertEquals(byteContentOffsets.get(totalCount + expectedIndexStart).longValue(),
+            countingInputStream.getCount() - record.length - 1 + start);
+        totalCount++;
+      }
+    } catch (NoSuchElementException e) {
+      // Used as break
     }
+    assertEquals("pairs between " + start + " and " + end, expectedIndexEnd - expectedIndexStart,
+        totalCount);
   }
 
 // -------------------------- INNER CLASSES --------------------------

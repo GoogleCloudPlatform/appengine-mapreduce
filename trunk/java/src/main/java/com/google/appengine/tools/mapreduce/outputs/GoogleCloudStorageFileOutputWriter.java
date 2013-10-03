@@ -29,23 +29,22 @@ public class GoogleCloudStorageFileOutputWriter extends OutputWriter<ByteBuffer>
 
   private final GcsFilename file;
   private boolean closed = false;
-  private final GcsOutputChannel channel;
+  private GcsOutputChannel channel;
+  private String mimeType;
 
 
-  GoogleCloudStorageFileOutputWriter(GcsFilename file, String mimeType) throws IOException {
+  public GoogleCloudStorageFileOutputWriter(GcsFilename file, String mimeType) {
+    this.mimeType = checkNotNull(mimeType, "Null mimeType");
     this.file = checkNotNull(file, "Null file");
-    checkNotNull(mimeType, "Null mimeType");
-    this.channel =
-        GCS_SERVICE.createOrReplace(file, new GcsFileOptions.Builder().mimeType(mimeType).build());
   }
 
   public static GoogleCloudStorageFileOutputWriter forWorker(Worker<?> worker,
-      String bucket, String fileName, String mimeType) throws IOException {
+      String bucket, String fileName, String mimeType) {
     return forRegistry(worker.getLifecycleListenerRegistry(), bucket, fileName, mimeType);
   }
 
   public static GoogleCloudStorageFileOutputWriter forRegistry(LifecycleListenerRegistry registry,
-      String bucket, String fileName, String mimeType) throws IOException {
+      String bucket, String fileName, String mimeType) {
     GcsFilename file = new GcsFilename(bucket, fileName);
     GoogleCloudStorageFileOutputWriter writer =
         new GoogleCloudStorageFileOutputWriter(file, mimeType);
@@ -57,8 +56,16 @@ public class GoogleCloudStorageFileOutputWriter extends OutputWriter<ByteBuffer>
   @Override
   public void write(ByteBuffer bytes) throws IOException {
     Preconditions.checkState(!closed, "%s: already closed", this);
-    if (bytes.hasRemaining()) {
+    while (bytes.hasRemaining()) {
       channel.write(bytes);
+    }
+  }
+
+  @Override
+  public void beginSlice() throws IOException {
+    if (channel == null) {
+      this.channel = GCS_SERVICE.createOrReplace(
+          file, new GcsFileOptions.Builder().mimeType(mimeType).build());
     }
   }
 

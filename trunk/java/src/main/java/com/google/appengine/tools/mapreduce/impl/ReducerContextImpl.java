@@ -17,19 +17,12 @@ import java.io.IOException;
  */
 public class ReducerContextImpl<O> extends ReducerContext<O> {
 
-  private final String mrJobId;
-  private final int shardNumber;
   private final OutputWriter<O> output;
-  private final Counters counters;
 
-  public ReducerContextImpl(String mrJobId,
-      int shardNumber,
-      OutputWriter<O> output,
+  public ReducerContextImpl(String mrJobId, int shardNumber, OutputWriter<O> output,
       Counters counters) {
-    this.mrJobId = checkNotNull(mrJobId, "Null mrJobId");
-    this.shardNumber = shardNumber;
+    super(mrJobId, shardNumber, counters);
     this.output = checkNotNull(output, "Null output");
-    this.counters = checkNotNull(counters, "Null counters");
   }
 
   @Override public void emit(O value) {
@@ -38,18 +31,6 @@ public class ReducerContextImpl<O> extends ReducerContext<O> {
     } catch (IOException e) {
       throw new RuntimeException(output + ".write(" + value + ") threw IOException", e);
     }
-  }
-
-  @Override public int getShardNumber() {
-    return shardNumber;
-  }
-
-  @Override public Counters getCounters() {
-    return counters;
-  }
-
-  @Override public String getJobId() {
-    return mrJobId;
   }
 
 }

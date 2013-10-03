@@ -9,26 +9,42 @@ import com.google.appengine.api.datastore.Query;
 import com.google.appengine.api.files.AppEngineFile;
 import com.google.appengine.api.files.FileReadChannel;
 import com.google.appengine.api.files.FileServiceFactory;
+import com.google.appengine.tools.cloudstorage.GcsFilename;
+import com.google.appengine.tools.cloudstorage.GcsInputChannel;
+import com.google.appengine.tools.cloudstorage.GcsService;
+import com.google.appengine.tools.cloudstorage.GcsServiceFactory;
+import com.google.appengine.tools.mapreduce.impl.HashingSharder;
 import com.google.appengine.tools.mapreduce.impl.InProcessMapReduce;
-import com.google.appengine.tools.mapreduce.impl.Shuffling;
 import com.google.appengine.tools.mapreduce.inputs.ConsecutiveLongInput;
 import com.google.appengine.tools.mapreduce.inputs.DatastoreInput;
+import com.google.appengine.tools.mapreduce.inputs.NoInput;
+import com.google.appengine.tools.mapreduce.inputs.RandomLongInput;
+import com.google.appengine.tools.mapreduce.outputs.BlobFileOutput;
 import com.google.appengine.tools.mapreduce.outputs.BlobFileOutputWriter;
+import com.google.appengine.tools.mapreduce.outputs.GoogleCloudStorageFileOutput;
 import com.google.appengine.tools.mapreduce.outputs.InMemoryOutput;
 import com.google.appengine.tools.mapreduce.outputs.NoOutput;
+import com.google.appengine.tools.mapreduce.outputs.StringOutput;
 import com.google.appengine.tools.mapreduce.reducers.KeyProjectionReducer;
 import com.google.appengine.tools.mapreduce.reducers.NoReducer;
+import com.google.appengine.tools.mapreduce.reducers.ValueProjectionReducer;
 import com.google.appengine.tools.pipeline.JobInfo;
 import com.google.appengine.tools.pipeline.PipelineService;
 import com.google.appengine.tools.pipeline.PipelineServiceFactory;
+import com.google.common.base.Charsets;
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 
+import java.io.BufferedReader;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.channels.Channels;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 import java.util.logging.Logger;
@@ -82,28 +98,103 @@ public class EndToEndTest extends EndToEndTestCase {
     runWithPipeline(preparer, mrSpec, verifier);
   }
 
-  public void testEmpty() throws Exception {
-    runTest(
-        new Preparer() {
-          @Override public void prepare() throws Exception {
+  public void testDoNothing() throws Exception {
+    runTest(new Preparer() {
+      @Override
+      public void prepare() throws Exception {}
+    }, MapReduceSpecification.of("Empty test MR",
+        new NoInput<Long>(1),
+        new Mod37Mapper(),
+        Marshallers.getStringMarshaller(),
+        Marshallers.getLongMarshaller(),
+        NoReducer.<String, Long, String>create(),
+        new NoOutput<String, String>(1)), new Verifier<String>() {
+      @Override
+      public void verify(MapReduceResult<String> result) throws Exception {
+        assertNull(result.getOutputResult());
+        assertEquals(0, result.getCounters().getCounter(CounterNames.MAPPER_CALLS).getValue());
+        assertEquals(0, result.getCounters().getCounter(CounterNames.REDUCER_CALLS).getValue());
+      }
+    });
+  }
+
+  public void testPassThroughToString() throws Exception {
+    final RandomLongInput input = new RandomLongInput(10, 1);
+    input.setSeed(0L);
+    runTest(new Preparer() {
+      @Override
+      public void prepare() throws Exception {}
+    }, MapReduceSpecification.of("TestPassThroughToString",
+        input,
+        new Mod37Mapper(),
+        Marshallers.getStringMarshaller(),
+        Marshallers.getLongMarshaller(),
+        ValueProjectionReducer.<String, Long>create(),
+        new StringOutput<Long, List<AppEngineFile>>(
+            ",", new BlobFileOutput("Foo-%02d", "testType", 1))),
+            new Verifier<List<AppEngineFile>>() {
+      @Override
+      public void verify(MapReduceResult<List<AppEngineFile>> result) throws Exception {
+        assertEquals(1, result.getOutputResult().size());
+        assertEquals(10, result.getCounters().getCounter(CounterNames.MAPPER_CALLS).getValue());
+        AppEngineFile file = result.getOutputResult().get(0);
+        ByteBuffer buf = ByteBuffer.allocate(1000);
+        FileReadChannel ch = FileServiceFactory.getFileService().openReadChannel(file, false);
+        BufferedReader reader =
+            new BufferedReader(Channels.newReader(ch, Charsets.US_ASCII.newDecoder(), -1));
+        String line = reader.readLine();
+        List<String> strings = Arrays.asList(line.split(","));
+        assertEquals(10, strings.size());
+        input.setSeed(0L);
+        InputReader<Long> source = input.createReaders().get(0);
+        for (int i = 0; i < 10; i++) {
+          assertTrue(strings.contains(source.next().toString()));
+        }
+      }
+    });
+  }
+
+  public void testPassByteBufferToGcs() throws Exception {
+    final RandomLongInput input = new RandomLongInput(10, 1);
+    input.setSeed(0L);
+    runTest(new Preparer() {
+      @Override
+      public void prepare() throws Exception {}
+    }, MapReduceSpecification.of("TestPassThroughToByteBuffer",
+        input,
+        new LongToBytesMapper(),
+        Marshallers.getByteBufferMarshaller(),
+        Marshallers.getByteBufferMarshaller(),
+        ValueProjectionReducer.<ByteBuffer, ByteBuffer>create(),
+        new GoogleCloudStorageFileOutput("bucket", "fileNamePattern-%04d",
+            "application/octet-stream", 2)), new Verifier<GoogleCloudStorageFileSet>() {
+      @Override
+      public void verify(MapReduceResult<GoogleCloudStorageFileSet> result) throws Exception {
+        assertEquals(2, result.getOutputResult().getNumFiles());
+        assertEquals(10, result.getCounters().getCounter(CounterNames.MAPPER_CALLS).getValue());
+        ArrayList<Long> results = new ArrayList<Long>();
+        GcsService gcsService = GcsServiceFactory.createGcsService();
+        ByteBuffer holder = ByteBuffer.allocate(8);
+        for (GcsFilename file : result.getOutputResult().getAllFiles()) {
+          GcsInputChannel readChannel = gcsService.openPrefetchingReadChannel(file, 0, 4096);
+          int read = readChannel.read(holder);
+          while (read != -1) {
+            holder.rewind();
+            results.add(holder.getLong());
+            holder.rewind();
+            read = readChannel.read(holder);
           }
-        },
-        MapReduceSpecification.of("Empty test MR",
-            new ConsecutiveLongInput(0, 0, 1),
-            new Mod37Mapper(),
-            Marshallers.getStringMarshaller(),
-            Marshallers.getLongMarshaller(),
-            new TestReducer(),
-            new InMemoryOutput<KeyValue<String, List<Long>>>(1)),
-        new Verifier<List<List<KeyValue<String, List<Long>>>>>() {
-          @Override public void verify(
-              MapReduceResult<List<List<KeyValue<String, List<Long>>>>> result)
-              throws Exception {
-            List<KeyValue<String, List<Long>>> output = Iterables.getOnlyElement(
-                result.getOutputResult());
-            assertEquals(ImmutableList.of(), output);
-          }
-        });
+        }
+        assertEquals(10, results.size());
+        RandomLongInput input = new RandomLongInput(10, 1);
+        input.setSeed(0L);
+        InputReader<Long> source = input.createReaders().get(0);
+        for (int i = 0; i < results.size(); i++) {
+          Long expected = source.next();
+          assertTrue(results.contains(expected));
+        }
+      }
+    });
   }
 
   public void testDatastoreData() throws Exception {
@@ -147,11 +238,13 @@ public class EndToEndTest extends EndToEndTestCase {
               assertNotNull(mark);
             }
 
-            List<KeyValue<String, List<Long>>> output = Iterables.getOnlyElement(
-                result.getOutputResult());
-            List<KeyValue<String, ImmutableList<Long>>> expectedOutput = ImmutableList.of(
-                KeyValue.of("even",
-                    ImmutableList.of(
+            List<KeyValue<String, List<Long>>> output =
+                Iterables.getOnlyElement(result.getOutputResult());
+            assertEquals(2, output.size());
+            assertEquals("even", output.get(0).getKey());
+            List<Long> evenValues = new ArrayList<Long>(output.get(0).getValue());
+            Collections.sort(evenValues);
+            assertEquals(ImmutableList.of(
                         2L, 4L, 6L, 8L,
                         10L, 12L, 14L, 16L, 18L,
                         20L, 22L, 24L, 26L, 28L,
@@ -162,10 +255,12 @@ public class EndToEndTest extends EndToEndTestCase {
                         70L, 72L, 74L, 76L, 78L,
                         80L, 82L, 84L, 86L, 88L,
                         90L, 92L, 94L, 96L, 98L,
-                        100L)),
-                KeyValue.of("multiple-of-ten",
-                    ImmutableList.of(10L, 20L, 30L, 40L, 50L, 60L, 70L, 80L, 90L, 100L)));
-            assertEquals(expectedOutput, output);
+                        100L), evenValues);
+            assertEquals("multiple-of-ten", output.get(1).getKey());
+            List<Long> multiplesOfTen = new ArrayList<Long>(output.get(1).getValue());
+            Collections.sort(multiplesOfTen);
+            assertEquals(ImmutableList.of(10L, 20L, 30L, 40L, 50L, 60L, 70L, 80L, 90L, 100L),
+                multiplesOfTen);
           }
         });
   }
@@ -200,10 +295,24 @@ public class EndToEndTest extends EndToEndTestCase {
         });
   }
 
+  @SuppressWarnings("serial")
   private static class Mod37Mapper extends Mapper<Long, String, Long> {
     @Override public void map(Long input) {
       String mod37 = "" + (Math.abs(input) % 37);
       getContext().emit(mod37, input);
+    }
+  }
+
+  @SuppressWarnings("serial")
+  private static class LongToBytesMapper extends Mapper<Long, ByteBuffer, ByteBuffer> {
+    @Override public void map(Long input) {
+      ByteBuffer key = ByteBuffer.allocate(8);
+      key.putLong(input);
+      key.rewind();
+      ByteBuffer value = ByteBuffer.allocate(8);
+      value.putLong(input);
+      value.rewind();
+      getContext().emit(key, value);
     }
   }
 
@@ -234,23 +343,61 @@ public class EndToEndTest extends EndToEndTestCase {
               expectedOutput.add(ArrayListMultimap.<String, Long>create());
             }
             Marshaller<String> marshaller = Marshallers.getStringMarshaller();
+            HashingSharder sharder = new HashingSharder(5);
             for (long l = -10000; l < 10000; l++) {
               String mod37 = "" + (Math.abs(l) % 37);
-              expectedOutput.get(Shuffling.reduceShardFor(marshaller.toBytes(mod37), 5))
+              expectedOutput.get(sharder.getShardForKey(marshaller.toBytes(mod37)))
                   .put(mod37, l);
             }
             for (int i = 0; i < 5; i++) {
               assertEquals(expectedOutput.get(i).keySet().size(), actualOutput.get(i).size());
               for (KeyValue<String, List<Long>> actual : actualOutput.get(i)) {
-                assertEquals(
-                    "shard " + i + ", key " + actual.getKey(),
-                    expectedOutput.get(i).get(actual.getKey()), actual.getValue());
+                List<Long> value = new ArrayList<Long>(actual.getValue());
+                Collections.sort(value);
+                assertEquals("shard " + i + ", key " + actual.getKey(),
+                    expectedOutput.get(i).get(actual.getKey()), value);
               }
             }
           }
         });
   }
 
+  /**
+   * Makes sure the same key is not dupped, nor does the reduce go into an infinite loop if it
+   * ignores the values.
+   */
+  public void testReduceOnlyLooksAtKeys() throws Exception {
+    runTest(new Preparer() {
+      @Override
+      public void prepare() throws Exception {}
+    }, MapReduceSpecification.of("Test MR",
+        new ConsecutiveLongInput(-10000, 10000, 10),
+        new Mod37Mapper(),
+        Marshallers.getStringMarshaller(),
+        Marshallers.getLongMarshaller(),
+        KeyProjectionReducer.<String, Long>create(),
+        new InMemoryOutput<String>(5)), new Verifier<List<List<String>>>() {
+      @Override
+      public void verify(MapReduceResult<List<List<String>>> result) throws Exception {
+        Counters counters = result.getCounters();
+        assertEquals(20000, counters.getCounter(CounterNames.MAPPER_CALLS).getValue());
+        assertEquals(37, counters.getCounter(CounterNames.REDUCER_CALLS).getValue());
+
+        List<List<String>> actualOutput = result.getOutputResult();
+        assertEquals(5, actualOutput.size());
+        List<String> allKeys = new ArrayList<String>();
+        for (int shard = 0; shard < 5; shard++) {
+          allKeys.addAll(actualOutput.get(shard));
+        }
+        assertEquals(37, allKeys.size());
+        for (int i = 0; i < 37; i++) {
+          assertTrue("" + i, allKeys.contains("" + i));
+        }
+      }
+    });
+  }
+
+  @SuppressWarnings("serial")
   static class SideOutputMapper extends Mapper<Long, String, Void> {
     transient BlobFileOutputWriter sideOutput;
 
@@ -319,6 +466,7 @@ public class EndToEndTest extends EndToEndTestCase {
         });
   }
 
+  @SuppressWarnings("serial")
   static class TestMapper extends Mapper<Entity, String, Long> {
 
     @Override public void map(Entity entity) {
@@ -360,6 +508,7 @@ public class EndToEndTest extends EndToEndTestCase {
     }
   }
 
+  @SuppressWarnings("serial")
   static class TestReducer extends Reducer<String, Long, KeyValue<String, List<Long>>> {
     @Override public void reduce(String property, ReducerInput<Long> matchingValues) {
       ImmutableList.Builder<Long> out = ImmutableList.builder();

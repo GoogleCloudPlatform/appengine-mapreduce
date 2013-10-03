@@ -11,7 +11,7 @@ import java.io.IOException;
  *
  * @param <O> type of values accepted by this output
  */
-abstract class ForwardingOutputWriter<O> extends OutputWriter<O> {
+public abstract class ForwardingOutputWriter<O> extends OutputWriter<O> {
   private static final long serialVersionUID = 738487653896786084L;
 
   protected abstract OutputWriter<?> getDelegate();
@@ -26,7 +26,7 @@ abstract class ForwardingOutputWriter<O> extends OutputWriter<O> {
     getDelegate().endSlice();
   }
 
-  @Override 
+  @Override
   public void close() throws IOException {
     getDelegate().close();
   }

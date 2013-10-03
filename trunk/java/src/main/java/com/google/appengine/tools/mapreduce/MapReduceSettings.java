@@ -24,6 +24,7 @@ public class MapReduceSettings implements Serializable {
   /*Nullable*/ private String backend = null;
   private String controllerQueueName = "default";
   private String workerQueueName = "default";
+  private String bucketName = null;
   private int millisPerSlice = 10000;
 
   public MapReduceSettings() {
@@ -65,6 +66,14 @@ public class MapReduceSettings implements Serializable {
     return this;
   }
 
+  public String getBucketName() {
+    return bucketName;
+  }
+  
+  public void setBucketName(String bucketName) {
+    this.bucketName = bucketName;
+  }
+
   public int getMillisPerSlice() {
     return millisPerSlice;
   }
@@ -80,8 +89,8 @@ public class MapReduceSettings implements Serializable {
         + backend + ", "
         + controllerQueueName + ", "
         + workerQueueName + ", "
+        + bucketName + ", "
         + millisPerSlice
         + ")";
   }
-
 }

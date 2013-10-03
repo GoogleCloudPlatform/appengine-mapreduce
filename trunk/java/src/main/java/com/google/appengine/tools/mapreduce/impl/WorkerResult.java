@@ -4,7 +4,9 @@ package com.google.appengine.tools.mapreduce.impl;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
+import com.google.appengine.tools.mapreduce.Counters;
 import com.google.appengine.tools.mapreduce.OutputWriter;
+import com.google.common.collect.ImmutableMap;
 
 import java.io.Serializable;
 import java.util.Map;
@@ -21,11 +23,21 @@ public class WorkerResult<O> implements Serializable {
   // not for each individual shard (which accumulates its own WorkerResult).
   private final Map<Integer, OutputWriter<O>> closedWriters;
   private final Map<Integer, WorkerShardState> workerShardStates;
-  private final CountersImpl counters;
+  private final Counters counters;
+
+  public WorkerResult(int shardNumber, WorkerShardState workerShardState, Counters counters) {
+    this(ImmutableMap.<Integer, OutputWriter<O>>of(), ImmutableMap.of(
+        shardNumber, workerShardState), counters);
+  }
+  
+  public WorkerResult(int shardNumber, OutputWriter<O> closedWriter,
+      WorkerShardState workerShardState, Counters counters) {
+    this(ImmutableMap.of(shardNumber, closedWriter), ImmutableMap.of(shardNumber, workerShardState),
+        counters);
+  }
 
   public WorkerResult(Map<Integer, OutputWriter<O>> closedWriters,
-      Map<Integer, WorkerShardState> workerShardStates,
-      CountersImpl counters) {
+      Map<Integer, WorkerShardState> workerShardStates, Counters counters) {
     this.closedWriters = checkNotNull(closedWriters, "Null closedWriters");
     this.workerShardStates = checkNotNull(workerShardStates, "Null workerShardStates");
     this.counters = checkNotNull(counters, "Null counters");
@@ -39,16 +51,14 @@ public class WorkerResult<O> implements Serializable {
     return workerShardStates;
   }
 
-  public CountersImpl getCounters() {
+  public Counters getCounters() {
     return counters;
   }
 
-  @Override public String toString() {
-    return getClass().getSimpleName() + "("
-        + closedWriters + ", "
-        + workerShardStates + ", "
-        + counters
-        + ")";
+  @Override
+  public String toString() {
+    return getClass().getSimpleName() + "(" + closedWriters + ", " + workerShardStates + ", "
+        + counters + ")";
   }
 
 }

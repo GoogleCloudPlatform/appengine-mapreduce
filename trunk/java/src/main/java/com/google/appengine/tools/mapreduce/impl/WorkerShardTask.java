@@ -13,11 +13,9 @@ import com.google.appengine.tools.mapreduce.Worker;
 import com.google.appengine.tools.mapreduce.WorkerContext;
 import com.google.appengine.tools.mapreduce.impl.shardedjob.IncrementalTask;
 import com.google.common.base.Stopwatch;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 
 import java.io.IOException;
-import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -36,13 +34,12 @@ public abstract class WorkerShardTask<I, O, C extends WorkerContext>
 
   private static final long serialVersionUID = 992552712402490981L;
 
-  private final String mrJobId;
-  private final int shardNumber;
-  private final int shardCount;
+  protected final String mrJobId;
+  protected final int shardNumber;
+  protected final int shardCount;
   private final InputReader<I> in;
   private final Worker<C> worker;
-  private final OutputWriter<O> out;
-  private final long millisPerSlice;
+  protected final OutputWriter<O> out;
   private final String workerCallsCounterName;
   private final String workerMillisCounterName;
 
@@ -54,7 +51,6 @@ public abstract class WorkerShardTask<I, O, C extends WorkerContext>
       InputReader<I> in,
       Worker<C> worker,
       OutputWriter<O> out,
-      long millisPerSlice,
       String workerCallsCounterName,
       String workerMillisCounterName) {
     this.mrJobId = checkNotNull(mrJobId, "Null mrJobId");
@@ -63,7 +59,6 @@ public abstract class WorkerShardTask<I, O, C extends WorkerContext>
     this.in = checkNotNull(in, "Null in");
     this.worker = checkNotNull(worker, "Null worker");
     this.out = checkNotNull(out, "Null out");
-    this.millisPerSlice = millisPerSlice;
     this.workerCallsCounterName =
         checkNotNull(workerCallsCounterName, "Null workerCallsCounterName");
     this.workerMillisCounterName =
@@ -78,38 +73,23 @@ public abstract class WorkerShardTask<I, O, C extends WorkerContext>
   protected abstract C getWorkerContext(Counters counters);
   protected abstract void callWorker(I input);
   protected abstract String formatLastWorkItem(I item);
+  protected abstract boolean shouldContinue(); 
 
-  @Override public RunResult<WorkerShardTask<I, O, C>, WorkerResult<O>> run() {
-    try {
-      in.beginSlice();
-    } catch (IOException e) {
-      throw new RuntimeException(in + ".beginSlice() threw IOException", e);
-    }
-    try {
-      out.beginSlice();
-    } catch (IOException e) {
-      throw new RuntimeException(out + ".beginSlice() threw IOException", e);
-    }
-    CountersImpl counters = new CountersImpl();
-    C context = getWorkerContext(counters);
-    worker.setContext(context);
-    if (isFirstSlice) {
-      isFirstSlice = false;
-      worker.beginShard();
-    }
-    for (LifecycleListener listener : worker.getLifecycleListenerRegistry().getListeners()) {
-      listener.beginSlice();
-    }
-    worker.beginSlice();
+  @Override 
+  public RunResult<WorkerShardTask<I, O, C>, WorkerResult<O>> run() {
 
+    beginSlice();
     Stopwatch overallStopwatch = new Stopwatch().start();
+    Stopwatch inputStopwatch = new Stopwatch();
     Stopwatch workerStopwatch = new Stopwatch();
+    
     int workerCalls = 0;
     int itemsRead = 0;
     boolean inputExhausted = false;
     I next = null;
     try {
       do {
+        inputStopwatch.start();
         try {
           next = in.next();
           itemsRead++;
@@ -126,7 +106,8 @@ public abstract class WorkerShardTask<I, O, C extends WorkerContext>
           }
           throw new RuntimeException(in + ".next() threw IOException", e);
         }
-
+        inputStopwatch.stop();
+        
         workerCalls++;
         // TODO(ohler): workerStopwatch includes time spent in emit() and the
         // OutputWriter, which is very significant because it includes I/O. I
@@ -136,24 +117,66 @@ public abstract class WorkerShardTask<I, O, C extends WorkerContext>
         workerStopwatch.start();
         callWorker(next);
         workerStopwatch.stop();
-      } while (overallStopwatch.elapsed(MILLISECONDS) < millisPerSlice);
+      } while (shouldContinue());
     } finally {
       log.info("Ending slice after " + itemsRead + " items read and calling the worker "
           + workerCalls + " times");
     }
     overallStopwatch.stop();
+    log.info("Ending slice, inputExhausted=" + inputExhausted + ", overallStopwatch="
+        + overallStopwatch + ", workerStopwatch=" + workerStopwatch + ", inputStopwatch="
+        + inputStopwatch);
+  Counters counters = worker.getContext().getCounters();
     counters.getCounter(workerCallsCounterName).increment(workerCalls);
     counters.getCounter(workerMillisCounterName).increment(workerStopwatch.elapsed(MILLISECONDS));
 
-    log.info("Ending slice, inputExhausted=" + inputExhausted
-        + ", overallStopwatch=" + overallStopwatch + ", workerStopwatch=" + workerStopwatch);
+    endSlice(inputExhausted);
+    WorkerShardState workerShardState =
+        new WorkerShardState(workerCalls, System.currentTimeMillis(), formatLastWorkItem(next));
+    if (!inputExhausted) {
+      return RunResult.of(new WorkerResult<O>(shardNumber, workerShardState, counters), this);
+    } else {
+      try {
+        out.close();
+      } catch (IOException e) {
+        throw new RuntimeException(out + ".close() threw IOException", e);
+      }
+      return RunResult.<WorkerShardTask<I, O, C>, WorkerResult<O>>of(
+          new WorkerResult<O>(shardNumber, out, workerShardState, counters), null);
+    }
+  }
+  
+  protected void beginSlice() {
+    try {
+      in.beginSlice();
+    } catch (IOException e) {
+      throw new RuntimeException(in + ".beginSlice() threw IOException", e);
+    }
+    try {
+      out.beginSlice();
+    } catch (IOException e) {
+      throw new RuntimeException(out + ".beginSlice() threw IOException", e);
+    }
+    Counters counters = new CountersImpl();
+    C context = getWorkerContext(counters);
+    worker.setContext(context);
+    if (isFirstSlice) {
+      isFirstSlice = false;
+      worker.beginShard();
+    }
+    for (LifecycleListener listener : worker.getLifecycleListenerRegistry().getListeners()) {
+      listener.beginSlice();
+    }
+    worker.beginSlice();
+  }
 
+  protected void endSlice(boolean inputExhausted) {
     worker.endSlice();
     if (inputExhausted) {
       worker.endShard();
     }
     for (LifecycleListener listener :
-             Lists.reverse(worker.getLifecycleListenerRegistry().getListeners())) {
+        Lists.reverse(worker.getLifecycleListenerRegistry().getListeners())) {
       listener.endSlice();
     }
     try {
@@ -166,31 +189,6 @@ public abstract class WorkerShardTask<I, O, C extends WorkerContext>
     } catch (IOException e) {
       throw new RuntimeException(in + ".endSlice() threw IOException", e);
     }
-    Map<Integer, WorkerShardState> workerShardStateMap =
-        ImmutableMap.of(shardNumber,
-            new WorkerShardState(workerCalls,
-                System.currentTimeMillis(),
-                formatLastWorkItem(next)));
-    if (!inputExhausted) {
-      return RunResult.of(
-          new WorkerResult<O>(
-              ImmutableMap.<Integer, OutputWriter<O>>of(),
-              workerShardStateMap,
-              counters),
-          this);
-    } else {
-      try {
-        out.close();
-      } catch (IOException e) {
-        throw new RuntimeException(out + ".close() threw IOException", e);
-      }
-      return RunResult.<WorkerShardTask<I, O, C>, WorkerResult<O>>of(
-          new WorkerResult<O>(
-              ImmutableMap.of(shardNumber, out),
-              workerShardStateMap,
-              counters),
-          null);
-    }
   }
 
   protected static String abbrev(Object x) {
@@ -198,8 +196,8 @@ public abstract class WorkerShardTask<I, O, C extends WorkerContext>
       return null;
     }
     String s = "" + x;
-    if (s.length() > 100) {
-      return s.substring(0, 100) + "...";
+    if (s.length() > MapReduceConstants.MAX_LAST_ITEM_STRING_SIZE) {
+      return s.substring(0, MapReduceConstants.MAX_LAST_ITEM_STRING_SIZE) + "...";
     } else {
       return s;
     }

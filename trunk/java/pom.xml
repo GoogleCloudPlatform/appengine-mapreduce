@@ -75,7 +75,12 @@
            use .99 to get latest release within the specified major version -->
       <version>[14.0,14.99]</version>
     </dependency>
-
+    <dependency>
+      <groupId>it.unimi.dsi</groupId>
+      <artifactId>fastutil</artifactId>
+      <version>[6.5,6.6)</version>
+    </dependency>
+    
     <!-- Test Dependencies -->
     <dependency>
       <groupId>com.google.appengine</groupId>

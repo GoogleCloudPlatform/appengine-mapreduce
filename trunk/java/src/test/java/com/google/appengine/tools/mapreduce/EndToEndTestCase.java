@@ -21,6 +21,8 @@ import com.google.apphosting.api.ApiProxy;
 
 import junit.framework.TestCase;
 
+import java.io.ByteArrayInputStream;
+import java.io.ObjectInputStream;
 import java.io.UnsupportedEncodingException;
 import java.net.URLDecoder;
 import java.util.Collections;
@@ -75,7 +77,14 @@ public abstract class EndToEndTestCase extends TestCase {
       throws Exception {
     logger.info("Executing task " + taskStateInfo.getTaskName()
         + " with URL " + taskStateInfo.getUrl());
-
+    // Hack to allow for deferred tasks. Exploits knowing how they work.
+    if (taskStateInfo.getUrl().endsWith("__deferred__")) {
+      ObjectInputStream oin =
+          new ObjectInputStream(new ByteArrayInputStream(taskStateInfo.getBodyAsBytes()));
+      Runnable object = (Runnable) oin.readObject();
+      object.run();
+      return;
+    }
     HttpServletRequest request = createMock(HttpServletRequest.class);
     HttpServletResponse response = createMock(HttpServletResponse.class);
 

@@ -4,10 +4,10 @@ package com.google.appengine.tools.mapreduce.inputs;
 
 import com.google.appengine.tools.mapreduce.Input;
 import com.google.appengine.tools.mapreduce.InputReader;
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 
-import java.io.IOException;
 import java.util.List;
 import java.util.NoSuchElementException;
 
@@ -19,14 +19,16 @@ import java.util.NoSuchElementException;
 public class ConsecutiveLongInput extends Input<Long> {
   private static final long serialVersionUID = 722495043491410651L;
 
-  private static class Reader extends InputReader<Long> {
+  @VisibleForTesting
+  static class Reader extends InputReader<Long> {
     private static final long serialVersionUID = 796981411158026526L;
 
     private final long start;
     private final long limit;
     private long next;
 
-    private Reader(long start, long limit) {
+    @VisibleForTesting
+    Reader(long start, long limit) {
       this.start = start;
       this.limit = limit;
       next = start;
@@ -67,7 +69,7 @@ public class ConsecutiveLongInput extends Input<Long> {
     return getClass().getSimpleName() + "(" + shardCount + ", " + start + ", " + limit + ")";
   }
 
-  @Override public List<? extends InputReader<Long>> createReaders() throws IOException {
+  @Override public List<? extends InputReader<Long>> createReaders() {
     ImmutableList.Builder<InputReader<Long>> b = ImmutableList.builder();
     long valuesTotal = Math.max(0, limit - start);
     long valuesPerShard = valuesTotal / shardCount;

@@ -17,6 +17,11 @@ public interface ShardedJobController<T extends IncrementalTask<T, R>,
     R extends Serializable> extends Serializable {
 
   /**
+   * @return A human readable string for UI purposes.
+   */
+  public String getName();
+  
+  /**
    * Combine multiple result objects into a single result object.  The
    * {@code ShardedJob} execution framework assumes that this is associative
    * and commutative.

@@ -20,7 +20,8 @@
     <dependency org="org.json" name="json" rev="20090211" conf="${thirdparty}->default"/>
     <dependency org="com.google.guava" name="guava" rev="[14.0,14.99]"
                 conf="${thirdparty}->default"/>
-
+    <dependency org="it.unimi.dsi" name="fastutil" rev="[6.5,6.6)"
+                conf="${thirdparty}->default"/>
     <dependency org="com.google.appengine" name="appengine-testing" rev="${sdk_version}"
                 conf="${test}->default"/>
     <dependency org="com.google.appengine" name="appengine-api-stubs" rev="${sdk_version}"

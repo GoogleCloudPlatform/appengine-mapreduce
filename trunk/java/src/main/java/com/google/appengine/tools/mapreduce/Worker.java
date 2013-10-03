@@ -66,7 +66,7 @@ public abstract class Worker<C extends WorkerContext> implements Serializable {
   /**
    * Returns the current context, or null if none.
    */
-  protected C getContext() {
+  public C getContext() {
     return context;
   }
 

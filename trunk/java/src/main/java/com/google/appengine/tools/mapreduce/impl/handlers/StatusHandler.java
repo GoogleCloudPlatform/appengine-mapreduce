@@ -4,7 +4,6 @@ package com.google.appengine.tools.mapreduce.impl.handlers;
 
 import com.google.appengine.tools.mapreduce.Counter;
 import com.google.appengine.tools.mapreduce.Counters;
-import com.google.appengine.tools.mapreduce.impl.AbstractWorkerController;
 import com.google.appengine.tools.mapreduce.impl.WorkerResult;
 import com.google.appengine.tools.mapreduce.impl.WorkerShardState;
 import com.google.appengine.tools.mapreduce.impl.shardedjob.ShardedJobServiceFactory;
@@ -160,13 +159,9 @@ final class StatusHandler {
   static JSONObject handleGetJobDetail(String jobId) {
     ShardedJobState<?, WorkerResult<? extends Serializable>> state =
         ShardedJobServiceFactory.getShardedJobService().getJobState(jobId);
-    @SuppressWarnings("rawtypes")
-    AbstractWorkerController<?, ?> controller =
-       (AbstractWorkerController) state.getController();
-
     JSONObject jobObject = new JSONObject();
     try {
-      jobObject.put("name", controller.getName());
+      jobObject.put("name", state.getController().getName());
       jobObject.put("mapreduce_id", jobId);
       jobObject.put("updated_timestamp_ms", state.getMostRecentUpdateTimeMillis());
       jobObject.put("start_timestamp_ms", state.getStartTimeMillis());
