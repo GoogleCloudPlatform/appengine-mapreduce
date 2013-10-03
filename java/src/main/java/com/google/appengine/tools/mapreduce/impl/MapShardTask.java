@@ -64,7 +64,7 @@ public class MapShardTask<I, K, V> extends WorkerShardTask<I, KeyValue<K, V>, Ma
   @Override
   protected void beginSlice() {
     super.beginSlice();
-    sliceStopwatch = new Stopwatch().start();
+    sliceStopwatch = Stopwatch.createStarted();
   }
 
 }

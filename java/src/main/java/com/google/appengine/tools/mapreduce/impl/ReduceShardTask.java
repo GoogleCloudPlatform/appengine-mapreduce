@@ -66,6 +66,6 @@ public class ReduceShardTask<K, V, O>
   @Override
   protected void beginSlice() {
     super.beginSlice();
-    sliceStopwatch = new Stopwatch().start();
+    sliceStopwatch = Stopwatch.createStarted();
   }
 }

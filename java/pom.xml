@@ -73,7 +73,7 @@
       <artifactId>guava</artifactId>
       <!-- version number of release candidates come before the ##.0 in maven,
            use .99 to get latest release within the specified major version -->
-      <version>[14.0,14.99]</version>
+      <version>[15.0,15.99]</version>
     </dependency>
     <dependency>
       <groupId>it.unimi.dsi</groupId>
