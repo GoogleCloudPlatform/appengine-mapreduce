@@ -8,8 +8,6 @@
 # Using opensource naming conventions, pylint: disable=g-bad-name
 
 
-import os
-import math
 from testlib import mox
 import unittest
 
@@ -353,9 +351,12 @@ class GoogleCloudStorageOutputWriterTest(GoogleCloudStorageOutputTestBase):
         output_params=
         {self.WRITER_CLS.BUCKET_NAME_PARAM: "test"})
     shard_state = self.create_shard_state(0)
+    ctx = context.Context(mapreduce_state.mapreduce_spec, shard_state)
+    context.Context._set(ctx)
+
     writer = self.WRITER_CLS.create(mapreduce_state, shard_state)
     data = "fakedata"
-    writer.write(data, None)
+    writer.write(data)
     writer.finalize(None, shard_state)
     filename = self.WRITER_CLS._get_filename(shard_state)
 
@@ -367,18 +368,20 @@ class GoogleCloudStorageOutputWriterTest(GoogleCloudStorageOutputTestBase):
         output_params=
         {self.WRITER_CLS.BUCKET_NAME_PARAM: "test"})
     shard_state = self.create_shard_state(0)
+    ctx = context.Context(mapreduce_state.mapreduce_spec, shard_state)
+    context.Context._set(ctx)
 
     # Create the writer for the 1st attempt
     writer = self.WRITER_CLS.create(mapreduce_state, shard_state)
     filename = writer._filename
-    writer.write("badData", None)
+    writer.write("badData")
 
     # Test re-creating the writer for a retry
     shard_state.reset_for_retry()
     writer = self.WRITER_CLS.create(mapreduce_state, shard_state)
     new_filename = writer._filename
     good_data = "goodData"
-    writer.write(good_data, None)
+    writer.write(good_data)
     writer.finalize(None, shard_state)
 
     # Verify the retry has a different filename
@@ -397,6 +400,8 @@ class GoogleCloudStorageOutputWriterTest(GoogleCloudStorageOutputTestBase):
          self.WRITER_CLS.CONTENT_TYPE_PARAM:
          test_content_type})
     shard_state = self.create_shard_state(0)
+    ctx = context.Context(mapreduce_state.mapreduce_spec, shard_state)
+    context.Context._set(ctx)
 
     writer = self.WRITER_CLS.create(mapreduce_state, shard_state)
     writer.finalize(None, shard_state)
@@ -413,14 +418,17 @@ class GoogleCloudStorageOutputWriterTest(GoogleCloudStorageOutputTestBase):
         output_params=
         {self.WRITER_CLS.BUCKET_NAME_PARAM: "test"})
     shard_state = self.create_shard_state(0)
+    ctx = context.Context(mapreduce_state.mapreduce_spec, shard_state)
+    context.Context._set(ctx)
+
     writer = self.WRITER_CLS.create(mapreduce_state, shard_state)
     # data expliclity contains binary data
     data = "\"fake\"\tdatathatishardtoencode"
-    writer.write(data, None)
+    writer.write(data)
 
     # Serialize/deserialize writer after some data written
     writer = self.WRITER_CLS.from_json(writer.to_json())
-    writer.write(data, None)
+    writer.write(data)
 
     # Serialize/deserialize writer after more data written
     writer = self.WRITER_CLS.from_json(writer.to_json())
@@ -428,7 +436,7 @@ class GoogleCloudStorageOutputWriterTest(GoogleCloudStorageOutputTestBase):
 
     # Serialize/deserialize writer after finalization
     writer = self.WRITER_CLS.from_json(writer.to_json())
-    self.assertRaises(IOError, writer.write, data, None)
+    self.assertRaises(IOError, writer.write, data)
 
     filename = self.WRITER_CLS._get_filename(shard_state)
 
@@ -442,9 +450,11 @@ class GoogleCloudStorageOutputWriterTest(GoogleCloudStorageOutputTestBase):
     shard_state = self.create_shard_state(0)
     writer = self.WRITER_CLS.create(mapreduce_state, shard_state)
     ctx = context.Context(mapreduce_state.mapreduce_spec, shard_state)
+    context.Context._set(ctx)
+
     # Write large amount of data to ensure measurable time passes during write.
     data = "d" * 1024 * 1024 * 10
-    writer.write(data, ctx)
+    writer.write(data)
     self.assertEqual(len(data), shard_state.counters_map.get(
         output_writers.COUNTER_IO_WRITE_BYTES))
     self.assertTrue(shard_state.counters_map.get(
@@ -483,127 +493,50 @@ class GoogleCloudStorageRecordOutputWriterTest(
     return super(GoogleCloudStorageRecordOutputWriterTest,
                  self).create_mapreduce_state(all_params)
 
-  def setupWriter(self, flush_size=None):
+  def setupWriter(self):
     """Create an Google Cloud Storage LevelDB record output writer.
-
-    Args:
-      flush_size: optional setting for the buffer size before data is flushed
-        to the cloudstorage library.
 
     Returns:
       a model.MapreduceSpec.
     """
-    self.mapreduce_state = self.create_mapreduce_state(
-        output_params={self.WRITER_CLS.FLUSH_SIZE_PARAM: flush_size})
+    self.mapreduce_state = self.create_mapreduce_state()
     self.shard_state = self.create_shard_state(0)
     self.writer = self.WRITER_CLS.create(self.mapreduce_state, self.shard_state)
     self.ctx = context.Context(self.mapreduce_state.mapreduce_spec,
                                self.shard_state)
+    context.Context._set(self.ctx)
 
-  def testWrite_RecordSizeSmallerThanFlush(self):
-    record_size = 10
-    flush_size = record_size + 2 * records._HEADER_LENGTH
-    self.setupWriter(flush_size=flush_size)
-
-    self.writer.write("d" * record_size, self.ctx)
-
-    # No data should have been flushed
-    self.assertEqual(1, len(self.writer._buffer))
-    self.assertEqual(record_size, len(self.writer._buffer[0]))
-    self.assertEqual(0, self.shard_state.counters_map.get(
-        output_writers.COUNTER_IO_WRITE_BYTES))
-
-    # Flush
-    self.writer._flush(self.ctx)
-
-    # No data should be in the record writer buffer
-    self.assertEqual(0, len(self.writer._buffer))
-    # All data should be written cloudstorage library
-    self.assertEqual(records._BLOCK_SIZE, self.shard_state.counters_map.get(
-        output_writers.COUNTER_IO_WRITE_BYTES))
-
-  def testWrite_RecordSizeLargerThanFlush(self):
-    record_size = 10
-    flush_size = 1
-    self.setupWriter(flush_size=flush_size)
-
-    self.writer.write("d" * record_size, self.ctx)
-
-    # No data should be in the record writer buffer
-    self.assertEqual(0, len(self.writer._buffer))
-    # All data should be written cloudstorage library
-    self.assertEqual(records._BLOCK_SIZE, self.shard_state.counters_map.get(
-        output_writers.COUNTER_IO_WRITE_BYTES))
-
-  def testWrite_FlushLargerThanBlock(self):
-    record_size = int(records._BLOCK_SIZE / 10)
-    flush_size = records._BLOCK_SIZE * 2
-    num_records = int(math.ceil(float(flush_size) / record_size))
-    self.setupWriter(flush_size=flush_size)
-
-    # Write all but the last recrod
-    for _ in range(num_records - 1):
-      self.writer.write("d" * record_size, self.ctx)
-
-    # No data should have been flushed
-    self.assertEqual(num_records - 1, len(self.writer._buffer))
-    self.assertEqual(0, self.shard_state.counters_map.get(
-        output_writers.COUNTER_IO_WRITE_BYTES))
-
-    # Write the last record that should put the buffer over flush size
-    self.writer.write("d" * record_size, self.ctx)
-
-    # No data should be in the record writer buffer
-    self.assertEqual(0, len(self.writer._buffer))
-    # All data should be written cloudstorage library (exact size will
-    # dependent on how many records were split across multiple blocks
-    min_expected_size = (record_size + records._HEADER_LENGTH) * num_records
-    self.assertTrue(min_expected_size < self.shard_state.counters_map.get(
-        output_writers.COUNTER_IO_WRITE_BYTES))
-
-  def testSerialization(self):
-    record_size = records._BLOCK_SIZE / 3
-    # Approximate, does not account for headers
-    records_per_flush = 5
-    flush_size = record_size * records_per_flush - 1
-
-    self.setupWriter(flush_size=flush_size)
+  def testSmoke(self):
+    data_size = 10
+    self.setupWriter()
 
     # Serialize un-used writer
-    self.writer = self.WRITER_CLS.from_json(self.writer.to_json())
+    self.writer = self.WRITER_CLS.from_json_str(self.writer.to_json_str())
 
     # Write single record
-    self.writer.write("d" * record_size, self.ctx)
+    self.writer.write("d" * data_size)
 
-    # No data should have been flushed
-    self.assertEqual(1, len(self.writer._buffer))
-    self.assertEqual(0, self.shard_state.counters_map.get(
-        output_writers.COUNTER_IO_WRITE_BYTES))
+    self.assertEqual(data_size + records._HEADER_LENGTH,
+                     self.shard_state.counters_map.get(
+                         output_writers.COUNTER_IO_WRITE_BYTES))
 
     # Serialize
-    self.writer = self.WRITER_CLS.from_json(self.writer.to_json())
+    self.writer = self.WRITER_CLS.from_json_str(self.writer.to_json_str())
 
-    # No data should be in the record writer buffer
-    self.assertEqual(0, len(self.writer._buffer))
     # A full (padded) block should have been flushed
     self.assertEqual(records._BLOCK_SIZE, self.shard_state.counters_map.get(
         output_writers.COUNTER_IO_WRITE_BYTES))
 
-    # Write enough records to trigger self-flush
-    for _ in range(records_per_flush):
-      self.writer.write("d" * record_size, self.ctx)
+    # Writer a large record.
+    self.writer.write("d" * records._BLOCK_SIZE)
 
-    # No data should be in the record writer buffer
-    self.assertEqual(0, len(self.writer._buffer))
-    data_written = self.shard_state.counters_map.get(
-        output_writers.COUNTER_IO_WRITE_BYTES)
-    # At least 2 blocks
-    self.assertTrue(records._BLOCK_SIZE * 2 < data_written)
-    # Only full blocks writen
-    self.assertEqual(0, data_written % records._BLOCK_SIZE)
+    self.assertEqual(records._BLOCK_SIZE + records._BLOCK_SIZE +
+                     2 * records._HEADER_LENGTH,
+                     self.shard_state.counters_map.get(
+                         output_writers.COUNTER_IO_WRITE_BYTES))
 
-    # Serialize
-    self.writer = self.WRITER_CLS.from_json(self.writer.to_json())
+    self.writer.finalize(self.ctx, self.shard_state)
+    self.writer = self.WRITER_CLS.from_json_str(self.writer.to_json_str())
 
 
 if __name__ == "__main__":

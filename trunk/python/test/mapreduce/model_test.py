@@ -247,7 +247,6 @@ class MapperSpecTest(unittest.TestCase):
     self.assertEquals(self.TEST_WRITER, ms.output_writer_spec)
     self.assertEquals(TestWriter, ms.output_writer_class())
 
-
   def specForHandler(self, handler_spec):
     self.default_json["mapper_handler_spec"] = handler_spec
     return model.MapperSpec.from_json(self.default_json)
