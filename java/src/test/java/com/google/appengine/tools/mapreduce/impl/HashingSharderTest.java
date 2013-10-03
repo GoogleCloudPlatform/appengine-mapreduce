@@ -8,6 +8,9 @@ import com.google.common.primitives.Ints;
 import junit.framework.TestCase;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Random;
 
 /**
@@ -77,6 +80,54 @@ public class HashingSharderTest extends TestCase {
     verifyWithKeyMaker(100, keyMaker);
     verifyWithKeyMaker(10, keyMaker);
     verifyWithKeyMaker(2, keyMaker);
+  }
+
+  public void testSubdevision() {
+    testSubdevision(2, 8);
+    testSubdevision(3, 9);
+    testSubdevision(8, 256);
+    testSubdevision(9, 81);
+    testSubdevision(10, 20);
+    testSubdevision(10, 100);
+    testSubdevision(64, 256);
+    testSubdevision(90, 256);
+    testSubdevision(101, 10000);
+    testSubdevision(128, 1024);
+    testSubdevision(128, 10000);
+    testSubdevision(1000, 10000);
+  }
+
+  private void testSubdevision(int numInitialShards, int numRehashedShards) {
+    int numItems = Math.min(10000, numInitialShards * numRehashedShards * 2);
+    final Marshaller<Integer> marshaller = Marshallers.getIntegerMarshaller();
+    HashingSharder sharder = new HashingSharder(numInitialShards);
+    ArrayList<ArrayList<Integer>> selectedShards =
+        new ArrayList<ArrayList<Integer>>(numInitialShards);
+    for (int i = 0; i < numInitialShards; i++) {
+      selectedShards.add(new ArrayList<Integer>());
+    }
+    for (int i = 0; i < numItems; i++) {
+      ArrayList<Integer> intsOnShard =
+          selectedShards.get(sharder.getShardForKey(marshaller.toBytes(i)));
+      intsOnShard.add(i);
+    }
+
+    sharder = new HashingSharder(numRehashedShards);
+    for (ArrayList<Integer> initialShard : selectedShards) {
+      Map<Integer, Integer> rehashedShardCount = new HashMap<Integer, Integer>(numRehashedShards);
+      for (Integer item : initialShard) {
+        int newShard = sharder.getShardForKey(marshaller.toBytes(item));
+        Integer intsOnShard = rehashedShardCount.get(newShard);
+        if (intsOnShard == null) {
+          rehashedShardCount.put(newShard, 1);
+        } else {
+          rehashedShardCount.put(newShard, intsOnShard + 1);
+        }
+      }
+      double expectNum = ((double) numRehashedShards) / numInitialShards;
+      assertTrue("Expected about, " + expectNum + " but found " + rehashedShardCount.size(),
+          rehashedShardCount.size() <= Math.ceil(expectNum) + 1);
+    }
   }
 
 }
