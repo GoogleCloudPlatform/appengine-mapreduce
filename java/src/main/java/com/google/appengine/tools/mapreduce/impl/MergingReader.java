@@ -67,6 +67,13 @@ final class MergingReader<K, V> extends InputReader<KeyValue<K, Iterator<V>>> {
   }
   
   @Override
+  public void open() throws IOException {
+    for (PeekingInputReader<KeyValue<ByteBuffer, Iterator<V>>> reader : readers) {
+      reader.open();
+    }
+  }
+  
+  @Override
   public void beginSlice() throws IOException {
     Comparator<PeekingInputReader<KeyValue<ByteBuffer, Iterator<V>>>> nextReaderComparator =
         new Comparator<PeekingInputReader<KeyValue<ByteBuffer, Iterator<V>>>>() {
@@ -219,6 +226,13 @@ final class MergingReader<K, V> extends InputReader<KeyValue<K, Iterator<V>>> {
       }
     }
     return total / readers.size();
+  }
+  
+  @Override
+  public void close() throws IOException {
+    for (PeekingInputReader<KeyValue<ByteBuffer, Iterator<V>>> reader : readers) {
+      reader.close();
+    }
   }
 
 }

@@ -62,6 +62,11 @@ private static final long serialVersionUID = -2164845668646485549L;
   }
 
   @Override
+  public void open() {
+    currentKey = null;
+  }
+
+  @Override
   public void beginSlice() {
     Preconditions.checkState(iterator == null, "%s: Already initialized: %s", this, iterator);
 

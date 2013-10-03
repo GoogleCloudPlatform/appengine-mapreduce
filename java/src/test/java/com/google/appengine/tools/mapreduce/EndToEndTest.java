@@ -1,6 +1,11 @@
 // Copyright 2011 Google Inc. All Rights Reserved.
 package com.google.appengine.tools.mapreduce;
 
+import static org.easymock.EasyMock.createStrictMock;
+import static org.easymock.EasyMock.expect;
+import static org.easymock.EasyMock.isA;
+import static org.easymock.EasyMock.replay;
+
 import com.google.appengine.api.datastore.DatastoreService;
 import com.google.appengine.api.datastore.DatastoreServiceFactory;
 import com.google.appengine.api.datastore.Entity;
@@ -44,8 +49,10 @@ import java.nio.ByteBuffer;
 import java.nio.channels.Channels;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
+import java.util.NoSuchElementException;
 import java.util.Set;
 import java.util.logging.Logger;
 
@@ -194,6 +201,45 @@ public class EndToEndTest extends EndToEndTestCase {
           assertTrue(results.contains(expected));
         }
       }
+    });
+  }
+
+  @SuppressWarnings({"unchecked", "rawtypes"})
+  public void testLifeCycleMethodsCalled() throws Exception {
+    Input<Long> mockInput = createStrictMock(Input.class);
+    InputReader<Long> inputReader = createStrictMock(InputReader.class);
+    Output<ByteBuffer, Void> mockOutput = createStrictMock(Output.class);
+    OutputWriter<ByteBuffer> outputWriter = createStrictMock(OutputWriter.class);
+
+    List/*<InputReader<Long>>*/ readers = ImmutableList.of(inputReader);
+    expect(mockInput.createReaders()).andReturn(readers);
+    inputReader.open();
+    inputReader.beginSlice();
+    expect(inputReader.next()).andThrow(new NoSuchElementException());
+    inputReader.endSlice();
+    inputReader.close();
+
+    expect(mockOutput.getNumShards()).andReturn(1).times(0, Integer.MAX_VALUE);
+    List/*<OutputWriter<ByteBuffer>>*/ writers = ImmutableList.of(outputWriter);
+    expect(mockOutput.createWriters()).andReturn(writers);
+    outputWriter.open();
+    outputWriter.beginSlice();
+    outputWriter.endSlice();
+    outputWriter.close();
+    expect(mockOutput.finish(isA(Collection.class))).andReturn(null);
+    replay(mockInput, inputReader, mockOutput, outputWriter);
+    runWithPipeline(new Preparer() {
+      @Override
+      public void prepare() throws Exception {}
+    }, MapReduceSpecification.of("testLifeCycleMethodsCalled",
+        mockInput,
+        new LongToBytesMapper(),
+        Marshallers.getByteBufferMarshaller(),
+        Marshallers.getByteBufferMarshaller(),
+        ValueProjectionReducer.<ByteBuffer, ByteBuffer>create(),
+        mockOutput), new Verifier<Void>() {
+      @Override
+      public void verify(MapReduceResult<Void> result) throws Exception {}
     });
   }
 

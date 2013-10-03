@@ -37,6 +37,11 @@ public class UnmarshallingInputReader<T> extends InputReader<T> {
   }
 
   @Override
+  public void open() throws IOException {
+    reader.open();
+  }
+
+  @Override
   public void beginSlice() throws IOException {
     reader.beginSlice();
   }
@@ -44,6 +49,11 @@ public class UnmarshallingInputReader<T> extends InputReader<T> {
   @Override
   public void endSlice() throws IOException {
     reader.endSlice();
+  }
+
+  @Override
+  public void close() throws IOException {
+    reader.close();
   }
 
 }

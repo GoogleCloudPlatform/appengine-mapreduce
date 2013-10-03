@@ -1,10 +1,12 @@
 package com.google.appengine.tools.mapreduce.inputs;
 
 import com.google.appengine.tools.mapreduce.CorruptDataException;
+import com.google.appengine.tools.mapreduce.InputReader;
 import com.google.appengine.tools.mapreduce.impl.util.Crc32c;
 import com.google.appengine.tools.mapreduce.impl.util.LevelDbConstants;
 import com.google.appengine.tools.mapreduce.impl.util.LevelDbConstants.RecordType;
 import com.google.appengine.tools.mapreduce.outputs.LevelDbOutputWriter;
+import com.google.apphosting.api.AppEngineInternal;
 import com.google.common.annotations.VisibleForTesting;
 
 import java.io.IOException;
@@ -25,25 +27,71 @@ import java.util.NoSuchElementException;
  * In the event that corrupt data is encountered a {@link CorruptDataException} is thrown.
  * If this occurs, do not continue to attempt to read. Behavior is not guaranteed. 
  */
-public final class LevelDbInputReader extends ReadableByteChannelReader {
+@AppEngineInternal
+public abstract class LevelDbInputReader extends InputReader<ByteBuffer> {
 
   private static final long serialVersionUID = -2949371665085068120L;
   
   private long offset = 0L;
   
-  private int blockSize;
+  private final int blockSize;
   /** A temp buffer that is used to hold contents and headers as they are read*/
   private transient ByteBuffer tmpBuffer;
   /** The buffer that contains the data that will ultimately be returned to the caller*/
   private transient ByteBuffer finalRecord;
   
-  public LevelDbInputReader(ReadableByteChannel in) {
-    this(in, LevelDbConstants.BLOCK_SIZE);
+  private long bytesRead;
+  private ReadableByteChannel in;
+  
+  public LevelDbInputReader() {
+    this(LevelDbConstants.BLOCK_SIZE);
   }
+  
   @VisibleForTesting
-  public LevelDbInputReader(ReadableByteChannel in, int blockSize) {
-    super(in);
+  protected LevelDbInputReader(int blockSize) {
+    super();
     this.blockSize = blockSize;
+  }
+  
+  /**
+   * @return A Serializable ReadableByteChannel from which data may be read.
+   */
+  public abstract ReadableByteChannel createReadableByteChannel();
+
+  private int read(ByteBuffer result) throws IOException {
+    int totalRead = 0;
+    while (result.hasRemaining()) {
+      int read = in.read(result);
+      if (read == -1) {
+        if (totalRead == 0) {
+          totalRead = -1;
+        }
+        break;
+      } else {
+        totalRead += read;
+        bytesRead += read;
+      }
+    }
+    return totalRead;
+  }
+
+  protected long getBytesRead() {
+    return bytesRead;
+  }
+
+  @Override
+  public void open() {
+    offset = 0;
+    bytesRead = 0;
+    in = createReadableByteChannel();
+  }
+  
+  /**
+   * Calls close on the underlying stream.
+   */
+  @Override
+  public void close() throws IOException {
+    in.close();
   }
 
   @Override
@@ -72,6 +120,7 @@ public final class LevelDbInputReader extends ReadableByteChannelReader {
     }
   }
 
+  
   /**
    * @return How far into the file has been read.
    */

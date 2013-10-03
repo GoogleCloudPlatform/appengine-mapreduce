@@ -43,7 +43,9 @@ public abstract class InputReader<I> implements Serializable {
    * Returns the relative progress reading this input as a number from 0 to 1.
    * Returns null if relative progress cannot be determined.
    */
-  public abstract Double getProgress();
+  public Double getProgress() {
+    return null;
+  }
 
   /**
    * Prepares the {@code InputReader} for reading, after possibly having gone
@@ -55,5 +57,18 @@ public abstract class InputReader<I> implements Serializable {
    * Prepares the {@code InputReader} for serialization.
    */
   public void endSlice() throws IOException {}
+
+  /**
+   * Performs setup at the beginning of the shard. This method is invoked before the first call to
+   * {@link #beginSlice}. It will not be invoked again unless the shard restarts. When a shard is
+   * restarted, this method is invoked and the input should be read from the beginning.
+   */
+  public void open() throws IOException {}
+
+  /**
+   * Called after endSlice if there will not be any subsequent calls to beginSlice or next.
+   * This may be used to teardown or finalize any state if required.
+   */
+  public void close() throws IOException {}
 
 }

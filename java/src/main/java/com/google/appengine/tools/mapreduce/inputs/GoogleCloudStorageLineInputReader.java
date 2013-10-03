@@ -7,14 +7,17 @@ import com.google.appengine.tools.cloudstorage.GcsService;
 import com.google.appengine.tools.cloudstorage.GcsServiceFactory;
 import com.google.appengine.tools.mapreduce.InputReader;
 import com.google.appengine.tools.mapreduce.impl.MapReduceConstants;
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.channels.Channels;
+import java.util.NoSuchElementException;
 
 /**
  * CloudStorageLineInputReader reads files from Cloud Storage one line at a time.
+ *
  */
 class GoogleCloudStorageLineInputReader extends InputReader<byte[]> {
   private static final long serialVersionUID = -762091129798691745L;
@@ -23,66 +26,78 @@ class GoogleCloudStorageLineInputReader extends InputReader<byte[]> {
       GcsServiceFactory.createGcsService(MapReduceConstants.GCS_RETRY_PARAMETERS);
   private static final int DEFAULT_BUFFER_SIZE = 1024 * 1024;
 
-  /*VisibleForTesting*/ long startOffset;
-  /*VisibleForTesting*/ long endOffset;
+  @VisibleForTesting final long startOffset;
+  @VisibleForTesting final long endOffset;
   private GcsFilename file;
-  private byte separator;
-  private long offset = 0L;
-  private int bufferSize;
-  private transient LineInputReader lineReader;
+  private long offset;
+  private final int bufferSize;
+  private transient LineInputStream in;
+  private final byte separator;
 
-  GoogleCloudStorageLineInputReader(
-      GcsFilename file, long startOffset, long endOffset, byte separator) {
+  GoogleCloudStorageLineInputReader(GcsFilename file, long startOffset, long endOffset,
+      byte separator) {
     this(file, startOffset, endOffset, separator, DEFAULT_BUFFER_SIZE);
   }
 
-  GoogleCloudStorageLineInputReader(
-      GcsFilename file, long startOffset, long endOffset, byte separator, int bufferSize) {
+  GoogleCloudStorageLineInputReader(GcsFilename file, long startOffset, long endOffset,
+      byte separator, int bufferSize) {
+    this.separator = separator;
     this.file = checkNotNull(file, "Null file");
+    Preconditions.checkArgument(endOffset >= startOffset);
     this.startOffset = startOffset;
     this.endOffset = endOffset;
-    this.separator = separator;
     this.bufferSize = (bufferSize > 0) ? bufferSize : DEFAULT_BUFFER_SIZE;
-  }
-
-  private void checkInitialized() {
-    Preconditions.checkState(lineReader != null, "%s: Not initialized", this);
-  }
-
-  @Override
-  public byte[] next() {
-    checkInitialized();
-    return lineReader.next();
   }
 
   @Override
   public Double getProgress() {
-    checkInitialized();
     if (endOffset == startOffset) {
       return 1.0;
     } else {
-      double currentOffset = offset + lineReader.getBytesRead();
+      double currentOffset = offset + (in == null ? 0 : in.getBytesCount());
       return Math.min(1.0, currentOffset / (endOffset - startOffset));
     }
   }
 
   @Override
-  public void beginSlice() {
-    Preconditions.checkState(
-        lineReader == null, "%s: Already initialized: %s", this, lineReader);
-    InputStream input = Channels.newInputStream(
+  public void open() {
+    offset = 0;
+    in = null;
+  }
+
+  @Override
+  public void beginSlice() throws IOException {
+    Preconditions.checkState(in == null, "%s: Already initialized: %s", this, in);
+    InputStream inputStream = Channels.newInputStream(
         GCS_SERVICE.openPrefetchingReadChannel(file, startOffset + offset, bufferSize));
-    lineReader = new LineInputReader(
-        input, endOffset - startOffset - offset, startOffset != 0L && offset == 0L, separator);
+    in = new LineInputStream(inputStream, endOffset - startOffset - offset, separator);
+    skipRecordReadByPreviousShard();
+  }
+
+  /**
+   * The previous record is responsible for reading past it's endOffset until a whole record is
+   * read.
+   */
+  private void skipRecordReadByPreviousShard() {
+    if (startOffset != 0L && offset == 0L) {
+      try {
+        in.next();
+      } catch (NoSuchElementException e) {
+        // Empty slice is ok.
+      }
+    }
   }
 
   @Override
   public void endSlice() throws IOException {
-    checkInitialized();
-    offset += lineReader.getBytesRead();
-    lineReader.close();
-    // Un-initialize to make checkInitialized() effective.
-    lineReader = null;
+    offset += in.getBytesCount();
+    in.close();
+    in = null;
+  }
+
+  @Override
+  public byte[] next() throws IOException, NoSuchElementException {
+    return in.next();
   }
 
 }

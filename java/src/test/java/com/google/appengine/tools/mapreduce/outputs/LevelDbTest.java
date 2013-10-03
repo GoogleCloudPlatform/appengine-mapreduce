@@ -15,6 +15,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.Channels;
+import java.nio.channels.ReadableByteChannel;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.NoSuchElementException;
@@ -28,6 +29,25 @@ public class LevelDbTest extends TestCase {
   private static final int BLOCK_SIZE = LevelDbConstants.BLOCK_SIZE;
   private static final int MAX_SINGLE_BLOCK_RECORD_SIZE =
       LevelDbConstants.BLOCK_SIZE - LevelDbConstants.HEADER_LENGTH;
+
+  private static class TestLevelDbInputReader extends LevelDbInputReader {
+
+    private ReadableByteChannel channel;
+
+    TestLevelDbInputReader(ReadableByteChannel channel) {
+      this.channel = channel;
+    }
+
+    TestLevelDbInputReader(ReadableByteChannel channel, int blockSize) {
+      super(blockSize);
+      this.channel = channel;
+    }
+
+    @Override
+    public ReadableByteChannel createReadableByteChannel() {
+      return channel;
+    }
+  }
 
   /**
    * Writes to an in memory byte array for testing.
@@ -76,7 +96,7 @@ public class LevelDbTest extends TestCase {
         writtenData[i] = (byte) (writtenData[i] ^ (1 << j));
         ByteArrayInputStream arrayInputStream = new ByteArrayInputStream(writtenData);
         LevelDbInputReader reader =
-            new LevelDbInputReader(Channels.newChannel(arrayInputStream), overriddenBlockSize);
+            new TestLevelDbInputReader(Channels.newChannel(arrayInputStream), overriddenBlockSize);
         try {
           verifyWrittenData(written, reader);
           fail();
@@ -104,7 +124,7 @@ public class LevelDbTest extends TestCase {
       System.arraycopy(writtenData, 0, toRead, 0, toRead.length);
       ByteArrayInputStream arrayInputStream = new ByteArrayInputStream(toRead);
       LevelDbInputReader reader =
-          new LevelDbInputReader(Channels.newChannel(arrayInputStream), overriddenBlockSize);
+          new TestLevelDbInputReader(Channels.newChannel(arrayInputStream), overriddenBlockSize);
       try {
         verifyWrittenData(written, reader);
         fail();
@@ -142,7 +162,7 @@ public class LevelDbTest extends TestCase {
     byte[] writtenData = arrayOutputWriter.toByteArray();
     assertEquals(0, writtenData.length % BLOCK_SIZE);
     ByteArrayInputStream arrayInputStream = new ByteArrayInputStream(writtenData);
-    LevelDbInputReader reader = new LevelDbInputReader(Channels.newChannel(arrayInputStream));
+    LevelDbInputReader reader = new TestLevelDbInputReader(Channels.newChannel(arrayInputStream));
     verifyWrittenData(written, reader);
   }
 
@@ -192,12 +212,13 @@ public class LevelDbTest extends TestCase {
     byte[] writtenData = arrayOutputWriter.toByteArray();
     assertEquals(0, writtenData.length % BLOCK_SIZE);
     ByteArrayInputStream arrayInputStream = new ByteArrayInputStream(writtenData);
-    LevelDbInputReader reader = new LevelDbInputReader(Channels.newChannel(arrayInputStream));
+    LevelDbInputReader reader = new TestLevelDbInputReader(Channels.newChannel(arrayInputStream));
     verifyWrittenData(written, reader);
   }
 
   static void verifyWrittenData(List<byte[]> written, LevelDbInputReader reader)
       throws IOException {
+    reader.open();
     reader.beginSlice();
     for (int i = 0; i < written.size(); i++) {
       ByteBuffer read = reader.next();

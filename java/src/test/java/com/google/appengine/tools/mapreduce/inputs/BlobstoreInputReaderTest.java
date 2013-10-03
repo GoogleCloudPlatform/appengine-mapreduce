@@ -50,8 +50,15 @@ public class BlobstoreInputReaderTest extends BlobstoreInputTestCase {
     String recordWithoutSeparator = RECORD.substring(0, RECORD.length() - 1);
 
     for (BlobstoreInputReader reader : readers) {
-      reader.beginSlice();
+      if (performSerialization) {
+        reader = recreate(reader);
+      }
+      reader.open();
+      if (performSerialization) {
+        reader = recreate(reader);
+      }
       while (true) {
+        reader.beginSlice();
         byte[] value;
         try {
           value = reader.next();
@@ -61,15 +68,20 @@ public class BlobstoreInputReaderTest extends BlobstoreInputTestCase {
         assertEquals("Record mismatch", recordWithoutSeparator, new String(value));
         recordsRead++;
 
+        reader.endSlice();
         if (performSerialization) {
-          reader.endSlice();
-          byte[] bytes = SerializationUtil.serializeToByteArray(reader);
-          reader = (BlobstoreInputReader) SerializationUtil.deserializeFromByteArray(bytes);
-          reader.beginSlice();
+          reader = recreate(reader);
         }
       }
+      reader.close();
     }
 
     assertEquals("Number of records read", RECORDS_COUNT, recordsRead);
+  }
+
+  private BlobstoreInputReader recreate(BlobstoreInputReader reader) {
+    byte[] bytes = SerializationUtil.serializeToByteArray(reader);
+    reader = (BlobstoreInputReader) SerializationUtil.deserializeFromByteArray(bytes);
+    return reader;
   }
 }

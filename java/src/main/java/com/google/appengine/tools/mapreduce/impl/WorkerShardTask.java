@@ -136,11 +136,6 @@ public abstract class WorkerShardTask<I, O, C extends WorkerContext>
     if (!inputExhausted) {
       return RunResult.of(new WorkerResult<O>(shardNumber, workerShardState, counters), this);
     } else {
-      try {
-        out.close();
-      } catch (IOException e) {
-        throw new RuntimeException(out + ".close() threw IOException", e);
-      }
       return RunResult.<WorkerShardTask<I, O, C>, WorkerResult<O>>of(
           new WorkerResult<O>(shardNumber, out, workerShardState, counters), null);
     }
@@ -150,6 +145,7 @@ public abstract class WorkerShardTask<I, O, C extends WorkerContext>
     if (isFirstSlice) {
       try {
         out.open();
+        in.open();
       } catch (IOException e) {
         throw new RuntimeException(out + ".beginShard() threw IOException", e);
       }
@@ -195,6 +191,18 @@ public abstract class WorkerShardTask<I, O, C extends WorkerContext>
       in.endSlice();
     } catch (IOException e) {
       throw new RuntimeException(in + ".endSlice() threw IOException", e);
+    }
+    if (inputExhausted) {
+      try {
+        out.close();
+      } catch (IOException e) {
+        throw new RuntimeException(out + ".close() threw IOException", e);
+      }
+      try {
+        in.close();
+      } catch (IOException e) {
+        throw new RuntimeException(in + ".close() threw IOException", e);
+      }
     }
   }
 
