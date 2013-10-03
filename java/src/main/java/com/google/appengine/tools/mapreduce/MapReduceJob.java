@@ -44,6 +44,7 @@ import com.google.appengine.tools.pipeline.PipelineServiceFactory;
 import com.google.appengine.tools.pipeline.PromisedValue;
 import com.google.appengine.tools.pipeline.Value;
 import com.google.common.base.Preconditions;
+import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 
 import java.io.IOException;
@@ -553,20 +554,27 @@ public class MapReduceJob<I, K, V, O, R>
     return reduceResult;
   }
 
+  public Value<MapReduceResult<R>> handleException(Throwable t) throws Throwable {
+    log.log(Level.SEVERE, "MapReduce job failed because of: ", t);
+    throw t;
+  }
+
   // TODO(user): Perhaps we should have some sort of generalized settings processing.
   private static String getAndSaveBucketName(MapReduceSettings settings) {
     String bucket = settings.getBucketName();
-    if (bucket == null || bucket.length() == 0) {
-      try { // TODO(user): Update this once b/6009907 is resolved.
+    if (Strings.isNullOrEmpty(bucket)) {
+      try { // TODO(user): Update this once b/6009907 is released.
         bucket = FileServiceFactory.getFileService().getDefaultGsBucketName();
-        if (bucket == null || bucket.length() == 0) {
-          throw new IllegalArgumentException("A GCS bucket to write intermediate data to was not "
-              + "provided in the MapReduceSettings object, and this application does not have a "
-              + "default bucket configured to fall back on.");
+        if (Strings.isNullOrEmpty(bucket)) {
+          String message = "The BucketName property was not set in the MapReduceSettings object, "
+              + "and this application does not have a default bucket configured to fall back on.";
+          log.log(Level.SEVERE, message);
+          throw new IllegalArgumentException(message);
         }
       } catch (IOException e) {
-        throw new RuntimeException("A GCS bucket to write intermediate data to was not "
-            + "provided in the MapReduceSettings, and could not get the default bucket.", e);
+        throw new RuntimeException(
+            "The BucketName property was not set in the MapReduceSettings object, "
+            + "and could not get the default bucket.", e);
       }
       settings.setBucketName(bucket);
     }
