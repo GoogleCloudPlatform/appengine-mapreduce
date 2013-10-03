@@ -33,7 +33,9 @@ public class HashingSharder implements Sharder {
   public int getShardForKey(ByteBuffer key) {
     byte[] bytes = SerializationUtil.getBytes(key);
     int hash = (HASH.hashBytes(bytes).asInt()) & Integer.MAX_VALUE; // Keeping positive
-    return hash % numShards;
+    // Dividing integer range rather than using modulo so as to avoid rewriting entries if they are
+    // re-hashed.
+    return hash / (Integer.MAX_VALUE / numShards + 1);
   }
 
 }
