@@ -93,13 +93,6 @@ class TaskQueueHandlerTest(unittest.TestCase):
     self.init()
     self.assertEquals(5, self.handler.task_retry_count())
 
-  def testTaskRetriedTooManyTimes(self):
-    self.request.headers["X-AppEngine-TaskExecutionCount"] = (
-        parameters._MAX_TASK_RETRIES + 1)
-    self.init()
-    self.handler.post()
-    self.assertEqual(httplib.OK, self.handler.response.status)
-
 
 class FaultyTaskQueueHandler(base_handler.TaskQueueHandler):
   """A handler that always fails at _preprocess."""
@@ -143,13 +136,14 @@ class FaultyTaskQueueHandlerTest(unittest.TestCase):
     self.assertFalse(self.handler.handled)
     self.assertEqual(httplib.OK, self.handler.response.status)
 
-  def testNoMrIdInHeader(self):
-    """Test _drop_gracefully code is not called."""
-    del self.request.headers[util._MR_ID_TASK_HEADER]
-    self.assertRaises(Exception, self.handler.initialize,
-                      self.request, mock_webapp.MockResponse())
-    self.assertFalse(self.handler.dropped)
+  def testTaskRetriedTooManyTimes(self):
+    self.request.headers["X-AppEngine-TaskExecutionCount"] = (
+        parameters._MAX_TASK_RETRIES + 1)
+    self.init()
+    self.handler.post()
+    self.assertTrue(self.handler.dropped)
     self.assertFalse(self.handler.handled)
+    self.assertEqual(httplib.OK, self.handler.response.status)
 
 
 class JsonErrorHandler(base_handler.JsonHandler):

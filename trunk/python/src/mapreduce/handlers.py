@@ -661,11 +661,15 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
     """
     if shard_state.slice_retries < parameters._RETRY_SLICE_ERROR_MAX_RETRIES:
       logging.error(
-          "Will retry slice %s %s for the %s time.",
+          "Slice %s %s failed for the %s of up to %s attempts "
+          "(%s of %s taskqueue execution attempts). "
+          "Will retry now.",
           tstate.shard_id,
           tstate.slice_id,
-          # Use taskqueue's count here.
-          self.task_retry_count() + 1)
+          shard_state.slice_retries + 1,
+          parameters._RETRY_SLICE_ERROR_MAX_RETRIES + 1,
+          self.task_retry_count() + 1,
+          parameters._MAX_TASK_RETRIES + 1)
       # Clear info related to current exception. Otherwise, the real
       # callstack that includes a frame for this method will show up
       # in log.

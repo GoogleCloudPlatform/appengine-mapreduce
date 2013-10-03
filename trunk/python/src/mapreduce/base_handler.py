@@ -40,7 +40,6 @@ from google.appengine.ext import webapp
 from mapreduce import errors
 from mapreduce import model
 from mapreduce import parameters
-from mapreduce import util
 
 
 class Error(Exception):
@@ -113,6 +112,7 @@ class TaskQueueHandler(BaseHandler):
       logging.error(
           "Task %s has been retried %s times. Dropping it permanently.",
           self.request.headers["X-AppEngine-TaskName"], self.task_retry_count())
+      self._drop_gracefully()
       return
 
     try:
@@ -120,13 +120,7 @@ class TaskQueueHandler(BaseHandler):
       self._preprocess_success = True
     # pylint: disable=bare-except
     except:
-      # For old task w/o mr_id, we raise exception and the task will be
-      # dropped after max retries.
-      # TODO(user): Remove after all tasks have mr_id.
       self._preprocess_success = False
-      mr_id = self.request.headers.get(util._MR_ID_TASK_HEADER, None)
-      if mr_id is None:
-        raise
       logging.error(
           "Preprocess task %s failed. Dropping it permanently.",
           self.request.headers["X-AppEngine-TaskName"])
