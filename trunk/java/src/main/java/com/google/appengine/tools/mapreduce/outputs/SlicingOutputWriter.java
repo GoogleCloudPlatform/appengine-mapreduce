@@ -29,6 +29,7 @@ public class SlicingOutputWriter<O, CreatorT extends SlicingWriterCreator<O>> ex
   @Override
   public void beginSlice() throws IOException {
     writer = getCreator().createNextWriter();
+    writer.open();
     writer.beginSlice();
   }
 
@@ -45,6 +46,11 @@ public class SlicingOutputWriter<O, CreatorT extends SlicingWriterCreator<O>> ex
   @Override
   public void write(O value) throws IOException {
     writer.write(value);
+  }
+
+  @Override
+  public void open() throws IOException {
+    // Done in beginSlice();
   }
 
   @Override

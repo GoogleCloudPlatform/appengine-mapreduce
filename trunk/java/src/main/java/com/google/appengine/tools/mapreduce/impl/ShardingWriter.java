@@ -38,6 +38,13 @@ final class ShardingWriter<K, V, R> extends
     this.output = Preconditions.checkNotNull(output);
     this.writers = output.createWriters();
   }
+  
+  @Override
+  public void open() throws IOException {
+    for (OutputWriter<KeyValue<K, V>> writer : writers) {
+      writer.open();
+    }
+  }
 
   @Override
   public void endSlice() throws IOException {

@@ -60,6 +60,7 @@ public class GoogleCloudStorageFileOutputTest extends TestCase {
         new GoogleCloudStorageFileOutput(BUCKET, FILE_NAME_PATTERN, MIME_TYPE, NUM_SHARDS);
     List<? extends OutputWriter<ByteBuffer>> writers = creator.createWriters();
     assertEquals(NUM_SHARDS, writers.size());
+    beginShard(writers);
     for (int i = 0; i < NUM_SHARDS; i++) {
       OutputWriter<ByteBuffer> out = writers.get(i);
       out.beginSlice();
@@ -77,6 +78,12 @@ public class GoogleCloudStorageFileOutputTest extends TestCase {
     }
   }
 
+  private void beginShard(List<? extends OutputWriter<ByteBuffer>> writers) throws IOException {
+    for (OutputWriter<ByteBuffer> writer : writers) {
+      writer.open();
+    }
+  }
+
   public void testSmallSlicing() throws IOException, ClassNotFoundException {
     testSlicing(SMALL_CONTENT);
   }
@@ -90,6 +97,7 @@ public class GoogleCloudStorageFileOutputTest extends TestCase {
         new GoogleCloudStorageFileOutput(BUCKET, FILE_NAME_PATTERN, MIME_TYPE, NUM_SHARDS);
     List<? extends OutputWriter<ByteBuffer>> writers = creator.createWriters();
     assertEquals(NUM_SHARDS, writers.size());
+    beginShard(writers);
     for (int i = 0; i < NUM_SHARDS; i++) {
       OutputWriter<ByteBuffer> out = writers.get(i);
       out.beginSlice();
