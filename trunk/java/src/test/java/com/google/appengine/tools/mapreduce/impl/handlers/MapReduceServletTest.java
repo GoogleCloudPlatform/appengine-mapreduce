@@ -26,12 +26,14 @@ import com.google.appengine.tools.development.testing.LocalMemcacheServiceTestCo
 import com.google.appengine.tools.development.testing.LocalServiceTestHelper;
 import com.google.appengine.tools.development.testing.LocalTaskQueueTestConfig;
 import com.google.appengine.tools.mapreduce.MapReduceServlet;
+import com.google.common.collect.ImmutableList;
 
 import junit.framework.TestCase;
 
 import org.easymock.EasyMock;
 
 import java.io.PrintWriter;
+import java.util.List;
 
 import javax.servlet.ServletOutputStream;
 import javax.servlet.http.HttpServletRequest;
@@ -121,34 +123,25 @@ public class MapReduceServletTest extends TestCase {
     verify(request, response);
   }
 
-  public void testGetBase() {
-    HttpServletRequest request = createMockControllerRequest();
-    replay(request);
-
-    assertEquals("/mapreduce/", MapReduceServletImpl.getBase(request));
-    verify(request);
-  }
-
-  public void testGetCommandBaseAndHandler() {
+  public void testGetCommand() {
     HttpServletRequest request = createMockRequest(
         MapReduceServletImpl.COMMAND_PATH + "/" + StatusHandler.ABORT_JOB_PATH, false, true);
-    expect(request.getMethod())
-        .andReturn("POST")
-        .anyTimes();
     replay(request);
 
-    assertEquals("/mapreduce/", MapReduceServletImpl.getBase(request));
     // Command should be treated as part of the handler
     assertEquals("command/abort_job", MapReduceServletImpl.getHandler(request));
     verify(request);
   }
 
   public void testGetHandler() {
-    HttpServletRequest req = createMockControllerRequest();
-    replay(req);
-
-    assertEquals("controllerCallback", MapReduceServletImpl.getHandler(req));
-    verify(req);
+    List<String> prefixes = ImmutableList.of("", "map/", "map/jobid1/");
+    for (String prefix : prefixes) {
+      HttpServletRequest request =
+          createMockControllerRequest(prefix + MapReduceServletImpl.CONTROLLER_PATH);
+      replay(request);
+      assertEquals("controllerCallback", MapReduceServletImpl.getHandler(request));
+      verify(request);
+    }
   }
 
   public void testGetJobDetailCSRF() throws Exception {
@@ -231,9 +224,8 @@ public class MapReduceServletTest extends TestCase {
     return request;
   }
 
-  private static HttpServletRequest createMockControllerRequest() {
-    HttpServletRequest request = createMockRequest(MapReduceServletImpl.CONTROLLER_PATH,
-        true, false);
+  private static HttpServletRequest createMockControllerRequest(String handlerPath) {
+    HttpServletRequest request = createMockRequest(handlerPath, true, false);
     return request;
   }
 }

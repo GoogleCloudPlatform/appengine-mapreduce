@@ -27,7 +27,6 @@ public final class MapReduceServletImpl {
   public static final String CONTROLLER_PATH = "controllerCallback";
   public static final String WORKER_PATH = "workerCallback";
   public static final String SHUFFLE_CALLBACK_PATH = "shuffleCallback";
-
   static final String COMMAND_PATH = "command";
 
 // --------------------------- CONSTRUCTORS ---------------------------
@@ -148,27 +147,13 @@ public final class MapReduceServletImpl {
   }
 
   /**
-   * Returns the portion of the URL from the end of the TLD (exclusive) to the
-   * handler portion (exclusive).
-   *
-   * For example, getBase(https://www.google.com/foo/bar) -> /foo/
-   * However, there are handler portions that take more than segment
-   * (currently only the command handlers). So in that case, we have:
-   * getBase(https://www.google.com/foo/command/bar) -> /foo/
-   */
-  static String getBase(HttpServletRequest request) {
-    String fullPath = request.getRequestURI();
-    int baseEnd = getDividingIndex(fullPath);
-    return fullPath.substring(0, baseEnd + 1);
-  }
-
-  /**
    * Finds the index of the "/" separating the base from the handler.
    */
   private static int getDividingIndex(String fullPath) {
     int baseEnd = fullPath.lastIndexOf('/');
-    if (fullPath.substring(0, baseEnd).endsWith(COMMAND_PATH)) {
-      baseEnd = fullPath.substring(0, baseEnd).lastIndexOf('/');
+    String base = fullPath.substring(0, baseEnd);
+    if (base.endsWith(COMMAND_PATH)) {
+      baseEnd = base.lastIndexOf('/');
     }
     return baseEnd;
   }
