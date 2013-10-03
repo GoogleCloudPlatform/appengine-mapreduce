@@ -79,9 +79,9 @@ public abstract class WorkerShardTask<I, O, C extends WorkerContext>
   public RunResult<WorkerShardTask<I, O, C>, WorkerResult<O>> run() {
 
     beginSlice();
-    Stopwatch overallStopwatch = new Stopwatch().start();
-    Stopwatch inputStopwatch = new Stopwatch();
-    Stopwatch workerStopwatch = new Stopwatch();
+    Stopwatch overallStopwatch = Stopwatch.createStarted();
+    Stopwatch inputStopwatch =  Stopwatch.createUnstarted();
+    Stopwatch workerStopwatch = Stopwatch.createUnstarted();
     
     int workerCalls = 0;
     int itemsRead = 0;
