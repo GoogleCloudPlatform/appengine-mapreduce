@@ -36,7 +36,10 @@ import heapq
 import logging
 import threading
 
-from google.appengine.ext import ndb
+try:
+  from google.appengine.ext import ndb
+except ImportError:
+  ndb = None
 from google.appengine.api import datastore
 from google.appengine.ext import db
 from google.appengine.runtime import apiproxy_errors
@@ -67,7 +70,7 @@ COUNTER_MAPPER_WALLTIME_MS = "mapper-walltime-ms"
 
 def _normalize_entity(value):
   """Return an entity from an entity or model instance."""
-  if isinstance(value, ndb.Model):
+  if ndb is not None and isinstance(value, ndb.Model):
     return None
   if getattr(value, "_populate_internal_entity", None):
     return value._populate_internal_entity()
@@ -76,7 +79,7 @@ def _normalize_entity(value):
 
 def _normalize_key(value):
   """Return a key from an entity, model instance, key, or key string."""
-  if isinstance(value, (ndb.Model, ndb.Key)):
+  if ndb is not None and isinstance(value, (ndb.Model, ndb.Key)):
     return None
   if getattr(value, "key", None):
     return value.key()
@@ -256,7 +259,7 @@ class _MutationPool(Pool):
 
   def ndb_put(self, entity):
     """Like put(), but for NDB entities."""
-    assert isinstance(entity, ndb.Model)
+    assert ndb is not None and isinstance(entity, ndb.Model)
     self.ndb_puts.append(entity)
 
   def delete(self, entity):
@@ -272,7 +275,7 @@ class _MutationPool(Pool):
 
   def ndb_delete(self, entity_or_key):
     """Like delete(), but for NDB entities/keys."""
-    if isinstance(entity_or_key, ndb.Model):
+    if ndb is not None and isinstance(entity_or_key, ndb.Model):
       key = entity_or_key.key
     else:
       key = entity_or_key
@@ -319,10 +322,12 @@ class _MutationPool(Pool):
 
   def _flush_ndb_puts(self, items, options):
     """Flush all NDB puts to datastore."""
+    assert ndb is not None
     ndb.put_multi(items, config=self._create_config(options))
 
   def _flush_ndb_deletes(self, items, options):
     """Flush all deletes to datastore."""
+    assert ndb is not None
     ndb.delete_multi(items, config=self._create_config(options))
 
   def _create_config(self, options):
