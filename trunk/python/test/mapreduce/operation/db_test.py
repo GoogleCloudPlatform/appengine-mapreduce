@@ -35,13 +35,13 @@ class PutTest(unittest.TestCase):
     m = mox.Mox()
 
     ctx = context.Context(None, None)
-    ctx.mutation_pool = m.CreateMock(context.MutationPool)
+    ctx._mutation_pool = m.CreateMock(context._MutationPool)
 
     entity = TestEntity()
     operation = op.db.Put(entity)
 
     # Record calls
-    ctx.mutation_pool.put(entity)
+    ctx._mutation_pool.put(entity)
 
     m.ReplayAll()
     try:  # test, verify
@@ -59,13 +59,13 @@ class DeleteTest(unittest.TestCase):
     m = mox.Mox()
 
     ctx = context.Context(None, None)
-    ctx.mutation_pool = m.CreateMock(context.MutationPool)
+    ctx._mutation_pool = m.CreateMock(context._MutationPool)
 
     entity = TestEntity()
     operation = op.db.Delete(entity)
 
     # Record calls
-    ctx.mutation_pool.delete(entity)
+    ctx._mutation_pool.delete(entity)
 
     m.ReplayAll()
     try:  # test, verify

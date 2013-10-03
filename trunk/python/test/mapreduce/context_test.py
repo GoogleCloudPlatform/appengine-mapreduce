@@ -17,15 +17,19 @@
 
 
 
-from testlib import mox
+import random
 import unittest
 
+from testlib import mox
+
 from google.appengine.ext import ndb
-import unittest
 from google.appengine.api import datastore
 from google.appengine.ext import db
 from mapreduce import context
 from testlib import testutil
+from google.appengine.runtime import apiproxy_errors
+
+# pylint: disable=g-bad-name
 
 
 class TestEntity(db.Model):
@@ -44,98 +48,164 @@ def new_datastore_entity(key_name=None):
   return datastore.Entity('TestEntity', name=key_name)
 
 
+class FlushFunction(object):
+  """Flush function to use for tests."""
+
+  # How many time to raise timeouts.
+  timeouts = 0
+  # Records calls to flush function.
+  calls = []
+  # Where things are flushed to.
+  persistent_storage = []
+
+  def flush_function(self, items, options):
+    FlushFunction.calls.append((items, dict(options)))
+    if len(FlushFunction.calls) <= FlushFunction.timeouts:
+      raise db.Timeout()
+    FlushFunction.persistent_storage.extend(items)
+
+  # pylint: disable=unused-argument
+  def flush_function_too_large_error(self, *args, **kwds):
+    raise apiproxy_errors.RequestTooLargeError()
+
+  @classmethod
+  def reset(cls):
+    cls.timeouts = False
+    cls.calls = []
+    cls.persistent_storage = []
+
+
 class ItemListTest(unittest.TestCase):
-  """Tests for context.ItemList class."""
+  """Tests for context._ItemList class."""
 
   def setUp(self):
-    self.list = context.ItemList()
+    FlushFunction.reset()
+    self.max_entity_count = 9
+    self.list = context._ItemList(
+        self.max_entity_count,
+        FlushFunction().flush_function)
 
-  def testAppend(self):
-    """Test append method."""
-    self.assertEquals([], self.list.items)
-    self.assertEquals(0, self.list.size)
-
-    self.list.append('abc', 100)
-
-    self.assertEquals(['abc'], self.list.items)
-    self.assertEquals(100, self.list.size)
+  def testShouldFlush(self):
+    for _ in range(self.max_entity_count):
+      self.assertFalse(self.list.should_flush())
+      self.list.append('a')
+    self.assertTrue(self.list.should_flush())
 
   def testClear(self):
     """Test clear method."""
-    self.list.append('abc', 100)
-    self.assertEquals(['abc'], self.list.items)
-    self.assertEquals(100, self.list.size)
-
+    self.list.append('abc')
     self.list.clear()
+    self.assertFieldsMatch([])
 
-    self.assertEquals([], self.list.items)
-    self.assertEquals(0, self.list.size)
+  def testInitialState(self):
+    self.assertFieldsMatch([])
 
-  def testBackwardsCompat(self):
-    """Old class name and 'entities' property should still work."""
-    self.list = context.EntityList()
-    self.list.append('abc', 100)
-    self.assertEquals(['abc'], self.list.entities)
-    self.assertEquals(self.list.items, self.list.entities)
-    self.assertEquals(100, self.list.size)
+  def testAppend(self):
+    """Test append method."""
+    self.list.append('abc')
+    self.list.append('de')
+    self.assertFieldsMatch(['abc', 'de'])
+
+  def testAppendTooManyEntities(self):
+    items = ['a' for _ in range(self.max_entity_count)]
+    for item in items:
+      self.list.append(item)
+    self.list.append('b')
+    self.assertFieldsMatch(['b'])
+    self.assertEqual(items, FlushFunction.persistent_storage)
+
+  def testFlushWithTooLargeRequestError(self):
+    self.list = context._ItemList(
+        self.max_entity_count,
+        FlushFunction().flush_function_too_large_error,
+        repr_function=lambda item: item)
+    items = [(s, 'a'*s) for s in range(10, 1, -1)]
+    items_copy = list(items)
+    random.seed(1)
+    random.shuffle(items_copy)
+    for _, i in items_copy:
+      self.list.append(i)
+    self.assertRaises(apiproxy_errors.RequestTooLargeError,
+                      self.list.flush)
+    self.assertEqual(items[:context._ItemList._LARGEST_ITEMS_TO_LOG],
+                     self.list._largest)
+
+  def testFlushRetry(self):
+    FlushFunction.timeouts = context._ItemList.DEFAULT_RETRIES
+    self.list.append('abc')
+    self.list.flush()
+    self.assertEqual(['abc'], FlushFunction.persistent_storage)
+    self.assertEqual(context._ItemList.DEFAULT_RETRIES + 1,
+                     len(FlushFunction.calls))
+    deadlines = [t[1]['deadline'] for t in FlushFunction.calls]
+    expected_deadlines = [context.DATASTORE_DEADLINE]
+    for _ in range(3):
+      expected_deadlines.append(expected_deadlines[-1]*2)
+    self.assertEqual(expected_deadlines, deadlines)
+
+  def testFlushTimeoutTooManyTimes(self):
+    FlushFunction.timeouts = context._ItemList.DEFAULT_RETRIES + 1
+    self.list.append('abc')
+    self.assertRaises(db.Timeout, self.list.flush)
+    self.assertEqual(context._ItemList.DEFAULT_RETRIES + 1,
+                     len(FlushFunction.calls))
+
+  def assertFieldsMatch(self, items, item_list=None):
+    """Assert all internal fields are consistent."""
+    if item_list is None:
+      item_list = self.list
+    self.assertEqual(items, item_list.items)
 
 
 class MutationPoolTest(testutil.HandlerTestBase):
-  """Tests for context.MutationPool class."""
+  """Tests for context._MutationPool class."""
 
   def setUp(self):
     super(MutationPoolTest, self).setUp()
-    self.pool = context.MutationPool()
-
-  def record_put(self, entities, force_writes=False):
-    datastore.Put(
-        entities,
-        config=testutil.MatchesDatastoreConfig(
-            deadline=context.DATASTORE_DEADLINE,
-            force_writes=force_writes))
-
-  def record_delete(self, entities, force_writes=False):
-    datastore.Delete(
-        entities,
-        config=testutil.MatchesDatastoreConfig(
-            deadline=context.DATASTORE_DEADLINE,
-            force_writes=force_writes))
+    self.pool = context._MutationPool()
 
   def testPoolWithForceWrites(self):
     class MapreduceSpec:
       def __init__(self):
         self.params = {'force_ops_writes':True}
-    pool = context.MutationPool(mapreduce_spec=MapreduceSpec())
-    m = mox.Mox()
-    m.StubOutWithMock(datastore, 'Put', use_mock_anything=True)
-    m.StubOutWithMock(datastore, 'Delete', use_mock_anything=True)
-    e1 = TestEntity()
-    e2 = TestEntity(key_name='key2')
-    self.record_put([e1._populate_internal_entity()], True)
-    self.record_delete([e2.key()], True)
-    m.ReplayAll()
-    try:  # test, verify
-      pool.put(e1)
-      pool.delete(e2.key())
-      self.assertEquals([e1._populate_internal_entity()], pool.puts.items)
-      self.assertEquals([e2.key()], pool.deletes.items)
-      pool.flush()
-      m.VerifyAll()
-    finally:
-      m.UnsetStubs()
+    pool = context._MutationPool(mapreduce_spec=MapreduceSpec())
+    self.assertTrue(pool.force_writes)
 
-  def testPut(self):
+  def testPutEntity(self):
     """Test put method."""
-    e = TestEntity()
+    e = new_datastore_entity()
     self.pool.put(e)
-    self.assertEquals([e._populate_internal_entity()], self.pool.puts.items)
-    self.assertEquals([], self.pool.deletes.items)
+    self.assertEquals([e], self.pool.puts.items)
 
-  def testPutWithForceWrite(self):
-    e = TestEntity()
-    self.pool.put(e)
-    self.assertEquals([e._populate_internal_entity()], self.pool.puts.items)
+    # Mix in a model instance.
+    # Model instance is "normalized", meaning internal fields are populated
+    # in order to accurately calculate size.
+    e2 = TestEntity()
+    self.pool.put(e2)
+    self.assertEquals([e, context._normalize_entity(e2)], self.pool.puts.items)
+
     self.assertEquals([], self.pool.deletes.items)
+    self.assertEquals([], self.pool.ndb_puts.items)
+    self.assertEquals([], self.pool.ndb_deletes.items)
+
+  def testDeleteEntity(self):
+    """Test delete method."""
+    # Model instance.
+    e1 = TestEntity(key_name='goingaway')
+    self.pool.delete(e1)
+    # Datastore instance.
+    e2 = new_datastore_entity(key_name='goingaway')
+    self.pool.delete(e2)
+    # Key.
+    k = db.Key.from_path('MyKind', 'MyKeyName', _app='myapp')
+    self.pool.delete(k)
+    # String of key.
+    self.pool.delete(str(k))
+
+    self.assertEquals([e1.key(), e2.key(), k, k], self.pool.deletes.items)
+    self.assertEquals([], self.pool.puts.items)
+    self.assertEquals([], self.pool.ndb_puts.items)
+    self.assertEquals([], self.pool.ndb_deletes.items)
 
   def testPutNdbEntity(self):
     """Test put() using an NDB entity."""
@@ -145,24 +215,6 @@ class MutationPoolTest(testutil.HandlerTestBase):
     self.assertEquals([], self.pool.ndb_deletes.items)
     self.assertEquals([], self.pool.puts.items)
     self.assertEquals([], self.pool.deletes.items)
-
-  def testPutEntity(self):
-    """Test put method using a datastore Entity directly."""
-    e = new_datastore_entity()
-    self.pool.put(e)
-    self.assertEquals([e], self.pool.puts.items)
-    self.assertEquals([], self.pool.deletes.items)
-    # Mix in a model instance.
-    e2 = TestEntity()
-    self.pool.put(e2)
-    self.assertEquals([e, e2._populate_internal_entity()], self.pool.puts.items)
-
-  def testDelete(self):
-    """Test delete method with a model instance."""
-    e = TestEntity(key_name='goingaway')
-    self.pool.delete(e)
-    self.assertEquals([], self.pool.puts.items)
-    self.assertEquals([e.key()], self.pool.deletes.items)
 
   def testDeleteNdbEntity(self):
     """Test delete method with an NDB model instance."""
@@ -182,185 +234,47 @@ class MutationPoolTest(testutil.HandlerTestBase):
     self.assertEquals([], self.pool.puts.items)
     self.assertEquals([], self.pool.deletes.items)
 
-  def testDeleteEntity(self):
-    """Test delete method with a datastore entity"""
-    e = new_datastore_entity(key_name='goingaway')
-    self.pool.delete(e)
-    self.assertEquals([], self.pool.puts.items)
-    self.assertEquals([e.key()], self.pool.deletes.items)
-
-  def testDeleteKey(self):
-    """Test delete method with a key instance."""
-    k = db.Key.from_path('MyKind', 'MyKeyName', _app='myapp')
-    self.pool.delete(k)
-    self.assertEquals([], self.pool.puts.items)
-    self.assertEquals([k], self.pool.deletes.items)
-    # String of keys should work too. No, there's no collapsing of dupes.
-    self.pool.delete(str(k))
-    self.assertEquals([k, k], self.pool.deletes.items)
-
-  def testPutOverPoolSize(self):
-    """Test putting more than pool size."""
-    self.pool = context.MutationPool(1000)
-
-    m = mox.Mox()
-    m.StubOutWithMock(datastore, 'Put', use_mock_anything=True)
-
-    e1 = TestEntity()
-    e2 = TestEntity(tag=' ' * 1000)
-
-    # Record Calls
-    self.record_put([e1._populate_internal_entity()])
-
-    m.ReplayAll()
-    try:  # test, verify
-      self.pool.put(e1)
-      self.assertEquals([e1._populate_internal_entity()], self.pool.puts.items)
-
-      self.pool.put(e2)
-      self.assertEquals([e2._populate_internal_entity()], self.pool.puts.items)
-
-      m.VerifyAll()
-    finally:
-      m.UnsetStubs()
-
-  def testPutTooManyEntities(self):
-    """Test putting more than allowed entity count."""
-    max_entity_count = 100
-    self.pool = context.MutationPool(max_entity_count=max_entity_count)
-
-    m = mox.Mox()
-    m.StubOutWithMock(datastore, 'Put', use_mock_anything=True)
-
-    entities = []
-    for i in range(max_entity_count + 50):
-      entities.append(TestEntity())
-
-    # Record Calls
-    self.record_put([e._populate_internal_entity()
-                     for e in entities[:max_entity_count]])
-
-    m.ReplayAll()
-    try:  # test, verify
-      for e in entities:
-        self.pool.put(e)
-
-      # only 50 entities should be left.
-      self.assertEquals(50, self.pool.puts.length)
-
-      m.VerifyAll()
-    finally:
-      m.UnsetStubs()
-
-  def testDeleteOverPoolSize(self):
-    """Test deleting more than pool size."""
-    self.pool = context.MutationPool(500)
-
-    m = mox.Mox()
-    m.StubOutWithMock(datastore, 'Delete', use_mock_anything=True)
-
-    e1 = TestEntity(key_name='goingaway')
-    e2 = TestEntity(key_name='x' * 500)
-
-    # Record Calls
-    self.record_delete([e1.key()])
-
-    m.ReplayAll()
-    try:  # test, verify
-      self.pool.delete(e1)
-      self.assertEquals([e1.key()], self.pool.deletes.items)
-
-      self.pool.delete(e2)
-      self.assertEquals([e2.key()], self.pool.deletes.items)
-
-      m.VerifyAll()
-    finally:
-      m.UnsetStubs()
-
-  def testDeleteTooManyEntities(self):
-    """Test putting more than allowed entity count."""
-    max_entity_count = context.MAX_ENTITY_COUNT
-    self.pool = context.MutationPool() # default size is MAX_ENTITY_COUNT
-
-    m = mox.Mox()
-    m.StubOutWithMock(datastore, 'Delete', use_mock_anything=True)
-
-    entities = []
-    for i in range(max_entity_count + 50):
-      entities.append(TestEntity(key_name='die%d' % i))
-
-    # Record Calls
-    self.record_delete([e.key() for e in entities[:max_entity_count]])
-
-    m.ReplayAll()
-    try:  # test, verify
-      for e in entities:
-        self.pool.delete(e)
-
-      # only 50 entities should be left.
-      self.assertEquals(50, self.pool.deletes.length)
-
-      m.VerifyAll()
-    finally:
-      m.UnsetStubs()
-
   def testFlush(self):
-    """Test flush method."""
-    self.pool = context.MutationPool(1000)
+    """Combined test for all db implicit and explicit flushing."""
+    self.pool = context._MutationPool(max_entity_count=3)
 
-    m = mox.Mox()
-    m.StubOutWithMock(datastore, 'Delete', use_mock_anything=True)
-    m.StubOutWithMock(datastore, 'Put', use_mock_anything=True)
+    for i in range(8):
+      self.pool.put(TestEntity())
+      self.assertEqual(len(self.pool.puts.items), (i%3) + 1)
 
-    e1 = TestEntity()
-    e2 = TestEntity(key_name='flushme')
+    for i in range(5):
+      e = TestEntity()
+      e.put()
+      self.pool.delete(e)
+      self.assertEqual(len(self.pool.deletes.items), (i%3) + 1)
 
-    # Record Calls
-    self.record_put([e1._populate_internal_entity()])
-    self.record_delete([e2.key()])
-
-    m.ReplayAll()
-    try:  # test, verify
-      self.pool.put(e1)
-      self.assertEquals([e1._populate_internal_entity()], self.pool.puts.items)
-
-      self.pool.delete(e2)
-      self.assertEquals([e2.key()], self.pool.deletes.items)
-
-      self.pool.flush()
-
-      self.assertEquals([], self.pool.puts.items)
-      self.assertEquals([], self.pool.deletes.items)
-
-      m.VerifyAll()
-    finally:
-      m.UnsetStubs()
+    self.pool.flush()
+    self.assertEquals(len(self.pool.puts.items), 0)
+    self.assertEquals(len(self.pool.deletes.items), 0)
+    self.assertEquals(len(self.pool.ndb_puts.items), 0)
+    self.assertEquals(len(self.pool.ndb_deletes.items), 0)
 
   def testNdbFlush(self):
-    # Combined test for all NDB implicit and explicit flushing.
-    self.pool = context.MutationPool(max_pool_size=500, max_entity_count=3)
+    """Combined test for all NDB implicit and explicit flushing."""
+    self.pool = context._MutationPool(max_entity_count=3)
 
     for i in range(8):
       self.pool.put(NdbTestEntity())
-      self.assertEquals(len(self.pool.ndb_puts.items), (i%3) + 1)
+      self.assertEqual(len(self.pool.ndb_puts.items), (i%3) + 1)
 
     for i in range(5):
       self.pool.delete(ndb.Key(NdbTestEntity, 'x%d' % i))
       self.assertEquals(len(self.pool.ndb_deletes.items), (i%3) + 1)
 
-    self.pool.put(NdbTestEntity(tag='x'*500))
-    self.assertEquals(len(self.pool.ndb_puts.items), 1)  # Down from 2
-
-    self.pool.delete(ndb.Key(NdbTestEntity, 'x'*500))
-    self.assertEquals(len(self.pool.ndb_deletes.items), 1)  # Down from 2
-
     self.pool.flush()
     self.assertEquals(len(self.pool.ndb_puts.items), 0)
     self.assertEquals(len(self.pool.ndb_deletes.items), 0)
+    self.assertEquals(len(self.pool.puts.items), 0)
+    self.assertEquals(len(self.pool.deletes.items), 0)
 
 
 class CountersTest(unittest.TestCase):
-  """Test for context.Counters class."""
+  """Test for context._Counters class."""
 
   def testIncrement(self):
     """Test increment() method."""
@@ -370,7 +284,7 @@ class CountersTest(unittest.TestCase):
     shard_state = m.CreateMockAnything()
     counters_map = m.CreateMockAnything()
     shard_state.counters_map = counters_map
-    counters = context.Counters(shard_state)
+    counters = context._Counters(shard_state)
 
     # Record call
     counters_map.increment('test', 19)
@@ -385,7 +299,7 @@ class CountersTest(unittest.TestCase):
 
   def testFlush(self):
     """Test flush() method."""
-    counters = context.Counters(None)
+    counters = context._Counters(None)
     counters.flush()
 
 
@@ -420,32 +334,6 @@ class ContextTest(testutil.HandlerTestBase):
       m.VerifyAll()
     finally:
       m.UnsetStubs()
-
-  def testMutationPoolSize(self):
-    ctx = context.Context(None, None)
-    self.assertEquals(context.MAX_ENTITY_COUNT,
-                      ctx.mutation_pool.max_entity_count)
-    self.assertEquals(context.MAX_POOL_SIZE,
-                      ctx.mutation_pool.max_pool_size)
-
-    ctx = context.Context(None, None, task_retry_count=0)
-    self.assertEquals(context.MAX_ENTITY_COUNT,
-                      ctx.mutation_pool.max_entity_count)
-    self.assertEquals(context.MAX_POOL_SIZE,
-                      ctx.mutation_pool.max_pool_size)
-
-    ctx = context.Context(None, None, task_retry_count=1)
-    self.assertEquals(context.MAX_ENTITY_COUNT / 2,
-                      ctx.mutation_pool.max_entity_count)
-    self.assertEquals(context.MAX_POOL_SIZE / 2,
-                      ctx.mutation_pool.max_pool_size)
-
-    ctx = context.Context(None, None, task_retry_count=4)
-    self.assertEquals(context.MAX_ENTITY_COUNT / 16,
-                      ctx.mutation_pool.max_entity_count)
-    self.assertEquals(context.MAX_POOL_SIZE / 16,
-                      ctx.mutation_pool.max_pool_size)
-
 
 if __name__ == "__main__":
   unittest.main()

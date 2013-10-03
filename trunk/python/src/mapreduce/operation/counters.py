@@ -23,6 +23,8 @@ __all__ = ['Increment']
 
 from mapreduce.operation import base
 
+# pylint: disable=protected-access
+
 
 class Increment(base.Operation):
   """Increment counter operation."""
@@ -43,4 +45,4 @@ class Increment(base.Operation):
     Args:
       context: mapreduce context as context.Context.
     """
-    context.counters.increment(self.counter_name, self.delta)
+    context._counters.increment(self.counter_name, self.delta)

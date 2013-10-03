@@ -32,12 +32,12 @@ class IncrementTest(unittest.TestCase):
     m = mox.Mox()
 
     ctx = context.Context(None, None)
-    ctx.counters = m.CreateMock(context.Counters)
+    ctx._counters = m.CreateMock(context._Counters)
 
     operation = op.counters.Increment("test", 12)
 
     # Record calls
-    ctx.counters.increment("test", 12)
+    ctx._counters.increment("test", 12)
 
     m.ReplayAll()
     try:  # test, verify
@@ -47,5 +47,5 @@ class IncrementTest(unittest.TestCase):
       m.UnsetStubs()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
   unittest.main()
