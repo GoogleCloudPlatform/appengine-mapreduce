@@ -26,14 +26,12 @@ import com.google.appengine.tools.development.testing.LocalMemcacheServiceTestCo
 import com.google.appengine.tools.development.testing.LocalServiceTestHelper;
 import com.google.appengine.tools.development.testing.LocalTaskQueueTestConfig;
 import com.google.appengine.tools.mapreduce.MapReduceServlet;
-import com.google.common.collect.ImmutableList;
 
 import junit.framework.TestCase;
 
 import org.easymock.EasyMock;
 
 import java.io.PrintWriter;
-import java.util.List;
 
 import javax.servlet.ServletOutputStream;
 import javax.servlet.http.HttpServletRequest;
@@ -123,27 +121,6 @@ public class MapReduceServletTest extends TestCase {
     verify(request, response);
   }
 
-  public void testGetCommand() {
-    HttpServletRequest request = createMockRequest(
-        MapReduceServletImpl.COMMAND_PATH + "/" + StatusHandler.ABORT_JOB_PATH, false, true);
-    replay(request);
-
-    // Command should be treated as part of the handler
-    assertEquals("command/abort_job", MapReduceServletImpl.getHandler(request));
-    verify(request);
-  }
-
-  public void testGetHandler() {
-    List<String> prefixes = ImmutableList.of("", "map/", "map/jobid1/");
-    for (String prefix : prefixes) {
-      HttpServletRequest request =
-          createMockControllerRequest(prefix + MapReduceServletImpl.CONTROLLER_PATH);
-      replay(request);
-      assertEquals("controllerCallback", MapReduceServletImpl.getHandler(request));
-      verify(request);
-    }
-  }
-
   public void testGetJobDetailCSRF() throws Exception {
     String jobId = "testJob";
     // Send it as a task queue request but not an ajax request - should be denied.
@@ -218,8 +195,8 @@ public class MapReduceServletTest extends TestCase {
           .andReturn(null)
           .anyTimes();
     }
-    expect(request.getRequestURI())
-        .andReturn("/mapreduce/" + handler)
+    expect(request.getPathInfo())
+        .andReturn("/" + handler)
         .anyTimes();
     return request;
   }
