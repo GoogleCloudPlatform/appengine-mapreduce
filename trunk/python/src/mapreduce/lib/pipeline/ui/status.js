@@ -135,6 +135,9 @@ function prettyName(name, sidebar) {
 
 // Constructs the info div for a stage.
 function constructStageNode(pipelineId, infoMap, sidebar) {
+  if (!infoMap) {
+    return;
+  }
   var containerDiv = $('<div class="status-box">');
   containerDiv.addClass('status-' + infoMap.status);
 
@@ -588,24 +591,25 @@ function generateSidebar(statusMap, nextPipelineId, rootElement) {
   var parentInfoMap = statusMap.pipelines[nextPipelineId];
   currentElement.append(
       constructStageNode(nextPipelineId, parentInfoMap, true));
+  
+  if (statusMap.pipelines[nextPipelineId]) {
+    var children = statusMap.pipelines[nextPipelineId].children;
+    if (children.length > 0) {
+      var treeElement = null;
+      if (rootElement) {
+        treeElement =
+            $('<ul id="pipeline-tree" class="treeview-black treeview">');
+      } else {
+        treeElement = $('<ul>');
+      }
 
-  var children = statusMap.pipelines[nextPipelineId].children;
-  if (children.length > 0) {
-    var treeElement = null;
-    if (rootElement) {
-      treeElement =
-          $('<ul id="pipeline-tree" class="treeview-black treeview">');
-    } else {
-      treeElement = $('<ul>');
+      $.each(children, function(index, childPipelineId) {
+        var childElement = generateSidebar(statusMap, childPipelineId);
+        treeElement.append(childElement);
+      });
+      currentElement.append(treeElement);
     }
-
-    $.each(children, function(index, childPipelineId) {
-      var childElement = generateSidebar(statusMap, childPipelineId);
-      treeElement.append(childElement);
-    });
-    currentElement.append(treeElement);
   }
-
   return currentElement;
 }
 
