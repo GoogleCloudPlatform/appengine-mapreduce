@@ -77,7 +77,7 @@ public class GoogleCloudStorageSortOutput extends
       return new MarshallingOutputWriter<KeyValue<ByteBuffer, Iterator<ByteBuffer>>>(
           new LevelDbOutputWriter(new GoogleCloudStorageFileOutputWriter(
               new GcsFilename(bucket, fileName), MapReduceConstants.REDUCE_INPUT_MIME_TYPE)),
-          new KeyValuesMarshaller<ByteBuffer, ByteBuffer>(identity, identity));
+          Marshallers.getKeyValuesMarshaller(identity, identity));
     }
 
     public GoogleCloudStorageFileSet finish() {
@@ -112,11 +112,10 @@ public class GoogleCloudStorageSortOutput extends
     assert writers.size() == shardCount;
     List<GoogleCloudStorageFileSet> filesByShard =
         new ArrayList<GoogleCloudStorageFileSet>(shardCount);
-   for (OutputWriter<KeyValue<ByteBuffer, Iterator<ByteBuffer>>> w : writers) {
+    for (OutputWriter<KeyValue<ByteBuffer, Iterator<ByteBuffer>>> w : writers) {
       @SuppressWarnings("unchecked")
-      SlicingOutputWriter<KeyValue<ByteBuffer, Iterator<ByteBuffer>>, WriterCreatorImpl>
-          writer = (SlicingOutputWriter<KeyValue<ByteBuffer, Iterator<ByteBuffer>>,
-              WriterCreatorImpl>) w;
+      SlicingOutputWriter<KeyValue<ByteBuffer, Iterator<ByteBuffer>>, WriterCreatorImpl> writer =
+          (SlicingOutputWriter<KeyValue<ByteBuffer, Iterator<ByteBuffer>>, WriterCreatorImpl>) w;
       filesByShard.add(writer.getCreator().finish());
     }
     return filesByShard;

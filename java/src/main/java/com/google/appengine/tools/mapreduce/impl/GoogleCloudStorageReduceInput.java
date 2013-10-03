@@ -47,8 +47,7 @@ public class GoogleCloudStorageReduceInput<K, V> extends Input<KeyValue<K, Itera
   @Override
   public List<? extends InputReader<KeyValue<K, Iterator<V>>>> createReaders() {
     Marshaller<KeyValue<ByteBuffer, Iterator<V>>> marshaller =
-        new KeyValuesMarshaller<ByteBuffer, V>(
-            Marshallers.getByteBufferMarshaller(), valueMarshaller);
+        Marshallers.getKeyValuesMarshaller(Marshallers.getByteBufferMarshaller(), valueMarshaller);
     ImmutableList.Builder<MergingReader<K, V>> result = ImmutableList.builder();
     for (GoogleCloudStorageFileSet reducerInputFileSet : allReducerFileSets) {
       result.add(createReaderForShard(marshaller, reducerInputFileSet));

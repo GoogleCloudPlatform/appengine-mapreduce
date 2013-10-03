@@ -8,7 +8,7 @@ import com.google.appengine.repackaged.com.google.protobuf.InvalidProtocolBuffer
 import com.google.appengine.tools.mapreduce.CorruptDataException;
 import com.google.appengine.tools.mapreduce.KeyValue;
 import com.google.appengine.tools.mapreduce.Marshaller;
-import com.google.common.annotations.VisibleForTesting;
+import com.google.apphosting.api.AppEngineInternal;
 
 import java.nio.ByteBuffer;
 
@@ -19,14 +19,13 @@ import java.nio.ByteBuffer;
  * @param <K> key type
  * @param <V> value type
  */
-@VisibleForTesting
+@AppEngineInternal
 public class KeyValueMarshaller<K, V> extends Marshaller<KeyValue<K, V>> {
 
   private static final long serialVersionUID = 4804959968008959514L;
   private final Marshaller<K> keyMarshaller;
   private final Marshaller<V> valueMarshaller;
 
-  @VisibleForTesting
   public KeyValueMarshaller(Marshaller<K> keyMarshaller, Marshaller<V> valueMarshaller) {
     this.keyMarshaller = checkNotNull(keyMarshaller, "Null keyMarshaller");
     this.valueMarshaller = checkNotNull(valueMarshaller, "Null valueMarshaller");
