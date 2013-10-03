@@ -41,6 +41,7 @@ __all__ = [
     ]
 
 # pylint: disable=g-bad-name
+# pylint: disable=protected-access
 
 import base64
 import copy
@@ -2434,12 +2435,19 @@ class _GoogleCloudStorageInputReader(InputReader):
 
   Optional configuration in the mapper_sec.input_reader dictionary.
     BUFFER_SIZE_PARAM: the size of the read buffer for each file handle.
+    DELIMITER_PARAM: if specified, turn on the shallow splitting mode.
+      The delimiter is used as a path separator to designate directory
+      hierarchy. Matching of prefixes from OBJECT_NAME_PARAM
+      will stop at the first directory instead of matching
+      all files under the directory. This allows MR to process bucket with
+      hundreds of thousands of files.
   """
 
   # Supported parameters
   BUCKET_NAME_PARAM = "bucket_name"
   OBJECT_NAMES_PARAM = "objects"
   BUFFER_SIZE_PARAM = "buffer_size"
+  DELIMITER_PARAM = "delimiter"
 
   # Internal parameters
   _ACCOUNT_ID_PARAM = "account_id"
@@ -2448,7 +2456,14 @@ class _GoogleCloudStorageInputReader(InputReader):
   _JSON_PICKLE = "pickle"
   _STRING_MAX_FILES_LISTED = 10  # Max files shown in the str representation
 
-  def __init__(self, filenames, index=0, buffer_size=None, _account_id=None):
+  # Input reader can also take in start and end filenames and do
+  # listbucket. This saves space but has two cons.
+  # 1. Files to read are less well defined: files can be added or removed over
+  #    the lifetime of the MR job.
+  # 2. A shard has to process files from a contiguous namespace.
+  #    May introduce staggering shard.
+  def __init__(self, filenames, index=0, buffer_size=None, _account_id=None,
+               delimiter=None):
     """Initialize a GoogleCloudStorageInputReader instance.
 
     Args:
@@ -2457,11 +2472,40 @@ class _GoogleCloudStorageInputReader(InputReader):
       index: Index of the next filename to read.
       buffer_size: The size of the read buffer, None to use default.
       _account_id: Internal use only. See cloudstorage documentation.
+      delimiter: Delimiter used as path separator. See class doc.
     """
     self._filenames = filenames
     self._index = index
     self._buffer_size = buffer_size
     self._account_id = _account_id
+    self._delimiter = delimiter
+    self._bucket = None
+    self._bucket_iter = None
+
+  def _next_file(self):
+    """Find next filename.
+
+    self._filenames may need to be expanded via listbucket.
+
+    Returns:
+      None if no more file is left. Filename otherwise.
+    """
+    while True:
+      if self._bucket_iter:
+        try:
+          return self._bucket_iter.next().filename
+        except StopIteration:
+          self._bucket_iter = None
+          self._bucket = None
+      if self._index >= len(self._filenames):
+        return
+      filename = self._filenames[self._index]
+      self._index += 1
+      if self._delimiter is None or not filename.endswith(self._delimiter):
+        return filename
+      self._bucket = cloudstorage.listbucket(filename,
+                                             delimiter=self._delimiter)
+      self._bucket_iter = iter(self._bucket)
 
   @classmethod
   def validate(cls, mapper_spec):
@@ -2502,6 +2546,12 @@ class _GoogleCloudStorageInputReader(InputReader):
         raise errors.BadReaderParamsError(
             "Object name is not a string but a %s" %
             filename.__class__.__name__)
+    if cls.DELIMITER_PARAM in reader_spec:
+      delimiter = reader_spec[cls.DELIMITER_PARAM]
+      if not isinstance(delimiter, str):
+        raise errors.BadReaderParamsError(
+            "%s is not a string but a %s" %
+            (cls.DELIMITER_PARAM, type(delimiter)))
 
   @classmethod
   def split_input(cls, mapper_spec):
@@ -2519,23 +2569,22 @@ class _GoogleCloudStorageInputReader(InputReader):
       A list of InputReaders. None when no input data can be found.
     """
     reader_spec = _get_params(mapper_spec, allow_old=False)
+    bucket = reader_spec[cls.BUCKET_NAME_PARAM]
+    filenames = reader_spec[cls.OBJECT_NAMES_PARAM]
+    delimiter = reader_spec.get(cls.DELIMITER_PARAM)
+    account_id = reader_spec.get(cls._ACCOUNT_ID_PARAM)
+    buffer_size = reader_spec.get(cls.BUFFER_SIZE_PARAM)
 
     # Gather the complete list of files (expanding wildcards)
     all_filenames = []
-    bucket = reader_spec[cls.BUCKET_NAME_PARAM]
-    filenames = reader_spec[cls.OBJECT_NAMES_PARAM]
     for filename in filenames:
       if filename.endswith("*"):
         all_filenames.extend(
             [file_stat.filename for file_stat in cloudstorage.listbucket(
-                "/" + bucket,
-                prefix=filename[:-1],
-                _account_id=reader_spec.get(cls._ACCOUNT_ID_PARAM, None))])
+                "/" + bucket + "/" + filename[:-1], delimiter=delimiter,
+                _account_id=account_id)])
       else:
         all_filenames.append("/%s/%s" % (bucket, filename))
-        # The existence of an object can only be checked by sending requests to
-        # GCS, thus this not performed at this time.
-
 
     # Split into shards
     readers = []
@@ -2543,20 +2592,26 @@ class _GoogleCloudStorageInputReader(InputReader):
       shard_filenames = all_filenames[shard::mapper_spec.shard_count]
       if shard_filenames:
         readers.append(cls(
-            shard_filenames,
-            buffer_size=reader_spec.get(cls.BUFFER_SIZE_PARAM, None),
-            _account_id=reader_spec.get(cls._ACCOUNT_ID_PARAM, None)))
+            shard_filenames, buffer_size=buffer_size, _account_id=account_id,
+            delimiter=delimiter))
     return readers
 
   @classmethod
   def from_json(cls, state):
-    return pickle.loads(state[cls._JSON_PICKLE])
+    obj = pickle.loads(state[cls._JSON_PICKLE])
+    if obj._bucket:
+      obj._bucket_iter = iter(obj._bucket)
+    return obj
 
   def to_json(self):
+    self._bucket_iter = None
     return {self._JSON_PICKLE: pickle.dumps(self)}
 
   def next(self):
     """Returns the next input from this input reader, a block of bytes.
+
+    Non existent files will be logged and skipped. The file might have been
+    removed after input splitting.
 
     Returns:
       The next input from this input reader in the form of a cloudstorage
@@ -2566,19 +2621,21 @@ class _GoogleCloudStorageInputReader(InputReader):
     Raises:
       StopIteration: The list of files has been exhausted.
     """
-    # A generator or for-loop is not used to ensure we can easily serialize
-    # the state of the iteration
-    if self._index >= len(self._filenames):
-      raise StopIteration()
-    else:
-      options = {}
-      if self._buffer_size:
-        options["read_buffer_size"] = self._buffer_size
-      if self._account_id:
-        options["_account_id"] = self._account_id
-      handle = cloudstorage.open(self._filenames[self._index], **options)
-      self._index += 1
-      return handle
+    options = {}
+    if self._buffer_size:
+      options["read_buffer_size"] = self._buffer_size
+    if self._account_id:
+      options["_account_id"] = self._account_id
+    while True:
+      filename = self._next_file()
+      if filename is None:
+        raise StopIteration()
+      try:
+        handle = cloudstorage.open(filename, **options)
+        return handle
+      except cloudstorage.NotFoundError:
+        logging.warning("File %s may have been removed. Skipping file.",
+                        filename)
 
   def __str__(self):
     # Only show a limited number of files individually for readability
