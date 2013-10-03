@@ -37,6 +37,7 @@ __all__ = [
 
 # pylint: disable=g-bad-name
 
+import cStringIO
 import gc
 import logging
 import pickle
@@ -45,10 +46,11 @@ import time
 
 from google.appengine.api import files
 from google.appengine.api.files import file_service_pb
-from google.appengine.api.files import records
+from mapreduce import context
 from mapreduce import errors
 from mapreduce import model
 from mapreduce import operation
+from mapreduce import records
 
 # pylint: disable=g-import-not-at-top
 # TODO(user): Cleanup imports if/when cloudstorage becomes part of runtime.
@@ -271,7 +273,7 @@ def _get_params(mapper_spec, allowed_keys=None, allow_old=True):
   return params
 
 
-class _FilePool(object):
+class _FilePool(context.Pool):
   """Pool of file append operations."""
 
   def __init__(self, flush_size_chars=_FILES_API_FLUSH_SIZE, ctx=None):
@@ -332,53 +334,7 @@ class _FilePool(object):
     self._size = 0
 
 
-class _StringWriter(object):
-  """Simple writer for records api that writes to a string buffer."""
-
-  def __init__(self):
-    self._buffer = ""
-
-  def to_string(self):
-    """Convert writer buffer to string."""
-    return self._buffer
-
-  def write(self, data):
-    """Write data.
-
-    Args:
-      data: data to append to the buffer as string.
-    """
-    self._buffer += data
-
-
-class _PassthroughWriter(object):
-  """Simple output writer that exposes a file-like write().
-
-  Handles the mismatch of an output writer's write(), which requires a context,
-  and a file-like write() which does not. The context is provided at init time
-  and used with each write call.
-  """
-
-  def __init__(self, writer, ctx):
-    """Initialize passthrough writer.
-
-    Args:
-      writer: the underlying mapreduce output writer.
-      ctx: the mapreduce context to pass the writer on each write.
-    """
-    self._writer = writer
-    self._ctx = ctx
-
-  def write(self, data):
-    """Write data.
-
-    Args:
-      data: data to write
-    """
-    self._writer.write(data, self._ctx)
-
-
-class RecordsPool(object):
+class RecordsPool(context.Pool):
   """Pool of append operations for records files."""
 
   # Approximate number of bytes of overhead for storing one record.
@@ -424,12 +380,14 @@ class RecordsPool(object):
   def flush(self):
     """Flush pool contents."""
     # Write data to in-memory buffer first.
-    buf = _StringWriter()
+    buf = cStringIO.StringIO()
     with records.RecordsWriter(buf) as w:
       for record in self._buffer:
         w.write(record)
+      w._pad_block()
+    str_buf = buf.getvalue()
+    buf.close()
 
-    str_buf = buf.to_string()
     if not self._exclusive and len(str_buf) > _FILES_API_MAX_SIZE:
       # Shouldn't really happen because of flush size.
       raise errors.Error(
@@ -1048,16 +1006,10 @@ class _GoogleCloudStorageOutputWriter(OutputWriter):
   def write(self, data, ctx):
     """Write data to the GoogleCloudStorage file.
 
-    The actual writing to the stream is handled by a private function
-    allowing this method to be overriden with other logic (such as records).
-
     Args:
       data: string containing the data to be written.
       ctx: a model.Context for this shard.
     """
-    self._write(data, ctx)
-
-  def _write(self, data, ctx):
     start_time = time.time()
     self._streaming_buffer.write(data)
     if ctx:
@@ -1069,6 +1021,33 @@ class _GoogleCloudStorageOutputWriter(OutputWriter):
     self._streaming_buffer.close()
     # Save filename to shard_state
     shard_state.writer_state = {"filename": self._filename}
+
+
+class _PassthroughWriter(object):
+  """Interface adapter from file-like write() to output writer write().
+
+  Handles the mismatch of an output writer's write(), which requires a context,
+  and a file-like write() which does not. The context is provided at init time
+  and used with each write call.
+  """
+
+  def __init__(self, output_writer, ctx):
+    """Initialize passthrough writer.
+
+    Args:
+      output_writer: the underlying mapreduce output writer.
+      ctx: the mapreduce context to pass to the output writer on each write.
+    """
+    self._output_writer = output_writer
+    self._ctx = ctx
+
+  def write(self, data):
+    """Write data.
+
+    Args:
+      data: data to write
+    """
+    self._output_writer.write(data, self._ctx)
 
 
 class _GoogleCloudStorageRecordOutputWriter(_GoogleCloudStorageOutputWriter):
@@ -1115,7 +1094,6 @@ class _GoogleCloudStorageRecordOutputWriter(_GoogleCloudStorageOutputWriter):
     self._reset()
 
   def to_json(self):
-    # If there is no last_ctx, then there were no writes, and no need to flush
     if self._buffer:
       self._flush(self._last_ctx)
     return super(_GoogleCloudStorageRecordOutputWriter, self).to_json()
@@ -1148,16 +1126,14 @@ class _GoogleCloudStorageRecordOutputWriter(_GoogleCloudStorageOutputWriter):
     record_writer = records.RecordsWriter(
         _PassthroughWriter(super(_GoogleCloudStorageRecordOutputWriter, self),
                            ctx))
-    # RecordsWriter will pad the last LevelDB block at the end
     with record_writer as w:
       for record in self._buffer:
         w.write(record)
+      w._pad_block()
     self._reset()
 
   def _reset(self):
     self._buffer = []
-    # Total size of all records in the buffer with an approximate header
-    # overhead. It is a estimate of how much data will be written to when
-    # flushed.
+    # Total size of all user records in the buffer without header overhead.
     self._size = 0
     self._last_ctx = None

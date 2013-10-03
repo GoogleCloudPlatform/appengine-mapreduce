@@ -16,11 +16,11 @@ import unittest
 from google.appengine.api import apiproxy_stub_map
 from google.appengine.api import files
 from google.appengine.api.files import testutil as files_testutil
-from google.appengine.api.files import records
 from mapreduce import context
 from mapreduce import errors
 from mapreduce import model
 from mapreduce import output_writers
+from mapreduce import records
 from testlib import testutil
 
 # pylint: disable=g-import-not-at-top
@@ -502,7 +502,7 @@ class GoogleCloudStorageRecordOutputWriterTest(
 
   def testWrite_RecordSizeSmallerThanFlush(self):
     record_size = 10
-    flush_size = record_size + 2 * records.HEADER_LENGTH
+    flush_size = record_size + 2 * records._HEADER_LENGTH
     self.setupWriter(flush_size=flush_size)
 
     self.writer.write("d" * record_size, self.ctx)
@@ -519,7 +519,7 @@ class GoogleCloudStorageRecordOutputWriterTest(
     # No data should be in the record writer buffer
     self.assertEqual(0, len(self.writer._buffer))
     # All data should be written cloudstorage library
-    self.assertEqual(records.BLOCK_SIZE, self.shard_state.counters_map.get(
+    self.assertEqual(records._BLOCK_SIZE, self.shard_state.counters_map.get(
         output_writers.COUNTER_IO_WRITE_BYTES))
 
   def testWrite_RecordSizeLargerThanFlush(self):
@@ -532,12 +532,12 @@ class GoogleCloudStorageRecordOutputWriterTest(
     # No data should be in the record writer buffer
     self.assertEqual(0, len(self.writer._buffer))
     # All data should be written cloudstorage library
-    self.assertEqual(records.BLOCK_SIZE, self.shard_state.counters_map.get(
+    self.assertEqual(records._BLOCK_SIZE, self.shard_state.counters_map.get(
         output_writers.COUNTER_IO_WRITE_BYTES))
 
   def testWrite_FlushLargerThanBlock(self):
-    record_size = int(records.BLOCK_SIZE / 10)
-    flush_size = records.BLOCK_SIZE * 2
+    record_size = int(records._BLOCK_SIZE / 10)
+    flush_size = records._BLOCK_SIZE * 2
     num_records = int(math.ceil(float(flush_size) / record_size))
     self.setupWriter(flush_size=flush_size)
 
@@ -557,12 +557,12 @@ class GoogleCloudStorageRecordOutputWriterTest(
     self.assertEqual(0, len(self.writer._buffer))
     # All data should be written cloudstorage library (exact size will
     # dependent on how many records were split across multiple blocks
-    min_expected_size = (record_size + records.HEADER_LENGTH) * num_records
+    min_expected_size = (record_size + records._HEADER_LENGTH) * num_records
     self.assertTrue(min_expected_size < self.shard_state.counters_map.get(
         output_writers.COUNTER_IO_WRITE_BYTES))
 
   def testSerialization(self):
-    record_size = records.BLOCK_SIZE / 3
+    record_size = records._BLOCK_SIZE / 3
     # Approximate, does not account for headers
     records_per_flush = 5
     flush_size = record_size * records_per_flush - 1
@@ -586,7 +586,7 @@ class GoogleCloudStorageRecordOutputWriterTest(
     # No data should be in the record writer buffer
     self.assertEqual(0, len(self.writer._buffer))
     # A full (padded) block should have been flushed
-    self.assertEqual(records.BLOCK_SIZE, self.shard_state.counters_map.get(
+    self.assertEqual(records._BLOCK_SIZE, self.shard_state.counters_map.get(
         output_writers.COUNTER_IO_WRITE_BYTES))
 
     # Write enough records to trigger self-flush
@@ -598,9 +598,9 @@ class GoogleCloudStorageRecordOutputWriterTest(
     data_written = self.shard_state.counters_map.get(
         output_writers.COUNTER_IO_WRITE_BYTES)
     # At least 2 blocks
-    self.assertTrue(records.BLOCK_SIZE * 2 < data_written)
+    self.assertTrue(records._BLOCK_SIZE * 2 < data_written)
     # Only full blocks writen
-    self.assertEqual(0, data_written % records.BLOCK_SIZE)
+    self.assertEqual(0, data_written % records._BLOCK_SIZE)
 
     # Serialize
     self.writer = self.WRITER_CLS.from_json(self.writer.to_json())

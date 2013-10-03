@@ -35,7 +35,6 @@ from mapreduce.lib import pipeline
 from mapreduce.lib.pipeline import common as pipeline_common
 from google.appengine.api import files
 from google.appengine.api.files import file_service_pb
-from google.appengine.api.files import records
 from google.appengine.ext import db
 from mapreduce import context
 from mapreduce import errors
@@ -44,6 +43,7 @@ from mapreduce import mapper_pipeline
 from mapreduce import operation
 from mapreduce import output_writers
 from mapreduce import pipeline_base
+from mapreduce import records
 
 # pylint: disable=g-bad-name
 
