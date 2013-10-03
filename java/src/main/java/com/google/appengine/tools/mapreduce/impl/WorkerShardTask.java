@@ -42,6 +42,9 @@ public abstract class WorkerShardTask<I, O, C extends WorkerContext>
   protected final OutputWriter<O> out;
   private final String workerCallsCounterName;
   private final String workerMillisCounterName;
+  private transient Stopwatch overallStopwatch;
+  private transient Stopwatch inputStopwatch;
+  private transient Stopwatch workerStopwatch;
 
   private boolean isFirstSlice = true;
 
@@ -73,15 +76,25 @@ public abstract class WorkerShardTask<I, O, C extends WorkerContext>
   protected abstract C getWorkerContext(Counters counters);
   protected abstract void callWorker(I input);
   protected abstract String formatLastWorkItem(I item);
-  protected abstract boolean shouldContinue(); 
-
+  
+  /**
+   * @return true iff a checkpoint should be performed. (Not not mandate that one will)
+   */
+  protected abstract boolean shouldCheckpoint(long timeElapsed); 
+  
+  /**
+   * @return false iff a checkPoint MUST be performed immediately because more input cannot be
+   *         accepted.
+   */
+  protected abstract boolean canContinue();
+  
   @Override 
   public RunResult<WorkerShardTask<I, O, C>, WorkerResult<O>> run() {
 
     beginSlice();
-    Stopwatch overallStopwatch = Stopwatch.createStarted();
-    Stopwatch inputStopwatch =  Stopwatch.createUnstarted();
-    Stopwatch workerStopwatch = Stopwatch.createUnstarted();
+    overallStopwatch = Stopwatch.createStarted();
+    inputStopwatch =  Stopwatch.createUnstarted();
+    workerStopwatch = Stopwatch.createUnstarted();
     
     int workerCalls = 0;
     int itemsRead = 0;
@@ -117,7 +130,7 @@ public abstract class WorkerShardTask<I, O, C extends WorkerContext>
         workerStopwatch.start();
         callWorker(next);
         workerStopwatch.stop();
-      } while (shouldContinue());
+      } while (canContinue() && !shouldCheckpoint(overallStopwatch.elapsed(MILLISECONDS)));
     } finally {
       log.info("Ending slice after " + itemsRead + " items read and calling the worker "
           + workerCalls + " times");

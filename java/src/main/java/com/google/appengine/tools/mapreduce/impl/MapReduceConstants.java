@@ -34,6 +34,12 @@ public class MapReduceConstants {
   public static final double[] TARGET_SORT_RAM_PROPORTIONS = {0.30, 0.20, 0.10};
   
   /**
+   * The maximum length of time sort should spend reading input before it starts sorting it and
+   * writing it out.
+   */
+  public static final int MAX_SORT_READ_TIME_MILLIS = 180000;
+  
+  /**
    * The size of the input buffer passed to the GCS reader.
    */
   public static final int INPUT_BUFFER_SIZE = 1 * 1024 * 1024;

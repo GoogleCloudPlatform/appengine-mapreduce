@@ -67,7 +67,12 @@ public class SortShardTask extends WorkerShardTask<
   }
 
   @Override
-  protected boolean shouldContinue() {
+  protected boolean shouldCheckpoint(long timeElapsed) {
+    return timeElapsed > MapReduceConstants.MAX_SORT_READ_TIME_MILLIS;
+  }
+
+  @Override
+  protected boolean canContinue() {
     return !inMemSorter.isFull();
   }
 

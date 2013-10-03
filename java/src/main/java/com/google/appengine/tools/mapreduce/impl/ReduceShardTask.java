@@ -3,7 +3,6 @@
 package com.google.appengine.tools.mapreduce.impl;
 
 import static com.google.common.base.Preconditions.checkNotNull;
-import static java.util.concurrent.TimeUnit.MILLISECONDS;
 
 import com.google.appengine.tools.mapreduce.CounterNames;
 import com.google.appengine.tools.mapreduce.Counters;
@@ -12,7 +11,6 @@ import com.google.appengine.tools.mapreduce.KeyValue;
 import com.google.appengine.tools.mapreduce.OutputWriter;
 import com.google.appengine.tools.mapreduce.Reducer;
 import com.google.appengine.tools.mapreduce.ReducerContext;
-import com.google.common.base.Stopwatch;
 
 import java.util.Iterator;
 
@@ -30,8 +28,6 @@ public class ReduceShardTask<K, V, O>
   private final Reducer<K, V, O> reducer;
 
   private final long millisPerSlice;
-  
-  private transient Stopwatch sliceStopwatch;
 
   public ReduceShardTask(String mrJobId,
       int shardNumber, int shardCount,
@@ -59,13 +55,12 @@ public class ReduceShardTask<K, V, O>
   }
 
   @Override
-  protected boolean shouldContinue() {
-    return sliceStopwatch.elapsed(MILLISECONDS) < millisPerSlice;
+  protected boolean shouldCheckpoint(long timeElapsed) {
+    return timeElapsed > millisPerSlice;
   }
 
   @Override
-  protected void beginSlice() {
-    super.beginSlice();
-    sliceStopwatch = Stopwatch.createStarted();
+  protected boolean canContinue() {
+    return true;
   }
 }
