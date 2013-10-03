@@ -8,6 +8,7 @@ import com.google.appengine.tools.cloudstorage.GcsService;
 import com.google.appengine.tools.cloudstorage.GcsServiceFactory;
 import com.google.appengine.tools.mapreduce.Input;
 import com.google.appengine.tools.mapreduce.InputReader;
+import com.google.appengine.tools.mapreduce.impl.MapReduceConstants;
 import com.google.common.base.Preconditions;
 
 import java.io.IOException;
@@ -42,7 +43,8 @@ public class GoogleCloudStorageLineInput extends Input<byte[]> {
 
   @Override
   public List<? extends InputReader<byte[]>> createReaders() {
-    GcsService gcsService = GcsServiceFactory.createGcsService();
+    GcsService gcsService =
+        GcsServiceFactory.createGcsService(MapReduceConstants.GCS_RETRY_PARAMETERS);
     GcsFileMetadata metadata;
     try {
       metadata = gcsService.getMetadata(file);

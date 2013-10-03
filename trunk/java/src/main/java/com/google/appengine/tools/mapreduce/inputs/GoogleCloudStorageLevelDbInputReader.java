@@ -8,6 +8,7 @@ import com.google.appengine.tools.cloudstorage.GcsFilename;
 import com.google.appengine.tools.cloudstorage.GcsService;
 import com.google.appengine.tools.cloudstorage.GcsServiceFactory;
 import com.google.appengine.tools.mapreduce.InputReader;
+import com.google.appengine.tools.mapreduce.impl.MapReduceConstants;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -18,7 +19,8 @@ import java.util.NoSuchElementException;
  */
 public final class GoogleCloudStorageLevelDbInputReader extends InputReader<ByteBuffer> {
  
-  private static final GcsService gcsService = GcsServiceFactory.createGcsService();
+  private static final GcsService gcsService =
+      GcsServiceFactory.createGcsService(MapReduceConstants.GCS_RETRY_PARAMETERS);
   private static final long serialVersionUID = 1014960525070958327L;
 
   private LevelDbInputReader reader;

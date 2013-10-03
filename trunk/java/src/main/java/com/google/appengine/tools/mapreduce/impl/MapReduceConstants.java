@@ -2,6 +2,7 @@
 
 package com.google.appengine.tools.mapreduce.impl;
 
+import com.google.appengine.tools.cloudstorage.RetryParams;
 import com.google.appengine.tools.cloudstorage.oauth.OauthRawGcsServiceFactory;
 
 /**
@@ -50,5 +51,13 @@ public class MapReduceConstants {
    * Maximum display size of the lastItem in the UI. 
    */
   public static final int MAX_LAST_ITEM_STRING_SIZE = 100;
+
+  public static final RetryParams GCS_RETRY_PARAMETERS = new RetryParams.Builder()
+      .retryMaxAttempts(10)
+      .retryMinAttempts(6)
+      .requestTimeoutMillis(10000)
+      .maxRetryDelayMillis(30000)
+      .totalRetryPeriodMillis(60000)
+      .build();
 
 }

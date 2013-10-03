@@ -6,6 +6,7 @@ import com.google.appengine.tools.cloudstorage.GcsFilename;
 import com.google.appengine.tools.cloudstorage.GcsService;
 import com.google.appengine.tools.cloudstorage.GcsServiceFactory;
 import com.google.appengine.tools.mapreduce.InputReader;
+import com.google.appengine.tools.mapreduce.impl.MapReduceConstants;
 import com.google.common.base.Preconditions;
 
 import java.io.IOException;
@@ -18,7 +19,8 @@ import java.nio.channels.Channels;
 class GoogleCloudStorageLineInputReader extends InputReader<byte[]> {
   private static final long serialVersionUID = -762091129798691745L;
 
-  private static final transient GcsService GCS_SERVICE = GcsServiceFactory.createGcsService();
+  private static final transient GcsService GCS_SERVICE =
+      GcsServiceFactory.createGcsService(MapReduceConstants.GCS_RETRY_PARAMETERS);
   private static final int DEFAULT_BUFFER_SIZE = 1024 * 1024;
 
   /*VisibleForTesting*/ long startOffset;
