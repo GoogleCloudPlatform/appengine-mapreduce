@@ -147,6 +147,13 @@ public abstract class WorkerShardTask<I, O, C extends WorkerContext>
   }
   
   protected void beginSlice() {
+    if (isFirstSlice) {
+      try {
+        out.open();
+      } catch (IOException e) {
+        throw new RuntimeException(out + ".beginShard() threw IOException", e);
+      }
+    }
     try {
       in.beginSlice();
     } catch (IOException e) {
@@ -161,13 +168,13 @@ public abstract class WorkerShardTask<I, O, C extends WorkerContext>
     C context = getWorkerContext(counters);
     worker.setContext(context);
     if (isFirstSlice) {
-      isFirstSlice = false;
       worker.beginShard();
     }
     for (LifecycleListener listener : worker.getLifecycleListenerRegistry().getListeners()) {
       listener.beginSlice();
     }
     worker.beginSlice();
+    isFirstSlice = false;
   }
 
   protected void endSlice(boolean inputExhausted) {

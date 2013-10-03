@@ -17,6 +17,11 @@ public abstract class ForwardingOutputWriter<O> extends OutputWriter<O> {
   protected abstract OutputWriter<?> getDelegate();
 
   @Override
+  public void open() throws IOException {
+    getDelegate().open();
+  }
+  
+  @Override
   public void beginSlice() throws IOException {
     getDelegate().beginSlice();
   }

@@ -133,6 +133,7 @@ public class LevelDbTest extends TestCase {
 
   static void testSlicing(LevelDbOutputWriter writer, ByteArrayOutputWriter arrayOutputWriter)
       throws IOException {
+    writer.open();
     Random r = new Random(0);
     List<byte[]> written = writeRandomItems(r, writer, 10, 100);
     writer.endSlice();

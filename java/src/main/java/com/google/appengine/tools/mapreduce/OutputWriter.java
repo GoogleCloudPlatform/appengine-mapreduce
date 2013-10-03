@@ -8,25 +8,30 @@ import java.io.Serializable;
 /**
  * Writes key-value pairs.
  *
- * <p>Created by {@link Output} to write input for a given shard.  Writers
- * output for a shard as a number of slices, where the slicing is up to the
- * caller.
+ * <p>
+ * Created by {@link Output} to write input for a given shard. Writers output for a shard as a
+ * number of slices, where the slicing is up to the caller.
  *
- * <p>Each slice is written by calling {@link #beginSlice}, then {@link #write}
- * any number of times, then {@link #endSlice}.  Between two slices, before the
- * first slice, or after the final slice, the {@code OutputWriter} may go
- * through serialization and deserialization.
+ * <p>
+ * {@link #open} is called before any calls to {@link #beginSlice} or {@link #write} to setup the
+ * writer.
  *
- * <p>At the end of the final slice, {@link #close()} will be called, either
- * before or after {@link #endSlice()}.
+ * <p>
+ * Each slice is written by calling {@link #beginSlice}, then {@link #write} any number of times,
+ * then {@link #endSlice}. Before the first slice, in between two slices, or after the final slice,
+ * the {@code OutputWriter} may go through serialization and deserialization.
  *
- * <p>If a slice is aborted, there is no guarantee whether {@link #endSlice}
- * will be called; however, if it is not called, the {@code OutputWriter} will
- * not be serialized.  If the slice is retried later, the {@code OutputWriter}
- * serialized after the previous slice will be deserialized again.
+ * <p>
+ * At the end of the final slice, {@link #close()} will be called after {@link #endSlice()}.
  *
- * <p>This class is really an interface that might be evolving. In order to avoid breaking
- * users when we change the interface, we made it an abstract class.
+ * <p>
+ * If a slice is aborted, there is no guarantee whether {@link #endSlice} will be called; however,
+ * if it is not called, the {@code OutputWriter} will not be serialized. If the slice is retried
+ * later, the {@code OutputWriter} serialized after the previous slice will be deserialized again.
+ *
+ * <p>
+ * This class is really an interface that might be evolving. In order to avoid breaking users when
+ * we change the interface, we made it an abstract class.
  *
  * @author ohler@google.com (Christian Ohler)
  *
@@ -50,14 +55,16 @@ public abstract class OutputWriter<O> implements Serializable {
    * Prepares the writer for possible serialization.
    */
   public void endSlice() throws IOException {}
+  
+  /**
+   * Will be called once before any calls to write. Prepares the writer for processing, after
+   * possibly having gone through serialization and deserialization.
+   */
+  public void open() throws IOException {}
 
   /**
    * Called when no more output will be written to this writer.
    */
-  // TODO(ohler): Determine whether we want to call this before or after the
-  // final endSlice().  Or perhaps endSlice() should have a boolean parameter
-  // isFinalSlice?  That would probably be more convenient for implementations,
-  // too (it gives them information earlier).
   public abstract void close() throws IOException;
 
 }

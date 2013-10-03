@@ -21,6 +21,7 @@ public class GoogleCloudStorageLevelDbOutputWriterTest extends TestCase {
   public void testIsPadded() throws IOException {
     LevelDbTest.ByteArrayOutputWriter arrayOutputWriter = new LevelDbTest.ByteArrayOutputWriter();
     LevelDbOutputWriter writer = new GoogleCloudStorageLevelDbOutputWriter(arrayOutputWriter);
+    writer.open();
     writer.beginSlice();
     writer.write(ByteBuffer.allocate(1));
     writer.endSlice();
