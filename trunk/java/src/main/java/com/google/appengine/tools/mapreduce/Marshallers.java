@@ -3,6 +3,7 @@
 package com.google.appengine.tools.mapreduce;
 
 import com.google.appengine.tools.mapreduce.impl.KeyValueMarshaller;
+import com.google.appengine.tools.mapreduce.impl.KeyValuesMarshaller;
 import com.google.appengine.tools.mapreduce.impl.util.SerializationUtil;
 import com.google.common.base.Charsets;
 
@@ -10,6 +11,7 @@ import java.io.Serializable;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.CharacterCodingException;
+import java.util.Iterator;
 
 /**
  * Some {@link Marshaller}s and related utilities.
@@ -186,6 +188,15 @@ public class Marshallers {
   public static <K, V> Marshaller<KeyValue<K, V>> getKeyValueMarshaller(Marshaller<K> keyMarshaller,
       Marshaller<V> valueMarshaller) {
     return new KeyValueMarshaller<K, V>(keyMarshaller, valueMarshaller);
+  }
+  
+  /**
+   * Returns a {@code Marshaller} for key-values pairs based on
+   * {@code keyMarshaller} and {@code valueMarshaller}.
+   */
+  public static <K, V> Marshaller<KeyValue<K, Iterator<V>>> getKeyValuesMarshaller(
+      Marshaller<K> keyMarshaller, Marshaller<V> valueMarshaller) {
+    return new KeyValuesMarshaller<K, V>(keyMarshaller, valueMarshaller);
   }
 
 }
