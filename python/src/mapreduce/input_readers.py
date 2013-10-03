@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-#
 # Copyright 2010 Google Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -59,10 +58,7 @@ from google.appengine.ext import ndb
 from google.appengine.api import datastore
 from google.appengine.api import files
 from google.appengine.api import logservice
-from google.appengine.api.files import records
 from google.appengine.api.logservice import log_service_pb
-from google.appengine.datastore import datastore_query
-from google.appengine.datastore import datastore_rpc
 from google.appengine.ext import blobstore
 from google.appengine.ext import db
 from google.appengine.ext import key_range
@@ -77,6 +73,7 @@ from mapreduce import model
 from mapreduce import namespace_range
 from mapreduce import operation
 from mapreduce import property_range
+from mapreduce import records
 from mapreduce import util
 
 # pylint: disable=g-import-not-at-top

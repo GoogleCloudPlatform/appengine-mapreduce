@@ -46,7 +46,6 @@ from google.appengine.api import datastore
 from google.appengine.api import datastore_file_stub
 from google.appengine.api import datastore_types
 from google.appengine.api import files
-from google.appengine.api.files import records
 from google.appengine.api import logservice
 from google.appengine.api.logservice import log_service_pb
 from google.appengine.api.logservice import logservice_stub
@@ -62,6 +61,7 @@ from mapreduce import file_format_root
 from mapreduce import input_readers
 from mapreduce import model
 from mapreduce import namespace_range
+from mapreduce import records
 from testlib import testutil
 from google.appengine.datastore import entity_pb
 

@@ -13,13 +13,13 @@ import string
 import unittest
 
 from google.appengine.api import files
-from google.appengine.api.files import records
 from google.appengine.ext import db
 from mapreduce import control
 from mapreduce import handlers
 from mapreduce import model
 from mapreduce import output_writers
 from mapreduce import parameters
+from mapreduce import records
 from mapreduce import test_support
 from testlib import testutil
 from google.appengine.ext import ndb
