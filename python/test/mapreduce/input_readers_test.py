@@ -2052,8 +2052,8 @@ class LogInputReaderTest(unittest.TestCase):
                       input_readers.LogInputReader.validate,
                       self.mapper_spec)
 
-  def testValidateNoVersionIdsParam(self):
-    """Test validate without version_ids param."""
+  def testValidateNoVersionIdsOrModuleVersionsParam(self):
+    """Test validate without version_ids or module_versions param."""
     del self.mapper_spec.params["input_reader"]["version_ids"]
     self.assertRaises(errors.BadReaderParamsError,
                       input_readers.LogInputReader.validate,
@@ -2063,6 +2063,19 @@ class LogInputReaderTest(unittest.TestCase):
     """Test validate with a malformed version_ids param."""
     # This is really testing the validation that logservice.fetch() itself does.
     self.mapper_spec.params["input_reader"]["version_ids"] = "1"
+    self.assertRaises(errors.BadReaderParamsError,
+                      input_readers.LogInputReader.validate,
+                      self.mapper_spec)
+
+  def testValidateModuleVersionsParam(self):
+    """Test validate module_versions param but without version_ids param."""
+    del self.mapper_spec.params["input_reader"]["version_ids"]
+    self.mapper_spec.params["input_reader"]["module_versions"] = [("m", "v")]
+    input_readers.LogInputReader.validate(self.mapper_spec)
+
+  def testValidateNoVersionIdsAndModuleVersionsParam(self):
+    """Test validate without version_ids and module_versions param."""
+    self.mapper_spec.params["input_reader"]["module_versions"] = [("m", "v")]
     self.assertRaises(errors.BadReaderParamsError,
                       input_readers.LogInputReader.validate,
                       self.mapper_spec)

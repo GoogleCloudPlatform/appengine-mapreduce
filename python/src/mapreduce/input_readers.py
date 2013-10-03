@@ -2216,6 +2216,7 @@ class LogInputReader(InputReader):
   INCLUDE_INCOMPLETE_PARAM = "include_incomplete"
   INCLUDE_APP_LOGS_PARAM = "include_app_logs"
   VERSION_IDS_PARAM = "version_ids"
+  MODULE_VERSIONS_PARAM = "module_versions"
 
   # Semi-hidden parameters used only internally or for privileged applications.
   _OFFSET_PARAM = "offset"
@@ -2224,7 +2225,7 @@ class LogInputReader(InputReader):
   _PARAMS = frozenset([START_TIME_PARAM, END_TIME_PARAM, _OFFSET_PARAM,
                        MINIMUM_LOG_LEVEL_PARAM, INCLUDE_INCOMPLETE_PARAM,
                        INCLUDE_APP_LOGS_PARAM, VERSION_IDS_PARAM,
-                       _PROTOTYPE_REQUEST_PARAM])
+                       MODULE_VERSIONS_PARAM, _PROTOTYPE_REQUEST_PARAM])
   _KWARGS = frozenset([_OFFSET_PARAM, _PROTOTYPE_REQUEST_PARAM])
 
   def __init__(self,
@@ -2234,6 +2235,7 @@ class LogInputReader(InputReader):
                include_incomplete=False,
                include_app_logs=False,
                version_ids=None,
+               module_versions=None,
                **kwargs):
     """Constructor.
 
@@ -2249,7 +2251,10 @@ class LogInputReader(InputReader):
         but not yet finished, as a boolean.  Defaults to False.
       include_app_logs: Whether or not to include application level logs in the
         mapped logs, as a boolean.  Defaults to False.
-      version_ids: A list of version ids whose logs should be mapped against.
+      version_ids: A list of version ids whose logs should be read. This can not
+        be used with module_versions
+      module_versions: A list of tuples containing a module and version id
+        whose logs should be read. This can not be used with version_ids
     """
     InputReader.__init__(self)
 
@@ -2269,6 +2274,8 @@ class LogInputReader(InputReader):
       self.__params[self.INCLUDE_APP_LOGS_PARAM] = include_app_logs
     if version_ids:
       self.__params[self.VERSION_IDS_PARAM] = version_ids
+    if module_versions:
+      self.__params[self.MODULE_VERSIONS_PARAM] = module_versions
 
     # Any submitted prototype_request will be in encoded form.
     if self._PROTOTYPE_REQUEST_PARAM in self.__params:
@@ -2368,9 +2375,14 @@ class LogInputReader(InputReader):
       raise errors.BadReaderParamsError("Input reader class mismatch")
 
     params = _get_params(mapper_spec, allowed_keys=cls._PARAMS)
-    if cls.VERSION_IDS_PARAM not in params:
-      raise errors.BadReaderParamsError("Must specify a list of version ids "
-                                        "for mapper input")
+    if (cls.VERSION_IDS_PARAM not in params and
+        cls.MODULE_VERSIONS_PARAM not in params):
+      raise errors.BadReaderParamsError("Must specify a list of version ids or "
+                                        "module/version ids for mapper input")
+    if (cls.VERSION_IDS_PARAM in params and
+        cls.MODULE_VERSIONS_PARAM in params):
+      raise errors.BadReaderParamsError("Can not supply both version ids or "
+                                        "module/version ids. Use only one.")
     if (cls.START_TIME_PARAM not in params or
         params[cls.START_TIME_PARAM] is None):
       raise errors.BadReaderParamsError("Must specify a starting time for "
