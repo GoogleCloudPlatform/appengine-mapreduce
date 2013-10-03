@@ -6,14 +6,11 @@ import com.google.appengine.tools.cloudstorage.GcsFilename;
 import com.google.appengine.tools.cloudstorage.GcsService;
 import com.google.appengine.tools.cloudstorage.GcsServiceFactory;
 import com.google.appengine.tools.mapreduce.InputReader;
-import com.google.appengine.tools.mapreduce.inputs.InputStreamIterator.OffsetRecordPair;
 import com.google.common.base.Preconditions;
-import com.google.common.io.CountingInputStream;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.channels.Channels;
-import java.util.Iterator;
-import java.util.NoSuchElementException;
 
 /**
  * CloudStorageLineInputReader reads files from Cloud Storage one line at a time.
@@ -30,8 +27,7 @@ class GoogleCloudStorageLineInputReader extends InputReader<byte[]> {
   private byte separator;
   private long offset = 0L;
   private int bufferSize;
-  private transient CountingInputStream input;
-  private transient Iterator<OffsetRecordPair> recordIterator;
+  private transient LineInputReader lineReader;
 
   GoogleCloudStorageLineInputReader(
       GcsFilename file, long startOffset, long endOffset, byte separator) {
@@ -48,17 +44,13 @@ class GoogleCloudStorageLineInputReader extends InputReader<byte[]> {
   }
 
   private void checkInitialized() {
-    Preconditions.checkState(recordIterator != null, "%s: Not initialized", this);
+    Preconditions.checkState(lineReader != null, "%s: Not initialized", this);
   }
 
   @Override
   public byte[] next() {
     checkInitialized();
-    if (!recordIterator.hasNext()) {
-      throw new NoSuchElementException();
-    }
-    // TODO(user): simplify by removing OffsetRecordPair
-    return recordIterator.next().getRecord();
+    return lineReader.next();
   }
 
   @Override
@@ -67,7 +59,7 @@ class GoogleCloudStorageLineInputReader extends InputReader<byte[]> {
     if (endOffset == startOffset) {
       return 1.0;
     } else {
-      double currentOffset = offset + input.getCount();
+      double currentOffset = offset + lineReader.getBytesRead();
       return Math.min(1.0, currentOffset / (endOffset - startOffset));
     }
   }
@@ -75,21 +67,20 @@ class GoogleCloudStorageLineInputReader extends InputReader<byte[]> {
   @Override
   public void beginSlice() {
     Preconditions.checkState(
-        recordIterator == null, "%s: Already initialized: %s", this, recordIterator);
-    input = new CountingInputStream(Channels.newInputStream(
-        GCS_SERVICE.openPrefetchingReadChannel(file, startOffset + offset, bufferSize)));
-    recordIterator = new InputStreamIterator(
+        lineReader == null, "%s: Already initialized: %s", this, lineReader);
+    InputStream input = Channels.newInputStream(
+        GCS_SERVICE.openPrefetchingReadChannel(file, startOffset + offset, bufferSize));
+    lineReader = new LineInputReader(
         input, endOffset - startOffset - offset, startOffset != 0L && offset == 0L, separator);
   }
 
   @Override
   public void endSlice() throws IOException {
     checkInitialized();
-    offset += input.getCount();
-    input.close();
+    offset += lineReader.getBytesRead();
+    lineReader.close();
     // Un-initialize to make checkInitialized() effective.
-    input = null;
-    recordIterator = null;
+    lineReader = null;
   }
 
 }

@@ -41,11 +41,16 @@ public class GoogleCloudStorageLineInput extends Input<byte[]> {
   }
 
   @Override
-  public List<? extends InputReader<byte[]>> createReaders() throws IOException {
+  public List<? extends InputReader<byte[]>> createReaders() {
     GcsService gcsService = GcsServiceFactory.createGcsService();
-    GcsFileMetadata metadata = gcsService.getMetadata(file);
-    if (metadata == null) {
-      throw new RuntimeException("File does not exist:" + file.toString());
+    GcsFileMetadata metadata;
+    try {
+      metadata = gcsService.getMetadata(file);
+      if (metadata == null) {
+        throw new RuntimeException("File does not exist: " + file.toString());
+      }
+    } catch (IOException e) {
+      throw new RuntimeException("Unable to read file metadata: " + file.toString(), e);
     }
     long blobSize = metadata.getLength();
     return split(file, blobSize, shardCount);

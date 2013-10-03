@@ -13,6 +13,7 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
+import java.util.Collection;
 import java.util.List;
 import java.util.logging.Logger;
 
@@ -103,7 +104,7 @@ public class StringOutput<O, R> extends Output<O, R> {
     this(terminator, "UTF-8", sink);
   }
 
-  @Override public List<? extends OutputWriter<O>> createWriters() throws IOException {
+  @Override public List<? extends OutputWriter<O>> createWriters() {
     List<? extends OutputWriter<ByteBuffer>> sinkWriters = sink.createWriters();
     ImmutableList.Builder<Writer<O>> out = ImmutableList.builder();
     for (OutputWriter<ByteBuffer> sinkWriter : sinkWriters) {
@@ -115,7 +116,7 @@ public class StringOutput<O, R> extends Output<O, R> {
   /**
    * Returns whatever the underlying {@code Output}'s {@link #finish} method returns.
    */
-  @Override public R finish(List<? extends OutputWriter<O>> writers) throws IOException {
+  @Override public R finish(Collection<? extends OutputWriter<O>> writers) throws IOException {
     ImmutableList.Builder<OutputWriter<ByteBuffer>> sinkWriters = ImmutableList.builder();
     for (OutputWriter<O> w : writers) {
       Writer<O> writer = (Writer<O>) w;
@@ -124,4 +125,9 @@ public class StringOutput<O, R> extends Output<O, R> {
     return sink.finish(sinkWriters.build());
   }
 
+  @Override
+  public int getNumShards() {
+    return sink.getNumShards();
+  }
+  
 }

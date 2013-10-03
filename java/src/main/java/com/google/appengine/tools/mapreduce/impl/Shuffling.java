@@ -6,6 +6,7 @@ import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.appengine.tools.mapreduce.KeyValue;
 import com.google.appengine.tools.mapreduce.Marshaller;
+import com.google.appengine.tools.mapreduce.Sharder;
 import com.google.appengine.tools.mapreduce.impl.util.SerializationUtil;
 import com.google.common.base.Function;
 import com.google.common.collect.ArrayListMultimap;
@@ -16,7 +17,6 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Ordering;
 import com.google.common.primitives.UnsignedBytes;
 
-import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.List;
@@ -44,19 +44,6 @@ public class Shuffling {
 
   public static final Ordering<KeyValue<byte[], ?>> KEY_VALUE_ORDERING_BY_KEY =
       KEY_ORDERING.onResultOf(KEY_FUNCTION);
-
-  public static int reduceShardFor(byte[] key, int reduceShardCount) {
-    // TODO(ohler): Use the same hash function as shuffle service would.
-    int targetShard = Arrays.hashCode(key) % reduceShardCount;
-    if (targetShard < 0) {
-      targetShard += reduceShardCount;
-    }
-    return targetShard;
-  }
-
-  public static int reduceShardFor(ByteBuffer key, int reduceShardCount) {
-    return reduceShardFor(SerializationUtil.getBytes(key), reduceShardCount);
-  }
 
   // Wrapper around byte[] that implements hashCode and equals the way we
   // need, for use as MultiMap keys etc.
@@ -102,8 +89,9 @@ public class Shuffling {
     for (int i = 0; i < shardCount; i++) {
       out.add(ArrayListMultimap.<Bytes, V>create());
     }
+    Sharder sharder = new HashingSharder(shardCount);
     for (KeyValue<Bytes, V> pair : in) {
-      out.get(reduceShardFor(pair.getKey().bytes, shardCount))
+      out.get(sharder.getShardForKey(ByteBuffer.wrap(pair.getKey().bytes)))
           .put(pair.getKey(), pair.getValue());
     }
     return out;
@@ -115,14 +103,7 @@ public class Shuffling {
     List<Bytes> keys = Ordering.natural().sortedCopy(in.keySet());
     ImmutableList.Builder<KeyValue<K, List<V>>> out = ImmutableList.builder();
     for (Bytes keyBytes : keys) {
-      K key;
-      try {
-        key = keyMarshaller.fromBytes(ByteBuffer.wrap(keyBytes.bytes));
-      } catch (IOException e) {
-        throw new RuntimeException(keyMarshaller + ".fromBytes() threw IOException on "
-            + SerializationUtil.prettyBytes(keyBytes.bytes),
-            e);
-      }
+      K key = keyMarshaller.fromBytes(ByteBuffer.wrap(keyBytes.bytes));
       out.add(KeyValue.of(key, in.get(keyBytes)));
     }
     return out.build();

@@ -12,6 +12,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 
 import java.nio.ByteBuffer;
+import java.util.Collection;
 import java.util.List;
 import java.util.logging.Logger;
 
@@ -52,13 +53,19 @@ public class BlobFileOutput extends Output<ByteBuffer, List<AppEngineFile>> {
    * shard.  Each element is either an {@link AppEngineFile} or null (if that
    * reduce shard emitted no data).
    */
-  @Override public List<AppEngineFile> finish(List<? extends OutputWriter<ByteBuffer>> writers) {
+  @Override
+  public List<AppEngineFile> finish(Collection<? extends OutputWriter<ByteBuffer>> writers) {
     List<AppEngineFile> out = Lists.newArrayList();
     for (OutputWriter<ByteBuffer> w : writers) {
       BlobFileOutputWriter writer = (BlobFileOutputWriter) w;
       out.add(writer.getFile());
     }
     return out;
+  }
+  
+  @Override
+  public int getNumShards() {
+    return shardCount;
   }
 
 }

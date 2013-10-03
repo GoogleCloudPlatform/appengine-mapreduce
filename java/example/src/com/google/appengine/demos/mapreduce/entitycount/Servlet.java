@@ -18,7 +18,6 @@ import com.google.appengine.tools.mapreduce.MapReduceSettings;
 import com.google.appengine.tools.mapreduce.MapReduceSpecification;
 import com.google.appengine.tools.mapreduce.Marshallers;
 import com.google.appengine.tools.mapreduce.impl.MapReduceConstants;
-import com.google.appengine.tools.mapreduce.impl.ShuffleServiceFactory;
 import com.google.appengine.tools.mapreduce.inputs.ConsecutiveLongInput;
 import com.google.appengine.tools.mapreduce.inputs.DatastoreInput;
 import com.google.appengine.tools.mapreduce.outputs.InMemoryOutput;
@@ -87,12 +86,6 @@ public class Servlet extends HttpServlet {
         + "<form method='post'><input type='hidden' name='token' value='" + token + "'>"
         + "<input type='hidden' name='action' value='viewJobResult'>"
         + "View result of job <input name='jobId'>"
-        + " <input type='submit' value='View'></form>"
-
-        + "<form method='post'><input type='hidden' name='token' value='" + token + "'>"
-        + "<input type='hidden' name='action' value='viewShuffleStatus'>"
-        + "View shuffle status of shuffle job"
-        + " <input name='shuffleJobId'>"
         + " <input type='submit' value='View'></form>"
 
         + "<form method='post'><input type='hidden' name='token' value='" + token + "'>"
@@ -234,11 +227,6 @@ public class Servlet extends HttpServlet {
       } catch (NoSuchObjectException e) {
         throw new RuntimeException(e);
       }
-      pw.close();
-    } else if ("viewShuffleStatus".equals(action)) {
-      PrintWriter pw = new PrintWriter(resp.getOutputStream());
-      pw.println("" + ShuffleServiceFactory.getShuffleService()
-          .getStatus(req.getParameter("shuffleJobId")));
       pw.close();
     } else if ("getBlob".equals(action)) {
       BlobKey blobKey = findBlob(req.getParameter("keyOrFilePath"));

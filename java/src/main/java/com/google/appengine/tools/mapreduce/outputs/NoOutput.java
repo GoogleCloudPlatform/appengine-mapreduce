@@ -6,6 +6,7 @@ import com.google.appengine.tools.mapreduce.Output;
 import com.google.appengine.tools.mapreduce.OutputWriter;
 import com.google.common.collect.ImmutableList;
 
+import java.util.Collection;
 import java.util.List;
 
 /**
@@ -42,7 +43,7 @@ public class NoOutput<O, R> extends Output<O, R> {
 
   private final int numShards;
 
-  private NoOutput(int numShards) {
+  public NoOutput(int numShards) {
     this.numShards = numShards;
   }
 
@@ -57,8 +58,13 @@ public class NoOutput<O, R> extends Output<O, R> {
   /**
    * Returns null.
    */
-  @Override public R finish(List<? extends OutputWriter<O>> writers) {
+  @Override public R finish(Collection<? extends OutputWriter<O>> writers) {
     return null;
+  }
+  
+  @Override
+  public int getNumShards() {
+    return numShards;
   }
 
 }

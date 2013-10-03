@@ -34,6 +34,7 @@ public abstract class AbstractWorkerController<
     this.shardedJobName = checkNotNull(shardedJobName, "Null shardedJobName");
   }
 
+  @Override
   public String getName() {
     return shardedJobName;
   }

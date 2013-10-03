@@ -7,8 +7,6 @@ import com.google.appengine.tools.mapreduce.InputReader;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 
-import java.io.IOException;
-import java.security.SecureRandom;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Random;
@@ -30,7 +28,7 @@ public class RandomLongInput extends Input<Long> {
     private Reader(Long seed, long toEmit) {
       this.toEmit = toEmit;
       if (seed == null) {
-        random = new SecureRandom();
+        random = new Random();
       } else {
         random = new Random(seed);
       }
@@ -65,11 +63,13 @@ public class RandomLongInput extends Input<Long> {
     return this;
   }
 
-  @Override public String toString() {
+  @Override
+  public String toString() {
     return getClass().getSimpleName() + "(" + valuesTotal + ", " + shardCount + ")";
   }
 
-  @Override public List<? extends InputReader<Long>> createReaders() throws IOException {
+  @Override
+  public List<? extends InputReader<Long>> createReaders() {
     ImmutableList.Builder<InputReader<Long>> b = ImmutableList.builder();
     long valuesPerShard = valuesTotal / shardCount;
     long remainder = valuesTotal % shardCount;

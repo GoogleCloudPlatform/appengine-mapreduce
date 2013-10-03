@@ -10,6 +10,10 @@ package com.google.appengine.tools.mapreduce;
  */
 public abstract class MapperContext<K, V> extends WorkerContext {
 
+  protected MapperContext(String jobId, int shardNumber, Counters counters) {
+    super(jobId, shardNumber, counters);
+  }
+
   /**
    * Emits a value for the given key to the reduce stage.
    */

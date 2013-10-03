@@ -18,6 +18,8 @@ package com.google.appengine.tools.mapreduce.impl.util;
 
 import com.google.appengine.api.datastore.Blob;
 import com.google.appengine.api.datastore.Entity;
+import com.google.appengine.tools.mapreduce.CorruptDataException;
+import com.google.appengine.tools.mapreduce.Marshaller;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -68,12 +70,16 @@ public class SerializationUtil {
     };
   }
 
-  public static Serializable deserializeFromByteArray(byte[] bytes) throws IOException {
-    ObjectInputStream in = new ObjectInputStream(new ByteArrayInputStream(bytes));
+  public static Serializable deserializeFromByteArray(byte[] bytes) {
     try {
-      return deserializeFromStream(in);
-    } finally {
-      in.close();
+      ObjectInputStream in = new ObjectInputStream(new ByteArrayInputStream(bytes));
+      try {
+        return deserializeFromStream(in);
+      } finally {
+        in.close();
+      }
+    } catch (IOException e) {
+      throw new CorruptDataException("Deserialization error", e);
     }
   }
 
@@ -97,50 +103,62 @@ public class SerializationUtil {
     };
   }
 
-  public static <T> T deserializeFromByteBufferNoHeader(ByteBuffer bytes) throws IOException {
-    ObjectInputStream in =
-        new ObjectInputStream(newInputStream(bytes)) {
-          @Override protected void readStreamHeader() throws IOException {
-            // do nothing
-          }
-        };
+  public static <T> T deserializeFromByteBufferNoHeader(ByteBuffer bytes) {
+    ObjectInputStream in = null;
+    CorruptDataException e = null;
     try {
+      in = new ObjectInputStream(newInputStream(bytes)) {
+        @Override
+        protected void readStreamHeader() throws IOException {
+          // do nothing
+        }
+      };
       T value = deserializeFromStream(in);
       if (in.read() != -1) {
-        throw new IOException("Trailing bytes in " + bytes + " after reading " + value);
+        throw new CorruptDataException("Trailing bytes in " + bytes + " after reading " + value);
       }
       return value;
+    } catch (IOException e1) {
+      e = new CorruptDataException(e1);
+      throw e;
     } finally {
-      in.close();
+      if (in != null) {
+        try {
+          in.close();
+        } catch (IOException e2) {
+          if (e == null) {
+            throw new RuntimeException(e2);
+          } else {
+            throw e;
+          }
+        }
+      }
     }
   }
 
-  public static <T> T deserializeFromByteArrayNoHeader(byte[] bytes) throws IOException {
+  public static <T> T deserializeFromByteArrayNoHeader(byte[] bytes) {
     return deserializeFromByteBufferNoHeader(ByteBuffer.wrap(bytes));
   }
 
-  public static <T> T deserializeFromStream(ObjectInputStream in) throws IOException {
+  public static <T> T deserializeFromStream(ObjectInputStream in) {
     try {
       @SuppressWarnings("unchecked")
       T obj = (T) in.readObject();
       return obj;
     } catch (ClassNotFoundException e) {
-      throw new IOException("Deserialization error", e);
+      throw new CorruptDataException("Deserialization error", e);
+    } catch (IOException e) {
+      throw new CorruptDataException("Deserialization error", e);
     }
   }
 
-  public static Serializable deserializeFromDatastoreProperty(Entity entity, String propertyName)
-      throws IOException {
+  public static Serializable deserializeFromDatastoreProperty(Entity entity, String propertyName) {
     return deserializeFromByteArray(((Blob) entity.getProperty(propertyName)).getBytes());
   }
 
   public static Serializable deserializeFromDatastorePropertyUnchecked(
       Entity entity, String propertyName) {
-    try {
-      return deserializeFromDatastoreProperty(entity, propertyName);
-    } catch (IOException e) {
-      throw new RuntimeException("Deserialization error", e);
-    }
+    return deserializeFromDatastoreProperty(entity, propertyName);
   }
 
   public static byte[] serializeToByteArray(Serializable o) {
@@ -185,8 +203,47 @@ public class SerializationUtil {
       return in.array();
     } else {
       byte[] buf = new byte[in.remaining()];
+      int position = in.position();
       in.get(buf);
+      in.position(position);
       return buf;
+    }
+  }
+
+  public static <T> void writeObjectToOutputStreamUsingMarshaller(T object,
+      Marshaller<T> marshaller, ObjectOutputStream oout) throws IOException {
+    if (object == null) {
+      oout.writeInt(-1);
+    } else {
+      ByteBuffer buf = marshaller.toBytes(object);
+      int length = buf.remaining();
+      oout.writeInt(length);
+      oout.write(getBytes(buf));
+    }
+  }
+
+  public static <T> T readObjectFromObjectStreamUsingMarshaller(Marshaller<T> marshaller,
+      ObjectInputStream oin) throws IOException {
+    int length = oin.readInt();
+    if (length == -1) {
+      return null;
+    }
+    byte[] buf = new byte[length];
+    readUntilFull(oin, buf);
+    return marshaller.fromBytes(ByteBuffer.wrap(buf));
+  }
+
+  private static void readUntilFull(InputStream in, byte[] buf) throws IOException {
+    int offset = 0;
+    int length = buf.length;
+    while (offset < buf.length) {
+      int read = in.read(buf, offset, length);
+      if (read < 0) {
+        throw new CorruptDataException("Could not fill buffer up to requested size: " + buf.length
+            + " was only able to read " + offset + " bytes.");
+      }
+      offset += read;
+      length -= read;
     }
   }
 

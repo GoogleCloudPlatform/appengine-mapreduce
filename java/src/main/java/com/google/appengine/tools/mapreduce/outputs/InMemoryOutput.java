@@ -8,7 +8,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 
-import java.io.IOException;
+import java.util.Collection;
 import java.util.List;
 
 /**
@@ -33,17 +33,20 @@ public class InMemoryOutput<O> extends Output<O, List<List<O>>> {
     private boolean closed = false;
     private final List<O> accu = Lists.newArrayList();
 
-    @Override public String toString() {
-      return "InMemoryOutput.Writer(" + accu.size() + " items"
-          + (closed ? ", closed" : " so far") + ")";
+    @Override
+    public String toString() {
+      return "InMemoryOutput.Writer(" + accu.size() + " items" + (closed ? ", closed" : " so far")
+          + ")";
     }
 
-    @Override public void write(O value) throws IOException {
+    @Override
+    public void write(O value) {
       Preconditions.checkState(!closed, "%s: Already closed", this);
       accu.add(value);
     }
 
-    @Override public void close() throws IOException {
+    @Override
+    public void close() {
       closed = true;
     }
   }
@@ -68,13 +71,18 @@ public class InMemoryOutput<O> extends Output<O, List<List<O>>> {
    * reduce shard, which is a list of the values emitted by that shard, in
    * order.
    */
-  @Override public List<List<O>> finish(List<? extends OutputWriter<O>> writers) {
+  @Override public List<List<O>> finish(Collection<? extends OutputWriter<O>> writers) {
     ImmutableList.Builder<List<O>> out = ImmutableList.builder();
     for (OutputWriter<O> w : writers) {
       Writer<O> writer = (Writer<O>) w;
       out.add(ImmutableList.copyOf(writer.accu));
     }
     return out.build();
+  }
+  
+  @Override
+  public int getNumShards() {
+    return shardCount;
   }
 
 }

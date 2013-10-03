@@ -1,11 +1,11 @@
 package com.google.appengine.tools.mapreduce.impl;
 
+import com.google.appengine.tools.mapreduce.Counters;
 import com.google.appengine.tools.mapreduce.OutputWriter;
 import com.google.appengine.tools.mapreduce.impl.shardedjob.IncrementalTask;
 import com.google.common.collect.ImmutableMap;
 
 import java.util.Collections;
-
 
 /**
  * A simple task for use in unit tests. Outputs a {@link WorkerResult} so that the output can be
@@ -26,7 +26,7 @@ public class TestWorkerTask implements IncrementalTask<TestWorkerTask, WorkerRes
 
   @Override
   public RunResult<TestWorkerTask, WorkerResult<Integer>> run() {
-    CountersImpl countersImpl = new CountersImpl();
+    Counters countersImpl = new CountersImpl();
     countersImpl.getCounter("TestWorkerTaskSum").increment(result);
     WorkerResult<Integer> workerResult = new WorkerResult<Integer>(
         Collections.<Integer, OutputWriter<Integer>>emptyMap(),

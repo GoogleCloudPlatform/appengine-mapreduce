@@ -19,4 +19,9 @@ public interface Counters extends Serializable {
    * @return iterable over all created counters.
    */
   Iterable<? extends Counter> getCounters();
+
+  /**
+   * @param other Another counter object who's counters should all be added to this one.
+   */
+  public void addAll(Counters other);
 }

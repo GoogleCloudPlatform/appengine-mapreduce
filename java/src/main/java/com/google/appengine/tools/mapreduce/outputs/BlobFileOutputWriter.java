@@ -67,7 +67,7 @@ public class BlobFileOutputWriter extends OutputWriter<ByteBuffer> {
 
   @Override public void write(ByteBuffer bytes) throws IOException {
     Preconditions.checkState(!closed, "%s: already closed", this);
-    if (bytes.hasRemaining()) {
+    while (bytes.hasRemaining()) {
       ensureOpen();
       channel.write(bytes);
     }

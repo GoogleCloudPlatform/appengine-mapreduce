@@ -1,11 +1,11 @@
 package com.google.appengine.tools.mapreduce.outputs;
 
 import com.google.appengine.tools.cloudstorage.GcsFileMetadata;
-import com.google.appengine.tools.cloudstorage.GcsFilename;
 import com.google.appengine.tools.cloudstorage.GcsService;
 import com.google.appengine.tools.cloudstorage.GcsServiceFactory;
 import com.google.appengine.tools.development.testing.LocalFileServiceTestConfig;
 import com.google.appengine.tools.development.testing.LocalServiceTestHelper;
+import com.google.appengine.tools.mapreduce.GoogleCloudStorageFileSet;
 import com.google.appengine.tools.mapreduce.OutputWriter;
 
 import junit.framework.TestCase;
@@ -44,7 +44,7 @@ public class GoogleCloudStorageFileOutputTest extends TestCase {
   protected void setUp() throws Exception {
     super.setUp();
     helper.setUp();
-    //Filling the large_content buffer with a non-repeating but consistent pattern.
+    // Filling the large_content buffer with a non-repeating but consistent pattern.
     Random r = new Random(0);
     r.nextBytes(LARGE_CONTENT);
   }
@@ -67,10 +67,10 @@ public class GoogleCloudStorageFileOutputTest extends TestCase {
       out.endSlice();
       out.close();
     }
-    List<GcsFilename> files = creator.finish(writers);
-    assertEquals(NUM_SHARDS, files.size());
+    GoogleCloudStorageFileSet files = creator.finish(writers);
+    assertEquals(NUM_SHARDS, files.getNumFiles());
     for (int i = 0; i < NUM_SHARDS; i++) {
-      GcsFileMetadata metadata = gcsService.getMetadata(files.get(i));
+      GcsFileMetadata metadata = gcsService.getMetadata(files.getFile(i));
       assertNotNull(metadata);
       assertEquals(SMALL_CONTENT.length, metadata.getLength());
       assertEquals(MIME_TYPE, metadata.getOptions().getMimeType());
@@ -101,35 +101,36 @@ public class GoogleCloudStorageFileOutputTest extends TestCase {
       out.endSlice();
       out.close();
     }
-    List<GcsFilename> files = creator.finish(writers);
-    assertEquals(NUM_SHARDS, files.size());
+    GoogleCloudStorageFileSet files = creator.finish(writers);
+    assertEquals(NUM_SHARDS, files.getNumFiles());
     ByteBuffer expectedContent = ByteBuffer.allocate(content.length * 2);
     expectedContent.put(content);
     expectedContent.put(content);
     for (int i = 0; i < NUM_SHARDS; i++) {
       expectedContent.rewind();
       ByteBuffer actualContent = ByteBuffer.allocate(content.length * 2 + 1);
-      GcsFileMetadata metadata = gcsService.getMetadata(files.get(i));
+      GcsFileMetadata metadata = gcsService.getMetadata(files.getFile(i));
       assertNotNull(metadata);
       assertEquals(expectedContent.capacity(), metadata.getLength());
       assertEquals(MIME_TYPE, metadata.getOptions().getMimeType());
-      ReadableByteChannel readChannel = gcsService.openReadChannel(files.get(i), 0);
+      ReadableByteChannel readChannel = gcsService.openReadChannel(files.getFile(i), 0);
       int read = readChannel.read(actualContent);
       assertEquals(read, content.length * 2);
       actualContent.limit(actualContent.position());
       actualContent.rewind();
       assertEquals(expectedContent, actualContent);
+      readChannel.close();
     }
   }
 
   @SuppressWarnings("unchecked")
-  private OutputWriter<ByteBuffer> reconstruct(OutputWriter<ByteBuffer> writer)
-      throws IOException, ClassNotFoundException {
+  private OutputWriter<ByteBuffer> reconstruct(OutputWriter<ByteBuffer> writer) throws IOException,
+      ClassNotFoundException {
     ByteArrayOutputStream bout = new ByteArrayOutputStream();
     ObjectOutputStream oout = new ObjectOutputStream(bout);
     oout.writeObject(writer);
     oout.close();
-    assertTrue(bout.size() < 1000 * 1000); //Should fit in datastore.
+    assertTrue(bout.size() < 1000 * 1000); // Should fit in datastore.
     ByteArrayInputStream bin = new ByteArrayInputStream(bout.toByteArray());
     ObjectInputStream oin = new ObjectInputStream(bin);
     return (OutputWriter<ByteBuffer>) oin.readObject();

@@ -55,4 +55,9 @@ public class TestController implements ShardedJobController<TestTask, Integer> {
     }
     return true;
   }
+
+  @Override
+  public String getName() {
+    return "Test controller expecting: " + expectedResult;
+  }
 }

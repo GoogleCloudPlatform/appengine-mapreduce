@@ -11,6 +11,10 @@ package com.google.appengine.tools.mapreduce;
  */
 public abstract class ReducerContext<O> extends WorkerContext {
 
+  protected ReducerContext(String jobId, int shardNumber, Counters counters) {
+    super(jobId, shardNumber, counters);
+  }
+
   /**
    * Emits a value to the MapReduce output.
    */

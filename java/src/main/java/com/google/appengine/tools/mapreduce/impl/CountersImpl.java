@@ -42,6 +42,7 @@ public class CountersImpl implements Counters {
     return Iterables.unmodifiableIterable(values.values());
   }
 
+  @Override
   public void addAll(Counters other) {
     for (Counter c : other.getCounters()) {
       getCounter(c.getName()).increment(c.getValue());
