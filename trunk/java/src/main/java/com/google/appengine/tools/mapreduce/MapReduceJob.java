@@ -2,6 +2,8 @@
 
 package com.google.appengine.tools.mapreduce;
 
+import static com.google.appengine.tools.mapreduce.impl.handlers.MapReduceServletImpl.CONTROLLER_PATH;
+import static com.google.appengine.tools.mapreduce.impl.handlers.MapReduceServletImpl.WORKER_PATH;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.appengine.api.files.FileServiceFactory;
@@ -26,7 +28,6 @@ import com.google.appengine.tools.mapreduce.impl.MapShardTask;
 import com.google.appengine.tools.mapreduce.impl.ReduceShardTask;
 import com.google.appengine.tools.mapreduce.impl.WorkerResult;
 import com.google.appengine.tools.mapreduce.impl.WorkerShardTask;
-import com.google.appengine.tools.mapreduce.impl.handlers.MapReduceServletImpl;
 import com.google.appengine.tools.mapreduce.impl.shardedjob.ShardedJobServiceFactory;
 import com.google.appengine.tools.mapreduce.impl.shardedjob.ShardedJobSettings;
 import com.google.appengine.tools.mapreduce.impl.sort.SortContext;
@@ -93,15 +94,15 @@ public class MapReduceJob<I, K, V, O, R>
 
   private static ShardedJobSettings makeShardedJobSettings(
       String shardedJobId, MapReduceSettings mrSettings) {
-    String pathPrefix = String.format("%s%s/", mrSettings.getBaseUrl(), shardedJobId);
     return new ShardedJobSettings()
-        .setControllerPath(pathPrefix + MapReduceServletImpl.CONTROLLER_PATH)
-        .setWorkerPath(pathPrefix + MapReduceServletImpl.WORKER_PATH)
+        .setControllerPath(mrSettings.getBaseUrl() + CONTROLLER_PATH + "/" + shardedJobId)
+        .setWorkerPath(mrSettings.getBaseUrl() + WORKER_PATH + "/" + shardedJobId)
         .setControllerBackend(mrSettings.getBackend())
         .setWorkerBackend(mrSettings.getBackend())
         .setControllerQueueName(mrSettings.getControllerQueueName())
         .setWorkerQueueName(mrSettings.getWorkerQueueName());
   }
+
   // TODO(user) b/9693832
   private static class FillPromiseJob extends Job2<Void, String, Object> {
     private static final long serialVersionUID = 850701484460334898L;

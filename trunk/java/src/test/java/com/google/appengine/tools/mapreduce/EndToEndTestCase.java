@@ -88,8 +88,15 @@ public abstract class EndToEndTestCase extends TestCase {
     HttpServletRequest request = createMock(HttpServletRequest.class);
     HttpServletResponse response = createMock(HttpServletResponse.class);
 
-    expect(request.getRequestURI())
-        .andReturn(taskStateInfo.getUrl())
+    String pathInfo = taskStateInfo.getUrl();
+    if (pathInfo.startsWith("/")) {
+      int skipFrom = pathInfo.startsWith("/_ah/") ? 5 : 1;
+      pathInfo = pathInfo.substring(pathInfo.indexOf('/', skipFrom));
+    } else {
+      pathInfo = "/" + pathInfo;
+    }
+    expect(request.getPathInfo())
+        .andReturn(pathInfo)
         .anyTimes();
     expect(request.getHeader("X-AppEngine-QueueName"))
         .andReturn(queueName)

@@ -147,27 +147,15 @@ public final class MapReduceServletImpl {
   }
 
   /**
-   * Finds the index of the "/" separating the base from the handler.
-   */
-  private static int getDividingIndex(String fullPath) {
-    int baseEnd = fullPath.lastIndexOf('/');
-    String base = fullPath.substring(0, baseEnd);
-    if (base.endsWith(COMMAND_PATH)) {
-      baseEnd = base.lastIndexOf('/');
-    }
-    return baseEnd;
-  }
-
-  /**
    * Returns the handler portion of the URL path.
    *
-   * For example, getHandler(https://www.google.com/foo/bar) -> bar
-   * Note that for command handlers,
-   * getHandler(https://www.google.com/foo/command/bar) -> command/bar
+   * For examples (for a servlet mapped as /foo/*):
+   *   getHandler(https://www.google.com/foo/bar) -> bar
+   *   getHandler(https://www.google.com/foo/bar/id) -> bar/id
    */
-  static String getHandler(HttpServletRequest request) {
-    String requestURI = request.getRequestURI();
-    return requestURI.substring(getDividingIndex(requestURI) + 1);
+  private static String getHandler(HttpServletRequest request) {
+    String pathInfo = request.getPathInfo();
+    return pathInfo == null ? "" : pathInfo.substring(1);
   }
 
   /**
