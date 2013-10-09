@@ -9,7 +9,7 @@ import junit.framework.TestCase;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Random;
 
@@ -75,7 +75,7 @@ public class MarshallersTest extends TestCase {
     assertEquals(value, reconstructed);
     assertEquals(bytes, marshaller.toBytes(reconstructed));
   }
-  
+
   /**
    * Perform checks that assume the data is not corrupted.
    */
@@ -84,7 +84,7 @@ public class MarshallersTest extends TestCase {
     checkByteOrder(m, value);
     checkMoreCapacity(m, value);
   }
-  
+
   /**
    * Perform all checks including those that attempt to detect corruption.
    */
@@ -93,7 +93,7 @@ public class MarshallersTest extends TestCase {
     checkTruncated(m, value);
     checkTrailingBytes(m, value);
   }
-  
+
   @SuppressWarnings({"rawtypes", "unchecked"})
   public void testObjectMarshaller() {
     Marshaller m = Marshallers.getSerializationMarshaller();
@@ -108,7 +108,7 @@ public class MarshallersTest extends TestCase {
     Random r = new Random(0);
     preformAllChecks(m, new BigInteger(8 * (1024 * 1024 + 10), r));
     // Testing a map
-    Map<String, String> map = new HashMap<String, String>();
+    Map<String, String> map = new LinkedHashMap<String, String>();
     map.put("foo", "bar");
     map.put("baz", "bat");
     preformValidChecks(m, map);
