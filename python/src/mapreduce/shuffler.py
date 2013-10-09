@@ -639,11 +639,10 @@ class _ShuffleServicePipeline(pipeline_base.PipelineBase):
     target = modules.get_current_version_name()
     module_name = modules.get_current_module_name()
     if module_name != "default":
-      # NOTE(user): We can't use '.' here to separate module name and
-      # version name because old versions of the shuffler library would
-      # put in "myversion.12345678" in this field, expecting the admin-shuffler
-      # app to remove the timestamp suffix. Use '-dot-' instead.
-      target = "%s-dot-%s" % (target, module_name)
+      # NOTE(user): The final dot is necessary here because old versions
+      # of the shuffler library would put "myversion.12345678" in this field,
+      # expecting the admin-shuffler app to remove the timestamp suffix.
+      target = "%s.%s." % (target, module_name)
 
     files.shuffler.shuffle("%s-%s" % (job_name, int(time.time())),
                            input_files,

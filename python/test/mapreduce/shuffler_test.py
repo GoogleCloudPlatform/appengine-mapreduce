@@ -75,7 +75,7 @@ class ShuffleServicePipelineTest(testutil.HandlerTestBase):
     callback = request.callback()
     self.assertTrue(callback.url().startswith(
         "/mapreduce/pipeline/callback?pipeline_id="))
-    self.assertEquals(self.major_version_id + "-dot-" + self.module_id,
+    self.assertEquals("%s.%s." % (self.major_version_id, self.module_id),
                       callback.app_version_id())
     self.assertEquals("GET", callback.method())
     self.assertEquals("default", callback.queue())
