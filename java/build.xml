@@ -8,7 +8,7 @@
   <property name="thirdparty" value="thirdparty"/>
   <property name="sdk" value="sdk"/>
   <property name="test" value="test"/>
-  <property name="sdk_version" value="1.8.1"/>
+  <property name="sdk_version" value="1.8.5"/>
 
   <!-- Paths -->
   <property name="src" location="src/main/java"/>
