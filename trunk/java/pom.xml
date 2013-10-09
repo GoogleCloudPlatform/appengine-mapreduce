@@ -15,7 +15,7 @@
     </license>
   </licenses>
   <properties>
-    <appengine.target.version>1.8.1</appengine.target.version>
+    <appengine.target.version>1.8.5</appengine.target.version>
   </properties>
   <build>
     <plugins>
