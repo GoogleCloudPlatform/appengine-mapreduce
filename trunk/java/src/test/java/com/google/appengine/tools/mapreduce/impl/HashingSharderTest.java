@@ -82,22 +82,22 @@ public class HashingSharderTest extends TestCase {
     verifyWithKeyMaker(2, keyMaker);
   }
 
-  public void testSubdevision() {
-    testSubdevision(2, 8);
-    testSubdevision(3, 9);
-    testSubdevision(8, 256);
-    testSubdevision(9, 81);
-    testSubdevision(10, 20);
-    testSubdevision(10, 100);
-    testSubdevision(64, 256);
-    testSubdevision(90, 256);
-    testSubdevision(101, 10000);
-    testSubdevision(128, 1024);
-    testSubdevision(128, 10000);
-    testSubdevision(1000, 10000);
+  public void testSubdivision() {
+    testSubdivision(2, 8);
+    testSubdivision(3, 9);
+    testSubdivision(8, 256);
+    testSubdivision(9, 81);
+    testSubdivision(10, 20);
+    testSubdivision(10, 100);
+    testSubdivision(64, 256);
+    testSubdivision(90, 256);
+    testSubdivision(101, 10000);
+    testSubdivision(128, 1024);
+    testSubdivision(128, 10000);
+    testSubdivision(1000, 10000);
   }
 
-  private void testSubdevision(int numInitialShards, int numRehashedShards) {
+  private void testSubdivision(int numInitialShards, int numRehashedShards) {
     int numItems = Math.min(10000, numInitialShards * numRehashedShards * 2);
     final Marshaller<Integer> marshaller = Marshallers.getIntegerMarshaller();
     HashingSharder sharder = new HashingSharder(numInitialShards);
