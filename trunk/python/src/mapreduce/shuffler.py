@@ -34,6 +34,7 @@ import time
 from mapreduce.lib import pipeline
 from mapreduce.lib.pipeline import common as pipeline_common
 from google.appengine.api import files
+from google.appengine.api import modules
 from google.appengine.api.files import file_service_pb
 from google.appengine.ext import db
 from mapreduce import context
@@ -632,14 +633,29 @@ class _ShuffleServicePipeline(pipeline_base.PipelineBase):
           _blobinfo_uploaded_filename=blob_file_name)
       output_files.append(file_name)
     self.fill(self.outputs._output_files, output_files)
+
+    # Support shuffler callbacks going to specific modules and
+    # specific non-default versions of those modules.
+    target = modules.get_current_version_name()
+    module_name = modules.get_current_module_name()
+    if module_name != "default":
+      # NOTE(user): We can't use '.' here to separate module name and
+      # version name because old versions of the shuffler library would
+      # put in "myversion.12345678" in this field, expecting the admin-shuffler
+      # app to remove the timestamp suffix. Use '-dot-' instead.
+      target = "%s-dot-%s" % (target, module_name)
+
     files.shuffler.shuffle("%s-%s" % (job_name, int(time.time())),
                            input_files,
                            output_files,
                            {
                                "url": self.get_callback_url(),
+                               # NOTE(user): This is always GET because of
+                               # how the admin_shuffler app adds the callback
+                               # task with additional URL params.
                                "method": "GET",
                                "queue": self.queue_name,
-                               "version": os.environ["CURRENT_VERSION_ID"],
+                               "version": target,
                            })
 
   def callback(self, **kwargs):

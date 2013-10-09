@@ -84,9 +84,11 @@ class HandlerTestBase(unittest.TestCase):
     self.mox = mox.Mox()
 
     self.appid = "testapp"
-    self.version_id = "1.23456789"
+    self.major_version_id = "1"
+    self.version_id = self.major_version_id + ".23456789"
     self.module_id = "foo_module"
-    self.host = "1.foo_module.testapp.appspot.com"
+    self.host = "%s.%s.%s" % (
+        self.major_version_id, self.module_id, "testapp.appspot.com")
 
     self.testbed = testbed.Testbed()
     self.testbed.activate()
