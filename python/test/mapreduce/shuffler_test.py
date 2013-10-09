@@ -4,7 +4,9 @@
 
 
 
+import os
 import unittest
+
 from testlib import mox
 
 from google.appengine.api import apiproxy_stub_map
@@ -73,7 +75,8 @@ class ShuffleServicePipelineTest(testutil.HandlerTestBase):
     callback = request.callback()
     self.assertTrue(callback.url().startswith(
         "/mapreduce/pipeline/callback?pipeline_id="))
-    self.assertEquals(self.version_id, callback.app_version_id())
+    self.assertEquals(self.major_version_id + "-dot-" + self.module_id,
+                      callback.app_version_id())
     self.assertEquals("GET", callback.method())
     self.assertEquals("default", callback.queue())
 
@@ -90,6 +93,22 @@ class ShuffleServicePipelineTest(testutil.HandlerTestBase):
     self.assertEquals(2, len(output_files))
     self.assertTrue(output_files[0].startswith("/blobstore/"))
     self.assertTrue(output_files[1].startswith("/blobstore/"))
+
+  def testSuccessfulRun_CallbackOnDefaultVersion(self):
+    os.environ["CURRENT_MODULE_ID"] = "default"
+    input_file1 = self._CreateInputFile()
+    input_file2 = self._CreateInputFile()
+    p = shuffler._ShuffleServicePipeline("testjob", [input_file1, input_file2])
+    p.start()
+    test_support.execute_until_empty(self.taskqueue)
+
+    request = self.file_service.shuffle_request
+    callback = request.callback()
+    self.assertTrue(callback.url().startswith(
+        "/mapreduce/pipeline/callback?pipeline_id="))
+    self.assertEquals(self.major_version_id, callback.app_version_id())
+    self.assertEquals("GET", callback.method())
+    self.assertEquals("default", callback.queue())
 
   def testError(self):
     input_file1 = self._CreateInputFile()
