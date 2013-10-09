@@ -1238,7 +1238,7 @@ class _OldAbstractDatastoreInputReader(InputReader):
       elif not namespace_keys:
         return [cls(entity_kind_name,
                     key_ranges=None,
-                    ns_range=namespace_range.NamespaceRange(),
+                    ns_range=namespace_range.NamespaceRange(_app=app),
                     batch_size=shard_count,
                     filters=filters)]
       else:
