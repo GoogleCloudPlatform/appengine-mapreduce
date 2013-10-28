@@ -80,11 +80,14 @@ class ControlTest(testutil.HandlerTestBase):
     self.assertEquals(1, len(tasks))
     # Checks that tasks are scheduled into the future.
     task = tasks[0]
-    self.assertEquals("/mapreduce_base_path/kickoffjob_callback", task["url"])
+    self.assertEqual("/mapreduce_base_path/kickoffjob_callback/" + mapreduce_id,
+                     task["url"])
     handler = test_support.execute_task(task)
     self.assertEqual(mapreduce_id, handler.request.get("mapreduce_id"))
     state = model.MapreduceState.get_by_job_id(mapreduce_id)
-    self.assertEqual(state.mapreduce_spec.params, {"foo": "bar"})
+    self.assertEqual(state.mapreduce_spec.params,
+                     {"foo": "bar",
+                      "base_path": "/mapreduce_base_path"})
 
     return task["eta"]
 
@@ -214,8 +217,9 @@ class ControlTest(testutil.HandlerTestBase):
 
     self.assertTrue(mapreduce_id)
     task, queue_name = TestHooks.enqueue_kickoff_task_calls[0]
-    self.assertEquals("/mapreduce_base_path/kickoffjob_callback", task.url)
-    self.assertEquals("crazy-queue", queue_name)
+    self.assertEqual("/mapreduce_base_path/kickoffjob_callback/" + mapreduce_id,
+                     task.url)
+    self.assertEqual("crazy-queue", queue_name)
 
   def testStartMap_RaisingHooks(self):
     """Tests that MR can be scheduled with a dummy hook class installed.

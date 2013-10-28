@@ -39,26 +39,6 @@ except ImportError:
 # pylint: disable=g-bad-name
 
 
-class BaseHandlerTest(unittest.TestCase):
-  """Tests for BaseHandler."""
-
-  def setUp(self):
-    self.handler = base_handler.BaseHandler()
-    self.handler.initialize(mock_webapp.MockRequest(),
-                            mock_webapp.MockResponse())
-
-  def testBasePath(self):
-    """Test base_path calculation."""
-    self.handler.request.path = "/mapreduce_base/start"
-    self.assertEquals("/mapreduce_base", self.handler.base_path())
-
-    self.handler.request.path = "/start"
-    self.assertEquals("", self.handler.base_path())
-
-    self.handler.request.path = "/map/reduce/base/start"
-    self.assertEquals("/map/reduce/base", self.handler.base_path())
-
-
 class TaskQueueHandlerTest(unittest.TestCase):
   """Tests for TaskQueueHandler."""
 

@@ -68,10 +68,12 @@ def create_handlers_map():
 
   return pipeline_handlers_map + [
       # Task queue handlers.
-      (r".*/worker_callback", handlers.MapperWorkerCallbackHandler),
-      (r".*/controller_callback", handlers.ControllerCallbackHandler),
-      (r".*/kickoffjob_callback", handlers.KickOffJobHandler),
-      (r".*/finalizejob_callback", handlers.FinalizeJobHandler),
+      # Always suffix by mapreduce_id or shard_id for log analysis purposes.
+      # mapreduce_id or shard_id also presents in headers or payload.
+      (r".*/worker_callback/.*", handlers.MapperWorkerCallbackHandler),
+      (r".*/controller_callback/.*", handlers.ControllerCallbackHandler),
+      (r".*/kickoffjob_callback/.*", handlers.KickOffJobHandler),
+      (r".*/finalizejob_callback/.*", handlers.FinalizeJobHandler),
 
       # RPC requests with JSON responses
       # All JSON handlers should have /command/ prefix.
