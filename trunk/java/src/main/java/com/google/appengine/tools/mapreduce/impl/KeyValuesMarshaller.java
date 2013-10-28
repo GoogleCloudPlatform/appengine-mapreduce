@@ -8,20 +8,20 @@ import com.google.appengine.repackaged.com.google.protobuf.InvalidProtocolBuffer
 import com.google.appengine.tools.mapreduce.CorruptDataException;
 import com.google.appengine.tools.mapreduce.KeyValue;
 import com.google.appengine.tools.mapreduce.Marshaller;
-import com.google.apphosting.api.AppEngineInternal;
 
 import java.nio.ByteBuffer;
 import java.util.Iterator;
 import java.util.List;
 
 /**
- * Marshalls KeyValue pairs where the value is an iterator. 
+ * Marshalls KeyValue pairs where the value is an iterator.
  * Used to marshal and unmarshal data from the sort to the reducer.
+ *
+ * For internal use only. User code cannot safely depend on this class.
  *
  * @param <K> key type
  * @param <V> value type
  */
-@AppEngineInternal
 public class KeyValuesMarshaller<K, V> extends Marshaller<KeyValue<K, Iterator<V>>> {
   private static final long serialVersionUID = -469910411827845614L;
   private final Marshaller<K> keyMarshaller;
@@ -31,7 +31,7 @@ public class KeyValuesMarshaller<K, V> extends Marshaller<KeyValue<K, Iterator<V
     this.keyMarshaller = checkNotNull(keyMarshaller, "Null keyMarshaller");
     this.valueMarshaller = checkNotNull(valueMarshaller, "Null valueMarshaller");
   }
-  
+
   @Override
   public ByteBuffer toBytes(KeyValue<K, Iterator<V>> keyValues) {
     FileServicePb.KeyValues.Builder b = FileServicePb.KeyValues.newBuilder();

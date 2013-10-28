@@ -1,7 +1,6 @@
 package com.google.appengine.tools.mapreduce.impl.handlers;
 
 import com.google.appengine.tools.mapreduce.impl.MapReduceConstants;
-import com.google.apphosting.api.AppEngineInternal;
 import com.google.common.base.Preconditions;
 import com.google.common.primitives.Ints;
 
@@ -13,8 +12,9 @@ import java.util.logging.Logger;
  * Limits the number of parallel requests according to their estimated memory usage.
  * Estimates are specified in MB.
  *
+ * For internal use only. User code cannot safely depend on this class.
+ *
  */
-@AppEngineInternal
 public final class MemoryLimiter {
 
   private static final Logger log = Logger.getLogger(MemoryLimiter.class.getName());

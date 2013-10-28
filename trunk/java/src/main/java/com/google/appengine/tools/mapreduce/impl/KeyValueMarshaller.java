@@ -8,18 +8,18 @@ import com.google.appengine.repackaged.com.google.protobuf.InvalidProtocolBuffer
 import com.google.appengine.tools.mapreduce.CorruptDataException;
 import com.google.appengine.tools.mapreduce.KeyValue;
 import com.google.appengine.tools.mapreduce.Marshaller;
-import com.google.apphosting.api.AppEngineInternal;
 
 import java.nio.ByteBuffer;
 
 /**
  * Marshalls KeyValue pairs given a Marshaller for the Key and the Value.
  * Used to marshall and unmarshall data from the Mapper to the Sort.
- * 
+ *
+ * For internal use only. User code cannot safely depend on this class.
+ *
  * @param <K> key type
  * @param <V> value type
  */
-@AppEngineInternal
 public class KeyValueMarshaller<K, V> extends Marshaller<KeyValue<K, V>> {
 
   private static final long serialVersionUID = 4804959968008959514L;
