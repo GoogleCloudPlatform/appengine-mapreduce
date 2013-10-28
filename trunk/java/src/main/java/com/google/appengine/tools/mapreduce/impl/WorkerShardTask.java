@@ -14,6 +14,7 @@ import com.google.appengine.tools.mapreduce.WorkerContext;
 import com.google.appengine.tools.mapreduce.impl.handlers.MemoryLimiter;
 import com.google.appengine.tools.mapreduce.impl.shardedjob.IncrementalTask;
 import com.google.common.base.Stopwatch;
+import com.google.common.base.StringUtil;
 import com.google.common.collect.Lists;
 
 import java.io.IOException;
@@ -36,7 +37,7 @@ public abstract class WorkerShardTask<I, O, C extends WorkerContext>
   private static final long serialVersionUID = 992552712402490981L;
 
   private static final MemoryLimiter LIMITER = new MemoryLimiter();
-  
+
   protected final String mrJobId;
   protected final int shardNumber;
   protected final int shardCount;
@@ -79,21 +80,21 @@ public abstract class WorkerShardTask<I, O, C extends WorkerContext>
   protected abstract C getWorkerContext(Counters counters);
   protected abstract void callWorker(I input);
   protected abstract String formatLastWorkItem(I item);
-  
+
   /**
    * @return true iff a checkpoint should be performed. (Not not mandate that one will)
    */
-  protected abstract boolean shouldCheckpoint(long timeElapsed); 
-  
+  protected abstract boolean shouldCheckpoint(long timeElapsed);
+
   /**
    * @return false iff a checkPoint MUST be performed immediately because more input cannot be
    *         accepted.
    */
   protected abstract boolean canContinue();
-  
+
   protected abstract long estimateMemoryNeeded();
 
-  @Override 
+  @Override
   public RunResult<WorkerShardTask<I, O, C>, WorkerResult<O>> run() {
     long claimedMemory = LIMITER.claim(estimateMemoryNeeded() / 1024 / 1024);
     try {
@@ -102,14 +103,14 @@ public abstract class WorkerShardTask<I, O, C extends WorkerContext>
       LIMITER.release(claimedMemory);
     }
   }
-  
+
   public RunResult<WorkerShardTask<I, O, C>, WorkerResult<O>> doWork() {
 
     beginSlice();
     overallStopwatch = Stopwatch.createStarted();
     inputStopwatch =  Stopwatch.createUnstarted();
     workerStopwatch = Stopwatch.createUnstarted();
-    
+
     int workerCalls = 0;
     int itemsRead = 0;
     boolean inputExhausted = false;
@@ -134,7 +135,7 @@ public abstract class WorkerShardTask<I, O, C extends WorkerContext>
           throw new RuntimeException(in + ".next() threw IOException", e);
         }
         inputStopwatch.stop();
-        
+
         workerCalls++;
         // TODO(ohler): workerStopwatch includes time spent in emit() and the
         // OutputWriter, which is very significant because it includes I/O. I
@@ -153,7 +154,7 @@ public abstract class WorkerShardTask<I, O, C extends WorkerContext>
     log.info("Ending slice, inputExhausted=" + inputExhausted + ", overallStopwatch="
         + overallStopwatch + ", workerStopwatch=" + workerStopwatch + ", inputStopwatch="
         + inputStopwatch);
-  Counters counters = worker.getContext().getCounters();
+    Counters counters = worker.getContext().getCounters();
     counters.getCounter(workerCallsCounterName).increment(workerCalls);
     counters.getCounter(workerMillisCounterName).increment(workerStopwatch.elapsed(MILLISECONDS));
 
@@ -167,7 +168,7 @@ public abstract class WorkerShardTask<I, O, C extends WorkerContext>
           new WorkerResult<O>(shardNumber, out, workerShardState, counters), null);
     }
   }
-  
+
   protected void beginSlice() {
     if (isFirstSlice) {
       try {
@@ -234,15 +235,7 @@ public abstract class WorkerShardTask<I, O, C extends WorkerContext>
   }
 
   protected static String abbrev(Object x) {
-    if (x == null) {
-      return null;
-    }
-    String s = "" + x;
-    if (s.length() > MapReduceConstants.MAX_LAST_ITEM_STRING_SIZE) {
-      return s.substring(0, MapReduceConstants.MAX_LAST_ITEM_STRING_SIZE) + "...";
-    } else {
-      return s;
-    }
+    return x == null ? null : StringUtil.truncateAtMaxLength(
+        String.valueOf(x), MapReduceConstants.MAX_LAST_ITEM_STRING_SIZE, true);
   }
-
 }

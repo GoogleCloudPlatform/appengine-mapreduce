@@ -11,6 +11,8 @@ import com.google.appengine.tools.mapreduce.KeyValue;
 import com.google.appengine.tools.mapreduce.OutputWriter;
 import com.google.appengine.tools.mapreduce.Reducer;
 import com.google.appengine.tools.mapreduce.ReducerContext;
+import com.google.appengine.tools.mapreduce.ReducerInput;
+import com.google.appengine.tools.mapreduce.impl.shardedjob.ShardFailureException;
 
 import java.util.Iterator;
 
@@ -47,7 +49,12 @@ public class ReduceShardTask<K, V, O>
   }
 
   @Override protected void callWorker(KeyValue<K, Iterator<V>> input) {
-    reducer.reduce(input.getKey(), ReducerInputs.fromIterator(input.getValue()));
+    ReducerInput<V> value = ReducerInputs.fromIterator(input.getValue());
+    try {
+      reducer.reduce(input.getKey(), value);
+    } catch (RuntimeException ex) {
+      throw new ShardFailureException(ex);
+    }
   }
 
   @Override protected String formatLastWorkItem(KeyValue<K, Iterator<V>> item) {
@@ -63,7 +70,7 @@ public class ReduceShardTask<K, V, O>
   protected boolean canContinue() {
     return true;
   }
-  
+
   @Override
   protected long estimateMemoryNeeded() {
     return in.estimateMemoryRequirment() + out.estimateMemoryRequirment()

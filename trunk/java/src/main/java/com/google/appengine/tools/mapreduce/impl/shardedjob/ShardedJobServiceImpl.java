@@ -56,6 +56,8 @@ class ShardedJobServiceImpl implements ShardedJobService {
   @SuppressWarnings("rawtypes")
   @Override
   public void handleWorkerRequest(HttpServletRequest request) {
+    // TODO(user): once b/11319583 is fixed mark job as error upon task failure when task-queue
+    // will no longer retry it.
     new ShardedJobRunner().runTask(
         checkNotNull(request.getParameter(TASK_ID_PARAM), "Null task id"),
         checkNotNull(request.getParameter(JOB_ID_PARAM), "Null job id"),
