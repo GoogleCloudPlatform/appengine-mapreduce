@@ -50,6 +50,12 @@ from mapreduce import parameters
 from mapreduce import util
 from google.appengine.runtime import apiproxy_errors
 
+# pylint: disable=g-import-not-at-top
+try:
+  import cloudstorage
+except ImportError:
+  cloudstorage = None  # CloudStorage library not available
+
 
 # Set of strings of various test-injected faults.
 _TEST_INJECTED_FAULTS = set()
@@ -376,7 +382,13 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
       shard_state.put(config=util.create_datastore_write_config(spec))
       return
 
+    # TODO(user): Find a better way to set these per thread configs.
+    # E.g. what if user change it?
     util._set_ndb_cache_policy()
+    if cloudstorage:
+      cloudstorage.set_default_retry_params(
+          cloudstorage.RetryParams(
+              urlfetch_timeout=parameters._GCS_URLFETCH_TIMEOUT_SEC))
 
     try:
       self.process_inputs(
