@@ -228,11 +228,12 @@ public class MapReduceJob<I, K, V, O, R>
             writers.get(i),
             settings.getMillisPerSlice()));
       }
-      ShardedJobServiceFactory.getShardedJobService().startJob(shardedJobId,
-          mapTasks.build(), new WorkerController<
-              I, KeyValue<K, V>, List<GoogleCloudStorageFileSet>, MapperContext<K, V>>(
-              shardedJobName, new CountersImpl(), output, result.getHandle()),
-          makeShardedJobSettings(shardedJobId, settings));
+      ShardedJobSettings shardedJobSettings = makeShardedJobSettings(shardedJobId, settings);
+      WorkerController<I, KeyValue<K, V>, List<GoogleCloudStorageFileSet>, MapperContext<K, V>>
+          workerController =
+            new WorkerController<>(shardedJobName, new CountersImpl(), output, result.getHandle());
+      ShardedJobServiceFactory.getShardedJobService().startJob(shardedJobId, mapTasks.build(),
+          workerController, shardedJobSettings);
       setStatusConsoleUrl(settings.getBaseUrl() + "detail?mapreduce_id=" + shardedJobId);
       return result;
     }
@@ -320,12 +321,12 @@ public class MapReduceJob<I, K, V, O, R>
             new SortWorker(),
             writers.get(i)));
       }
-      ShardedJobServiceFactory.getShardedJobService().startJob(shardedJobId,
-          sortTasks.build(), new WorkerController<
-              KeyValue<ByteBuffer, ByteBuffer>, KeyValue<ByteBuffer, Iterator<ByteBuffer>>,
-              List<GoogleCloudStorageFileSet>, SortContext>(
-              shardedJobName, new CountersImpl(), output, result.getHandle()),
-          makeShardedJobSettings(shardedJobId, settings));
+      ShardedJobSettings shardedJobSettings = makeShardedJobSettings(shardedJobId, settings);
+      WorkerController<KeyValue<ByteBuffer, ByteBuffer>, KeyValue<ByteBuffer, Iterator<ByteBuffer>>,
+          List<GoogleCloudStorageFileSet>, SortContext> workerController =
+            new WorkerController<>(shardedJobName, new CountersImpl(), output, result.getHandle());
+      ShardedJobServiceFactory.getShardedJobService().startJob(shardedJobId, sortTasks.build(),
+          workerController, shardedJobSettings);
       setStatusConsoleUrl(settings.getBaseUrl() + "detail?mapreduce_id=" + shardedJobId);
       return result;
     }
@@ -388,11 +389,13 @@ public class MapReduceJob<I, K, V, O, R>
             writers.get(i),
             settings.getMillisPerSlice()));
       }
-      ShardedJobServiceFactory.getShardedJobService().startJob(shardedJobId,
-          sortTasks.build(), new WorkerController<
-              KeyValue<K, Iterator<V>>, O, R, ReducerContext<O>>(
-              shardedJobName, mapResult.getCounters(), output, result.getHandle()),
-          makeShardedJobSettings(shardedJobId, settings));
+      ShardedJobSettings shardedJobSettings =
+          makeShardedJobSettings(shardedJobId, settings);
+      WorkerController<KeyValue<K, Iterator<V>>, O, R, ReducerContext<O>> workerController =
+          new WorkerController<>(shardedJobName, mapResult.getCounters(), output,
+              result.getHandle());
+      ShardedJobServiceFactory.getShardedJobService().startJob(shardedJobId, sortTasks.build(),
+          workerController, shardedJobSettings);
       setStatusConsoleUrl(settings.getBaseUrl() + "detail?mapreduce_id=" + shardedJobId);
       return result;
     }

@@ -63,6 +63,14 @@ public abstract class OutputWriter<O> implements Serializable {
   public void open() throws IOException {}
 
   /**
+   * Returns the estimated mininum memory that will be used by this writer. 
+   * (This is normally just set to the size of the buffers used by the implementation)
+   */
+  public long estimateMemoryRequirment() {
+    return 0;
+  }
+  
+  /**
    * Called when no more output will be written to this writer.
    */
   public abstract void close() throws IOException;

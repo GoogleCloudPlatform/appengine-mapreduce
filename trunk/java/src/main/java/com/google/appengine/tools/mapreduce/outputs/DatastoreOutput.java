@@ -56,6 +56,11 @@ public class DatastoreOutput extends Output<Entity, Void> {
     public void close() {
       // Nothing to do
     }
+
+    @Override
+    public long estimateMemoryRequirment() {
+      return poolParams.getBytesLimit();
+    }
   }
 
   private final int numShards;

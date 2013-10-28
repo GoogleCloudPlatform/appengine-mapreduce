@@ -21,9 +21,11 @@ import java.util.NoSuchElementException;
 /**
  */
 class DatastoreInputReader extends InputReader<Entity> {
-// --------------------------- STATIC FIELDS ---------------------------
+  // --------------------------- STATIC FIELDS ---------------------------
 
-private static final long serialVersionUID = -2164845668646485549L;
+  private static final long serialVersionUID = -2164845668646485549L;
+
+  private static final long AVERAGE_ENTITY_SIZE = 100 * 1024;
 
 // ------------------------------ FIELDS ------------------------------
 
@@ -93,5 +95,10 @@ private static final long serialVersionUID = -2164845668646485549L;
     q.addSort(KEY_RESERVED_PROPERTY);
 
     iterator = getDatastoreService().prepare(q).asQueryResultIterator(withChunkSize(batchSize));
+  }
+
+  @Override
+  public long estimateMemoryRequirment() {
+    return batchSize * AVERAGE_ENTITY_SIZE;
   }
 }

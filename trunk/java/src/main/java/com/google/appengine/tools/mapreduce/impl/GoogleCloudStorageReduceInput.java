@@ -74,7 +74,7 @@ public class GoogleCloudStorageReduceInput<K, V> extends Input<KeyValue<K, Itera
         new ArrayList<PeekingInputReader<KeyValue<ByteBuffer, Iterator<V>>>>();
 
     GoogleCloudStorageLevelDbInput reducerInput = new GoogleCloudStorageLevelDbInput(
-        reducerInputFileSet, MapReduceConstants.INPUT_BUFFER_SIZE);
+        reducerInputFileSet, MapReduceConstants.DEFAULT_IO_BUFFER_SIZE);
     for (InputReader<ByteBuffer> in : reducerInput.createReaders()) {
       inputFiles.add(new PeekingInputReader<KeyValue<ByteBuffer, Iterator<V>>>(in, marshaller));
     }

@@ -11,6 +11,7 @@ import com.google.appengine.tools.mapreduce.LifecycleListener;
 import com.google.appengine.tools.mapreduce.OutputWriter;
 import com.google.appengine.tools.mapreduce.Worker;
 import com.google.appengine.tools.mapreduce.WorkerContext;
+import com.google.appengine.tools.mapreduce.impl.handlers.MemoryLimiter;
 import com.google.appengine.tools.mapreduce.impl.shardedjob.IncrementalTask;
 import com.google.common.base.Stopwatch;
 import com.google.common.collect.Lists;
@@ -34,10 +35,12 @@ public abstract class WorkerShardTask<I, O, C extends WorkerContext>
 
   private static final long serialVersionUID = 992552712402490981L;
 
+  private static final MemoryLimiter LIMITER = new MemoryLimiter();
+  
   protected final String mrJobId;
   protected final int shardNumber;
   protected final int shardCount;
-  private final InputReader<I> in;
+  protected final InputReader<I> in;
   private final Worker<C> worker;
   protected final OutputWriter<O> out;
   private final String workerCallsCounterName;
@@ -88,8 +91,19 @@ public abstract class WorkerShardTask<I, O, C extends WorkerContext>
    */
   protected abstract boolean canContinue();
   
+  protected abstract long estimateMemoryNeeded();
+
   @Override 
   public RunResult<WorkerShardTask<I, O, C>, WorkerResult<O>> run() {
+    long claimedMemory = LIMITER.claim(estimateMemoryNeeded() / 1024 / 1024);
+    try {
+      return doWork();
+    } finally {
+      LIMITER.release(claimedMemory);
+    }
+  }
+  
+  public RunResult<WorkerShardTask<I, O, C>, WorkerResult<O>> doWork() {
 
     beginSlice();
     overallStopwatch = Stopwatch.createStarted();

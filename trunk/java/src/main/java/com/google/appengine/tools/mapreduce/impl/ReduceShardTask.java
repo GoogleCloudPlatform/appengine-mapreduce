@@ -63,4 +63,10 @@ public class ReduceShardTask<K, V, O>
   protected boolean canContinue() {
     return true;
   }
+  
+  @Override
+  protected long estimateMemoryNeeded() {
+    return in.estimateMemoryRequirment() + out.estimateMemoryRequirment()
+        + MapReduceConstants.ASSUMED_BASE_MEMORY_PER_REQUEST;
+  }
 }

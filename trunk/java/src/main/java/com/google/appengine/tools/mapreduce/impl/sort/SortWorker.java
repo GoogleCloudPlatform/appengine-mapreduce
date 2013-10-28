@@ -3,9 +3,11 @@ package com.google.appengine.tools.mapreduce.impl.sort;
 import com.google.appengine.tools.mapreduce.KeyValue;
 import com.google.appengine.tools.mapreduce.Worker;
 import com.google.appengine.tools.mapreduce.impl.MapReduceConstants;
+import com.google.appengine.tools.mapreduce.impl.handlers.RejectRequestException;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Stopwatch;
 import com.google.common.collect.ImmutableList;
+import com.google.common.primitives.Ints;
 
 import it.unimi.dsi.fastutil.Arrays;
 import it.unimi.dsi.fastutil.Swapper;
@@ -38,6 +40,14 @@ public class SortWorker extends Worker<SortContext> {
 
   private static final long serialVersionUID = 5872735741738296902L;
   private static final Logger log = Logger.getLogger(SortWorker.class.getName());
+
+  /**
+   * Fraction of system ram sort will allocate. There are multiple values in case the largest
+   * proportion is unavailable. If the smallest is unavailable sort will fail.
+   */
+  private static final double[] TARGET_SORT_RAM_PROPORTIONS = {0.30, 0.25, 0.15};
+
+  private static final int MEMORY_ALLOCATION_ATTEMPTS = TARGET_SORT_RAM_PROPORTIONS.length;
 
   // Items are batched to save storage cost, but not too big to limit memory use.
   static final int BATCHED_ITEM_SIZE_PER_EMIT = 1024;
@@ -104,7 +114,6 @@ public class SortWorker extends Worker<SortContext> {
     } catch (IOException e) {
       throw new RuntimeException(e);
     }
-    memoryBuffer = null;
   }
 
   private int getStoredSize() {
@@ -348,25 +357,40 @@ public class SortWorker extends Worker<SortContext> {
    * as large as possible. However because there may be multiple requests occurring on the same
    * instance, several attempts may be made to allocate a large portion.
    *
-   * @throws RuntimeException If the number of attempts made is higher than the number allowed by
-   *         {@link MapReduceConstants#TARGET_SORT_RAM_PROPORTIONS}
+   * @throws RuntimeException If we cannot allocate after several attempts.
    */
   @VisibleForTesting
   ByteBuffer allocateMemory() {
     Runtime runtime = Runtime.getRuntime();
-    long totalMemory = runtime.maxMemory() - MapReduceConstants.ASSUMED_JVM_RAM_OVERHEAD;
-    int maxAttempts = MapReduceConstants.TARGET_SORT_RAM_PROPORTIONS.length;
-    for (int attempt = 0; attempt < maxAttempts; attempt++) {
-      int capacity = (int) (totalMemory * MapReduceConstants.TARGET_SORT_RAM_PROPORTIONS[attempt]);
+    for (int retries = 0; retries < MEMORY_ALLOCATION_ATTEMPTS; retries++) {
+      int targetCapacity = getMemoryForSort(retries);
       try {
-        return ByteBuffer.allocateDirect(capacity);
+        return ByteBuffer.allocateDirect(targetCapacity);
       } catch (OutOfMemoryError e) {
-        log.warning(
-            "Failed to allocate memory for sort: " + capacity + " Retrying with a smaller buffer.");
+        log.info("Failed to allocate direct memory for sort: " + targetCapacity
+            + " retrying with a smaller buffer.");
       }
     }
-    throw new RuntimeException(
-        "Failed to allocate memory for sort after " + maxAttempts + " attempts. Giving up.");
+    int targetCapacity = getMemoryForSort(MEMORY_ALLOCATION_ATTEMPTS);
+    try {
+      if (targetCapacity < runtime.freeMemory() + (runtime.maxMemory() - runtime.totalMemory())) {
+        log.info("Using indirect memory allocation.");
+        return ByteBuffer.allocate(targetCapacity);
+      } else {
+        log.info("Skipping indirect memory allocation.");
+      }
+    } catch (OutOfMemoryError e) {
+      log.info("Failed to allocate non-direct memory for sort: " + targetCapacity + " giving up");
+    }
+    throw new RejectRequestException("Failed to allocate memory for sort after "
+        + MEMORY_ALLOCATION_ATTEMPTS + " attempts. Giving up.");
+  }
+
+  public static int getMemoryForSort(int numRetries) {
+    long maxUsableMemory =
+        (Runtime.getRuntime().maxMemory() - MapReduceConstants.ASSUMED_JVM_RAM_OVERHEAD);
+    int memIndex = Math.min(numRetries, MEMORY_ALLOCATION_ATTEMPTS - 1);
+    return Ints.saturatedCast((long) (maxUsableMemory * TARGET_SORT_RAM_PROPORTIONS[memIndex]));
   }
 
   public int getValuesHeld() {

@@ -4,6 +4,7 @@ package com.google.appengine.tools.mapreduce.inputs;
 import com.google.appengine.api.blobstore.BlobKey;
 import com.google.appengine.api.blobstore.BlobstoreInputStream;
 import com.google.appengine.tools.mapreduce.InputReader;
+import com.google.appengine.tools.mapreduce.impl.MapReduceConstants;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 
@@ -91,6 +92,11 @@ class BlobstoreInputReader extends InputReader<byte[]> {
   @Override
   public byte[] next() throws IOException, NoSuchElementException {
     return in.next();
+  }
+
+  @Override
+  public long estimateMemoryRequirment() {
+    return MapReduceConstants.DEFAULT_IO_BUFFER_SIZE;
   }
 
 }

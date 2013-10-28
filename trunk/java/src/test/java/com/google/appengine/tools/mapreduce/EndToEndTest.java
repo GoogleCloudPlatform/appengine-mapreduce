@@ -212,6 +212,7 @@ public class EndToEndTest extends EndToEndTestCase {
 
     List/*<InputReader<Long>>*/ readers = ImmutableList.of(inputReader);
     expect(mockInput.createReaders()).andReturn(readers);
+    expect(inputReader.estimateMemoryRequirment()).andReturn(0l).anyTimes();
     inputReader.open();
     inputReader.beginSlice();
     expect(inputReader.next()).andThrow(new NoSuchElementException());
@@ -221,6 +222,7 @@ public class EndToEndTest extends EndToEndTestCase {
     expect(mockOutput.getNumShards()).andReturn(1).times(0, Integer.MAX_VALUE);
     List/*<OutputWriter<ByteBuffer>>*/ writers = ImmutableList.of(outputWriter);
     expect(mockOutput.createWriters()).andReturn(writers);
+    expect(outputWriter.estimateMemoryRequirment()).andReturn(0l).anyTimes();
     outputWriter.open();
     outputWriter.beginSlice();
     outputWriter.endSlice();

@@ -18,6 +18,7 @@ import com.google.appengine.tools.development.testing.LocalTaskQueueTestConfig;
 import com.google.appengine.tools.pipeline.impl.servlets.PipelineServlet;
 import com.google.appengine.tools.pipeline.impl.servlets.TaskHandler;
 import com.google.apphosting.api.ApiProxy;
+import com.google.common.base.CharMatcher;
 
 import junit.framework.TestCase;
 
@@ -95,36 +96,25 @@ public abstract class EndToEndTestCase extends TestCase {
     } else {
       pathInfo = "/" + pathInfo;
     }
-    expect(request.getPathInfo())
-        .andReturn(pathInfo)
+    expect(request.getPathInfo()).andReturn(pathInfo).anyTimes();
+    expect(request.getHeader("X-AppEngine-QueueName")).andReturn(queueName).anyTimes();
+    expect(request.getHeader("X-AppEngine-TaskName")).andReturn(taskStateInfo.getTaskName())
         .anyTimes();
-    expect(request.getHeader("X-AppEngine-QueueName"))
-        .andReturn(queueName)
-        .anyTimes();
-    expect(request.getHeader("X-AppEngine-TaskName"))
-        .andReturn(taskStateInfo.getTaskName())
-        .anyTimes();
-    // Pipeline looks at this header but uses the value only for diagnostic
-    // messages.
+    // Pipeline looks at this header but uses the value only for diagnostic messages
     expect(request.getHeader(TaskHandler.TASK_RETRY_COUNT_HEADER))
-        .andReturn("HACK: not implemented")
-        .anyTimes();
-
+        .andReturn("HACK: not implemented").anyTimes();
     for (HeaderWrapper header : taskStateInfo.getHeaders()) {
+      int value = parseAsQuotedInt(header.getValue());
+      expect(request.getIntHeader(header.getKey())).andReturn(value).anyTimes();
       logger.info("header: " + header.getKey() + "=" + header.getValue());
-      expect(request.getHeader(header.getKey()))
-          .andReturn(header.getValue())
-          .anyTimes();
+      expect(request.getHeader(header.getKey())).andReturn(header.getValue()).anyTimes();
     }
 
     Map<String, String> parameters = decodeParameters(taskStateInfo.getBody());
     for (String name : parameters.keySet()) {
-      expect(request.getParameter(name))
-          .andReturn(parameters.get(name))
-          .anyTimes();
+      expect(request.getParameter(name)).andReturn(parameters.get(name)).anyTimes();
     }
-    expect(request.getParameterNames())
-        .andReturn(Collections.enumeration(parameters.keySet()))
+    expect(request.getParameterNames()).andReturn(Collections.enumeration(parameters.keySet()))
         .anyTimes();
 
     replay(request, response);
@@ -137,6 +127,14 @@ public abstract class EndToEndTestCase extends TestCase {
       }
     } else {
       throw new UnsupportedOperationException();
+    }
+  }
+
+  private int parseAsQuotedInt(String str) {
+    try {
+      return Integer.parseInt(CharMatcher.is('"').trimFrom(str));
+    } catch (NumberFormatException e) {
+      return -1;
     }
   }
 

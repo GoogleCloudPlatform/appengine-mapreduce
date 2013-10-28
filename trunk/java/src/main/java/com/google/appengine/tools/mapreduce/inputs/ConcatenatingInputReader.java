@@ -95,4 +95,13 @@ public final class ConcatenatingInputReader<I> extends InputReader<I> {
     }
   }
 
+  @Override
+  public long estimateMemoryRequirment() {
+    long max = 0;
+    for (InputReader<I> reader : readers) {
+      max = Math.max(max, reader.estimateMemoryRequirment());
+    }
+    return max;
+  }
+
 }
