@@ -35,10 +35,9 @@ public class DatastoreMutationPoolTest extends TestCase {
 // ------------------------------ FIELDS ------------------------------
 
   private final LocalServiceTestHelper helper =
-    new LocalServiceTestHelper(new LocalDatastoreServiceTestConfig());
+      new LocalServiceTestHelper(new LocalDatastoreServiceTestConfig());
 
   private DatastoreService ds;
-
   private Entity[] entities;
 
 // ------------------------ OVERRIDING METHODS ------------------------

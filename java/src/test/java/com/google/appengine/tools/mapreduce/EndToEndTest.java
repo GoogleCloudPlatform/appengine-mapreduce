@@ -145,7 +145,6 @@ public class EndToEndTest extends EndToEndTestCase {
         assertEquals(1, result.getOutputResult().size());
         assertEquals(10, result.getCounters().getCounter(CounterNames.MAPPER_CALLS).getValue());
         AppEngineFile file = result.getOutputResult().get(0);
-        ByteBuffer buf = ByteBuffer.allocate(1000);
         FileReadChannel ch = FileServiceFactory.getFileService().openReadChannel(file, false);
         BufferedReader reader =
             new BufferedReader(Channels.newReader(ch, Charsets.US_ASCII.newDecoder(), -1));
@@ -447,7 +446,7 @@ public class EndToEndTest extends EndToEndTestCase {
   static class SideOutputMapper extends Mapper<Long, String, Void> {
     transient BlobFileOutputWriter sideOutput;
 
-    @Override public void beginShard() {
+    @Override public void beginSlice() {
       sideOutput = BlobFileOutputWriter.forWorker(this, "test file", "application/octet-stream");
     }
 
@@ -460,7 +459,7 @@ public class EndToEndTest extends EndToEndTestCase {
       }
     }
 
-    @Override public void endShard() {
+    @Override public void endSlice() {
       log.info("endShard() in shard " + getContext().getShardNumber());
       try {
         sideOutput.close();
@@ -515,6 +514,7 @@ public class EndToEndTest extends EndToEndTestCase {
   @SuppressWarnings("serial")
   static class TestMapper extends Mapper<Entity, String, Long> {
 
+    transient DatastoreMutationPool pool;
     @Override public void map(Entity entity) {
       getContext().incrementCounter("map");
       try {
@@ -532,7 +532,7 @@ public class EndToEndTest extends EndToEndTestCase {
         getContext().emit("multiple-of-ten", key);
       }
 
-      DatastoreMutationPool pool = DatastoreMutationPool.forWorker(this);
+
       entity.setProperty("mark", Boolean.TRUE);
       pool.put(entity);
     }
@@ -546,10 +546,12 @@ public class EndToEndTest extends EndToEndTestCase {
     }
 
     @Override public void beginSlice() {
+      pool = DatastoreMutationPool.forManualFlushing();
       getContext().incrementCounter("beginSlice");
     }
 
     @Override public void endSlice() {
+      pool.flush();
       getContext().incrementCounter("endSlice");
     }
   }

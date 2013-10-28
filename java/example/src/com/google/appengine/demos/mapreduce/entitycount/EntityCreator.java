@@ -10,7 +10,6 @@ import com.google.appengine.tools.mapreduce.DatastoreMutationPool;
 import com.google.appengine.tools.mapreduce.Mapper;
 
 import java.util.Random;
-import java.util.logging.Logger;
 
 /**
  * Creates random entities.
@@ -19,9 +18,6 @@ import java.util.logging.Logger;
  */
 class EntityCreator extends Mapper<Long, Void, Void> {
   private static final long serialVersionUID = 409204195454478863L;
-
-  @SuppressWarnings("unused")
-  private static final Logger log = Logger.getLogger(EntityCreator.class.getName());
 
   private final String kind;
   private final int payloadBytesPerEntity;
@@ -41,11 +37,20 @@ class EntityCreator extends Mapper<Long, Void, Void> {
     return out.toString();
   }
 
-  @Override public void beginShard() {
-    pool = DatastoreMutationPool.forWorker(this);
+  @Override
+  public void beginSlice() {
+    super.beginSlice();
+    pool = DatastoreMutationPool.forManualFlushing();
   }
 
-  @Override public void map(Long ignored) {
+  @Override
+  public void endSlice() {
+    pool.flush();
+    super.endSlice();
+  }
+
+  @Override
+  public void map(Long ignored) {
     String name = "" + (random.nextLong() & Long.MAX_VALUE);
     Entity e = new Entity(kind, name);
     // TODO(ohler): Verify that the datastore encodes text as 8 bits per
