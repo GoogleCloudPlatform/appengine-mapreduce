@@ -2,6 +2,9 @@
 
 package com.google.appengine.tools.mapreduce.impl.shardedjob;
 
+import static com.google.appengine.tools.mapreduce.impl.shardedjob.ShardedJobRunner.JOB_ID_PARAM;
+import static com.google.appengine.tools.mapreduce.impl.shardedjob.ShardedJobRunner.SEQUENCE_NUMBER_PARAM;
+import static com.google.appengine.tools.mapreduce.impl.shardedjob.ShardedJobRunner.TASK_ID_PARAM;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 import java.io.Serializable;
@@ -16,7 +19,8 @@ import javax.servlet.http.HttpServletRequest;
  */
 class ShardedJobServiceImpl implements ShardedJobService {
 
-  @Override public <T extends IncrementalTask<T, R>, R extends Serializable> void startJob(
+  @Override
+  public <T extends IncrementalTask<T, R>, R extends Serializable> void startJob(
       String jobId,
       List<? extends T> initialTasks,
       ShardedJobController<T, R> controller,
@@ -36,23 +40,25 @@ class ShardedJobServiceImpl implements ShardedJobService {
     new ShardedJobRunner().abortJob(jobId);
   }
 
-  @Override public void cleanupJob(String jobId) {
+  @Override
+  public void cleanupJob(String jobId) {
     throw new RuntimeException("Not implemented");
   }
 
   @SuppressWarnings("rawtypes")
-  @Override public void handleControllerRequest(HttpServletRequest request) {
+  @Override
+  public void handleControllerRequest(HttpServletRequest request) {
     new ShardedJobRunner().pollTaskStates(
-        checkNotNull(request.getParameter(ShardedJobRunner.JOB_ID_PARAM), "Null job id"),
-        Integer.parseInt(request.getParameter(ShardedJobRunner.SEQUENCE_NUMBER_PARAM)));
+        checkNotNull(request.getParameter(JOB_ID_PARAM), "Null job id"),
+        Integer.parseInt(request.getParameter(SEQUENCE_NUMBER_PARAM)));
   }
 
   @SuppressWarnings("rawtypes")
-  @Override public void handleWorkerRequest(HttpServletRequest request) {
+  @Override
+  public void handleWorkerRequest(HttpServletRequest request) {
     new ShardedJobRunner().runTask(
-        checkNotNull(request.getParameter(ShardedJobRunner.TASK_ID_PARAM), "Null task id"),
-        checkNotNull(request.getParameter(ShardedJobRunner.JOB_ID_PARAM), "Null job id"),
-        Integer.parseInt(request.getParameter(ShardedJobRunner.SEQUENCE_NUMBER_PARAM)));
+        checkNotNull(request.getParameter(TASK_ID_PARAM), "Null task id"),
+        checkNotNull(request.getParameter(JOB_ID_PARAM), "Null job id"),
+        Integer.parseInt(request.getParameter(SEQUENCE_NUMBER_PARAM)));
   }
-
 }

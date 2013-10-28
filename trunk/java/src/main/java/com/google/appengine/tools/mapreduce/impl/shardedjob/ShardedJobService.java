@@ -42,8 +42,7 @@ public interface ShardedJobService {
    * Returns the state of the job with the given ID.  Returns null if no such
    * job exists.
    */
-  <R extends Serializable> ShardedJobState<?, R> getJobState(
-      String jobId);
+  <R extends Serializable> ShardedJobState<?, R> getJobState(String jobId);
 
   /**
    * Aborts execution of the job with the given ID.  If the job has already

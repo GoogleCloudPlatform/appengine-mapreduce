@@ -159,7 +159,7 @@ class ShardedJobStateImpl<T extends IncrementalTask<T, R>, R extends Serializabl
           in.getMostRecentUpdateTimeMillis());
       out.setUnindexedProperty(NEXT_SEQUENCE_NUMBER_PROPERTY, in.getNextSequenceNumber());
       out.setUnindexedProperty(ACTIVE_TASK_COUNT_PROPERTY, in.getActiveTaskCount());
-      out.setUnindexedProperty(STATUS_PROPERTY, "" + in.getStatus());
+      out.setUnindexedProperty(STATUS_PROPERTY, String.valueOf(in.getStatus()));
       if (in.getAggregateResult() != null) {
         out.setUnindexedProperty(AGGREGATE_RESULT_PROPERTY,
             new Blob(SerializationUtil.serializeToByteArray(in.getAggregateResult())));
@@ -189,84 +189,4 @@ class ShardedJobStateImpl<T extends IncrementalTask<T, R>, R extends Serializabl
               Ints.checkedCast((Long) in.getProperty(ACTIVE_TASK_COUNT_PROPERTY)));
     }
   }
-
-  @Override
-  public int hashCode() {
-    final int prime = 31;
-    int result = 1;
-    result = prime * result + activeTaskCount;
-    result = prime * result + ((aggregateResult == null) ? 0 : aggregateResult.hashCode());
-    result = prime * result + ((controller == null) ? 0 : controller.hashCode());
-    result = prime * result + ((jobId == null) ? 0 : jobId.hashCode());
-    result =
-        prime * result + (int) (mostRecentUpdateTimeMillis ^ (mostRecentUpdateTimeMillis >>> 32));
-    result = prime * result + nextSequenceNumber;
-    result = prime * result + ((settings == null) ? 0 : settings.hashCode());
-    result = prime * result + (int) (startTimeMillis ^ (startTimeMillis >>> 32));
-    result = prime * result + ((status == null) ? 0 : status.hashCode());
-    result = prime * result + totalTaskCount;
-    return result;
-  }
-
-  @Override
-  public boolean equals(Object obj) {
-    if (this == obj) {
-      return true;
-    }
-    if (obj == null) {
-      return false;
-    }
-    if (getClass() != obj.getClass()) {
-      return false;
-    }
-    ShardedJobStateImpl<?, ?> other = (ShardedJobStateImpl<?, ?>) obj;
-    if (activeTaskCount != other.activeTaskCount) {
-      return false;
-    }
-    if (aggregateResult == null) {
-      if (other.aggregateResult != null) {
-        return false;
-      }
-    } else if (!aggregateResult.equals(other.aggregateResult)) {
-      return false;
-    }
-    if (controller == null) {
-      if (other.controller != null) {
-        return false;
-      }
-    } else if (!controller.equals(other.controller)) {
-      return false;
-    }
-    if (jobId == null) {
-      if (other.jobId != null) {
-        return false;
-      }
-    } else if (!jobId.equals(other.jobId)) {
-      return false;
-    }
-    if (mostRecentUpdateTimeMillis != other.mostRecentUpdateTimeMillis) {
-      return false;
-    }
-    if (nextSequenceNumber != other.nextSequenceNumber) {
-      return false;
-    }
-    if (settings == null) {
-      if (other.settings != null) {
-        return false;
-      }
-    } else if (!settings.equals(other.settings)) {
-      return false;
-    }
-    if (startTimeMillis != other.startTimeMillis) {
-      return false;
-    }
-    if (status != other.status) {
-      return false;
-    }
-    if (totalTaskCount != other.totalTaskCount) {
-      return false;
-    }
-    return true;
-  }
-
 }

@@ -22,7 +22,7 @@ import javax.servlet.http.HttpServletResponse;
 public final class MapReduceServletImpl {
 // --------------------------- STATIC FIELDS ---------------------------
 
-  public static final Logger LOG = Logger.getLogger(MapReduceServlet.class.getName());
+  private static final Logger log = Logger.getLogger(MapReduceServlet.class.getName());
 
   public static final String CONTROLLER_PATH = "controllerCallback";
   public static final String WORKER_PATH = "workerCallback";
@@ -92,7 +92,7 @@ public final class MapReduceServletImpl {
   private static void handleShuffleCallback(HttpServletRequest request) {
     String promiseHandle = request.getParameter("promiseHandle");
     String errorCode = request.getParameter("error");
-    LOG.info("shuffle callback; promiseHandle=" + promiseHandle + ", error=" + errorCode);
+    log.info("shuffle callback; promiseHandle=" + promiseHandle + ", error=" + errorCode);
     try {
       PipelineServiceFactory.newPipelineService().submitPromisedValue(promiseHandle, errorCode);
     } catch (NoSuchObjectException e) {
@@ -101,7 +101,7 @@ public final class MapReduceServletImpl {
       throw new RuntimeException("NoSuchObjectException for promiseHandle " + promiseHandle, e);
     } catch (OrphanedObjectException e) {
       // Pipeline is aborted, don't retry.
-      LOG.log(Level.WARNING, "OrphanedObjectException for promiseHandle " + promiseHandle, e);
+      log.log(Level.WARNING, "OrphanedObjectException for promiseHandle " + promiseHandle, e);
     }
   }
 
@@ -117,7 +117,7 @@ public final class MapReduceServletImpl {
   private static boolean checkForAjax(HttpServletRequest request, HttpServletResponse response)
       throws IOException {
     if (!"XMLHttpRequest".equals(request.getHeader("X-Requested-With"))) {
-      LOG.log(
+      log.log(
           Level.SEVERE, "Received unexpected non-XMLHttpRequest command. Possible CSRF attack.");
       response.sendError(HttpServletResponse.SC_FORBIDDEN,
           "Received unexpected non-XMLHttpRequest command.");
@@ -138,7 +138,7 @@ public final class MapReduceServletImpl {
   private static boolean checkForTaskQueue(HttpServletRequest request,
       HttpServletResponse response) throws IOException {
     if (request.getHeader("X-AppEngine-QueueName") == null) {
-      LOG.log(Level.SEVERE, "Received unexpected non-task queue request. Possible CSRF attack.");
+      log.log(Level.SEVERE, "Received unexpected non-task queue request. Possible CSRF attack.");
       response.sendError(
           HttpServletResponse.SC_FORBIDDEN, "Received unexpected non-task queue request.");
       return false;
@@ -184,7 +184,7 @@ public final class MapReduceServletImpl {
       response.setContentType("text/javascript");
       fileName = "status.js";
     } else {
-      response.sendError(404);
+      response.sendError(HttpServletResponse.SC_NOT_FOUND);
       return;
     }
 

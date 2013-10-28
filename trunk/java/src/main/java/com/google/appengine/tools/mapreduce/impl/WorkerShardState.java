@@ -35,7 +35,18 @@ public class WorkerShardState implements Serializable {
     return lastWorkItem;
   }
 
-  @Override public String toString() {
+  /**
+   * Returns a new WorkerShardState using the combined values of {@code this} and {@code other}.
+   */
+  public WorkerShardState combine(WorkerShardState other) {
+    long workerCallCount = this.workerCallCount + other.workerCallCount;
+    long mostRecentUpdateTimeMillis =
+        Math.max(this.mostRecentUpdateTimeMillis, other.mostRecentUpdateTimeMillis);
+    return new WorkerShardState(workerCallCount, mostRecentUpdateTimeMillis, lastWorkItem);
+  }
+
+  @Override
+  public String toString() {
     return getClass().getSimpleName() + "("
         + workerCallCount + ", "
         + mostRecentUpdateTimeMillis + ", "

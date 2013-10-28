@@ -90,26 +90,24 @@ class ShardedJobRunner<T extends IncrementalTask<T, R>, R extends Serializable> 
   }
 
   private ShardedJobStateImpl<T, R> lookupJobState(Transaction tx, String jobId) {
-    Entity entity;
     try {
-      entity = DATASTORE.get(tx, ShardedJobStateImpl.ShardedJobSerializer.makeKey(jobId));
+      Entity entity = DATASTORE.get(tx, ShardedJobStateImpl.ShardedJobSerializer.makeKey(jobId));
+      return ShardedJobStateImpl.ShardedJobSerializer.<T, R>fromEntity(entity);
     } catch (EntityNotFoundException e) {
       return null;
     }
-    return ShardedJobStateImpl.ShardedJobSerializer.<T, R>fromEntity(entity);
   }
 
   private IncrementalTaskState<T, R> lookupTaskState(Transaction tx, String taskId) {
-    Entity entity;
     try {
-      entity = DATASTORE.get(tx, IncrementalTaskState.Serializer.makeKey(taskId));
+      Entity entity = DATASTORE.get(tx, IncrementalTaskState.Serializer.makeKey(taskId));
+      return IncrementalTaskState.Serializer.<T, R>fromEntity(entity);
     } catch (EntityNotFoundException e) {
       return null;
     }
-    return IncrementalTaskState.Serializer.<T, R>fromEntity(entity);
   }
 
-  private Map<Key, Entity> lookupTasks(ShardedJobState<?, ?> jobState) {
+  private static Map<Key, Entity> lookupTasks(ShardedJobState<?, ?> jobState) {
     ImmutableList.Builder<Key> b = ImmutableList.builder();
     for (int i = 0; i < jobState.getTotalTaskCount(); i++) {
      b.add(IncrementalTaskState.Serializer.makeKey(getTaskId(jobState.getJobId(), i)));
@@ -118,12 +116,13 @@ class ShardedJobRunner<T extends IncrementalTask<T, R>, R extends Serializable> 
     return DATASTORE.get(keys);
   }
 
-  private int countActiveTasks(ShardedJobState<?, ?> jobState) {
+  private static int countActiveTasks(ShardedJobState<?, ?> jobState) {
     int count = 0;
     Map<Key, Entity> tasks = lookupTasks(jobState);
     for (Entry<Key, Entity> entry : tasks.entrySet()) {
       Entity entity = entry.getValue();
-      Preconditions.checkState(entity != null, "%s: Missing task: %s", this, entry.getKey());
+      Preconditions.checkState(entity != null, "%s: Missing task: %s",
+          jobState.getJobId(), entry.getKey());
       if (IncrementalTaskState.Serializer.hasNextTask(entity)) {
         count++;
       }
@@ -148,7 +147,7 @@ class ShardedJobRunner<T extends IncrementalTask<T, R>, R extends Serializable> 
     TaskOptions taskOptions = TaskOptions.Builder.withMethod(TaskOptions.Method.POST)
         .url(settings.getControllerPath())
         .param(JOB_ID_PARAM, state.getJobId())
-        .param(SEQUENCE_NUMBER_PARAM, "" + state.getNextSequenceNumber())
+        .param(SEQUENCE_NUMBER_PARAM, String.valueOf(state.getNextSequenceNumber()))
         .countdownMillis(settings.getMillisBetweenPolls());
     if (settings.getControllerBackend() != null) {
       taskOptions.header("Host",
@@ -164,7 +163,7 @@ class ShardedJobRunner<T extends IncrementalTask<T, R>, R extends Serializable> 
         .url(settings.getWorkerPath())
         .param(TASK_ID_PARAM, state.getTaskId())
         .param(JOB_ID_PARAM, state.getJobId())
-        .param(SEQUENCE_NUMBER_PARAM, "" + state.getNextSequenceNumber());
+        .param(SEQUENCE_NUMBER_PARAM, String.valueOf(state.getNextSequenceNumber()));
     if (settings.getWorkerBackend() != null) {
       taskOptions.header("Host",
           BackendServiceFactory.getBackendService().getBackendAddress(settings.getWorkerBackend()));
@@ -283,7 +282,7 @@ class ShardedJobRunner<T extends IncrementalTask<T, R>, R extends Serializable> 
         return;
       }
       entity = IncrementalTaskState.Serializer.toEntity(taskState);
-      
+
       DATASTORE.put(tx, entity);
       if (result.getFollowupTask() != null) {
         scheduleWorkerTask(tx, jobState.getSettings(), taskState);
@@ -300,7 +299,7 @@ class ShardedJobRunner<T extends IncrementalTask<T, R>, R extends Serializable> 
     }
   }
 
-  private String getTaskId(String jobId, int taskNumber) {
+  private static String getTaskId(String jobId, int taskNumber) {
     return jobId + "-task" + taskNumber;
   }
 

@@ -4,9 +4,9 @@ package com.google.appengine.tools.mapreduce;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Sets;
 
 import java.io.Serializable;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -19,7 +19,7 @@ import java.util.Set;
 public class LifecycleListenerRegistry implements Serializable {
   private static final long serialVersionUID = 992608587128906678L;
 
-  public final Set<LifecycleListener> listeners = Sets.newLinkedHashSet();
+  public final Set<LifecycleListener> listeners = new LinkedHashSet<>();
 
   // Private constructor to disallow subclasses (more flexible than making the class final).
   private LifecycleListenerRegistry() {

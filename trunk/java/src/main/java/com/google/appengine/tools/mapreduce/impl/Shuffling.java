@@ -20,15 +20,13 @@ import com.google.common.primitives.UnsignedBytes;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.List;
-import java.util.logging.Logger;
 
 /**
+ * A shuffle utility used by {@link InProcessMapReduce}.
+ *
  * @author ohler@google.com (Christian Ohler)
  */
-public class Shuffling {
-
-  @SuppressWarnings("unused")
-  private static final Logger log = Logger.getLogger(Shuffling.class.getName());
+class Shuffling {
 
   private Shuffling() {}
 
