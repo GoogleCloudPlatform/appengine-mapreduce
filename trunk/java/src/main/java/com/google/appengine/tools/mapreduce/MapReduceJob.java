@@ -226,7 +226,7 @@ public class MapReduceJob<I, K, V, O, R>
       @SuppressWarnings({"unchecked", "rawtypes"})
       PromisedValue<MapReduceResult<List<GoogleCloudStorageFileSet>>> result =
           (PromisedValue) newPromise(MapReduceResult.class);
-      String shardedJobId = mrJobId + "-map";
+      String shardedJobId = "map-" + mrJobId;
       List<? extends InputReader<I>> readers;
       try {
         readers = mrSpec.getInput().createReaders();
@@ -323,7 +323,7 @@ public class MapReduceJob<I, K, V, O, R>
       @SuppressWarnings({"unchecked", "rawtypes"})
       PromisedValue<MapReduceResult<List<GoogleCloudStorageFileSet>>> result =
           (PromisedValue) newPromise(MapReduceResult.class);
-      String shardedJobId = mrJobId + "-sort";
+      String shardedJobId = "sort-" + mrJobId;
       int reduceShards = mrSpec.getOutput().getNumShards();
       String bucket = getAndSaveBucketName(settings);
       List<GoogleCloudStorageFileSet> mapOutput =
@@ -400,7 +400,7 @@ public class MapReduceJob<I, K, V, O, R>
           new GoogleCloudStorageReduceInput<K, V>(sortResult.getOutputResult(),
               mrSpec.getIntermediateKeyMarshaller(), mrSpec.getIntermediateValueMarshaller())
               .createReaders();
-      String shardedJobId = mrJobId + "-reduce";
+      String shardedJobId = "reduce-" + mrJobId;
       String shardedJobName = mrSpec.getJobName() + " (reduce phase)";
       Output<O, R> output = mrSpec.getOutput();
       List<? extends OutputWriter<O>> writers = output.createWriters();
