@@ -969,21 +969,22 @@ class KickOffJobHandlerTest(testutil.HandlerTestBase):
 
   def createDummyHandler(self):
     self.handler = handlers.KickOffJobHandler()
+    self.mapreduce_id = "foo_id"
     request = mock_webapp.MockRequest()
     request.headers["X-AppEngine-QueueName"] = self.QUEUE
-    request.path = "/mapreduce/kickoff_callback"
+    request.path = "/mapreduce/kickoff_callback/" + self.mapreduce_id
     self.handler.initialize(request,
                             mock_webapp.MockResponse())
 
   def testInvalidMRState(self):
     self.createDummyHandler()
     # No mr_state exists.
-    self.handler.request.set("mapreduce_id", "foo_id")
+    self.handler.request.set("mapreduce_id", self.mapreduce_id)
     self.handler.post()
     self.assertEqual(0, len(self.taskqueue.GetTasks(self.QUEUE)))
 
     # mr_state is not active.
-    state = model.MapreduceState.create_new("foo_id")
+    state = model.MapreduceState.create_new(self.mapreduce_id)
     state.active = False
     state.put()
     self.handler.post()
@@ -1513,7 +1514,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
     request = mock_webapp.MockRequest()
     request.headers["X-AppEngine-QueueName"] = "default"
     request.headers["X-AppEngine-TaskName"] = "foo-task-name"
-    request.path = "/mapreduce/worker_callback"
+    request.path = "/mapreduce/worker_callback/" + self.shard_id
     request.headers[util._MR_ID_TASK_HEADER] = self.mapreduce_id
     request.headers[util._MR_SHARD_ID_TASK_HEADER] = self.shard_id
     request.headers[model.HugeTask.PAYLOAD_VERSION_HEADER] = (
@@ -2085,7 +2086,7 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
     request.headers[util._MR_ID_TASK_HEADER] = self.mapreduce_id
     request.headers[model.HugeTask.PAYLOAD_VERSION_HEADER] = (
         model.HugeTask.PAYLOAD_VERSION)
-    request.path = "/mapreduce/worker_callback"
+    request.path = "/mapreduce/controller_callback/" + self.mapreduce_id
 
     self.request = request
     self.response = mock_webapp.MockResponse()
