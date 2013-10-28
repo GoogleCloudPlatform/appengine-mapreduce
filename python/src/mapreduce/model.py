@@ -1257,7 +1257,6 @@ class ShardState(db.Model):
     return list(cls.find_all_by_mapreduce_state(mapreduce_state))
 
   @classmethod
-  @db.non_transactional
   def find_all_by_mapreduce_state(cls, mapreduce_state):
     """Find all shard states for given mapreduce.
 
@@ -1273,7 +1272,12 @@ class ShardState(db.Model):
     keys = cls.calculate_keys_by_mapreduce_state(mapreduce_state)
     i = 0
     while i < len(keys):
-      states = db.get(keys[i:i+cls._MAX_STATES_IN_MEMORY])
+      @db.non_transactional
+      def no_tx_get(i):
+        return db.get(keys[i:i+cls._MAX_STATES_IN_MEMORY])
+      # We need a separate function to so that we can mix non-transactional and
+      # use be a generator
+      states = no_tx_get(i)
       for s in states:
         i += 1
         if s is not None:
