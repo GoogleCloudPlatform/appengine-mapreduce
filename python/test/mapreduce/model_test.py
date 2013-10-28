@@ -30,6 +30,7 @@ from google.appengine.api import apiproxy_stub_map
 from google.appengine.api import datastore_errors
 from google.appengine.api import datastore_file_stub
 from google.appengine.ext import db
+from google.appengine.ext import testbed
 from mapreduce import hooks
 from mapreduce import model
 from google.appengine.ext.webapp import mock_webapp
@@ -74,11 +75,11 @@ class TestJsonType(object):
     self.size = size
 
   def to_json(self):
-    return {'size': self.size}
+    return {"size": self.size}
 
   @classmethod
   def from_json(cls, json):
-    return cls(json['size'])
+    return cls(json["size"])
 
 
 class EmptyDictJsonType(object):
@@ -100,7 +101,7 @@ class TestEntity(db.Model):
       TestJsonType, default=TestJsonType())
   empty_json_property = model.JsonProperty(EmptyDictJsonType)
 
-ENTITY_KIND = '__main__.TestEntity'
+ENTITY_KIND = "__main__.TestEntity"
 
 
 class HugeTaskTest(unittest.TestCase):
@@ -161,12 +162,12 @@ class JsonPropertyTest(unittest.TestCase):
     """Test validate method."""
     self.assertRaises(
         datastore_errors.BadValueError,
-        TestEntity.json_property.validate, 'a')
+        TestEntity.json_property.validate, "a")
 
   def testEmpty(self):
     """Test empty() method."""
     self.assertTrue(TestEntity.json_property.empty(None))
-    self.assertFalse(TestEntity.json_property.empty('abcd'))
+    self.assertFalse(TestEntity.json_property.empty("abcd"))
 
   def testDefaultValue(self):
     """Test default value."""
@@ -381,9 +382,13 @@ class ShardStateTest(unittest.TestCase):
 
   def setUp(self):
     os.environ["APPLICATION_ID"] = "my-app"
+    self.testbed = testbed.Testbed()
+    self.testbed.activate()
+    self.testbed.init_datastore_v3_stub()
 
   def tearDown(self):
     del os.environ["APPLICATION_ID"]
+    self.testbed.deactivate()
 
   def testAccessors(self):
     """Tests simple accessors."""
@@ -410,6 +415,19 @@ class ShardStateTest(unittest.TestCase):
     self.assertEquals(state.update_time, another_state.update_time)
     self.assertEquals(state.shard_description, another_state.shard_description)
     self.assertEquals(state.last_work_item, another_state.last_work_item)
+
+  def testFindAllByMapreduceState(self):
+    mr_state = model.MapreduceState.create_new("mapreduce-id")
+    mr_state.mapreduce_spec = model.MapreduceSpec(
+        "mapreduce", "mapreduce-id",
+        model.MapperSpec("handler", "input-reader",
+                         {}, shard_count=304).to_json())
+    mr_state.put()
+    for i in range(304):
+      model.ShardState.create_new("mapreduce-id", i).put()
+    shard_states = model.ShardState.find_all_by_mapreduce_state(mr_state)
+    for i, ss in enumerate(shard_states):
+      self.assertEqual(i, ss.shard_number)
 
 
 class CountersMapTest(unittest.TestCase):
@@ -475,5 +493,5 @@ class CountersMapTest(unittest.TestCase):
     self.assertEquals(0, counters_map.get("1"))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
   unittest.main()

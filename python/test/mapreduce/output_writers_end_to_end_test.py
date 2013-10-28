@@ -176,7 +176,7 @@ class FileOutputWriterEndToEndTest(testutil.HandlerTestBase):
     test_support.execute_all_tasks(self.taskqueue)
     # Verify all writer_states are set.
     mapreduce_state = model.MapreduceState.get_by_job_id(mapreduce_id)
-    shard_states = model.ShardState.find_by_mapreduce_state(mapreduce_state)
+    shard_states = model.ShardState.find_all_by_mapreduce_state(mapreduce_state)
     for s in shard_states:
       writer_state = output_writers.FileOutputWriterBase._State.from_json(
           s.writer_state)

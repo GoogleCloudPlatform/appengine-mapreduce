@@ -1094,6 +1094,9 @@ class ShardState(db.Model):
 
   _RESULTS = frozenset([RESULT_SUCCESS, RESULT_FAILED, RESULT_ABORTED])
 
+  # Maximum number of shard states to hold in memory at any time.
+  _MAX_STATES_IN_MEMORY = 10
+
   # Functional properties.
   active = db.BooleanProperty(default=True, indexed=False)
   counters_map = JsonProperty(CountersMap, default=CountersMap(), indexed=False)
@@ -1240,8 +1243,23 @@ class ShardState(db.Model):
     return cls.get_by_key_name(shard_id)
 
   @classmethod
-  @db.non_transactional
   def find_by_mapreduce_state(cls, mapreduce_state):
+    """Find all shard states for given mapreduce.
+
+    Deprecated. Use find_all_by_mapreduce_state.
+    This will be removed after 1.8.9 release.
+
+    Args:
+      mapreduce_state: MapreduceState instance
+
+    Returns:
+      A list of ShardStates.
+    """
+    return list(cls.find_all_by_mapreduce_state(mapreduce_state))
+
+  @classmethod
+  @db.non_transactional
+  def find_all_by_mapreduce_state(cls, mapreduce_state):
     """Find all shard states for given mapreduce.
 
     Never runs within a transaction since it may touch >5 entity groups (one
@@ -1250,11 +1268,17 @@ class ShardState(db.Model):
     Args:
       mapreduce_state: MapreduceState instance
 
-    Returns:
-      iterable of all ShardState for given mapreduce.
+    Yields:
+      shard states sorted by shard id.
     """
     keys = cls.calculate_keys_by_mapreduce_state(mapreduce_state)
-    return [state for state in db.get(keys) if state]
+    i = 0
+    while i < len(keys):
+      states = db.get(keys[i:i+cls._MAX_STATES_IN_MEMORY])
+      for s in states:
+        i += 1
+        if s is not None:
+          yield s
 
   @classmethod
   def calculate_keys_by_mapreduce_state(cls, mapreduce_state):
@@ -1264,22 +1288,17 @@ class ShardState(db.Model):
       mapreduce_state: MapreduceState instance
 
     Returns:
-      A list of keys for shard states. The corresponding shard states
-      may not exist.
+      A list of keys for shard states, sorted by shard id.
+      The corresponding shard states may not exist.
     """
+    if mapreduce_state is None:
+      return []
+
     keys = []
     for i in range(mapreduce_state.mapreduce_spec.mapper.shard_count):
       shard_id = cls.shard_id_from_number(mapreduce_state.key().name(), i)
       keys.append(cls.get_key_by_shard_id(shard_id))
     return keys
-
-  @classmethod
-  def find_by_mapreduce_id(cls, mapreduce_id):
-    logging.error(
-        "ShardState.find_by_mapreduce_id method may be inconsistent. " +
-        "ShardState.find_by_mapreduce_state should be used instead.")
-    return cls.all().filter(
-        "mapreduce_id =", mapreduce_id).fetch(99999)
 
   @classmethod
   def create_new(cls, mapreduce_id, shard_number):

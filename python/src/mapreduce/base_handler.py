@@ -108,10 +108,11 @@ class TaskQueueHandler(BaseHandler):
       return
 
     # Check task has not been retried too many times.
-    if self.task_retry_count() > parameters._MAX_TASK_RETRIES:
+    if self.task_retry_count() + 1 > parameters.config.TASK_MAX_ATTEMPTS:
       logging.error(
-          "Task %s has been retried %s times. Dropping it permanently.",
-          self.request.headers["X-AppEngine-TaskName"], self.task_retry_count())
+          "Task %s has been attempted %s times. Dropping it permanently.",
+          self.request.headers["X-AppEngine-TaskName"],
+          self.task_retry_count() + 1)
       self._drop_gracefully()
       return
 

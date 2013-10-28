@@ -160,7 +160,7 @@ class TestGetQueueName(unittest.TestCase):
     self.assertEqual("foo", util.get_queue_name(None))
 
     os.environ["HTTP_X_APPENGINE_QUEUENAME"] = "__cron"
-    self.assertEqual(parameters.DEFAULT_QUEUE_NAME, util.get_queue_name(None))
+    self.assertEqual(parameters.config.QUEUE_NAME, util.get_queue_name(None))
 
 
 class SerializeHandlerTest(unittest.TestCase):
