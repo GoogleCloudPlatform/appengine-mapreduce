@@ -14,6 +14,7 @@ import com.google.appengine.tools.cloudstorage.RetryParams;
 import com.google.apphosting.api.ApiProxy;
 import com.google.apphosting.api.ApiProxy.ApiDeadlineExceededException;
 import com.google.apphosting.api.ApiProxy.RPCFailedException;
+import com.google.apphosting.api.ApiProxy.UnknownException;
 import com.google.common.base.Preconditions;
 
 import java.io.IOException;
@@ -31,7 +32,8 @@ public class FileUtil {
 
   private static final FileService FILE_SERVICE = FileServiceFactory.getFileService();
   private static final ExceptionHandler EXCEPTION_HANDLER = new ExceptionHandler.Builder()
-      .retryOn(RPCFailedException.class, ApiDeadlineExceededException.class, IOException.class)
+      .retryOn(UnknownException.class, RPCFailedException.class, ApiDeadlineExceededException.class,
+          IOException.class)
       .build();
 
   private FileUtil() {}
