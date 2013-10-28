@@ -32,7 +32,10 @@ try:
 except ImportError:
   pipeline_base = None
 try:
+  # Check if the full cloudstorage package exists. The stub part is in runtime.
   import cloudstorage
+  if hasattr(cloudstorage, "_STUB"):
+    cloudstorage = None
 except ImportError:
   cloudstorage = None
 
