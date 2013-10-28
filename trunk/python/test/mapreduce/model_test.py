@@ -425,9 +425,16 @@ class ShardStateTest(unittest.TestCase):
     mr_state.put()
     for i in range(304):
       model.ShardState.create_new("mapreduce-id", i).put()
-    shard_states = model.ShardState.find_all_by_mapreduce_state(mr_state)
-    for i, ss in enumerate(shard_states):
-      self.assertEqual(i, ss.shard_number)
+    @db.transactional(xg=False)
+    def non_xg_tx():
+      # Open a single non-related entity group to ensure
+      # find_all_by_mapreduce_state does not attempt to use outer transaction
+      mr_state2 = model.MapreduceState.create_new("unrelated-mapreduce-id")
+      mr_state2.put()
+      shard_states = model.ShardState.find_all_by_mapreduce_state(mr_state)
+      for i, ss in enumerate(shard_states):
+        self.assertEqual(i, ss.shard_number)
+    non_xg_tx()
 
 
 class CountersMapTest(unittest.TestCase):
