@@ -16,7 +16,6 @@
 
 package com.google.appengine.tools.mapreduce.inputs;
 
-import com.google.apphosting.api.AppEngineInternal;
 import com.google.common.io.CountingInputStream;
 
 import java.io.ByteArrayOutputStream;
@@ -30,8 +29,9 @@ import java.util.logging.Logger;
 /**
  * A reader to return one line at a time from an underlying input stream.
  *
+ * For internal use only. User code cannot safely depend on this class.
+ *
  */
-@AppEngineInternal
 class LineInputStream {
 
   private static final Logger log = Logger.getLogger(LineInputStream.class.getName());

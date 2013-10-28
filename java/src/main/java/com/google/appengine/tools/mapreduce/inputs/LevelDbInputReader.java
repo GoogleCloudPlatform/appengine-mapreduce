@@ -6,7 +6,6 @@ import com.google.appengine.tools.mapreduce.impl.util.Crc32c;
 import com.google.appengine.tools.mapreduce.impl.util.LevelDbConstants;
 import com.google.appengine.tools.mapreduce.impl.util.LevelDbConstants.RecordType;
 import com.google.appengine.tools.mapreduce.outputs.LevelDbOutputWriter;
-import com.google.apphosting.api.AppEngineInternal;
 import com.google.common.annotations.VisibleForTesting;
 
 import java.io.IOException;
@@ -25,34 +24,35 @@ import java.util.NoSuchElementException;
  * serialized is the offset.
  *
  * In the event that corrupt data is encountered a {@link CorruptDataException} is thrown.
- * If this occurs, do not continue to attempt to read. Behavior is not guaranteed. 
+ * If this occurs, do not continue to attempt to read. Behavior is not guaranteed.
+ *
+ * For internal use only. User code cannot safely depend on this class.
  */
-@AppEngineInternal
 public abstract class LevelDbInputReader extends InputReader<ByteBuffer> {
 
   private static final long serialVersionUID = -2949371665085068120L;
-  
+
   private long offset = 0L;
-  
+
   private final int blockSize;
   /** A temp buffer that is used to hold contents and headers as they are read*/
   private transient ByteBuffer tmpBuffer;
   /** The buffer that contains the data that will ultimately be returned to the caller*/
   private transient ByteBuffer finalRecord;
-  
+
   private long bytesRead;
   private ReadableByteChannel in;
-  
+
   public LevelDbInputReader() {
     this(LevelDbConstants.BLOCK_SIZE);
   }
-  
+
   @VisibleForTesting
   protected LevelDbInputReader(int blockSize) {
     super();
     this.blockSize = blockSize;
   }
-  
+
   /**
    * @return A Serializable ReadableByteChannel from which data may be read.
    */
@@ -85,7 +85,7 @@ public abstract class LevelDbInputReader extends InputReader<ByteBuffer> {
     bytesRead = 0;
     in = createReadableByteChannel();
   }
-  
+
   /**
    * Calls close on the underlying stream.
    */
@@ -101,7 +101,7 @@ public abstract class LevelDbInputReader extends InputReader<ByteBuffer> {
     finalRecord = ByteBuffer.allocate(blockSize);
     finalRecord.order(ByteOrder.LITTLE_ENDIAN);
   }
-  
+
   private static final class Record {
     private final ByteBuffer data;
     private final RecordType type;
@@ -120,14 +120,14 @@ public abstract class LevelDbInputReader extends InputReader<ByteBuffer> {
     }
   }
 
-  
+
   /**
    * @return How far into the file has been read.
    */
   long getOffset() {
     return offset;
   }
-  
+
   /**
    * {@inheritDoc}
    */
