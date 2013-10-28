@@ -1020,14 +1020,11 @@ class TransientShardState(object):
               mapper_spec.output_writer_class(),
               output_writer.__class__))
 
-    request_path = request.path
-    base_path = request_path[:request_path.rfind("/")]
-
     handler = util.try_deserialize_handler(request.get("serialized_handler"))
     if not handler:
       handler = mapreduce_spec.mapper.handler
 
-    return cls(base_path,
+    return cls(mapreduce_spec.params["base_path"],
                mapreduce_spec,
                str(request.get("shard_id")),
                int(request.get("slice_id")),
