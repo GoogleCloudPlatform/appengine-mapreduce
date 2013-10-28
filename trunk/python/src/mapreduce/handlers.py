@@ -53,6 +53,12 @@ from google.appengine.runtime import apiproxy_errors
 # pylint: disable=g-import-not-at-top
 try:
   import cloudstorage
+  # In 25 runtime, the above code will be scrubbed to import the stub version
+  # of cloudstorage. All occurences of the following if condition in MR
+  # codebase is to tell it apart.
+  # TODO(user): Remove after 25 runtime MR is abondoned.
+  if hasattr(cloudstorage, "_STUB"):
+    cloudstorage = None
 except ImportError:
   cloudstorage = None  # CloudStorage library not available
 

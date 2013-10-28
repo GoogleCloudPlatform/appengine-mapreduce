@@ -40,11 +40,13 @@ from google.appengine.ext import testbed
 
 # TODO(user): Cleanup imports if/when cloudstorage becomes part of runtime.
 try:
-  # Check if cloudstorage is available, pylint: disable=unused-import
+  # Check if the full cloudstorage package exists. The stub part is in runtime.
   import cloudstorage
   enable_cloudstorage_tests = True
+  if hasattr(cloudstorage, "_STUB"):
+    cloudstorage = None
 except ImportError:
-  enable_cloudstorage_tests = False
+  cloudstorage = None
 
 # pylint: disable=unused-import
 try:
@@ -148,7 +150,7 @@ class CloudStorageTestBase(HandlerTestBase):
   """Test base class that ensures cloudstorage library is available."""
 
   def setUp(self):
-    if not enable_cloudstorage_tests:
+    if cloudstorage is None:
       # skipTest is only supported starting in Python 2.7, prior to 2.7
       # the test will result in an error due to the ImportWarning
       if sys.version_info < (2, 7):
