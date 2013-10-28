@@ -24,7 +24,6 @@ import unittest
 from mapreduce import base_handler
 from mapreduce import errors
 from mapreduce import parameters
-from mapreduce import status
 from mapreduce import util
 from google.appengine.ext.webapp import mock_webapp
 
@@ -138,7 +137,7 @@ class FaultyTaskQueueHandlerTest(unittest.TestCase):
 
   def testTaskRetriedTooManyTimes(self):
     self.request.headers["X-AppEngine-TaskExecutionCount"] = (
-        parameters._MAX_TASK_RETRIES + 1)
+        parameters.config.TASK_MAX_ATTEMPTS)
     self.init()
     self.handler.post()
     self.assertTrue(self.handler.dropped)

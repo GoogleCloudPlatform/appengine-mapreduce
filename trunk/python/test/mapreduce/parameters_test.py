@@ -17,15 +17,15 @@ class UserParametersTest(unittest.TestCase):
 
   def testUserCanSetParameters(self):
     # Match test_data/appengine_config.py
-    self.assertEqual(5, parameters.config.SHARD_RETRY_LIMIT)
+    self.assertEqual(5, parameters.config.SHARD_MAX_ATTEMPTS)
     self.assertEqual('foo', parameters.config.QUEUE_NAME)
     self.assertEqual('/my-mapreduce', parameters.config.BASE_PATH)
 
     # No overriding. Default settings that match parameters.py
     self.assertEqual(8, parameters.config.SHARD_COUNT)
     self.assertEqual(1000000, parameters.config.PROCESSING_RATE_PER_SEC)
-    self.assertEqual(10, parameters.config.RETRY_SLICE_ERROR_MAX_RETRIES)
-    self.assertEqual(30, parameters.config.MAX_TASK_RETRIES)
+    self.assertEqual(11, parameters.config.TASK_MAX_DATA_PROCESSING_ATTEMPTS)
+    self.assertEqual(31, parameters.config.TASK_MAX_ATTEMPTS)
     self.assertEqual(15, parameters.config._SLICE_DURATION_SEC)
     self.assertEqual(1, parameters.config._LEASE_GRACE_PERIOD)
     self.assertEqual(10 * 60 + 30, parameters.config._REQUEST_EVENTUAL_TIMEOUT)
@@ -34,19 +34,6 @@ class UserParametersTest(unittest.TestCase):
     # Other constant that depends on _config.
     self.assertEqual('/my-mapreduce/pipeline',
                      parameters._DEFAULT_PIPELINE_BASE_PATH)
-
-  def testBackwardCompat(self):
-    self.assertEqual('/my-mapreduce', parameters._DEFAULT_BASE_PATH)
-    self.assertEqual(5, parameters.DEFAULT_SHARD_RETRY_LIMIT)
-    self.assertEqual('foo', parameters.DEFAULT_QUEUE_NAME)
-    self.assertEqual(8, parameters.DEFAULT_SHARD_COUNT)
-    self.assertEqual(1000000, parameters._DEFAULT_PROCESSING_RATE_PER_SEC)
-    self.assertEqual(10, parameters._RETRY_SLICE_ERROR_MAX_RETRIES)
-    self.assertEqual(30, parameters._MAX_TASK_RETRIES)
-    self.assertEqual(15, parameters._SLICE_DURATION_SEC)
-    self.assertEqual(1, parameters._LEASE_GRACE_PERIOD)
-    self.assertEqual(10 * 60 + 30, parameters._REQUEST_EVENTUAL_TIMEOUT)
-    self.assertEqual(2, parameters._CONTROLLER_PERIOD_SEC)
 
 
 if __name__ == '__main__':

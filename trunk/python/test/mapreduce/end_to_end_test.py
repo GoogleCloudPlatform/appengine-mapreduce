@@ -157,11 +157,11 @@ class EndToEndTest(testutil.HandlerTestBase):
     testutil.HandlerTestBase.setUp(self)
     TestHandler.reset()
     TestOutputWriter.reset()
-    self.original_slice_duration = parameters._SLICE_DURATION_SEC
+    self.original_slice_duration = parameters.config._SLICE_DURATION_SEC
     SerializableHandler.reset()
 
   def tearDown(self):
-    parameters._SLICE_DURATION_SEC = self.original_slice_duration
+    parameters.config._SLICE_DURATION_SEC = self.original_slice_duration
 
   def testHandlerSerialization(self):
     """Test serializable handler works with MR and shard retry."""
@@ -171,7 +171,7 @@ class EndToEndTest(testutil.HandlerTestBase):
       TestEntity(int_property=-1).put()
 
     # Force handler to serialize on every call.
-    parameters._SLICE_DURATION_SEC = 0
+    parameters.config._SLICE_DURATION_SEC = 0
 
     control.start_map(
         "test_map",
