@@ -26,7 +26,7 @@ public class GoogleCloudStorageLevelDbInput extends Input<ByteBuffer> {
   private final int bufferSize;
 
   public GoogleCloudStorageLevelDbInput(GoogleCloudStorageFileSet files) {
-    this(files, MapReduceConstants.INPUT_BUFFER_SIZE);
+    this(files, MapReduceConstants.DEFAULT_IO_BUFFER_SIZE);
   }
 
   /**

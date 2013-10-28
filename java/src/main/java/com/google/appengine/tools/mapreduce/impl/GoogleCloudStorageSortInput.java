@@ -50,7 +50,7 @@ public class GoogleCloudStorageSortInput extends Input<KeyValue<ByteBuffer, Byte
       Marshaller<KeyValue<ByteBuffer, ByteBuffer>> marshaller =
           new KeyValueMarshaller<ByteBuffer, ByteBuffer>(identity, identity);
       GoogleCloudStorageLevelDbInputReader in = new GoogleCloudStorageLevelDbInputReader(file,
-          MapReduceConstants.INPUT_BUFFER_SIZE);
+          MapReduceConstants.DEFAULT_IO_BUFFER_SIZE);
       reader =  new UnmarshallingInputReader<KeyValue<ByteBuffer, ByteBuffer>>(in, marshaller);
       reader.open();
     }

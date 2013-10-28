@@ -76,4 +76,9 @@ public class SortShardTask extends WorkerShardTask<
     return !inMemSorter.isFull();
   }
 
+  @Override
+  protected long estimateMemoryNeeded() {
+    return SortWorker.getMemoryForSort(0);
+  }
+
 }

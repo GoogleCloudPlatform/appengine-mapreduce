@@ -235,4 +235,13 @@ final class MergingReader<K, V> extends InputReader<KeyValue<K, Iterator<V>>> {
     }
   }
 
+  @Override
+  public long estimateMemoryRequirment() {
+    long total = 0;
+    for (PeekingInputReader<KeyValue<ByteBuffer, Iterator<V>>> reader : readers) {
+      total += reader.estimateMemoryRequirment();
+    }
+    return total;
+  }
+
 }

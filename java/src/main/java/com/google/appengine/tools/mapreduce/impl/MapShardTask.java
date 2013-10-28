@@ -63,4 +63,10 @@ public class MapShardTask<I, K, V> extends WorkerShardTask<I, KeyValue<K, V>, Ma
     return true;
   }
 
+  @Override
+  protected long estimateMemoryNeeded() {
+    return in.estimateMemoryRequirment() + out.estimateMemoryRequirment()
+        + MapReduceConstants.ASSUMED_BASE_MEMORY_PER_REQUEST;
+  }
+
 }

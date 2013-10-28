@@ -8,6 +8,7 @@ import com.google.appengine.tools.cloudstorage.GcsFilename;
 import com.google.appengine.tools.cloudstorage.GcsService;
 import com.google.appengine.tools.cloudstorage.GcsServiceFactory;
 import com.google.appengine.tools.mapreduce.impl.MapReduceConstants;
+import com.google.appengine.tools.mapreduce.impl.util.LevelDbConstants;
 
 import java.io.IOException;
 import java.nio.channels.ReadableByteChannel;
@@ -61,5 +62,9 @@ public final class GoogleCloudStorageLevelDbInputReader extends LevelDbInputRead
     return gcsService.openPrefetchingReadChannel(file, 0, bufferSize);
   }
 
+  @Override
+  public long estimateMemoryRequirment() {
+    return LevelDbConstants.BLOCK_SIZE + bufferSize * 2; // Double buffered
+  }
 
 }

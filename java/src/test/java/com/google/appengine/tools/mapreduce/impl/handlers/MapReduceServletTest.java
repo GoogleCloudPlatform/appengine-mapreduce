@@ -83,9 +83,7 @@ public class MapReduceServletTest extends TestCase {
   public void testCommandError() throws Exception {
     HttpServletRequest request = createMockRequest(
         MapReduceServletImpl.COMMAND_PATH + "/" + StatusHandler.GET_JOB_DETAIL_PATH, false, true);
-    expect(request.getMethod())
-        .andReturn("GET")
-        .anyTimes();
+    expect(request.getMethod()).andReturn("GET").anyTimes();
     HttpServletResponse response = createMock(HttpServletResponse.class);
     PrintWriter responseWriter = createMock(PrintWriter.class);
     responseWriter.write('{');
@@ -126,9 +124,7 @@ public class MapReduceServletTest extends TestCase {
     // Send it as a task queue request but not an ajax request - should be denied.
     HttpServletRequest request = createMockRequest(
         MapReduceServletImpl.COMMAND_PATH + "/" + StatusHandler.GET_JOB_DETAIL_PATH, true, false);
-    expect(request.getMethod())
-        .andReturn("POST")
-        .anyTimes();
+    expect(request.getMethod()).andReturn("POST").anyTimes();
 
     HttpServletResponse response = createMock(HttpServletResponse.class);
 
@@ -201,8 +197,4 @@ public class MapReduceServletTest extends TestCase {
     return request;
   }
 
-  private static HttpServletRequest createMockControllerRequest(String handlerPath) {
-    HttpServletRequest request = createMockRequest(handlerPath, true, false);
-    return request;
-  }
 }
