@@ -12,12 +12,15 @@ import com.google.appengine.api.datastore.Transaction;
 import com.google.appengine.api.taskqueue.QueueFactory;
 import com.google.appengine.api.taskqueue.TaskOptions;
 import com.google.common.base.Preconditions;
+import com.google.common.collect.AbstractIterator;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Iterators;
 
 import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.logging.Logger;
 
 /**
@@ -107,22 +110,38 @@ class ShardedJobRunner<T extends IncrementalTask<T, R>, R extends Serializable> 
     }
   }
 
-  private static Map<Key, Entity> lookupTasks(ShardedJobState<?, ?> jobState) {
-    ImmutableList.Builder<Key> b = ImmutableList.builder();
-    for (int i = 0; i < jobState.getTotalTaskCount(); i++) {
-     b.add(IncrementalTaskState.Serializer.makeKey(getTaskId(jobState.getJobId(), i)));
-    }
-    List<Key> keys = b.build();
-    return DATASTORE.get(keys);
+  private static Iterator<Entity> lookupTasks(ShardedJobState<?, ?> jobState) {
+    final String jobId = jobState.getJobId();
+    final int taskCount = jobState.getTotalTaskCount();
+    return new AbstractIterator<Entity>() {
+      private int lastCount;
+      private Iterator<Map.Entry<Key, Entity>> lastBatch = Iterators.emptyIterator();
+
+      @Override protected Entity computeNext() {
+        if (lastBatch.hasNext()) {
+          Map.Entry<Key, Entity> entry = lastBatch.next();
+          Entity entity = entry.getValue();
+          Preconditions.checkState(entity != null, "%s: Missing task: %s", jobId, entry.getKey());
+          return entity;
+        } else if (lastCount >= taskCount) {
+          return endOfData();
+        }
+        int toRead = Math.min(20, taskCount - lastCount);
+        List<Key> keys = new ArrayList<>(toRead);
+        for (int i = 0; i < toRead; i++, lastCount++) {
+          Key key = IncrementalTaskState.Serializer.makeKey(getTaskId(jobId, lastCount));
+          keys.add(key);
+        }
+        lastBatch = DATASTORE.get(keys).entrySet().iterator();
+        return computeNext();
+      }
+    };
   }
 
   private static int countActiveTasks(ShardedJobState<?, ?> jobState) {
     int count = 0;
-    Map<Key, Entity> tasks = lookupTasks(jobState);
-    for (Entry<Key, Entity> entry : tasks.entrySet()) {
-      Entity entity = entry.getValue();
-      Preconditions.checkState(entity != null, "%s: Missing task: %s",
-          jobState.getJobId(), entry.getKey());
+    for (Iterator<Entity> iter = lookupTasks(jobState); iter.hasNext(); ) {
+      Entity entity = iter.next();
       if (IncrementalTaskState.Serializer.hasNextTask(entity)) {
         count++;
       }
@@ -132,10 +151,8 @@ class ShardedJobRunner<T extends IncrementalTask<T, R>, R extends Serializable> 
 
   private R aggregateState(ShardedJobController<T, R> controller, ShardedJobState<?, ?> jobState) {
     ImmutableList.Builder<R> results = ImmutableList.builder();
-    Map<Key, Entity> tasks = lookupTasks(jobState);
-    for (Entry<Key, Entity> entry : tasks.entrySet()) {
-      Entity entity = entry.getValue();
-      Preconditions.checkState(entity != null, "%s: Missing task: %s", this, entry.getKey());
+    for (Iterator<Entity> iter = lookupTasks(jobState); iter.hasNext(); ) {
+      Entity entity = iter.next();
       IncrementalTaskState<T, R> state = IncrementalTaskState.Serializer.<T, R>fromEntity(entity);
       results.add(state.getPartialResult());
     }
