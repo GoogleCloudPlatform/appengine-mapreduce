@@ -84,6 +84,10 @@ def start_map(name,
     mapper_parameters = dict(mapper_parameters)
   if mapreduce_parameters:
     mapreduce_parameters = dict(mapreduce_parameters)
+    if "base_path" not in mapreduce_parameters:
+      mapreduce_parameters["base_path"] = base_path
+  else:
+    mapreduce_parameters = {"base_path": base_path}
 
   mapper_spec = model.MapperSpec(handler_spec,
                                  reader_spec,
@@ -98,8 +102,7 @@ def start_map(name,
   return handlers.StartJobHandler._start_map(
       name,
       mapper_spec,
-      mapreduce_parameters or {},
-      base_path=base_path,
+      mapreduce_parameters,
       queue_name=util.get_queue_name(queue_name),
       eta=eta,
       countdown=countdown,
