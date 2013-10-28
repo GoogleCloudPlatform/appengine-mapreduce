@@ -21,6 +21,7 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
@@ -276,7 +277,16 @@ class ShardedJobRunner<T extends IncrementalTask<T, R>, R extends Serializable> 
 
     log.fine("About to run task: " + taskState);
 
-    IncrementalTask.RunResult<T, R> result = taskState.getNextTask().run();
+    IncrementalTask.RunResult<T, R> result;
+    try {
+      result = taskState.getNextTask().run();
+    } catch (ShardFailureException  ex) {
+      // TODO(user): change message and log level once shard-retry logic is added
+      log.log(Level.SEVERE, "Shard failed. MR job will marked as ERROR.", ex);
+      changeJobStatus(jobId, Status.ERROR);
+      return;
+    }
+
     taskState.setPartialResult(
         jobState.getController().combineResults(
             ImmutableList.of(taskState.getPartialResult(), result.getPartialResult())));
@@ -446,16 +456,16 @@ class ShardedJobRunner<T extends IncrementalTask<T, R>, R extends Serializable> 
     return jobState;
   }
 
-  void abortJob(String jobId) {
-    log.info(jobId + ": Aborting");
+  private void changeJobStatus(String jobId,  Status status) {
+    log.info(jobId + ": Changing job status to " + status);
     Transaction tx = DATASTORE.beginTransaction();
     try {
       ShardedJobStateImpl<T, R> jobState = lookupJobState(tx, jobId);
       if (jobState == null || !jobState.getStatus().isActive()) {
-        log.info(jobId + ": Job not active, not aborting: " + jobState);
+        log.info(jobId + ": Job not active, can't change its status: " + jobState);
         return;
       }
-      jobState.setStatus(Status.ABORTED);
+      jobState.setStatus(status);
       DATASTORE.put(tx, ShardedJobStateImpl.ShardedJobSerializer.toEntity(jobState));
       tx.commit();
     } finally {
@@ -465,4 +475,7 @@ class ShardedJobRunner<T extends IncrementalTask<T, R>, R extends Serializable> 
     }
   }
 
+  void abortJob(String jobId) {
+    changeJobStatus(jobId, Status.ABORTED);
+  }
 }
