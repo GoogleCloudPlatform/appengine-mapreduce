@@ -12,7 +12,7 @@
                 conf="${sdk}->default"/>
 
     <dependency org="com.google.appengine.tools" name="appengine-gcs-client"
-                rev="[0.3.1,0.4)" conf="${thirdparty}->default"/>
+                rev="[0.3.2,0.4)" conf="${thirdparty}->default"/>
     <dependency org="com.google.appengine.tools" name="appengine-pipeline"
                 rev="[0.2,0.3)" conf="${thirdparty}->default"/>
     <dependency org="com.googlecode.charts4j" name="charts4j" rev="1.3"
