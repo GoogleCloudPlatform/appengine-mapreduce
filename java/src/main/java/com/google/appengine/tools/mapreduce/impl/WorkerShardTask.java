@@ -14,7 +14,6 @@ import com.google.appengine.tools.mapreduce.WorkerContext;
 import com.google.appengine.tools.mapreduce.impl.handlers.MemoryLimiter;
 import com.google.appengine.tools.mapreduce.impl.shardedjob.IncrementalTask;
 import com.google.common.base.Stopwatch;
-import com.google.common.base.StringUtil;
 import com.google.common.collect.Lists;
 
 import java.io.IOException;
@@ -234,8 +233,16 @@ public abstract class WorkerShardTask<I, O, C extends WorkerContext>
     }
   }
 
+
   protected static String abbrev(Object x) {
-    return x == null ? null : StringUtil.truncateAtMaxLength(
-        String.valueOf(x), MapReduceConstants.MAX_LAST_ITEM_STRING_SIZE, true);
+    if (x == null) {
+      return null;
+    }
+    String s = String.valueOf(x);
+    if (s.length() > MapReduceConstants.MAX_LAST_ITEM_STRING_SIZE) {
+      return s.substring(0, MapReduceConstants.MAX_LAST_ITEM_STRING_SIZE) + "...";
+    } else {
+      return s;
+    }
   }
 }
