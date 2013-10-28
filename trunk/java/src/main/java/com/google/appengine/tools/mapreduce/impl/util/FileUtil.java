@@ -8,10 +8,16 @@ import com.google.appengine.api.files.FileService;
 import com.google.appengine.api.files.FileServiceFactory;
 import com.google.appengine.api.files.FileWriteChannel;
 import com.google.appengine.api.files.FinalizationException;
+import com.google.appengine.tools.cloudstorage.ExceptionHandler;
+import com.google.appengine.tools.cloudstorage.RetryHelper;
+import com.google.appengine.tools.cloudstorage.RetryParams;
 import com.google.apphosting.api.ApiProxy;
+import com.google.apphosting.api.ApiProxy.ApiDeadlineExceededException;
+import com.google.apphosting.api.ApiProxy.RPCFailedException;
 import com.google.common.base.Preconditions;
 
 import java.io.IOException;
+import java.util.concurrent.Callable;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -24,6 +30,9 @@ public class FileUtil {
   private static final Logger log = Logger.getLogger(FileUtil.class.getName());
 
   private static final FileService FILE_SERVICE = FileServiceFactory.getFileService();
+  private static final ExceptionHandler EXCEPTION_HANDLER = new ExceptionHandler.Builder()
+      .retryOn(RPCFailedException.class, ApiDeadlineExceededException.class, IOException.class)
+      .build();
 
   private FileUtil() {}
 
@@ -44,8 +53,7 @@ public class FileUtil {
         c.close();
       } catch (IOException e) {
         if (isErrorCode(e, 10)) {
-          log.log(Level.INFO, "File " + c + " already closed, ignoring exception: "
-              + RetryHelper.messageChain(e));
+          log.log(Level.INFO, "File " + c + " already closed, ignoring exception: ", e);
           return;
         }
         log.log(Level.INFO, "Got IOException closing " + c, e);
@@ -56,11 +64,11 @@ public class FileUtil {
 
   public static BlobKey getBlobKey(final AppEngineFile finalizedBlobFile) {
     return RetryHelper.runWithRetries(
-        new RetryHelper.Body<BlobKey>() {
+        new Callable<BlobKey>() {
           @Override public String toString() {
             return "get BlobKey for " + finalizedBlobFile;
           }
-          @Override public BlobKey run() throws IOException {
+          @Override public BlobKey call() throws IOException {
             BlobKey key = FILE_SERVICE.getBlobKey(finalizedBlobFile);
             if (key == null) {
               // I have the impression that this can happen because of HRD's
@@ -69,7 +77,7 @@ public class FileUtil {
             }
             return key;
           }
-        });
+        }, RetryParams.getDefaultInstance(), EXCEPTION_HANDLER);
   }
 
   // TODO(ohler): Find out if the Files API already has a way to do this.
@@ -89,13 +97,13 @@ public class FileUtil {
   // handles, and then get rid of this.
   public static AppEngineFile ensureFinalized(final AppEngineFile file) {
     return RetryHelper.runWithRetries(
-        new RetryHelper.Body<AppEngineFile>() {
+        new Callable<AppEngineFile>() {
           @Override public String toString() {
             return "finalizing file " + file;
           }
           @SuppressWarnings("unused") String stage = "init";
           FileWriteChannel out = null;
-          @Override public AppEngineFile run() throws IOException {
+          @Override public AppEngineFile call() throws IOException {
             if (out != null) {
               stage = "close previous";
               tryClosingOnce(out);
@@ -107,13 +115,11 @@ public class FileUtil {
               out = FILE_SERVICE.openWriteChannel(file, true);
               alreadyFinalized = false;
             } catch (FinalizationException e) {
-              log.info(this + ": File already finalized, ignoring exception: "
-                  + RetryHelper.messageChain(e));
+              log.log(Level.INFO, this + ": File already finalized, ignoring exception: ", e);
               alreadyFinalized = true;
             } catch (IOException e) {
               if (isErrorCode(e, 101)) {
-                log.info(this + ": File already finalized, ignoring exception: "
-                    + RetryHelper.messageChain(e));
+                log.log(Level.INFO, this + ": File already finalized, ignoring exception: ", e);
                 alreadyFinalized = true;
               } else {
                 throw e;
@@ -127,7 +133,6 @@ public class FileUtil {
             }
             return getReadHandle(file);
           }
-        });
+        }, RetryParams.getDefaultInstance(), EXCEPTION_HANDLER);
   }
-
 }

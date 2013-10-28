@@ -2,17 +2,26 @@
 package com.google.appengine.tools.mapreduce;
 
 import static com.google.common.base.Preconditions.checkNotNull;
+import static java.util.concurrent.Executors.callable;
 
+import com.google.appengine.api.datastore.CommittedButStillApplyingException;
 import com.google.appengine.api.datastore.DatastoreService;
 import com.google.appengine.api.datastore.DatastoreServiceFactory;
+import com.google.appengine.api.datastore.DatastoreTimeoutException;
 import com.google.appengine.api.datastore.Entity;
 import com.google.appengine.api.datastore.EntityTranslator;
 import com.google.appengine.api.datastore.Key;
 import com.google.appengine.api.datastore.KeyFactory;
+import com.google.appengine.tools.cloudstorage.ExceptionHandler;
+import com.google.appengine.tools.cloudstorage.RetryHelper;
+import com.google.appengine.tools.cloudstorage.RetryParams;
+import com.google.apphosting.api.ApiProxy.ApiProxyException;
 import com.google.common.base.Preconditions;
+import com.google.common.collect.Lists;
 
-import java.util.ArrayList;
+import java.io.Serializable;
 import java.util.Collection;
+import java.util.ConcurrentModificationException;
 
 /**
  * DatastoreMutationPool allows you to pool datastore operations such that they
@@ -24,24 +33,77 @@ import java.util.Collection;
  */
 public class DatastoreMutationPool {
 
-  private static final int DEFAULT_COUNT_LIMIT = 100;
-  private static final int DEFAULT_BYTES_LIMIT = 256 * 1024;
+  public static final int DEFAULT_COUNT_LIMIT = 100;
+  public static final int DEFAULT_BYTES_LIMIT = 256 * 1024;
+  private static final ExceptionHandler EXCEPTION_HANDLER = new ExceptionHandler.Builder()
+      .retryOn(ApiProxyException.class, ConcurrentModificationException.class,
+          CommittedButStillApplyingException.class, DatastoreTimeoutException.class)
+      .build();
+  public static final Params DEFAULT_PARAMS = new Params.Builder().build();
 
+  private final Params params;
   private final DatastoreService ds;
-  private final int countLimit;
-  private final int bytesLimit;
+  private final Collection<Entity> puts = Lists.newArrayList();
+  private int putsBytes;
+  private final Collection<Key> deletes = Lists.newArrayList();
+  private int deletesBytes;
 
-  private final Collection<Entity> puts = new ArrayList<Entity>();
-  private int putsBytes = 0;
+  public static class Params implements Serializable {
 
-  private final Collection<Key> deletes = new ArrayList<Key>();
-  private int deletesBytes = 0;
+    private static final long serialVersionUID = -4072996713626072011L;
 
-  // Private constructor to disallow subclasses (more flexible than making the class final).
-  private DatastoreMutationPool(DatastoreService ds, int countLimit, int bytesLimit) {
+    private final RetryParams retryParams;
+    private final int countLimit;
+    private final int bytesLimit;
+
+    private Params(Builder builder) {
+      retryParams = builder.retryParams;
+      countLimit = builder.countLimit;
+      bytesLimit = builder.bytesLimit;
+    }
+
+    public RetryParams getRetryParams() {
+      return retryParams;
+    }
+
+    public int getCountLimit() {
+      return countLimit;
+    }
+
+    public int getBytesLimit() {
+      return bytesLimit;
+    }
+
+    public static class Builder {
+
+      private int bytesLimit = DEFAULT_BYTES_LIMIT;
+      private int countLimit = DEFAULT_COUNT_LIMIT;
+      private RetryParams retryParams = RetryParams.getDefaultInstance();
+
+      public Builder bytesLimit(int bytesLimit) {
+        this.bytesLimit = bytesLimit;
+        return this;
+      }
+
+      public Builder countLimit(int countLimit) {
+        this.countLimit = countLimit;
+        return this;
+      }
+
+      public Builder retryParams(RetryParams retryParams) {
+        this.retryParams = checkNotNull(retryParams);
+        return this;
+      }
+
+      public Params build() {
+        return new Params(this);
+      }
+    }
+  }
+
+  private DatastoreMutationPool(DatastoreService ds, Params params) {
     this.ds = ds;
-    this.countLimit = countLimit;
-    this.bytesLimit = bytesLimit;
+    this.params = params;
   }
 
   private static class Listener extends LifecycleListener {
@@ -51,7 +113,7 @@ public class DatastoreMutationPool {
     private static final long serialVersionUID = 121172329066475329L;
 
     private DatastoreMutationPool pool;
-    private LifecycleListenerRegistry registry;
+    private final LifecycleListenerRegistry registry;
 
     Listener(DatastoreMutationPool pool, LifecycleListenerRegistry registry) {
       this.pool = checkNotNull(pool, "Null pool");
@@ -61,15 +123,24 @@ public class DatastoreMutationPool {
     @Override public void endSlice() {
       Preconditions.checkState(pool != null, "%s: endSlice() called twice?", this);
       registry.removeListener(this);
-      DatastoreMutationPool p = pool;
-      pool = null;
-      p.flush();
+      try {
+        pool.flush();
+      } finally {
+        pool = null;
+      }
     }
+  }
+
+  public static DatastoreMutationPool forManualFlushing(DatastoreService ds, Params params) {
+    return new DatastoreMutationPool(ds, params);
   }
 
   public static DatastoreMutationPool forManualFlushing(
       DatastoreService ds, int countLimit, int bytesLimit) {
-    return new DatastoreMutationPool(ds, countLimit, bytesLimit);
+    Params.Builder paramBuilder = new Params.Builder();
+    paramBuilder.countLimit(countLimit);
+    paramBuilder.bytesLimit(bytesLimit);
+    return forManualFlushing(ds, paramBuilder.build());
   }
 
   public static DatastoreMutationPool forManualFlushing() {
@@ -107,14 +178,14 @@ public class DatastoreMutationPool {
     int bytesHere = KeyFactory.keyToString(key).length();
 
     // Do this before the add so that we guarantee that size is never > sizeLimit
-    if (deletesBytes + bytesHere >= bytesLimit) {
+    if (deletesBytes + bytesHere >= params.getBytesLimit()) {
       flushDeletes();
     }
 
     deletesBytes += bytesHere;
     deletes.add(key);
 
-    if (deletes.size() >= countLimit) {
+    if (deletes.size() >= params.getCountLimit()) {
       flushDeletes();
     }
   }
@@ -126,14 +197,14 @@ public class DatastoreMutationPool {
     int bytesHere = EntityTranslator.convertToPb(entity).getSerializedSize();
 
     // Do this before the add so that we guarantee that size is never > sizeLimit
-    if (putsBytes + bytesHere >= bytesLimit) {
+    if (putsBytes + bytesHere >= params.getBytesLimit()) {
       flushPuts();
     }
 
     putsBytes += bytesHere;
     puts.add(entity);
 
-    if (puts.size() >= countLimit) {
+    if (puts.size() >= params.getCountLimit()) {
       flushPuts();
     }
   }
@@ -151,15 +222,22 @@ public class DatastoreMutationPool {
   }
 
   private void flushDeletes() {
-    ds.delete(deletes);
-    deletes.clear();
-    deletesBytes = 0;
+    RetryHelper.runWithRetries(callable(new Runnable() {
+      @Override public void run() {
+        ds.delete(deletes);
+        deletes.clear();
+        deletesBytes = 0;
+      }
+    }), params.getRetryParams(), EXCEPTION_HANDLER);
   }
 
   private void flushPuts() {
-    ds.put(puts);
-    puts.clear();
-    putsBytes = 0;
+    RetryHelper.runWithRetries(callable(new Runnable() {
+      @Override public void run() {
+        ds.put(puts);
+        puts.clear();
+        putsBytes = 0;
+      }
+    }), params.getRetryParams(), EXCEPTION_HANDLER);
   }
-
 }
