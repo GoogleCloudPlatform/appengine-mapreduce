@@ -10,12 +10,18 @@ import com.google.appengine.api.files.FileServiceFactory;
 import com.google.appengine.api.taskqueue.DeferredTask;
 import com.google.appengine.api.taskqueue.Queue;
 import com.google.appengine.api.taskqueue.QueueFactory;
+import com.google.appengine.api.taskqueue.QueueStatistics;
 import com.google.appengine.api.taskqueue.RetryOptions;
 import com.google.appengine.api.taskqueue.TaskOptions;
+import com.google.appengine.api.taskqueue.TransientFailureException;
+import com.google.appengine.tools.cloudstorage.ExceptionHandler;
 import com.google.appengine.tools.cloudstorage.GcsFilename;
 import com.google.appengine.tools.cloudstorage.GcsService;
 import com.google.appengine.tools.cloudstorage.GcsServiceFactory;
 import com.google.appengine.tools.cloudstorage.RetriesExhaustedException;
+import com.google.appengine.tools.cloudstorage.RetryHelper;
+import com.google.appengine.tools.cloudstorage.RetryHelperException;
+import com.google.appengine.tools.cloudstorage.RetryParams;
 import com.google.appengine.tools.mapreduce.impl.AbstractWorkerController;
 import com.google.appengine.tools.mapreduce.impl.CountersImpl;
 import com.google.appengine.tools.mapreduce.impl.GoogleCloudStorageMapOutput;
@@ -54,6 +60,7 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.concurrent.Callable;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -74,15 +81,37 @@ public class MapReduceJob<I, K, V, O, R>
 
   private static final Logger log = Logger.getLogger(MapReduceJob.class.getName());
 
+  private static final ExceptionHandler QUEUE_EXCEPTION_HANDLER =
+      new ExceptionHandler.Builder().retryOn(TransientFailureException.class).build();
+
   /**
    * Starts a {@link MapReduceJob} with the given parameters in a new Pipeline.
    * Returns the pipeline id.
    */
   public static <I, K, V, O, R> String start(
       MapReduceSpecification<I, K, V, O, R> specification, MapReduceSettings settings) {
+    checkQueueSettings(settings.getControllerQueueName());
+    checkQueueSettings(settings.getWorkerQueueName());
     PipelineService pipelineService = PipelineServiceFactory.newPipelineService();
     return pipelineService.startNewPipeline(new MapReduceJob<I, K, V, O, R>(), specification,
         settings, Job.onBackend(settings.getBackend()));
+  }
+
+  private static void checkQueueSettings(String queueName) {
+    final Queue queue = QueueFactory.getQueue(queueName);
+    try {
+      RetryHelper.runWithRetries(
+          new Callable<QueueStatistics>() {
+            @Override public QueueStatistics call() {
+              return queue.fetchStatistics();
+            }
+          }, RetryParams.getDefaultInstance(), QUEUE_EXCEPTION_HANDLER);
+    } catch (RetryHelperException ex) {
+      if (ex.getCause() instanceof IllegalStateException) {
+        throw new RuntimeException("Queue '" + queueName + "' does not exists");
+      }
+      throw new RuntimeException("Could not check if queue exists", ex.getCause());
+    }
   }
 
   public MapReduceJob() {}
