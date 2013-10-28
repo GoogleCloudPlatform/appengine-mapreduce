@@ -4,7 +4,6 @@ package com.google.appengine.tools.mapreduce.impl.handlers;
 
 import com.google.appengine.tools.mapreduce.EndToEndTestCase;
 import com.google.appengine.tools.mapreduce.impl.AbstractWorkerController;
-import com.google.appengine.tools.mapreduce.impl.CountersImpl;
 import com.google.appengine.tools.mapreduce.impl.TestWorkerTask;
 import com.google.appengine.tools.mapreduce.impl.WorkerResult;
 import com.google.appengine.tools.mapreduce.impl.shardedjob.ShardedJobController;
@@ -14,6 +13,7 @@ import com.google.appengine.tools.mapreduce.impl.shardedjob.ShardedJobSettings;
 import com.google.appengine.tools.mapreduce.impl.shardedjob.ShardedJobState;
 import com.google.appengine.tools.mapreduce.impl.shardedjob.Status;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Iterables;
 
 import org.json.JSONObject;
 
@@ -36,27 +36,7 @@ public class StatusHandlerTest extends EndToEndTestCase {
     public void completed(WorkerResult<Integer> finalCombinedResult) {}
   }
 
-  public void testCleanupJob() throws Exception {
-    /*
-      MapperStateEntity state = MapperStateEntity.createForNewJob(
-          ds, "Namey", new JobID("14", 28).toString(), 12);
-      state.setConfigurationXML(
-          ConfigurationXmlUtil.convertConfigurationToXml(new Configuration(false)));
-      state.persist();
-      JSONObject response = StatusHandler.handleCleanupJob(state.getJobId());
-      try {
-        MapperStateEntity.getMapReduceStateFromJobID(ds, JobID.forName(state.getJobId()));
-        fail("MapperStateEntity entity should have been removed from the datastore");
-      } catch (EntityNotFoundException ignored) {
-        // expected
-      }
-      assertTrue("Response has \"uccess\" in the status: " + response,
-          ((String) response.get("status")).contains("uccess"));
-     */
-  }
-
-  // Tests that an job that has just been initialized returns a reasonable
-  // job detail.
+  // Tests that an job that has just been initialized returns a reasonable job detail.
   public void testGetJobDetail_empty() throws Exception {
     ShardedJobService jobService = ShardedJobServiceFactory.getShardedJobService();
     ShardedJobSettings settings = new ShardedJobSettings();
@@ -74,8 +54,7 @@ public class StatusHandlerTest extends EndToEndTestCase {
     assertEquals(0, result.getJSONObject("counters").length());
   }
 
-  // Tests that a populated job (with a couple of shards) generates a reasonable
-  // job detail.
+  // Tests that a populated job (with a couple of shards) generates a reasonable job detail.
   public void testGetJobDetail_populated() throws Exception {
     ShardedJobService jobService = ShardedJobServiceFactory.getShardedJobService();
     ShardedJobSettings settings = new ShardedJobSettings();
@@ -89,7 +68,7 @@ public class StatusHandlerTest extends EndToEndTestCase {
     ShardedJobState<?, WorkerResult<? extends Serializable>> state =
         jobService.getJobState("testGetJobDetail_populated");
     assertEquals(2, state.getActiveTaskCount());
-    assertEquals(new CountersImpl(), state.getAggregateResult().getCounters());
+    assertTrue(Iterables.isEmpty(state.getAggregateResult().getCounters().getCounters()));
     assertEquals(2, state.getTotalTaskCount());
     assertEquals(Status.RUNNING, state.getStatus());
     JSONObject jobDetail = StatusHandler.handleGetJobDetail("testGetJobDetail_populated");
@@ -129,7 +108,7 @@ public class StatusHandlerTest extends EndToEndTestCase {
     assertEquals("Namey", jobDetail.getString("name"));
     assertEquals(false, jobDetail.getBoolean("active"));
     assertEquals(0, jobDetail.getInt("active_shards"));
-    System.out.println(jobDetail);
+    System.out.println(jobDetail.toString());
     assertTrue(
         jobDetail.toString().matches(
             "\\{\"mapreduce_id\":\"testGetJobDetail_populated\"," +

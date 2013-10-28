@@ -41,7 +41,6 @@ import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
-import com.google.common.collect.Sets;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -51,6 +50,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Set;
@@ -487,7 +487,7 @@ public class EndToEndTest extends EndToEndTestCase {
           @Override public void verify(MapReduceResult<List<List<String>>> result)
               throws Exception {
             List<List<String>> outputResult = result.getOutputResult();
-            Set<Long> expected = Sets.newHashSet();
+            Set<Long> expected = new HashSet<>();
             for (long i = 0; i < 6; i++) {
               expected.add(i);
             }

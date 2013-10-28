@@ -72,7 +72,6 @@ public class MapReduceJob<I, K, V, O, R>
     extends Job2<MapReduceResult<R>, MapReduceSpecification<I, K, V, O, R>, MapReduceSettings> {
   private static final long serialVersionUID = 723635736794527552L;
 
-  @SuppressWarnings("unused")
   private static final Logger log = Logger.getLogger(MapReduceJob.class.getName());
 
   /**

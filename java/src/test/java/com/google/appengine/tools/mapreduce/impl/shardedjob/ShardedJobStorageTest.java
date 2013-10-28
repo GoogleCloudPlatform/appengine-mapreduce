@@ -24,22 +24,31 @@ public class ShardedJobStorageTest extends EndToEndTestCase {
     DATASTORE.put(entity);
     Entity readEntity = DATASTORE.get(entity.getKey());
     assertEquals(entity, readEntity);
-    assertEquals(
-        job, ShardedJobStateImpl.ShardedJobSerializer.<TestTask, Integer>fromEntity(readEntity));
+    ShardedJobStateImpl<TestTask, Integer> fromEntity =
+        ShardedJobStateImpl.ShardedJobSerializer.fromEntity(readEntity);
+    assertEquals(job.getJobId(), fromEntity.getJobId());
+    assertEquals(job.getActiveTaskCount(), fromEntity.getActiveTaskCount());
+    assertEquals(job.getMostRecentUpdateTimeMillis(), fromEntity.getMostRecentUpdateTimeMillis());
+    assertEquals(job.getStartTimeMillis(), fromEntity.getStartTimeMillis());
+    assertEquals(job.getTotalTaskCount(), fromEntity.getTotalTaskCount());
+    assertEquals(job.getAggregateResult(), fromEntity.getAggregateResult());
+    assertEquals(job.getSettings(), fromEntity.getSettings());
+    assertEquals(job.getStatus(), fromEntity.getStatus());
+    assertEquals(job.getController(), fromEntity.getController());
   }
 
-   public void testExpectedFields() {
-     ShardedJobStateImpl<TestTask, Integer> job = createGenericJobState();
-     Entity entity = ShardedJobStateImpl.ShardedJobSerializer.toEntity(job);
-     Map<String, Object> properties = entity.getProperties();
-     assertEquals(10, properties.get("activeTaskCount"));
-     assertEquals(10, properties.get("taskCount"));
-     assertEquals(0L, properties.get("nextSequenceNumber"));
-     assertTrue(properties.containsKey("status"));
-     assertTrue(properties.containsKey("startTimeMillis"));
-     assertTrue(properties.containsKey("settings"));
-     assertTrue(properties.containsKey("mostRecentUpdateTimeMillis"));
-   }
+  public void testExpectedFields() {
+    ShardedJobStateImpl<TestTask, Integer> job = createGenericJobState();
+    Entity entity = ShardedJobStateImpl.ShardedJobSerializer.toEntity(job);
+    Map<String, Object> properties = entity.getProperties();
+    assertEquals(10, properties.get("activeTaskCount"));
+    assertEquals(10, properties.get("taskCount"));
+    assertEquals(0L, properties.get("nextSequenceNumber"));
+    assertTrue(properties.containsKey("status"));
+    assertTrue(properties.containsKey("startTimeMillis"));
+    assertTrue(properties.containsKey("settings"));
+    assertTrue(properties.containsKey("mostRecentUpdateTimeMillis"));
+  }
 
 
   public void testFetchJobById() throws EntityNotFoundException {

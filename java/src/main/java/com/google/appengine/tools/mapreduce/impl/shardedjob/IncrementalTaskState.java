@@ -88,7 +88,8 @@ class IncrementalTaskState<T extends IncrementalTask<T, R>, R extends Serializab
     return this;
   }
 
-  @Override public String toString() {
+  @Override
+  public String toString() {
     return getClass().getSimpleName() + "("
         + taskId + ", "
         + jobId + ", "
@@ -146,7 +147,7 @@ class IncrementalTaskState<T extends IncrementalTask<T, R>, R extends Serializab
           .setNextSequenceNumber(
               Ints.checkedCast((Long) in.getProperty(NEXT_SEQUENCE_NUMBER_PROPERTY)));
     }
-    
+
     @SuppressWarnings({"unchecked"})
     static <R extends Serializable> R getPartialResult(Entity in) {
       Preconditions.checkArgument(ENTITY_KIND.equals(in.getKind()), "Unexpected kind: %s", in);
@@ -156,13 +157,10 @@ class IncrementalTaskState<T extends IncrementalTask<T, R>, R extends Serializab
       return (R) SerializationUtil.deserializeFromDatastorePropertyUnchecked(
           in, PARTIAL_RESULT_PROPERTY);
     }
-    
+
     static boolean hasNextTask(Entity in) {
       Preconditions.checkArgument(ENTITY_KIND.equals(in.getKind()), "Unexpected kind: %s", in);
       return in.hasProperty(NEXT_TASK_PROPERTY);
     }
-    
   }
-  
-
 }

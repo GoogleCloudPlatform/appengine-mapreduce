@@ -24,12 +24,12 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.IOException;
-import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
@@ -39,7 +39,7 @@ import javax.servlet.http.HttpServletResponse;
  *
  */
 final class StatusHandler {
-// --------------------------- STATIC FIELDS ---------------------------
+  private static final Logger log = Logger.getLogger(StatusHandler.class.getName());
 
   public static final int DEFAULT_JOBS_PER_PAGE_COUNT = 50;
   // Command paths
@@ -48,12 +48,12 @@ final class StatusHandler {
   public static final String ABORT_JOB_PATH = "abort_job";
   public static final String GET_JOB_DETAIL_PATH = "get_job_detail";
 
-// --------------------------- CONSTRUCTORS ---------------------------
+  // --------------------------- CONSTRUCTORS ---------------------------
 
   private StatusHandler() {
   }
 
-// -------------------------- STATIC METHODS --------------------------
+  // -------------------------- STATIC METHODS --------------------------
 
   private static JSONObject handleCleanupJob(String jobId) throws JSONException {
     JSONObject retValue = new JSONObject();
@@ -87,17 +87,17 @@ final class StatusHandler {
       } else if (command.equals(GET_JOB_DETAIL_PATH) && !isPost) {
         retValue = handleGetJobDetail(request.getParameter("mapreduce_id"));
       } else {
-        response.sendError(404);
+        response.sendError(HttpServletResponse.SC_NOT_FOUND);
         return;
       }
-    } catch (Throwable t) {
-      MapReduceServletImpl.LOG.log(Level.SEVERE, "Got exception while running command", t);
+    } catch (Exception t) {
+      log.log(Level.SEVERE, "Got exception while running command", t);
       try {
         retValue = new JSONObject();
         retValue.put("error_class", t.getClass().getName());
         retValue.put("error_message",
             "Full stack trace is available in the server logs. Message: "
-            + t.getMessage());
+                + t.getMessage());
       } catch (JSONException e) {
         throw new RuntimeException("Couldn't create error JSON object", e);
       }
@@ -106,7 +106,7 @@ final class StatusHandler {
       retValue.write(response.getWriter());
       response.getWriter().flush();
     } catch (JSONException e) {
-        throw new RuntimeException("Couldn't write command response", e);
+      throw new RuntimeException("Couldn't write command response", e);
     } catch (IOException e) {
       throw new RuntimeException("Couldn't write command response", e);
     }
@@ -157,7 +157,7 @@ final class StatusHandler {
    */
   @VisibleForTesting
   static JSONObject handleGetJobDetail(String jobId) {
-    ShardedJobState<?, WorkerResult<? extends Serializable>> state =
+    ShardedJobState<?, WorkerResult<?>> state =
         ShardedJobServiceFactory.getShardedJobService().getJobState(jobId);
     JSONObject jobObject = new JSONObject();
     try {
@@ -244,9 +244,8 @@ final class StatusHandler {
   /**
    * Handle the list_jobs AJAX command.
    */
+  @SuppressWarnings("unused")
   private static JSONObject handleListJobs(String cursor, int count) {
     throw new RuntimeException("Not implemented");
   }
-
-
 }
