@@ -54,9 +54,9 @@ public class MapReduceConstants {
   public static final int MAX_LAST_ITEM_STRING_SIZE = 100;
 
   public static final RetryParams GCS_RETRY_PARAMETERS = new RetryParams.Builder()
+      .requestTimeoutMillis(30000)
       .retryMaxAttempts(10)
       .retryMinAttempts(6)
-      .requestTimeoutMillis(10000)
       .maxRetryDelayMillis(30000)
       .totalRetryPeriodMillis(60000)
       .build();
