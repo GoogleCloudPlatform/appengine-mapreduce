@@ -78,3 +78,5 @@ config = lib_config.register(CONFIG_NAMESPACE, _ConfigDefaults.__dict__)
 # They are constants because _config is completely initialized on the first
 # request of an instance and will never change until user deploy a new version.
 _DEFAULT_PIPELINE_BASE_PATH = config.BASE_PATH + "/pipeline"
+# See b/11341023 for context.
+_GCS_URLFETCH_TIMEOUT_SEC = 30
