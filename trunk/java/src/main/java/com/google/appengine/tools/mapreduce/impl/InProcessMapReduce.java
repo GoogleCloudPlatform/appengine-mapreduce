@@ -14,6 +14,7 @@ import com.google.appengine.tools.mapreduce.Output;
 import com.google.appengine.tools.mapreduce.OutputWriter;
 import com.google.appengine.tools.mapreduce.ReducerContext;
 import com.google.appengine.tools.mapreduce.impl.shardedjob.InProcessShardedJobRunner;
+import com.google.appengine.tools.mapreduce.impl.shardedjob.Status;
 import com.google.appengine.tools.mapreduce.outputs.InMemoryOutput;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
@@ -104,8 +105,10 @@ public class InProcessMapReduce<I, K, V, O, R> {
           private static final long serialVersionUID = 661198005749484951L;
 
           @Override
-          public void completed(WorkerResult<KeyValue<K, V>> finalCombinedResult) {
-          }
+          public void completed(WorkerResult<KeyValue<K, V>> finalCombinedResult) {}
+
+          @Override
+          public void failed(Status status) {}
         });
     log.info("Map phase completed");
     return result;
@@ -172,6 +175,9 @@ public class InProcessMapReduce<I, K, V, O, R> {
           public void completed(WorkerResult<O> result) {
             counters[0] = result.getCounters();
           }
+
+          @Override
+          public void failed(Status status) {}
         });
     log.info("Reduce phase completed, reduce counters=" + counters[0]);
     counters[0].addAll(mapCounters);

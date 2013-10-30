@@ -54,27 +54,33 @@ class ShardedJobStateImpl<T extends IncrementalTask<T, R>, R extends Serializabl
     this.aggregateResult = initialAggregateResult;
   }
 
-  @Override public String getJobId() {
+  @Override
+  public String getJobId() {
     return jobId;
   }
 
-  @Override public ShardedJobController<T, R> getController() {
+  @Override
+  public ShardedJobController<T, R> getController() {
     return controller;
   }
 
-  @Override public ShardedJobSettings getSettings() {
+  @Override
+  public ShardedJobSettings getSettings() {
     return settings;
   }
 
-  @Override public int getTotalTaskCount() {
+  @Override
+  public int getTotalTaskCount() {
     return totalTaskCount;
   }
 
-  @Override public long getStartTimeMillis() {
+  @Override
+  public long getStartTimeMillis() {
     return startTimeMillis;
   }
 
-  @Override public long getMostRecentUpdateTimeMillis() {
+  @Override
+  public long getMostRecentUpdateTimeMillis() {
     return mostRecentUpdateTimeMillis;
   }
 
@@ -92,7 +98,8 @@ class ShardedJobStateImpl<T extends IncrementalTask<T, R>, R extends Serializabl
     return this;
   }
 
-  @Override public int getActiveTaskCount() {
+  @Override
+  public int getActiveTaskCount() {
     return activeTaskCount;
   }
 
@@ -101,7 +108,8 @@ class ShardedJobStateImpl<T extends IncrementalTask<T, R>, R extends Serializabl
     return this;
   }
 
-  @Override public Status getStatus() {
+  @Override
+  public Status getStatus() {
     return status;
   }
 
@@ -110,7 +118,8 @@ class ShardedJobStateImpl<T extends IncrementalTask<T, R>, R extends Serializabl
     return this;
   }
 
-  @Override /*Nullable*/ public R getAggregateResult() {
+  @Override
+  /*Nullable*/ public R getAggregateResult() {
     return aggregateResult;
   }
 
@@ -119,7 +128,8 @@ class ShardedJobStateImpl<T extends IncrementalTask<T, R>, R extends Serializabl
     return this;
   }
 
-  @Override public String toString() {
+  @Override
+  public String toString() {
     return getClass().getSimpleName() + "("
         + controller + ", "
         + nextSequenceNumber + ", "
@@ -159,7 +169,8 @@ class ShardedJobStateImpl<T extends IncrementalTask<T, R>, R extends Serializabl
           in.getMostRecentUpdateTimeMillis());
       out.setUnindexedProperty(NEXT_SEQUENCE_NUMBER_PROPERTY, in.getNextSequenceNumber());
       out.setUnindexedProperty(ACTIVE_TASK_COUNT_PROPERTY, in.getActiveTaskCount());
-      out.setUnindexedProperty(STATUS_PROPERTY, String.valueOf(in.getStatus()));
+      out.setUnindexedProperty(STATUS_PROPERTY,
+          new Blob(SerializationUtil.serializeToByteArray(in.getStatus())));
       if (in.getAggregateResult() != null) {
         out.setUnindexedProperty(AGGREGATE_RESULT_PROPERTY,
             new Blob(SerializationUtil.serializeToByteArray(in.getAggregateResult())));
@@ -167,26 +178,25 @@ class ShardedJobStateImpl<T extends IncrementalTask<T, R>, R extends Serializabl
       return out;
     }
 
-    @SuppressWarnings("unchecked")
     static <T extends IncrementalTask<T, R>, R extends Serializable>
           ShardedJobStateImpl<T, R> fromEntity(Entity in) {
       Preconditions.checkArgument(ENTITY_KIND.equals(in.getKind()), "Unexpected kind: %s", in);
-      return new ShardedJobStateImpl<T, R>(in.getKey().getName(),
-          (ShardedJobController<T, R>) SerializationUtil.deserializeFromDatastorePropertyUnchecked(
+      return new ShardedJobStateImpl<T, R>(
+          in.getKey().getName(),
+          SerializationUtil.<ShardedJobController<T, R>>deserializeFromDatastoreProperty(
               in, CONTROLLER_PROPERTY),
-          (ShardedJobSettings) SerializationUtil.deserializeFromDatastorePropertyUnchecked(
+          SerializationUtil.<ShardedJobSettings>deserializeFromDatastoreProperty(
               in, SETTINGS_PROPERTY),
           Ints.checkedCast((Long) in.getProperty(TOTAL_TASK_COUNT_PROPERTY)),
           (Long) in.getProperty(START_TIME_PROPERTY),
-          Status.valueOf((String) in.getProperty(STATUS_PROPERTY)),
-          in.hasProperty(AGGREGATE_RESULT_PROPERTY) ? (R) SerializationUtil
-              .deserializeFromDatastorePropertyUnchecked(in, AGGREGATE_RESULT_PROPERTY)
+          SerializationUtil.<Status>deserializeFromDatastoreProperty(in, STATUS_PROPERTY),
+          in.hasProperty(AGGREGATE_RESULT_PROPERTY) ?
+              SerializationUtil.<R>deserializeFromDatastoreProperty(in, AGGREGATE_RESULT_PROPERTY)
               : null)
           .setMostRecentUpdateTimeMillis((Long) in.getProperty(MOST_RECENT_UPDATE_TIME_PROPERTY))
           .setNextSequenceNumber(
               Ints.checkedCast((Long) in.getProperty(NEXT_SEQUENCE_NUMBER_PROPERTY)))
-          .setActiveTaskCount(
-              Ints.checkedCast((Long) in.getProperty(ACTIVE_TASK_COUNT_PROPERTY)));
+          .setActiveTaskCount(Ints.checkedCast((Long) in.getProperty(ACTIVE_TASK_COUNT_PROPERTY)));
     }
   }
 }

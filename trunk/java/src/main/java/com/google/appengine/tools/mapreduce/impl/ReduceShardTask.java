@@ -53,7 +53,7 @@ public class ReduceShardTask<K, V, O>
     try {
       reducer.reduce(input.getKey(), value);
     } catch (RuntimeException ex) {
-      throw new ShardFailureException(ex);
+      throw new ShardFailureException(shardNumber, ex);
     }
   }
 

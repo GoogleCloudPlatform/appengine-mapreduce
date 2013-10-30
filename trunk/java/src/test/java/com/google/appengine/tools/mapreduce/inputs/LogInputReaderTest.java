@@ -49,7 +49,7 @@ public class LogInputReaderTest extends TestCase {
       assertEquals(expectedRequestId, log.getRequestId());
     }
     try {
-      RequestLogs log = reader.next();
+      reader.next();
       fail("Too many logs found");
     } catch (NoSuchElementException expected) {
       // We intentionally perform one extra fetch to ensure there are no extra logs

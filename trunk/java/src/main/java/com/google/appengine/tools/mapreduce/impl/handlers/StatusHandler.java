@@ -170,7 +170,7 @@ final class StatusHandler {
         jobObject.put("active", true);
       } else {
         jobObject.put("active", false);
-        jobObject.put("result_status", "" + state.getStatus());
+        jobObject.put("result_status", "" + state.getStatus().getStatusCode());
       }
       jobObject.put("shards", state.getTotalTaskCount());
       jobObject.put("active_shards", state.getActiveTaskCount());

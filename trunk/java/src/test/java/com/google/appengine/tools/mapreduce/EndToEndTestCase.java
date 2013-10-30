@@ -144,9 +144,9 @@ public abstract class EndToEndTestCase extends TestCase {
 
   protected void executeTasksUntilEmpty(String queueName) throws Exception {
     while (true) {
-      // We have to reacquire task list every time, because local implementation returns a copy.
-      List<QueueStateInfo.TaskStateInfo> taskInfo = taskQueue.getQueueStateInfo().get(queueName)
-          .getTaskInfo();
+      // We have to re-acquire task list every time, because local implementation returns a copy.
+      List<QueueStateInfo.TaskStateInfo> taskInfo =
+          taskQueue.getQueueStateInfo().get(queueName).getTaskInfo();
       if (taskInfo.isEmpty()) {
         break;
       }

@@ -14,7 +14,7 @@ import java.io.Serializable;
 public interface MapReduceResult<R> extends Serializable {
 
   /**
-   * Returns the result from {@link Output#finish}.
+   * Returns the result from {@link Output#finish} or {@code null} if completed unsuccessfully.
    */
   R getOutputResult();
 
@@ -22,5 +22,4 @@ public interface MapReduceResult<R> extends Serializable {
    * Returns the counter values at the end of the MapReduce.
    */
   Counters getCounters();
-
 }

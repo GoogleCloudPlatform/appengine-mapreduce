@@ -43,6 +43,8 @@ public abstract class OutputWriter<O> implements Serializable {
   /**
    * Prepares the writer for writing after possibly having gone through
    * serialization or deserialization.
+   *
+   * @throws IOException in the event of failure
    */
   public void beginSlice() throws IOException {}
 
@@ -53,23 +55,27 @@ public abstract class OutputWriter<O> implements Serializable {
 
   /**
    * Prepares the writer for possible serialization.
+   *
+   * @throws IOException in the event of failure
    */
   public void endSlice() throws IOException {}
-  
+
   /**
    * Will be called once before any calls to write. Prepares the writer for processing, after
    * possibly having gone through serialization and deserialization.
+   *
+   * @throws IOException in the event of failure
    */
   public void open() throws IOException {}
 
   /**
-   * Returns the estimated mininum memory that will be used by this writer. 
+   * Returns the estimated mininum memory that will be used by this writer.
    * (This is normally just set to the size of the buffers used by the implementation)
    */
   public long estimateMemoryRequirment() {
     return 0;
   }
-  
+
   /**
    * Called when no more output will be written to this writer.
    */

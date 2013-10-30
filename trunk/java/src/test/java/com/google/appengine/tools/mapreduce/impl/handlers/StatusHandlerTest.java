@@ -34,6 +34,9 @@ public class StatusHandlerTest extends EndToEndTestCase {
 
     @Override
     public void completed(WorkerResult<Integer> finalCombinedResult) {}
+
+    @Override
+    public void failed(Status status) {}
   }
 
   // Tests that an job that has just been initialized returns a reasonable job detail.
@@ -44,7 +47,6 @@ public class StatusHandlerTest extends EndToEndTestCase {
     controller = new DummyWorkerController("Namey");
     jobService.startJob(
         "testGetJobDetail_empty", ImmutableList.<TestWorkerTask>of(), controller, settings);
-
 
     JSONObject result = StatusHandler.handleGetJobDetail("testGetJobDetail_empty");
     assertEquals("testGetJobDetail_empty", result.getString("mapreduce_id"));
@@ -70,7 +72,7 @@ public class StatusHandlerTest extends EndToEndTestCase {
     assertEquals(2, state.getActiveTaskCount());
     assertTrue(Iterables.isEmpty(state.getAggregateResult().getCounters().getCounters()));
     assertEquals(2, state.getTotalTaskCount());
-    assertEquals(Status.RUNNING, state.getStatus());
+    assertEquals(new Status(Status.StatusCode.RUNNING), state.getStatus());
     JSONObject jobDetail = StatusHandler.handleGetJobDetail("testGetJobDetail_populated");
     assertNotNull(jobDetail);
     assertEquals("testGetJobDetail_populated", jobDetail.getString("mapreduce_id"));
@@ -108,7 +110,6 @@ public class StatusHandlerTest extends EndToEndTestCase {
     assertEquals("Namey", jobDetail.getString("name"));
     assertEquals(false, jobDetail.getBoolean("active"));
     assertEquals(0, jobDetail.getInt("active_shards"));
-    System.out.println(jobDetail.toString());
     assertTrue(
         jobDetail.toString().matches(
             "\\{\"mapreduce_id\":\"testGetJobDetail_populated\"," +
@@ -133,7 +134,7 @@ public class StatusHandlerTest extends EndToEndTestCase {
                 "\"chart_url\":\"[^\"]*\"," +
                 "\"counters\":\\{\"TestWorkerTaskSum\":6\\}," +
                 "\"start_timestamp_ms\":[0-9]*\\," +
-            "\"result_status\":\"DONE\"}"));
+                "\"result_status\":\"DONE\"}"));
   }
 
   // -------------------------- STATIC METHODS --------------------------
