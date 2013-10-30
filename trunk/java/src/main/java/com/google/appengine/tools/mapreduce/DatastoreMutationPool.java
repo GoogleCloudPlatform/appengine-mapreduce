@@ -148,27 +148,6 @@ public class DatastoreMutationPool {
         DatastoreServiceFactory.getDatastoreService(), DEFAULT_COUNT_LIMIT, DEFAULT_BYTES_LIMIT);
   }
 
-  public static DatastoreMutationPool forRegistry(
-      LifecycleListenerRegistry registry, DatastoreService ds, int countLimit, int bytesLimit) {
-    DatastoreMutationPool pool = forManualFlushing(ds, countLimit, bytesLimit);
-    registry.addListener(new Listener(pool, registry));
-    return pool;
-  }
-
-  public static DatastoreMutationPool forRegistry(LifecycleListenerRegistry registry) {
-    return forRegistry(registry,
-        DatastoreServiceFactory.getDatastoreService(), DEFAULT_COUNT_LIMIT, DEFAULT_BYTES_LIMIT);
-  }
-
-  public static DatastoreMutationPool forWorker(Worker<?> worker,
-      DatastoreService ds, int countLimit, int bytesLimit) {
-    return forRegistry(worker.getLifecycleListenerRegistry(), ds, countLimit, bytesLimit);
-  }
-
-  public static DatastoreMutationPool forWorker(Worker<?> worker) {
-    return forRegistry(worker.getLifecycleListenerRegistry());
-  }
-
   /**
    * Adds a mutation to put the given entity to the datastore.
    */
