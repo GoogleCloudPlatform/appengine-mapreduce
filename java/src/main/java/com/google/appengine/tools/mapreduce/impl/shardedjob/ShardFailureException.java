@@ -7,11 +7,7 @@ public class ShardFailureException extends RuntimeException {
 
   private static final long serialVersionUID = -1082842736486563617L;
 
-  public ShardFailureException(String msg, Throwable rootCause) {
-    super(msg, rootCause);
-  }
-
-  public ShardFailureException(Throwable rootCause) {
-    super(rootCause);
+  public ShardFailureException(int shardNumber, Throwable rootCause) {
+    super("Shard " + shardNumber + " failed.", rootCause);
   }
 }

@@ -70,7 +70,6 @@ public class GoogleCloudStorageLineInputReaderTest extends GoogleCloudStorageLin
       List<GoogleCloudStorageLineInputReader> readers, boolean performSerialization)
       throws IOException {
     int recordsRead = 0;
-    long lastOffset = -1;
     String recordWithoutSeparator = RECORD.substring(0, RECORD.length() - 1);
 
     for (GoogleCloudStorageLineInputReader reader : readers) {
@@ -103,11 +102,8 @@ public class GoogleCloudStorageLineInputReaderTest extends GoogleCloudStorageLin
     assertEquals("Number of records read", RECORDS_COUNT, recordsRead);
   }
 
-  private GoogleCloudStorageLineInputReader recreate(GoogleCloudStorageLineInputReader reader)
-      throws IOException {
+  private GoogleCloudStorageLineInputReader recreate(GoogleCloudStorageLineInputReader reader) {
     byte[] bytes = SerializationUtil.serializeToByteArray(reader);
-    reader =
-        (GoogleCloudStorageLineInputReader) SerializationUtil.deserializeFromByteArray(bytes);
-    return reader;
+    return (GoogleCloudStorageLineInputReader) SerializationUtil.deserializeFromByteArray(bytes);
   }
 }

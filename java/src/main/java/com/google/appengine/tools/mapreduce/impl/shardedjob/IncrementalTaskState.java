@@ -32,15 +32,19 @@ class IncrementalTaskState<T extends IncrementalTask<T, R>, R extends Serializab
   /*Nullable*/ private T nextTask;
   /*Nullable*/ private R partialResult;
 
-  public IncrementalTaskState(String taskId,
-      String jobId,
-      long mostRecentUpdateMillis,
-      T initialTask,
-      R initialPartialResult) {
+  static <T extends IncrementalTask<T, R>, R extends Serializable> IncrementalTaskState<T, R>
+      create(String taskId, String jobId, long createTime, T initialTask, R initialResult) {
+    IncrementalTaskState<T, R> taskState = new IncrementalTaskState<T, R>(
+        taskId, jobId, createTime, checkNotNull(initialTask), checkNotNull(initialResult));
+    return taskState;
+  }
+
+  private IncrementalTaskState(String taskId, String jobId, long mostRecentUpdateMillis,
+      T nextTask, R initialPartialResult) {
     this.taskId = checkNotNull(taskId, "Null taskId");
     this.jobId = checkNotNull(jobId, "Null jobId");
     this.mostRecentUpdateMillis = mostRecentUpdateMillis;
-    this.nextTask = initialTask;
+    this.nextTask = nextTask;
     this.partialResult = initialPartialResult;
   }
 
@@ -96,12 +100,12 @@ class IncrementalTaskState<T extends IncrementalTask<T, R>, R extends Serializab
         + mostRecentUpdateMillis + ", "
         + nextSequenceNumber + ", "
         + nextTask + ", "
-        + partialResult
-        + ")";
+        + partialResult + ")";
   }
 
   static class Serializer {
     static final String ENTITY_KIND = "MR-IncrementalTask";
+    static final String SHARD_INFO_ENTITY_KIND = ENTITY_KIND + "-ShardInfo";
 
     private static final String JOB_ID_PROPERTY = "jobId";
     private static final String MOST_RECENT_UPDATE_MILLIS_PROPERTY = "mostRecentUpdateMillis";
@@ -114,22 +118,23 @@ class IncrementalTaskState<T extends IncrementalTask<T, R>, R extends Serializab
     }
 
     static Entity toEntity(IncrementalTaskState<?, ?> in) {
-      Entity out = new Entity(makeKey(in.getTaskId()));
-      out.setProperty(JOB_ID_PROPERTY, in.getJobId());
-      out.setUnindexedProperty(MOST_RECENT_UPDATE_MILLIS_PROPERTY, in.getMostRecentUpdateMillis());
-      out.setProperty(NEXT_SEQUENCE_NUMBER_PROPERTY, in.getNextSequenceNumber());
+      Entity taskState = new Entity(makeKey(in.getTaskId()));
+      taskState.setProperty(JOB_ID_PROPERTY, in.getJobId());
+      taskState.setUnindexedProperty(
+          MOST_RECENT_UPDATE_MILLIS_PROPERTY, in.getMostRecentUpdateMillis());
+      taskState.setProperty(NEXT_SEQUENCE_NUMBER_PROPERTY, in.getNextSequenceNumber());
       if (in.getNextTask() != null) {
-        out.setUnindexedProperty(NEXT_TASK_PROPERTY,
+        taskState.setUnindexedProperty(NEXT_TASK_PROPERTY,
             new Blob(SerializationUtil.serializeToByteArray(in.getNextTask())));
       }
       if (in.getPartialResult() != null) {
-        out.setUnindexedProperty(PARTIAL_RESULT_PROPERTY,
+        taskState.setUnindexedProperty(PARTIAL_RESULT_PROPERTY,
             new Blob(SerializationUtil.serializeToByteArray(in.getPartialResult())));
       }
-      return out;
+      return taskState;
     }
 
-    @SuppressWarnings({"unchecked", "rawtypes"})
+    @SuppressWarnings({"rawtypes", "unchecked"})
     static <T extends IncrementalTask<T, R>, R extends Serializable>
         IncrementalTaskState<T, R> fromEntity(Entity in) {
       Preconditions.checkArgument(ENTITY_KIND.equals(in.getKind()), "Unexpected kind: %s", in);
@@ -137,25 +142,22 @@ class IncrementalTaskState<T extends IncrementalTask<T, R>, R extends Serializab
           (String) in.getProperty(JOB_ID_PROPERTY),
           (Long) in.getProperty(MOST_RECENT_UPDATE_MILLIS_PROPERTY),
           in.hasProperty(NEXT_TASK_PROPERTY)
-              ? (IncrementalTask) SerializationUtil.deserializeFromDatastorePropertyUnchecked(
+              ? SerializationUtil.<IncrementalTask>deserializeFromDatastoreProperty(
                   in, NEXT_TASK_PROPERTY)
               : null,
           in.hasProperty(PARTIAL_RESULT_PROPERTY)
-              ? SerializationUtil.deserializeFromDatastorePropertyUnchecked(
-                  in, PARTIAL_RESULT_PROPERTY)
+              ? SerializationUtil.deserializeFromDatastoreProperty(in, PARTIAL_RESULT_PROPERTY)
               : null)
           .setNextSequenceNumber(
               Ints.checkedCast((Long) in.getProperty(NEXT_SEQUENCE_NUMBER_PROPERTY)));
     }
 
-    @SuppressWarnings({"unchecked"})
     static <R extends Serializable> R getPartialResult(Entity in) {
       Preconditions.checkArgument(ENTITY_KIND.equals(in.getKind()), "Unexpected kind: %s", in);
       if (!in.hasProperty(PARTIAL_RESULT_PROPERTY)) {
         return null;
       }
-      return (R) SerializationUtil.deserializeFromDatastorePropertyUnchecked(
-          in, PARTIAL_RESULT_PROPERTY);
+      return SerializationUtil.deserializeFromDatastoreProperty(in, PARTIAL_RESULT_PROPERTY);
     }
 
     static boolean hasNextTask(Entity in) {

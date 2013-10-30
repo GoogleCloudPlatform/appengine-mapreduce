@@ -67,7 +67,6 @@ public class GoogleCloudStorageSortInput extends Input<KeyValue<ByteBuffer, Byte
 
   @Override
   public List<? extends InputReader<KeyValue<ByteBuffer, ByteBuffer>>> createReaders() {
-    Marshaller<ByteBuffer> idenity = Marshallers.getByteBufferMarshaller();
     ImmutableList.Builder<InputReader<KeyValue<ByteBuffer, ByteBuffer>>> out =
         ImmutableList.builder();
     for (GoogleCloudStorageFileSet filesForShard : filenames) {

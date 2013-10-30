@@ -32,7 +32,7 @@ public class ShardedJobStorageTest extends EndToEndTestCase {
     assertEquals(job.getStartTimeMillis(), fromEntity.getStartTimeMillis());
     assertEquals(job.getTotalTaskCount(), fromEntity.getTotalTaskCount());
     assertEquals(job.getAggregateResult(), fromEntity.getAggregateResult());
-    assertEquals(job.getSettings(), fromEntity.getSettings());
+    assertEquals(job.getSettings().toString(), fromEntity.getSettings().toString());
     assertEquals(job.getStatus(), fromEntity.getStatus());
     assertEquals(job.getController(), fromEntity.getController());
   }
@@ -65,7 +65,7 @@ public class ShardedJobStorageTest extends EndToEndTestCase {
         new ShardedJobSettings(),
         10,
         System.currentTimeMillis(),
-        Status.INITIALIZING,
+        new Status(Status.StatusCode.INITIALIZING),
         1);
   }
 

@@ -50,11 +50,15 @@ public abstract class InputReader<I> implements Serializable {
   /**
    * Prepares the {@code InputReader} for reading, after possibly having gone
    * through serialization and deserialization.
+   *
+   * @throws IOException in the event of failure
    */
   public void beginSlice() throws IOException {}
 
   /**
    * Prepares the {@code InputReader} for serialization.
+   *
+   * @throws IOException in the event of failure
    */
   public void endSlice() throws IOException {}
 
@@ -62,12 +66,16 @@ public abstract class InputReader<I> implements Serializable {
    * Performs setup at the beginning of the shard. This method is invoked before the first call to
    * {@link #beginSlice}. It will not be invoked again unless the shard restarts. When a shard is
    * restarted, this method is invoked and the input should be read from the beginning.
+   *
+   * @throws IOException in the event of failure
    */
   public void open() throws IOException {}
 
   /**
    * Called after endSlice if there will not be any subsequent calls to beginSlice or next.
    * This may be used to teardown or finalize any state if required.
+   *
+   * @throws IOException in the event of failure
    */
   public void close() throws IOException {}
 

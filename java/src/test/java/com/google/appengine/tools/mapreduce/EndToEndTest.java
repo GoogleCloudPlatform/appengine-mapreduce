@@ -95,6 +95,7 @@ public class EndToEndTest extends EndToEndTestCase {
     JobInfo info = pipelineService.getJobInfo(jobId);
     @SuppressWarnings("unchecked")
     MapReduceResult<R> result = (MapReduceResult<R>) info.getOutput();
+    assertEquals(JobInfo.State.COMPLETED_SUCCESSFULLY, info.getJobState());
     assertNotNull(result);
     verifier.verify(result);
   }
@@ -123,6 +124,75 @@ public class EndToEndTest extends EndToEndTestCase {
         assertEquals(0, result.getCounters().getCounter(CounterNames.REDUCER_CALLS).getValue());
       }
     });
+  }
+
+  @SuppressWarnings("serial")
+  private static class RougeMapper extends Mapper<Long, String, Long> {
+
+    private static int beginShardCount;
+    private final int shardFailures;
+
+    private RougeMapper(int shardFailures) {
+      this.shardFailures = shardFailures;
+      beginShardCount = 0;
+    }
+
+    @Override
+    public void beginShard() {
+      beginShardCount++;
+    }
+
+    @Override
+    public void map(Long input) {
+      getContext().incrementCounter("counter1");
+      if (beginShardCount <= shardFailures) {
+        throw new RuntimeException("Bad state");
+      }
+    }
+  }
+
+  public void testShardRetriesSuccess() throws Exception {
+    final RandomLongInput input = new RandomLongInput(10, 1);
+    input.setSeed(0L);
+
+    runWithPipeline(new Preparer() {
+      @Override
+      public void prepare() throws Exception {}
+    }, MapReduceSpecification.of("Shard-retry test",
+        input,
+        new RougeMapper(2),
+        Marshallers.getStringMarshaller(),
+        Marshallers.getLongMarshaller(),
+        NoReducer.<String, Long, String>create(),
+        new NoOutput<String, String>(1)), new Verifier<String>() {
+      @Override
+      public void verify(MapReduceResult<String> result) throws Exception {
+        assertNull(result.getOutputResult());
+        assertEquals(10, result.getCounters().getCounter(CounterNames.MAPPER_CALLS).getValue());
+        assertEquals(10, result.getCounters().getCounter("counter1").getValue());
+        assertEquals(0, result.getCounters().getCounter(CounterNames.REDUCER_CALLS).getValue());
+      }
+    });
+  }
+
+  public void testShardRetriesFailure() throws Exception {
+    final RandomLongInput input = new RandomLongInput(10, 1);
+    input.setSeed(0L);
+    MapReduceSpecification<Long, String, Long, String, String> mrSpec =
+        MapReduceSpecification.of("Shard-retry failed", input, new RougeMapper(5),
+        Marshallers.getStringMarshaller(), Marshallers.getLongMarshaller(),
+        NoReducer.<String, Long, String>create(), new NoOutput<String, String>(1));
+    String jobId = pipelineService.startNewPipeline(
+        new MapReduceJob<Long, String, Long, String, String>(), mrSpec, new MapReduceSettings());
+    assertFalse(jobId.isEmpty());
+    executeTasksUntilEmpty("default");
+    JobInfo info = pipelineService.getJobInfo(jobId);
+    assertNull(info.getOutput());
+    assertEquals(JobInfo.State.STOPPED_BY_ERROR, info.getJobState());
+    assertTrue(info.getException().getMessage().matches(
+        "Stage map-.* was not completed successfuly \\(status=ERROR\\)"));
+    assertEquals("Shard 0 failed.", info.getException().getCause().getMessage());
+    assertEquals("Bad state", info.getException().getCause().getCause().getMessage());
   }
 
   public void testPassThroughToString() throws Exception {

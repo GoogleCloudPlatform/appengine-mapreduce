@@ -20,25 +20,26 @@ public class MapReduceResultImpl<R> implements MapReduceResult<R> {
   /*Nullable*/ private final R outputResult;
   private final Counters counters;
 
-  public MapReduceResultImpl(/*Nullable*/ R outputResult,
-      Counters counters) {
+  public MapReduceResultImpl(
+      /*Nullable*/ R outputResult, Counters counters) {
     this.outputResult = outputResult;
     this.counters = checkNotNull(counters, "Null counters");
   }
 
-  @Override /*Nullable*/ public R getOutputResult() {
+  @Override
+  /*Nullable*/ public R getOutputResult() {
     return outputResult;
   }
 
-  @Override public Counters getCounters() {
+  @Override
+  public Counters getCounters() {
     return counters;
   }
 
-  @Override public String toString() {
+  @Override
+  public String toString() {
     return getClass().getSimpleName() + "("
         + outputResult + ", "
-        + counters
-        + ")";
+        + counters + ")";
   }
-
 }

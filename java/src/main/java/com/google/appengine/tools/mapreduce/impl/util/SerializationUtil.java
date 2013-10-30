@@ -113,20 +113,16 @@ public class SerializationUtil {
       @SuppressWarnings("unchecked")
       T obj = (T) in.readObject();
       return obj;
-    } catch (ClassNotFoundException e) {
-      throw new CorruptDataException("Deserialization error", e);
-    } catch (IOException e) {
+    } catch (ClassNotFoundException | IOException e) {
       throw new CorruptDataException("Deserialization error", e);
     }
   }
 
-  public static Serializable deserializeFromDatastoreProperty(Entity entity, String propertyName) {
-    return deserializeFromByteArray(((Blob) entity.getProperty(propertyName)).getBytes());
-  }
-
-  public static Serializable deserializeFromDatastorePropertyUnchecked(
+  public static <T extends Serializable> T deserializeFromDatastoreProperty(
       Entity entity, String propertyName) {
-    return deserializeFromDatastoreProperty(entity, propertyName);
+    @SuppressWarnings("unchecked")
+    T obj = (T) deserializeFromByteArray(((Blob) entity.getProperty(propertyName)).getBytes());
+    return obj;
   }
 
   public static byte[] serializeToByteArray(Serializable o) {
@@ -213,5 +209,4 @@ public class SerializationUtil {
       length -= read;
     }
   }
-
 }

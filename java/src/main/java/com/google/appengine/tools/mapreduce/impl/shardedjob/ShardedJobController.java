@@ -20,7 +20,7 @@ public interface ShardedJobController<T extends IncrementalTask<T, R>,
    * @return A human readable string for UI purposes.
    */
   public String getName();
-  
+
   /**
    * Combine multiple result objects into a single result object.  The
    * {@code ShardedJob} execution framework assumes that this is associative
@@ -35,10 +35,15 @@ public interface ShardedJobController<T extends IncrementalTask<T, R>,
   /*Nullable*/ R combineResults(Iterable<R> partialResults);
 
   /**
-   * Called when the sharded job has completed.
+   * Called when the sharded job has completed successfully.
    */
   // TODO(ohler): Integrate with Pipeline more closely and eliminate this; the
   // result should be returned from a Pipeline Job.
   void completed(/*Nullable*/ R finalCombinedResult);
 
+  /**
+   * Called when the sharded job has failed to complete successfully.
+   * @param status
+   */
+  void failed(Status status);
 }

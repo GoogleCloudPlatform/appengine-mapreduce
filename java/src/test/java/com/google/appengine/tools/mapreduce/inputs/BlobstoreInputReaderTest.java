@@ -46,7 +46,6 @@ public class BlobstoreInputReaderTest extends BlobstoreInputTestCase {
   private void verifyReaders(List<BlobstoreInputReader> readers, boolean performSerialization)
       throws IOException {
     int recordsRead = 0;
-    long lastOffset = -1;
     String recordWithoutSeparator = RECORD.substring(0, RECORD.length() - 1);
 
     for (BlobstoreInputReader reader : readers) {

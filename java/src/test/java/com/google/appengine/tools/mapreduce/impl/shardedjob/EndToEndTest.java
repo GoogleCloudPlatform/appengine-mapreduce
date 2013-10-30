@@ -2,6 +2,9 @@
 
 package com.google.appengine.tools.mapreduce.impl.shardedjob;
 
+import static com.google.appengine.tools.mapreduce.impl.shardedjob.Status.StatusCode.DONE;
+import static com.google.appengine.tools.mapreduce.impl.shardedjob.Status.StatusCode.RUNNING;
+
 import com.google.common.collect.ImmutableList;
 
 import java.util.List;
@@ -25,7 +28,7 @@ public class EndToEndTest extends EndToEndTestCase {
 
     assertEquals(0, getTasks().size());
     service.startJob(jobId, tasks, new TestController(expectedResult), settings);
-    assertEquals(Status.RUNNING, service.getJobState(jobId).getStatus());
+    assertEquals(new Status(RUNNING), service.getJobState(jobId).getStatus());
     // 5 initial tasks plus controller.
     assertEquals(6, getTasks().size());
     assertEquals(0, service.getJobState(jobId).getAggregateResult());
@@ -34,7 +37,7 @@ public class EndToEndTest extends EndToEndTestCase {
 
     // Starting again should not add any tasks.
     service.startJob(jobId, tasks, new TestController(expectedResult), settings);
-    assertEquals(Status.RUNNING, service.getJobState(jobId).getStatus());
+    assertEquals(new Status(RUNNING), service.getJobState(jobId).getStatus());
     assertEquals(6, getTasks().size());
     assertEquals(0, service.getJobState(jobId).getAggregateResult());
     assertEquals(5, service.getJobState(jobId).getActiveTaskCount());
@@ -43,7 +46,7 @@ public class EndToEndTest extends EndToEndTestCase {
     executeTasksUntilEmpty();
 
     ShardedJobState<?, ?> state = service.getJobState(jobId);
-    assertEquals(Status.DONE, state.getStatus());
+    assertEquals(new Status(DONE), state.getStatus());
     assertEquals(expectedResult, state.getAggregateResult());
     assertEquals(0, state.getActiveTaskCount());
     assertEquals(5, state.getTotalTaskCount());
@@ -57,10 +60,9 @@ public class EndToEndTest extends EndToEndTestCase {
     assertNull(service.getJobState(jobId));
     service.startJob(jobId, ImmutableList.<TestTask>of(), new TestController(0), settings);
     ShardedJobState<?, ?> state = service.getJobState(jobId);
-    assertEquals(Status.DONE, state.getStatus());
+    assertEquals(new Status(DONE), state.getStatus());
     assertEquals(0, state.getAggregateResult());
     assertEquals(0, state.getActiveTaskCount());
     assertEquals(0, state.getTotalTaskCount());
   }
-
 }

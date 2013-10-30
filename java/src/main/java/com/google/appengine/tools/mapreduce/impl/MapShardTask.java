@@ -49,7 +49,7 @@ public class MapShardTask<I, K, V> extends WorkerShardTask<I, KeyValue<K, V>, Ma
     try {
       mapper.map(input);
     } catch (RuntimeException ex) {
-      throw new ShardFailureException(ex);
+      throw new ShardFailureException(shardNumber, ex);
     }
   }
 

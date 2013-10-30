@@ -37,6 +37,7 @@ import com.google.appengine.tools.mapreduce.impl.WorkerResult;
 import com.google.appengine.tools.mapreduce.impl.WorkerShardTask;
 import com.google.appengine.tools.mapreduce.impl.shardedjob.ShardedJobServiceFactory;
 import com.google.appengine.tools.mapreduce.impl.shardedjob.ShardedJobSettings;
+import com.google.appengine.tools.mapreduce.impl.shardedjob.Status;
 import com.google.appengine.tools.mapreduce.impl.sort.SortContext;
 import com.google.appengine.tools.mapreduce.impl.sort.SortShardTask;
 import com.google.appengine.tools.mapreduce.impl.sort.SortWorker;
@@ -56,6 +57,7 @@ import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 
 import java.io.IOException;
+import java.io.Serializable;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -132,14 +134,58 @@ public class MapReduceJob<I, K, V, O, R>
         .setWorkerQueueName(mrSettings.getWorkerQueueName());
   }
 
-  // TODO(user) b/9693832
-  private static class FillPromiseJob extends Job2<Void, String, Object> {
-    private static final long serialVersionUID = 850701484460334898L;
+  private static class ResultAndStatus<R> implements Serializable {
 
-    FillPromiseJob() {}
+    private static final long serialVersionUID = 7862563622882782696L;
+
+    private final MapReduceResult<R> result;
+    private final Status status;
+
+    public ResultAndStatus(MapReduceResult<R> result, Status status) {
+      this.result = result;
+      this.status = status;
+    }
+
+    public MapReduceResult<R> getResult() {
+      return result;
+    }
+
+    public Status getStatus() {
+      return status;
+    }
+  }
+
+  // TODO(user): This class will not be needed once b/11279055 is fixed.
+  private static class ExamineStatusAndReturnResult<R>
+      extends Job1<MapReduceResult<R>, ResultAndStatus<R>> {
+
+    private static final long serialVersionUID = -4916783324594785878L;
+
+    private final String stage;
+
+    ExamineStatusAndReturnResult(String stage) {
+      this.stage = stage;
+    }
 
     @Override
-    public Value<Void> run(String promiseHandle, Object value) {
+    public Value<MapReduceResult<R>> run(ResultAndStatus<R> resultAndStatus) {
+      if (resultAndStatus.getStatus().getStatusCode() == Status.StatusCode.DONE) {
+        return immediate(resultAndStatus.getResult());
+      }
+
+      throw new RuntimeException("Stage " + stage + " was not completed successfuly (status="
+          + resultAndStatus.getStatus().getStatusCode() + ")",
+          resultAndStatus.getStatus().getException());
+    }
+  }
+
+  // TODO(user): This class will not be needed once b/9693832 is fixed.
+  private static class FillPromiseJob<R> extends Job2<Void, String, ResultAndStatus<R>> {
+
+    private static final long serialVersionUID = 850701484460334898L;
+
+    @Override
+    public Value<Void> run(String promiseHandle, ResultAndStatus<R> value) {
       try {
         PipelineServiceFactory.newPipelineService().submitPromisedValue(promiseHandle, value);
       } catch (OrphanedObjectException e) {
@@ -157,6 +203,7 @@ public class MapReduceJob<I, K, V, O, R>
 
   private static class WorkerController<I, O, R, C extends WorkerContext>
       extends AbstractWorkerController<WorkerShardTask<I, O, C>, O> {
+
     private static final long serialVersionUID = 931651840864967980L;
 
     private final Counters initialCounters;
@@ -173,19 +220,29 @@ public class MapReduceJob<I, K, V, O, R>
 
     @Override
     public void completed(WorkerResult<O> finalCombinedResult) {
-      R outputResult;
+      R outputResult = null;
+      Counters totalCounters = new CountersImpl();
+      totalCounters.addAll(initialCounters);
       try {
         outputResult = output.finish(finalCombinedResult.getClosedWriters().values());
+        totalCounters.addAll(finalCombinedResult.getCounters());
       } catch (IOException e) {
         throw new RuntimeException(output + ".finish() threw IOException");
       }
-      Counters totalCounters = new CountersImpl();
-      totalCounters.addAll(initialCounters);
-      totalCounters.addAll(finalCombinedResult.getCounters());
-      MapReduceResult<R> result = new MapReduceResultImpl<R>(outputResult, totalCounters);
+      Status status = new Status(Status.StatusCode.DONE);
+      ResultAndStatus<R> resultAndStatus = new ResultAndStatus<R>(
+          new MapReduceResultImpl<R>(outputResult, totalCounters), status);
       // TODO(user) b/9693832
-      PipelineServiceFactory.newPipelineService()
-          .startNewPipeline(new FillPromiseJob(), resultPromiseHandle, result);
+      PipelineServiceFactory.newPipelineService().startNewPipeline(
+          new FillPromiseJob<R>(), resultPromiseHandle, resultAndStatus);
+    }
+
+    @Override
+    public void failed(Status status) {
+      ResultAndStatus<R> resultAndStatus = new ResultAndStatus<R>(null, status);
+      // TODO(user) b/9693832
+      PipelineServiceFactory.newPipelineService().startNewPipeline(
+          new FillPromiseJob<R>(), resultPromiseHandle, resultAndStatus);
     }
   }
 
@@ -224,8 +281,8 @@ public class MapReduceJob<I, K, V, O, R>
     @Override
     public Value<MapReduceResult<List<GoogleCloudStorageFileSet>>> run() {
       @SuppressWarnings({"unchecked", "rawtypes"})
-      PromisedValue<MapReduceResult<List<GoogleCloudStorageFileSet>>> result =
-          (PromisedValue) newPromise(MapReduceResult.class);
+      PromisedValue<ResultAndStatus<List<GoogleCloudStorageFileSet>>> resultAndStatus =
+          (PromisedValue) newPromise(ResultAndStatus.class);
       String shardedJobId = "map-" + mrJobId;
       List<? extends InputReader<I>> readers;
       try {
@@ -259,12 +316,14 @@ public class MapReduceJob<I, K, V, O, R>
       }
       ShardedJobSettings shardedJobSettings = makeShardedJobSettings(shardedJobId, settings);
       WorkerController<I, KeyValue<K, V>, List<GoogleCloudStorageFileSet>, MapperContext<K, V>>
-          workerController =
-            new WorkerController<>(shardedJobName, new CountersImpl(), output, result.getHandle());
+          workerController = new WorkerController<>(
+              shardedJobName, new CountersImpl(), output, resultAndStatus.getHandle());
       ShardedJobServiceFactory.getShardedJobService().startJob(shardedJobId, mapTasks.build(),
           workerController, shardedJobSettings);
       setStatusConsoleUrl(settings.getBaseUrl() + "detail?mapreduce_id=" + shardedJobId);
-      return result;
+      return futureCall(
+          new ExamineStatusAndReturnResult<List<GoogleCloudStorageFileSet>>(shardedJobId),
+          resultAndStatus, Job.onBackend(settings.getBackend()));
     }
   }
 
@@ -273,6 +332,7 @@ public class MapReduceJob<I, K, V, O, R>
    */
   private static class SortJob extends Job1<MapReduceResult<List<GoogleCloudStorageFileSet>>,
       MapReduceResult<List<GoogleCloudStorageFileSet>>> {
+
     private static final long serialVersionUID = 8761355950012542309L;
     // We don't need the CountersImpl part of the MapResult input here but we
     // accept it to avoid needing an adapter job to connect this job to MapJob's
@@ -321,8 +381,8 @@ public class MapReduceJob<I, K, V, O, R>
     public Value<MapReduceResult<List<GoogleCloudStorageFileSet>>> run(
         MapReduceResult<List<GoogleCloudStorageFileSet>> mapResult) {
       @SuppressWarnings({"unchecked", "rawtypes"})
-      PromisedValue<MapReduceResult<List<GoogleCloudStorageFileSet>>> result =
-          (PromisedValue) newPromise(MapReduceResult.class);
+      PromisedValue<ResultAndStatus<List<GoogleCloudStorageFileSet>>> resultAndStatus =
+          (PromisedValue) newPromise(ResultAndStatus.class);
       String shardedJobId = "sort-" + mrJobId;
       int reduceShards = mrSpec.getOutput().getNumShards();
       String bucket = getAndSaveBucketName(settings);
@@ -352,14 +412,15 @@ public class MapReduceJob<I, K, V, O, R>
       }
       ShardedJobSettings shardedJobSettings = makeShardedJobSettings(shardedJobId, settings);
       WorkerController<KeyValue<ByteBuffer, ByteBuffer>, KeyValue<ByteBuffer, Iterator<ByteBuffer>>,
-          List<GoogleCloudStorageFileSet>, SortContext> workerController =
-            new WorkerController<>(shardedJobName, new CountersImpl(), output, result.getHandle());
+          List<GoogleCloudStorageFileSet>, SortContext> workerController = new WorkerController<>(
+              shardedJobName, new CountersImpl(), output, resultAndStatus.getHandle());
       ShardedJobServiceFactory.getShardedJobService().startJob(shardedJobId, sortTasks.build(),
           workerController, shardedJobSettings);
       setStatusConsoleUrl(settings.getBaseUrl() + "detail?mapreduce_id=" + shardedJobId);
-      return result;
+      return futureCall(
+          new ExamineStatusAndReturnResult<List<GoogleCloudStorageFileSet>>(shardedJobId),
+          resultAndStatus, Job.onBackend(settings.getBackend()));
     }
-
   }
 
   /**
@@ -368,6 +429,7 @@ public class MapReduceJob<I, K, V, O, R>
   private static class ReduceJob<K, V, O, R> extends Job2<MapReduceResult<R>,
       MapReduceResult<List<GoogleCloudStorageFileSet>>,
       MapReduceResult<List<GoogleCloudStorageFileSet>>> {
+
     private static final long serialVersionUID = 590237832617368335L;
 
     private final String mrJobId;
@@ -395,7 +457,8 @@ public class MapReduceJob<I, K, V, O, R>
     public Value<MapReduceResult<R>> run(MapReduceResult<List<GoogleCloudStorageFileSet>> mapResult,
         MapReduceResult<List<GoogleCloudStorageFileSet>> sortResult) {
       @SuppressWarnings({"unchecked", "rawtypes"})
-      PromisedValue<MapReduceResult<R>> result = (PromisedValue) newPromise(MapReduceResult.class);
+      PromisedValue<ResultAndStatus<R>> resultAndStatus =
+          (PromisedValue) newPromise(ResultAndStatus.class);
       List<? extends InputReader<KeyValue<K, Iterator<V>>>> readers =
           new GoogleCloudStorageReduceInput<K, V>(sortResult.getOutputResult(),
               mrSpec.getIntermediateKeyMarshaller(), mrSpec.getIntermediateValueMarshaller())
@@ -422,11 +485,13 @@ public class MapReduceJob<I, K, V, O, R>
           makeShardedJobSettings(shardedJobId, settings);
       WorkerController<KeyValue<K, Iterator<V>>, O, R, ReducerContext<O>> workerController =
           new WorkerController<>(shardedJobName, mapResult.getCounters(), output,
-              result.getHandle());
+              resultAndStatus.getHandle());
       ShardedJobServiceFactory.getShardedJobService().startJob(shardedJobId, sortTasks.build(),
           workerController, shardedJobSettings);
       setStatusConsoleUrl(settings.getBaseUrl() + "detail?mapreduce_id=" + shardedJobId);
-      return result;
+      return futureCall(
+          new ExamineStatusAndReturnResult<R>(shardedJobId),
+          resultAndStatus, Job.onBackend(settings.getBackend()));
     }
   }
 

@@ -45,6 +45,7 @@ public class GoogleCloudStorageFileOutputWriter extends OutputWriter<ByteBuffer>
     return forRegistry(worker.getLifecycleListenerRegistry(), bucket, fileName, mimeType);
   }
 
+  @SuppressWarnings("unused")
   public static GoogleCloudStorageFileOutputWriter forRegistry(LifecycleListenerRegistry registry,
       String bucket, String fileName, String mimeType) {
     GcsFilename file = new GcsFilename(bucket, fileName);

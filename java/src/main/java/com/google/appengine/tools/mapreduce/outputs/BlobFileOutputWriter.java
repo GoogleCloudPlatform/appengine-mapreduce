@@ -44,7 +44,8 @@ public class BlobFileOutputWriter extends OutputWriter<ByteBuffer> {
     return forRegistry(worker.getLifecycleListenerRegistry(), fileName, mimeType);
   }
 
-  public static BlobFileOutputWriter forRegistry(LifecycleListenerRegistry registry,
+  public static BlobFileOutputWriter forRegistry(
+      @SuppressWarnings("unused") LifecycleListenerRegistry registry,
       String fileName, String mimeType) {
     BlobFileOutputWriter writer = new BlobFileOutputWriter(mimeType, fileName);
     // We could now add a listener to registry but it so happens that we don't

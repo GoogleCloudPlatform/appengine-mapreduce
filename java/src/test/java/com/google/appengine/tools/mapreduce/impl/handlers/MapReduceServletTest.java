@@ -108,7 +108,6 @@ public class MapReduceServletTest extends TestCase {
   }
 
   public void testControllerCSRF() throws Exception {
-    String jobId = "testJob";
     // Send it as an AJAX request but not a task queue request - should be denied.
     HttpServletRequest request = createMockRequest(MapReduceServletImpl.CONTROLLER_PATH,
         false, true);
@@ -120,7 +119,6 @@ public class MapReduceServletTest extends TestCase {
   }
 
   public void testGetJobDetailCSRF() throws Exception {
-    String jobId = "testJob";
     // Send it as a task queue request but not an ajax request - should be denied.
     HttpServletRequest request = createMockRequest(
         MapReduceServletImpl.COMMAND_PATH + "/" + StatusHandler.GET_JOB_DETAIL_PATH, true, false);
