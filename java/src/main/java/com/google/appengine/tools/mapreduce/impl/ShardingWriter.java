@@ -82,5 +82,14 @@ final class ShardingWriter<K, V, R> extends
   Output<KeyValue<K, V>, R> getOutput() {
     return output;
   }
+  
+  @Override
+  public long estimateMemoryRequirment() {
+    long total = 0;
+    for (OutputWriter<KeyValue<K, V>> writer : writers) {
+      total += writer.estimateMemoryRequirment();
+    }
+    return total;
+  }
 
 }
