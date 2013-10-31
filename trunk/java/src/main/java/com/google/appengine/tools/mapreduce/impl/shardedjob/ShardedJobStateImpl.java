@@ -13,6 +13,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.primitives.Ints;
 
 import java.io.Serializable;
+import java.util.BitSet;
 
 /**
  * Implements {@link ShardedJobState}, with additional package-private features.
@@ -31,8 +32,7 @@ class ShardedJobStateImpl<T extends IncrementalTask<T, R>, R extends Serializabl
   private final int totalTaskCount;
   private final long startTimeMillis;
   private long mostRecentUpdateTimeMillis;
-  private int nextSequenceNumber = 0;
-  private int activeTaskCount;
+  private BitSet shardsCompleted;
   private Status status;
   /*Nullable*/ private R aggregateResult;
 
@@ -47,7 +47,7 @@ class ShardedJobStateImpl<T extends IncrementalTask<T, R>, R extends Serializabl
     this.controller = checkNotNull(controller, "Null controller");
     this.settings = checkNotNull(settings, "Null settings");
     this.totalTaskCount = totalTaskCount;
-    this.activeTaskCount = totalTaskCount;
+    this.shardsCompleted = new BitSet(totalTaskCount);
     this.startTimeMillis = startTimeMillis;
     this.mostRecentUpdateTimeMillis = startTimeMillis;
     this.status = checkNotNull(status, "Null status");
@@ -83,28 +83,22 @@ class ShardedJobStateImpl<T extends IncrementalTask<T, R>, R extends Serializabl
   public long getMostRecentUpdateTimeMillis() {
     return mostRecentUpdateTimeMillis;
   }
+  
+  @Override public int getActiveTaskCount() {
+    return totalTaskCount - shardsCompleted.cardinality();
+  }
+  
+  public void markShardCompleted(int shard) {
+    shardsCompleted.set(shard);
+  }
 
+  private ShardedJobStateImpl<T, R> setShardsCompleted(BitSet shardsCompleted) {
+    this.shardsCompleted = shardsCompleted;
+    return this;
+  }
+  
   ShardedJobStateImpl<T, R> setMostRecentUpdateTimeMillis(long mostRecentUpdateTimeMillis) {
     this.mostRecentUpdateTimeMillis = mostRecentUpdateTimeMillis;
-    return this;
-  }
-
-  long getNextSequenceNumber() {
-    return nextSequenceNumber;
-  }
-
-  ShardedJobStateImpl<T, R> setNextSequenceNumber(int nextSequenceNumber) {
-    this.nextSequenceNumber = nextSequenceNumber;
-    return this;
-  }
-
-  @Override
-  public int getActiveTaskCount() {
-    return activeTaskCount;
-  }
-
-  ShardedJobStateImpl<T, R> setActiveTaskCount(int activeTaskCount) {
-    this.activeTaskCount = activeTaskCount;
     return this;
   }
 
@@ -132,9 +126,8 @@ class ShardedJobStateImpl<T extends IncrementalTask<T, R>, R extends Serializabl
   public String toString() {
     return getClass().getSimpleName() + "("
         + controller + ", "
-        + nextSequenceNumber + ", "
         + status + ", "
-        + activeTaskCount + "/" + totalTaskCount + ", "
+        + shardsCompleted.cardinality() + "/" + totalTaskCount + ", "
         + mostRecentUpdateTimeMillis + ", "
         + aggregateResult
         + ")";
@@ -148,8 +141,7 @@ class ShardedJobStateImpl<T extends IncrementalTask<T, R>, R extends Serializabl
     private static final String SETTINGS_PROPERTY = "settings";
     private static final String TOTAL_TASK_COUNT_PROPERTY = "taskCount";
     private static final String MOST_RECENT_UPDATE_TIME_PROPERTY = "mostRecentUpdateTimeMillis";
-    private static final String NEXT_SEQUENCE_NUMBER_PROPERTY = "nextSequenceNumber";
-    private static final String ACTIVE_TASK_COUNT_PROPERTY = "activeTaskCount";
+    private static final String SHARDS_COMPLETED_PROPERTY = "activeShards";
     private static final String STATUS_PROPERTY = "status";
     private static final String AGGREGATE_RESULT_PROPERTY = "result";
 
@@ -167,8 +159,8 @@ class ShardedJobStateImpl<T extends IncrementalTask<T, R>, R extends Serializabl
       out.setUnindexedProperty(START_TIME_PROPERTY, in.getStartTimeMillis());
       out.setUnindexedProperty(MOST_RECENT_UPDATE_TIME_PROPERTY,
           in.getMostRecentUpdateTimeMillis());
-      out.setUnindexedProperty(NEXT_SEQUENCE_NUMBER_PROPERTY, in.getNextSequenceNumber());
-      out.setUnindexedProperty(ACTIVE_TASK_COUNT_PROPERTY, in.getActiveTaskCount());
+      out.setUnindexedProperty(SHARDS_COMPLETED_PROPERTY,
+          new Blob(SerializationUtil.serializeToByteArray(in.shardsCompleted)));
       out.setUnindexedProperty(STATUS_PROPERTY,
           new Blob(SerializationUtil.serializeToByteArray(in.getStatus())));
       if (in.getAggregateResult() != null) {
@@ -178,8 +170,8 @@ class ShardedJobStateImpl<T extends IncrementalTask<T, R>, R extends Serializabl
       return out;
     }
 
-    static <T extends IncrementalTask<T, R>, R extends Serializable>
-          ShardedJobStateImpl<T, R> fromEntity(Entity in) {
+    static <T extends IncrementalTask<T, R>,
+        R extends Serializable> ShardedJobStateImpl<T, R> fromEntity(Entity in) {
       Preconditions.checkArgument(ENTITY_KIND.equals(in.getKind()), "Unexpected kind: %s", in);
       return new ShardedJobStateImpl<T, R>(
           in.getKey().getName(),
@@ -192,11 +184,11 @@ class ShardedJobStateImpl<T extends IncrementalTask<T, R>, R extends Serializabl
           SerializationUtil.<Status>deserializeFromDatastoreProperty(in, STATUS_PROPERTY),
           in.hasProperty(AGGREGATE_RESULT_PROPERTY) ?
               SerializationUtil.<R>deserializeFromDatastoreProperty(in, AGGREGATE_RESULT_PROPERTY)
-              : null)
-          .setMostRecentUpdateTimeMillis((Long) in.getProperty(MOST_RECENT_UPDATE_TIME_PROPERTY))
-          .setNextSequenceNumber(
-              Ints.checkedCast((Long) in.getProperty(NEXT_SEQUENCE_NUMBER_PROPERTY)))
-          .setActiveTaskCount(Ints.checkedCast((Long) in.getProperty(ACTIVE_TASK_COUNT_PROPERTY)));
+              : null).setMostRecentUpdateTimeMillis(
+          (Long) in.getProperty(MOST_RECENT_UPDATE_TIME_PROPERTY)).setShardsCompleted(
+          (BitSet) SerializationUtil.deserializeFromDatastoreProperty(in,
+              SHARDS_COMPLETED_PROPERTY));
     }
   }
+
 }

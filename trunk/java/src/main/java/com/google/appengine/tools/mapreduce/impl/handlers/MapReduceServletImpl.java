@@ -67,7 +67,7 @@ public final class MapReduceServletImpl {
       if (!checkForTaskQueue(request, response)) {
         return;
       }
-      ShardedJobServiceFactory.getShardedJobService().handleControllerRequest(request);
+      ShardedJobServiceFactory.getShardedJobService().handleShardCompleteRequest(request);
     } else if (handler.startsWith(WORKER_PATH)) {
       if (!checkForTaskQueue(request, response)) {
         return;

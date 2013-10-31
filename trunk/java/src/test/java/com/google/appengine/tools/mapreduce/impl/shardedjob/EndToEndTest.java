@@ -29,8 +29,8 @@ public class EndToEndTest extends EndToEndTestCase {
     assertEquals(0, getTasks().size());
     service.startJob(jobId, tasks, new TestController(expectedResult), settings);
     assertEquals(new Status(RUNNING), service.getJobState(jobId).getStatus());
-    // 5 initial tasks plus controller.
-    assertEquals(6, getTasks().size());
+    // 5 initial tasks
+    assertEquals(5, getTasks().size());
     assertEquals(0, service.getJobState(jobId).getAggregateResult());
     assertEquals(5, service.getJobState(jobId).getActiveTaskCount());
     assertEquals(5, service.getJobState(jobId).getTotalTaskCount());
@@ -38,7 +38,7 @@ public class EndToEndTest extends EndToEndTestCase {
     // Starting again should not add any tasks.
     service.startJob(jobId, tasks, new TestController(expectedResult), settings);
     assertEquals(new Status(RUNNING), service.getJobState(jobId).getStatus());
-    assertEquals(6, getTasks().size());
+    assertEquals(5, getTasks().size());
     assertEquals(0, service.getJobState(jobId).getAggregateResult());
     assertEquals(5, service.getJobState(jobId).getActiveTaskCount());
     assertEquals(5, service.getJobState(jobId).getTotalTaskCount());

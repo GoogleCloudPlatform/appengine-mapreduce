@@ -88,7 +88,7 @@ public abstract class EndToEndTestCase extends TestCase {
 
     if (taskStateInfo.getMethod().equals("POST")) {
       if (taskStateInfo.getUrl().contains(controllerPath)) {
-        service.handleControllerRequest(request);
+        service.handleShardCompleteRequest(request);
       } else {
         service.handleWorkerRequest(request);
       }

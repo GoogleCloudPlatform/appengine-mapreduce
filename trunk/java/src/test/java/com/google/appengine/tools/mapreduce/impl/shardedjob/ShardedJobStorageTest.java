@@ -41,9 +41,8 @@ public class ShardedJobStorageTest extends EndToEndTestCase {
     ShardedJobStateImpl<TestTask, Integer> job = createGenericJobState();
     Entity entity = ShardedJobStateImpl.ShardedJobSerializer.toEntity(job);
     Map<String, Object> properties = entity.getProperties();
-    assertEquals(10, properties.get("activeTaskCount"));
     assertEquals(10, properties.get("taskCount"));
-    assertEquals(0L, properties.get("nextSequenceNumber"));
+    assertTrue(properties.containsKey("activeShards"));
     assertTrue(properties.containsKey("status"));
     assertTrue(properties.containsKey("startTimeMillis"));
     assertTrue(properties.containsKey("settings"));
