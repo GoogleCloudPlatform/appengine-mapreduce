@@ -150,69 +150,6 @@ class FileOutputWriterEndToEndTest(testutil.HandlerTestBase):
 
     self.assertEquals(1000, sum(file_lengths))
 
-  # For 183 compat.
-  # TODO(user): Remove after 184 is out.
-  def testMultipleShards183Compat(self):
-    entity_count = 1000
-
-    for _ in range(entity_count):
-      TestEntity().put()
-
-    mapreduce_id = control.start_map(
-        "test_map",
-        __name__ + ".test_handler_yield_key_str",
-        DATASTORE_READER_NAME,
-        {
-            "entity_kind": __name__ + "." + TestEntity.__name__,
-            "output_sharding": "input",
-            "filesystem": "gs",
-            "gs_bucket_name": "bucket"
-        },
-        shard_count=4,
-        base_path="/mapreduce_base_path",
-        output_writer_spec="__main__.TestFileOutputWriter")
-
-    # Kickoff job task.
-    test_support.execute_all_tasks(self.taskqueue)
-    # Verify all writer_states are set.
-    mapreduce_state = model.MapreduceState.get_by_job_id(mapreduce_id)
-    shard_states = model.ShardState.find_all_by_mapreduce_state(mapreduce_state)
-    for s in shard_states:
-      writer_state = output_writers.FileOutputWriterBase._State.from_json(
-          s.writer_state)
-      self.assertTrue(writer_state.filenames)
-      self.assertTrue(writer_state.request_filenames)
-    # Worker tasks.
-    test_support.execute_until_empty(self.taskqueue)
-
-    mapreduce_state = model.MapreduceState.get_by_job_id(mapreduce_id)
-    filenames = output_writers.BlobstoreOutputWriter.get_filenames(
-        mapreduce_state)
-    self.assertEqual(4, len(set(filenames)))
-
-    writer_state = output_writers.FileOutputWriterBase._State.from_json(
-        mapreduce_state.writer_state)
-    self.assertEqual(filenames, writer_state.filenames)
-
-    file_lengths = []
-    for filename in filenames:
-      self.assertTrue(filenames[0].startswith("/gs/bucket/"))
-
-      with files.open(filename, "r") as f:
-        data = f.read(10000000)
-        file_lengths.append(len(data.strip().split("\n")))
-
-    self.assertEquals(1000, sum(file_lengths))
-
-
-# For 183 compat.
-# TODO(user): Remove after 184 is out.
-class TestFileOutputWriter(output_writers.FileOutputWriter):
-
-  def __init__(self, filenames, request_filenames):
-    super(TestFileOutputWriter, self).__init__(filenames, request_filenames)
-    self._183_test = True
-
 
 class BlobstoreOutputWriterEndToEndTest(testutil.HandlerTestBase):
   """End-to-end tests for BlobstoreOutputWriter.
