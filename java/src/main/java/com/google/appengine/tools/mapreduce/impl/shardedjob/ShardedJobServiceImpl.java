@@ -47,10 +47,10 @@ class ShardedJobServiceImpl implements ShardedJobService {
 
   @SuppressWarnings("rawtypes")
   @Override
-  public void handleControllerRequest(HttpServletRequest request) {
-    new ShardedJobRunner().pollTaskStates(
+  public void handleShardCompleteRequest(HttpServletRequest request) {
+    new ShardedJobRunner().completeShard(
         checkNotNull(request.getParameter(JOB_ID_PARAM), "Null job id"),
-        Integer.parseInt(request.getParameter(SEQUENCE_NUMBER_PARAM)));
+        checkNotNull(request.getParameter(TASK_ID_PARAM), "Null task id"));
   }
 
   @SuppressWarnings("rawtypes")

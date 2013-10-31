@@ -61,7 +61,7 @@ public interface ShardedJobService {
    * Must be called from the servlet that handles
    * {@link ShardedJobSettings#setControllerPath}.
    */
-  void handleControllerRequest(HttpServletRequest request);
+  void handleShardCompleteRequest(HttpServletRequest request);
 
   /**
    * Must be called from the servlet that handles

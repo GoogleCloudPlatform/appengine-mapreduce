@@ -22,7 +22,6 @@ public final class ShardedJobSettings implements Serializable {
   private String workerPath = "/mapreduce/workerCallback";
   private String controllerQueueName = "default";
   private String workerQueueName = "default";
-  private int millisBetweenPolls = 2000;
   private int maxShardRetries = 4;
 
   public ShardedJobSettings() {
@@ -82,15 +81,6 @@ public final class ShardedJobSettings implements Serializable {
     return this;
   }
 
-  public int getMillisBetweenPolls() {
-    return millisBetweenPolls;
-  }
-
-  public ShardedJobSettings setMillisBetweenPolls(int millisBetweenPolls) {
-    this.millisBetweenPolls = millisBetweenPolls;
-    return this;
-  }
-
   public int getMaxShardRetries() {
     return maxShardRetries;
   }
@@ -107,7 +97,7 @@ public final class ShardedJobSettings implements Serializable {
         + workerPath + ", "
         + controllerQueueName + ", "
         + workerQueueName + ", "
-        + millisBetweenPolls + ","
         + maxShardRetries + ")";
   }
+
 }
