@@ -45,12 +45,12 @@ def test_fail_map(_):
 
 
 def test_slice_retry_map(entity):
-  """Raise exception for 9 times when data is 100."""
+  """Raise exception for 11 times when data is 100."""
   if entity.data == "100":
     retry_count = RetryCount.get_by_key_name(entity.data)
     if not retry_count:
       retry_count = RetryCount(key_name=entity.data, retries=0)
-    if retry_count.retries < 9:
+    if retry_count.retries < 11:
       retry_count.retries += 1
       retry_count.put()
       raise Exception()
@@ -58,28 +58,28 @@ def test_slice_retry_map(entity):
 
 
 def test_shard_retry_map(entity):
-  """Raise shard retry exception 3 times when data is 100."""
+  """Raise exception 12 times when data is 100."""
   if entity.data == "100":
     retry_count = RetryCount.get_by_key_name(entity.data)
     if not retry_count:
       retry_count = RetryCount(key_name=entity.data, retries=0)
-    if retry_count.retries < 3:
+    if retry_count.retries < 12:
       retry_count.retries += 1
       retry_count.put()
-      raise files.FinalizationError()
+      raise Exception()
   TestOutputEntity(key_name=entity.data, data=entity.data).put()
 
 
 def test_shard_retry_too_many_map(entity):
-  """Raise shard retry exception 4 times when data is 100."""
+  """Raise shard retry exception 45 times when data is 100."""
   if entity.data == "100":
     retry_count = RetryCount.get_by_key_name(entity.data)
     if not retry_count:
       retry_count = RetryCount(key_name=entity.data, retries=0)
-    if retry_count.retries < 4:
+    if retry_count.retries < 45:
       retry_count.retries += 1
       retry_count.put()
-      raise files.FinalizationError()
+      raise Exception()
   TestOutputEntity(key_name=entity.data, data=entity.data).put()
 
 

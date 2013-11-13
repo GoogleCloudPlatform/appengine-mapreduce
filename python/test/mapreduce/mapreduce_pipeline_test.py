@@ -59,9 +59,9 @@ def test_failed_map(_):
 
 class TestFileRecordsOutputWriter(output_writers.FileRecordsOutputWriter):
 
-  RETRIES = 3
+  RETRIES = 11
 
-  def finalize(self, ctx, shard_number):
+  def finalize(self, ctx, shard_state):
     """Simulate output writer finalization Error."""
     retry_count = RetryCount.get_by_key_name(__name__)
     if not retry_count:
@@ -70,7 +70,7 @@ class TestFileRecordsOutputWriter(output_writers.FileRecordsOutputWriter):
       retry_count.retries += 1
       retry_count.put()
       raise files.FinalizationError("output writer finalize failed.")
-    super(TestFileRecordsOutputWriter, self).finalize(ctx, shard_number)
+    super(TestFileRecordsOutputWriter, self).finalize(ctx, shard_state)
 
 
 class MapreducePipelineTest(testutil.HandlerTestBase):
@@ -205,13 +205,14 @@ class MapreducePipelineTest(testutil.HandlerTestBase):
     output_data = []
     retries = 0
     for output_file in p.outputs.default.value:
+      # Get the number of shard retries by parsing filename.
       retries += int(output_file[-1])
       with files.open(output_file, "r") as f:
         for record in records.RecordsReader(f):
           output_data.append(record)
 
     # Assert file names also suggest the right number of retries.
-    self.assertEquals(TestFileRecordsOutputWriter.RETRIES, retries)
+    self.assertEquals(1, retries)
     expected_data = [
         str((str(d), ["", ""])) for d in range(entity_count)]
     expected_data.sort()

@@ -69,20 +69,20 @@ class TestHandler(object):
 class SerializableHandler(object):
   """Handler that utilize serialization."""
 
-  # The number of handler instances created.
-  _instances_created = 0
+  _next_instance_id = 0
   # The first few instances will keep raising errors.
   # This is to test that upon shard retry, shard creates a new handler.
-  RAISE_ERRORS = 4
+  INSTANCES_THAT_RAISE_ERRORS = 3
   # The first instance is created for validation and not used by any shard.
-  TASKS_CONSUMED_BY_RETRY = RAISE_ERRORS - 1
+  FAILURES_INDUCED_BY_INSTANCE = INSTANCES_THAT_RAISE_ERRORS - 1
 
   def __init__(self):
     self.count = 0
-    self.__class__._instances_created += 1
+    self.instance = self.__class__._next_instance_id
+    self.__class__._next_instance_id += 1
 
   def __call__(self, entity):
-    if self.__class__._instances_created <= self.RAISE_ERRORS:
+    if self.instance < self.INSTANCES_THAT_RAISE_ERRORS:
       raise files.FinalizationError("Injected error.")
     # Increment the int property by one on every call.
     entity.int_property = self.count
@@ -91,7 +91,7 @@ class SerializableHandler(object):
 
   @classmethod
   def reset(cls):
-    cls._instances_created = 0
+    cls._next_instance_id = 0
 
 
 def test_handler_yield_key(entity):
@@ -186,7 +186,8 @@ class EndToEndTest(testutil.HandlerTestBase):
     task_run_counts = test_support.execute_until_empty(self.taskqueue)
     self.assertEquals(
         task_run_counts[handlers.MapperWorkerCallbackHandler],
-        entity_count + 1 + SerializableHandler.TASKS_CONSUMED_BY_RETRY)
+        # Shard retries + one per entity + one to exhaust input reader
+        SerializableHandler.FAILURES_INDUCED_BY_INSTANCE + entity_count + 1)
     vals = [e.int_property for e in TestEntity.all()]
     vals.sort()
     # SerializableHandler updates int_property to be incremental from 0 to 9.
