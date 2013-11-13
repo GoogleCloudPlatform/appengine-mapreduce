@@ -15,6 +15,7 @@
  */
 package com.google.appengine.tools.mapreduce.inputs;
 
+import com.google.appengine.api.NamespaceManager;
 import com.google.appengine.api.datastore.DatastoreService;
 import com.google.appengine.api.datastore.DatastoreServiceFactory;
 import com.google.appengine.api.datastore.Entity;
@@ -28,26 +29,18 @@ import junit.framework.TestCase;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
 import java.util.NoSuchElementException;
-import java.util.Set;
 
 /**
  */
 public class DatastoreInputReaderTest extends TestCase {
-// --------------------------- STATIC FIELDS ---------------------------
 
   static final String ENTITY_KIND_NAME = "Bob";
 
-// ------------------------------ FIELDS ------------------------------
-
   private final LocalServiceTestHelper helper =
       new LocalServiceTestHelper(new LocalDatastoreServiceTestConfig());
-
   private DatastoreService ds;
-
-// ------------------------ OVERRIDING METHODS ------------------------
 
   @Override
   public void setUp() throws Exception {
@@ -62,11 +55,11 @@ public class DatastoreInputReaderTest extends TestCase {
     super.tearDown();
   }
 
-// -------------------------- TEST METHODS --------------------------
-
-  public void testNoData() throws Exception {
-    DatastoreInputReader reader = new DatastoreInputReader(ENTITY_KIND_NAME, null, null);
+  public void testOneEntityOnly() throws Exception {
+    Key key = populateData(1, null).get(0);
+    DatastoreInputReader reader = new DatastoreInputReader(ENTITY_KIND_NAME, key, null, null);
     reader.beginSlice();
+    assertEquals(key, reader.next().getKey());
     try {
       reader.next();
       fail();
@@ -75,52 +68,69 @@ public class DatastoreInputReaderTest extends TestCase {
     }
   }
 
-  public void testReadAllData() throws Exception {
-    Collection<Entity> entities = new ArrayList<Entity>();
-    for (int i = 0; i < 300; i++) {
-      entities.add(new Entity(ENTITY_KIND_NAME));
-    }
-
-    Set<Key> keys = new HashSet<Key>(ds.put(entities));
-    Set<Key> readKeys = new HashSet<Key>();
-    DatastoreInputReader reader = new DatastoreInputReader(ENTITY_KIND_NAME, null, null);
-    reader.beginSlice();
-    while (true) {
-      Entity entity;
-      try {
-        entity = reader.next();
-      } catch (NoSuchElementException e) {
-        break;
+  private List<Key> populateData(int size, String namespace) {
+    Collection<Entity> entities = new ArrayList<>(size);
+    String ns = NamespaceManager.get();
+    try {
+      if (namespace != null) {
+        NamespaceManager.set(namespace);
       }
-      readKeys.add(entity.getKey());
+      for (int i = 0; i < size; i++) {
+        entities.add(new Entity(ENTITY_KIND_NAME));
+      }
+    } finally {
+      NamespaceManager.set(ns);
     }
+    List<Key> keys = ds.put(entities);
+    Collections.sort(keys);
+    return keys;
+  }
 
+  public void testReadAllData() throws Exception {
+    List<Key> keys = populateData(300, null);
+    validateReadAllData(keys);
+  }
+
+  public void testReadAllDataWithNamespace() throws Exception {
+    List<Key> keys = populateData(300, "namespace1");
+    validateReadAllData(keys);
+  }
+
+  private void validateReadAllData(List<Key> keys) {
+    Key start = keys.get(0);
+    DatastoreInputReader reader =
+        new DatastoreInputReader(ENTITY_KIND_NAME, start, null, start.getNamespace());
+    List<Key> readKeys = readAllFromReader(reader);
     assertEquals(keys.size(), readKeys.size());
     assertEquals(keys, readKeys);
   }
 
-  public void testSerialization() throws Exception {
-    Collection<Entity> entities = new ArrayList<Entity>();
-    for (int i = 0; i < 300; i++) {
-      entities.add(new Entity(ENTITY_KIND_NAME));
-    }
-
-    List<Key> keys = ds.put(entities);
-    Collections.sort(keys);
-
-    List<Key> readKeys = new ArrayList<Key>();
-
-    DatastoreInputReader reader = new DatastoreInputReader(ENTITY_KIND_NAME,
-        keys.get(100), keys.get(200));
+  private List<Key> readAllFromReader(DatastoreInputReader reader) {
+    List<Key> readKeys = new ArrayList<>();
     reader.beginSlice();
     while (true) {
-      Entity entity;
       try {
-        entity = reader.next();
+        Entity entity = reader.next();
+        readKeys.add(entity.getKey());
+      } catch (NoSuchElementException e) {
+        return readKeys;
+      }
+    }
+  }
+
+  public void testSerialization() throws Exception {
+    List<Key> keys = populateData(300, null);
+    List<Key> readKeys = new ArrayList<>();
+    DatastoreInputReader reader =
+        new DatastoreInputReader(ENTITY_KIND_NAME, keys.get(100), keys.get(200), null);
+    reader.beginSlice();
+    while (true) {
+      try {
+        Entity entity = reader.next();
+        readKeys.add(entity.getKey());
       } catch (NoSuchElementException e) {
         break;
       }
-      readKeys.add(entity.getKey());
 
       reader.endSlice();
       byte[] bytes = SerializationUtil.serializeToByteArray(reader);
@@ -133,29 +143,10 @@ public class DatastoreInputReaderTest extends TestCase {
   }
 
   public void testStartEndKey() throws Exception {
-    Collection<Entity> entities = new ArrayList<Entity>();
-    for (int i = 0; i < 300; i++) {
-      entities.add(new Entity(ENTITY_KIND_NAME));
-    }
-
-    List<Key> keys = ds.put(entities);
-    Collections.sort(keys);
-
-    List<Key> readKeys = new ArrayList<Key>();
-
-    DatastoreInputReader reader = new DatastoreInputReader(ENTITY_KIND_NAME,
-        keys.get(100), keys.get(200));
-    reader.beginSlice();
-    while (true) {
-      Entity entity;
-      try {
-        entity = reader.next();
-      } catch (NoSuchElementException e) {
-        break;
-      }
-      readKeys.add(entity.getKey());
-    }
-
+    List<Key> keys = populateData(300, null);
+    DatastoreInputReader reader =
+        new DatastoreInputReader(ENTITY_KIND_NAME, keys.get(100), keys.get(200), null);
+    List<Key> readKeys = readAllFromReader(reader);
     assertEquals(100, readKeys.size());
     assertEquals(keys.subList(100, 200), readKeys);
   }

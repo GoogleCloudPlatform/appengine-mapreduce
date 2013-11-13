@@ -16,13 +16,13 @@
 
 package com.google.appengine.tools.mapreduce.inputs;
 
+import com.google.appengine.api.NamespaceManager;
 import com.google.appengine.api.datastore.DatastoreService;
 import com.google.appengine.api.datastore.DatastoreServiceFactory;
 import com.google.appengine.api.datastore.Entity;
 import com.google.appengine.api.datastore.Key;
 import com.google.appengine.tools.development.testing.LocalDatastoreServiceTestConfig;
 import com.google.appengine.tools.development.testing.LocalServiceTestHelper;
-import com.google.appengine.tools.mapreduce.InputReader;
 
 import junit.framework.TestCase;
 
@@ -34,18 +34,12 @@ import java.util.List;
 /**
  */
 public class DatastoreInputTest extends TestCase {
-// --------------------------- STATIC FIELDS ---------------------------
 
   static final String ENTITY_KIND_NAME = "Bob";
 
-// ------------------------------ FIELDS ------------------------------
-
   private final LocalServiceTestHelper helper
       = new LocalServiceTestHelper(new LocalDatastoreServiceTestConfig());
-
   private DatastoreService ds;
-
-// ------------------------ OVERRIDING METHODS ------------------------
 
   @Override
   public void setUp() throws Exception {
@@ -60,18 +54,46 @@ public class DatastoreInputTest extends TestCase {
     super.tearDown();
   }
 
-// -------------------------- TEST METHODS --------------------------
-
-  public void testCreateReadersLotsOfData() throws Exception {
-    Collection<Entity> entities = new ArrayList<Entity>();
-    for (int i = 0; i < 300; i++) {
-      entities.add(new Entity(ENTITY_KIND_NAME));
+  private List<Key> populateData(int size, String namespace) {
+    Collection<Entity> entities = new ArrayList<>(size);
+    String ns = NamespaceManager.get();
+    try {
+      if (namespace != null) {
+        NamespaceManager.set(namespace);
+      }
+      for (int i = 0; i < size; i++) {
+        entities.add(new Entity(ENTITY_KIND_NAME));
+      }
+    } finally {
+      NamespaceManager.set(ns);
     }
-
     List<Key> keys = ds.put(entities);
     Collections.sort(keys);
+    return keys;
+  }
 
-    List<? extends InputReader<Entity>> splits = createReaders(5);
+  public void testCreateReadersWithNamespace() {
+    List<Key> keys = populateData(100, "namespace1");
+    DatastoreInput input = new DatastoreInput(ENTITY_KIND_NAME, 2, "namespace1");
+    DatastoreInputReader reader = input.createReaders().get(0);
+    assertStartAndEndKeys(reader, keys.get(0), keys.get(43));
+    reader.beginSlice();
+    for (Key key : keys.subList(0, 43)) {
+      assertEquals("namespace1", key.getNamespace());
+      assertEquals(key, reader.next().getKey());
+    }
+    reader = input.createReaders().get(1);
+    assertStartAndEndKeys(reader, keys.get(43), null);
+    reader.beginSlice();
+    for (Key key : keys.subList(43, keys.size())) {
+      assertEquals("namespace1", key.getNamespace());
+      assertEquals(key, reader.next().getKey());
+    }
+  }
+
+  public void testCreateReadersLotsOfData() throws Exception {
+    List<Key> keys = populateData(300, null);
+    List<DatastoreInputReader> splits = createReaders(5);
     assertEquals(5, splits.size());
     // Sizes are not expected to be equal due to scatter sampling
     // Expected sizes for this dataset are: 62, 69, 65, 52, and 52
@@ -83,14 +105,8 @@ public class DatastoreInputTest extends TestCase {
   }
 
   public void testCreateReadersNotEnoughData() throws Exception {
-    Collection<Entity> entities = new ArrayList<Entity>();
-    for (int i = 0; i < 9; i++) {
-      entities.add(new Entity(ENTITY_KIND_NAME));
-    }
-
-    List<Key> keys = ds.put(entities);
-
-    List<? extends InputReader<Entity>> splits = createReaders(5);
+    List<Key> keys = populateData(9, null);
+    List<DatastoreInputReader> splits = createReaders(5);
     assertEquals(4, splits.size());
     assertStartAndEndKeys(splits.get(0), keys.get(0), keys.get(6));
     assertStartAndEndKeys(splits.get(1), keys.get(6), keys.get(7));
@@ -99,13 +115,13 @@ public class DatastoreInputTest extends TestCase {
   }
 
   public void testCreateReadersWithNoData() throws Exception {
-    List<? extends InputReader<Entity>> splits = createReaders(10);
+    List<DatastoreInputReader> splits = createReaders(10);
     assertEquals(0, splits.size());
   }
 
   public void testCreateReadersWithSingleKey() throws Exception {
     Key key = ds.put(new Entity(ENTITY_KIND_NAME));
-    List<? extends InputReader<Entity>> splits = createReaders(1);
+    List<DatastoreInputReader> splits = createReaders(1);
 
     assertEquals(1, splits.size());
     assertStartAndEndKeys(splits.get(0), key, null);
@@ -123,15 +139,12 @@ public class DatastoreInputTest extends TestCase {
     assertRegionSizeBounds(999, 1000);
   }
 
-// -------------------------- STATIC METHODS --------------------------
-
-  private static void assertStartAndEndKeys(InputReader<Entity> reader, Key startKey, Key endKey) {
-    DatastoreInputReader datastoreInputSource = (DatastoreInputReader) reader;
-    assertEquals("Start key doesn't match", startKey, datastoreInputSource.startKey);
-    assertEquals("End key doesn't match", endKey, datastoreInputSource.endKey);
+  private static void assertStartAndEndKeys(DatastoreInputReader reader, Key startKey, Key endKey) {
+    assertEquals("Start key doesn't match", startKey, reader.startKey);
+    assertEquals("End key doesn't match", endKey, reader.endKey);
   }
 
-  private static List<? extends InputReader<Entity>> createReaders(int shardCount) {
+  private static List<DatastoreInputReader> createReaders(int shardCount) {
     DatastoreInput input = new DatastoreInput(ENTITY_KIND_NAME, shardCount);
     return input.createReaders();
   }
@@ -143,7 +156,7 @@ public class DatastoreInputTest extends TestCase {
     int min = (scatterKeys + 1) / numShards;
     int max = min + ((((scatterKeys + 1) % numShards) > 0) ? 1 : 0);
 
-    ArrayList<Entity> entities = new ArrayList<Entity>(scatterKeys);
+    ArrayList<Entity> entities = new ArrayList<>(scatterKeys);
     for (int i = 1; i <= scatterKeys; i++) {
       entities.add(new Entity(ENTITY_KIND_NAME, i));
     }
