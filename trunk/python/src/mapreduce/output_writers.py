@@ -999,6 +999,10 @@ class _GoogleCloudStorageOutputWriter(OutputWriter):
     # Save filename to shard_state
     shard_state.writer_state = {"filename": self._filename}
 
+  # pylint: disable=unused-argument
+  def _can_be_retried(self, tstate):
+    return True
+
 
 class _GoogleCloudStorageRecordOutputWriter(_GoogleCloudStorageOutputWriter):
   """Write data to the Google Cloud Storage file using LevelDB format.

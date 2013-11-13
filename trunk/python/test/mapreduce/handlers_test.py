@@ -42,7 +42,6 @@ from google.appengine.api import apiproxy_stub_map
 from google.appengine.api import datastore
 from google.appengine.api import datastore_errors
 from google.appengine.api import datastore_file_stub
-from google.appengine.api import files
 from google.appengine.api import logservice
 from google.appengine.api import memcache
 from google.appengine.api import taskqueue
@@ -199,24 +198,6 @@ def test_handler_raise_fail_job_exception(entity):
     FailJobError: always.
   """
   raise errors.FailJobError()
-
-
-def test_handler_raise_slice_retry_exception(entity):
-  """Test handler function that always raises a fatal error.
-
-  Raises:
-    errors.RetrySliceError: always.
-  """
-  raise errors.RetrySliceError("")
-
-
-def test_handler_raise_shard_retry_exception(entity):
-  """Test handler function that always raises a fatal error.
-
-  Raises:
-    files.ExistenceError: always.
-  """
-  raise files.ExistenceError("")
 
 
 def test_handler_yield_op(entity):
@@ -485,6 +466,8 @@ class MapreduceHandlerTestBase(testutil.HandlerTestBase):
                      shard_state.result_status)
     self.assertEqual(kwargs.get("slice_retries", 0),
                      shard_state.slice_retries)
+    self.assertEqual(kwargs.get("retries", 0),
+                     shard_state.retries)
 
   def verify_mapreduce_state(self, mapreduce_state, **kwargs):
     """Checks mapreduce state to have expected property values.
@@ -1465,7 +1448,8 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
            mapper_parameters=None,
            hooks_class_name=None,
            output_writer_spec=None,
-           shard_count=8):
+           shard_count=8,
+           shard_retries=0):
     """Init everything needed for testing worker callbacks.
 
     Args:
@@ -1489,6 +1473,8 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
     self.slice_id = 0
     self.shard_state = self.create_and_store_shard_state(
         self.mapreduce_id, self.shard_number)
+    self.shard_state.retries = shard_retries
+    self.shard_state.put()
     self.shard_id = self.shard_state.shard_id
 
     output_writer = None
@@ -1506,8 +1492,8 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
         self.slice_id,
         InputReader(reader_iter),
         InputReader(reader_iter),
-        output_writer=output_writer
-        )
+        output_writer=output_writer,
+        retries=shard_retries)
 
     self.handler = handlers.MapperWorkerCallbackHandler()
     self.handler._time = MockTime.time
@@ -1861,9 +1847,9 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
         result_status=None,
         processed=1)
 
-  def testSliceRetryExceptionInHandler(self):
-    """Test when a handler throws a fatal exception."""
-    self.init(__name__ + ".test_handler_raise_slice_retry_exception")
+  def testSliceAndShardRetries(self):
+    """Test when a handler throws a non fatal exception."""
+    self.init(__name__ + ".test_handler_raise_exception")
     TestEntity().put()
 
     # First time, the task gets retried.
@@ -1875,23 +1861,42 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
         processed=0,
         slice_retries=1)
 
-    # After the Nth attempt, we abort the whole job.
+    # After the Nth attempt on slice, we retry the shard.
+    shard_state = model.ShardState.get_by_shard_id(self.shard_id)
+    shard_state.slice_retries = (
+        parameters.config.TASK_MAX_DATA_PROCESSING_ATTEMPTS)
+    shard_state.put()
+    self.handler.post()
+    self.verify_shard_state(
+        model.ShardState.get_by_shard_id(self.shard_id),
+        active=True,
+        result_status=None,
+        processed=0,
+        slice_retries=0,
+        retries=1)
+
+  # TODO(user): test MR jobs that only allow slice or shard retry when
+  # it is configurable per job.
+  def testShardRetryFailed(self):
+    """Test when shard retry failed."""
+    self.init(__name__ + ".test_handler_raise_exception",
+              shard_retries=parameters.config.SHARD_MAX_ATTEMPTS)
+    TestEntity().put()
+
+    # Slice attempts have exhausted.
     shard_state = model.ShardState.get_by_shard_id(self.shard_id)
     shard_state.slice_retries = (
         parameters.config.TASK_MAX_DATA_PROCESSING_ATTEMPTS)
     shard_state.put()
 
-    try:
-      self.handler.post()
-    finally:
-      pass
-
+    self.handler.post()
     self.verify_shard_state(
         model.ShardState.get_by_shard_id(self.shard_id),
         active=False,
         result_status=model.ShardState.RESULT_FAILED,
         processed=1,
-        slice_retries=shard_state.slice_retries)
+        slice_retries=parameters.config.TASK_MAX_DATA_PROCESSING_ATTEMPTS,
+        retries=parameters.config.SHARD_MAX_ATTEMPTS)
 
   def testSuccessfulSliceRetryClearsSliceRetriesCount(self):
     self.init(__name__ + ".test_handler_yield_op")
@@ -1911,17 +1916,6 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
         active=True,
         processed=1,
         slice_retries=0)
-
-  def testShardRetryExceptionInHandler(self):
-    """Test when a handler throws a fatal exception."""
-    self.init(__name__ + ".test_handler_raise_shard_retry_exception")
-    TestEntity().put()
-
-    self.handler.post()
-    shard_state = model.ShardState.get_by_shard_id(self.shard_id)
-    self.verify_shard_state(shard_state)
-    self.assertEquals(1, shard_state.retries)
-    self.assertEquals("", shard_state.last_work_item)
 
   def testExceptionInHandler(self):
     """Test behavior when handler throws exception."""
