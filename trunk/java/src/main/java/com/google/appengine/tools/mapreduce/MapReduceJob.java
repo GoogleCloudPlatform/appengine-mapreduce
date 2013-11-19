@@ -6,6 +6,7 @@ import static com.google.appengine.tools.mapreduce.impl.handlers.MapReduceServle
 import static com.google.appengine.tools.mapreduce.impl.handlers.MapReduceServletImpl.WORKER_PATH;
 import static com.google.common.base.Preconditions.checkNotNull;
 
+import com.google.appengine.api.datastore.Key;
 import com.google.appengine.api.files.FileServiceFactory;
 import com.google.appengine.api.taskqueue.DeferredTask;
 import com.google.appengine.api.taskqueue.Queue;
@@ -52,6 +53,7 @@ import com.google.appengine.tools.pipeline.PipelineService;
 import com.google.appengine.tools.pipeline.PipelineServiceFactory;
 import com.google.appengine.tools.pipeline.PromisedValue;
 import com.google.appengine.tools.pipeline.Value;
+import com.google.appengine.tools.pipeline.impl.servlets.PipelineServlet;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
@@ -124,10 +126,11 @@ public class MapReduceJob<I, K, V, O, R>
   }
 
   private static ShardedJobSettings makeShardedJobSettings(
-      String shardedJobId, MapReduceSettings mrSettings) {
+      String shardedJobId, MapReduceSettings mrSettings, Key pipelineKey) {
     return new ShardedJobSettings()
         .setControllerPath(mrSettings.getBaseUrl() + CONTROLLER_PATH + "/" + shardedJobId)
         .setWorkerPath(mrSettings.getBaseUrl() + WORKER_PATH + "/" + shardedJobId)
+        .setPipelineStatusUrl(PipelineServlet.makeViewerUrl(pipelineKey, pipelineKey))
         .setControllerBackend(mrSettings.getBackend())
         .setWorkerBackend(mrSettings.getBackend())
         .setControllerQueueName(mrSettings.getControllerQueueName())
@@ -314,7 +317,8 @@ public class MapReduceJob<I, K, V, O, R>
             writers.get(i),
             settings.getMillisPerSlice()));
       }
-      ShardedJobSettings shardedJobSettings = makeShardedJobSettings(shardedJobId, settings);
+      ShardedJobSettings shardedJobSettings =
+          makeShardedJobSettings(shardedJobId, settings, getPipelineKey());
       WorkerController<I, KeyValue<K, V>, List<GoogleCloudStorageFileSet>, MapperContext<K, V>>
           workerController = new WorkerController<>(
               shardedJobName, new CountersImpl(), output, resultAndStatus.getHandle());
@@ -410,7 +414,8 @@ public class MapReduceJob<I, K, V, O, R>
             new SortWorker(),
             writers.get(i)));
       }
-      ShardedJobSettings shardedJobSettings = makeShardedJobSettings(shardedJobId, settings);
+      ShardedJobSettings shardedJobSettings =
+          makeShardedJobSettings(shardedJobId, settings, getPipelineKey());
       WorkerController<KeyValue<ByteBuffer, ByteBuffer>, KeyValue<ByteBuffer, Iterator<ByteBuffer>>,
           List<GoogleCloudStorageFileSet>, SortContext> workerController = new WorkerController<>(
               shardedJobName, new CountersImpl(), output, resultAndStatus.getHandle());
@@ -482,7 +487,7 @@ public class MapReduceJob<I, K, V, O, R>
             settings.getMillisPerSlice()));
       }
       ShardedJobSettings shardedJobSettings =
-          makeShardedJobSettings(shardedJobId, settings);
+          makeShardedJobSettings(shardedJobId, settings, getPipelineKey());
       WorkerController<KeyValue<K, Iterator<V>>, O, R, ReducerContext<O>> workerController =
           new WorkerController<>(shardedJobName, mapResult.getCounters(), output,
               resultAndStatus.getHandle());

@@ -18,6 +18,7 @@ public final class ShardedJobSettings implements Serializable {
   /*Nullable*/ private String controllerBackend = null;
   /*Nullable*/ private String workerBackend = null;
   // TODO(ohler): Integrate with pipeline and put this under /_ah/pipeline.
+  /*Nullable*/ private String pipelineStatusUrl = null;
   private String controllerPath = "/mapreduce/controllerCallback";
   private String workerPath = "/mapreduce/workerCallback";
   private String controllerQueueName = "default";
@@ -25,6 +26,15 @@ public final class ShardedJobSettings implements Serializable {
   private int maxShardRetries = 4;
 
   public ShardedJobSettings() {
+  }
+  
+  /*Nullable*/ public String getPipelineStatusUrl() {
+    return pipelineStatusUrl;
+  }
+  
+  public ShardedJobSettings setPipelineStatusUrl(/*Nullable*/ String pipelineStatusUrl) {
+    this.pipelineStatusUrl = pipelineStatusUrl;
+    return this;
   }
 
   /*Nullable*/ public String getControllerBackend() {
@@ -93,6 +103,7 @@ public final class ShardedJobSettings implements Serializable {
     return getClass().getSimpleName() + "("
         + controllerBackend + ", "
         + workerBackend + ", "
+        + pipelineStatusUrl + ", "
         + controllerPath + ", "
         + workerPath + ", "
         + controllerQueueName + ", "
