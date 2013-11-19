@@ -239,6 +239,7 @@ class _KeyRangesIterator(RangeIterator):
         self._current_iter = self._key_range_iter_cls(k_range,
                                                       self._query_spec)
       except StopIteration:
+        self._current_iter = None
         break
 
   def to_json(self):
