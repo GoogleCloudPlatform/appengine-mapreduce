@@ -79,27 +79,35 @@ public class SerializationUtil {
       }
     };
 
-
+    private static final Map<Byte, CompressionType> FLAG_TO_COMPRESSION_TYPE = new HashMap<>();
     private final Flag flag;
 
+    static {
+      for (CompressionType compressionType : values()) {
+        FLAG_TO_COMPRESSION_TYPE.put(compressionType.flag.id, compressionType);
+      }
+    }
+
     private CompressionType(int id) {
-      flag = new Flag((byte) id, this);
+      flag = new Flag((byte) id);
     }
 
     abstract ObjectInputStream wrap(ObjectInputStream sink) throws IOException;
 
     abstract ObjectOutputStream wrap(ObjectOutputStream dest) throws IOException;
 
+    private static CompressionType getByFlag(Flag flag) {
+      return FLAG_TO_COMPRESSION_TYPE.get(flag.id);
+    }
+
     private Flag getFlag() {
       return flag;
     }
   }
 
-  @SuppressWarnings("hiding")
   private static class Flag implements Externalizable {
 
     private static final long serialVersionUID = 1L;
-    private static final Map<Byte, CompressionType> FLAG_TO_COMPRESSION_TYPE = new HashMap<>();
     private byte id;
 
     @SuppressWarnings("unused")
@@ -107,13 +115,12 @@ public class SerializationUtil {
       // Needed for serialization
     }
 
-    private Flag(byte id, CompressionType compressionType) {
+    private Flag(byte id) {
       this.id = id;
-      FLAG_TO_COMPRESSION_TYPE.put(id, compressionType);
     }
 
     private CompressionType getCompressionType() {
-      return FLAG_TO_COMPRESSION_TYPE.get(id);
+      return CompressionType.getByFlag(this);
     }
 
     @Override
@@ -122,7 +129,7 @@ public class SerializationUtil {
     }
 
     @Override
-    public void readExternal(ObjectInput in) throws IOException, ClassNotFoundException {
+    public void readExternal(ObjectInput in) throws IOException {
       id = in.readByte();
     }
   }
@@ -221,6 +228,7 @@ public class SerializationUtil {
     return deserializeFromByteArray(bytes, false);
   }
 
+  @SuppressWarnings("resource")
   public static <T> T deserializeFromByteBuffer(ByteBuffer bytes, final boolean ignoreHeader) {
     return deserializeFromStream(new ByteBufferInputStream(bytes), ignoreHeader);
   }
