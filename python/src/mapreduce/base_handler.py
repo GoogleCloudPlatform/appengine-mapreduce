@@ -54,7 +54,19 @@ class BadRequestPathError(Error):
   """The request path for the handler is invalid."""
 
 
-class TaskQueueHandler(webapp.RequestHandler):
+class BaseHandler(webapp.RequestHandler):
+  """Base class for all mapreduce handlers.
+
+  In Python27 runtime, webapp2 will automatically replace webapp.
+  """
+
+  def base_path(self):
+    """Base path for all mapreduce-related urls."""
+    path = self.request.path
+    return path[:path.rfind("/")]
+
+
+class TaskQueueHandler(BaseHandler):
   """Base class for handlers intended to be run only from the task queue.
 
   Sub-classes should implement
@@ -62,8 +74,6 @@ class TaskQueueHandler(webapp.RequestHandler):
   2. '_preprocess' method for decoding or validations before handle.
   3. '_drop_gracefully' method if _preprocess fails and the task has to
      be dropped.
-
-  In Python27 runtime, webapp2 will automatically replace webapp.
   """
 
   def __init__(self, *args, **kwargs):
@@ -160,7 +170,7 @@ class TaskQueueHandler(webapp.RequestHandler):
     self.response.clear()
 
 
-class JsonHandler(webapp.RequestHandler):
+class JsonHandler(BaseHandler):
   """Base class for JSON handlers for user interface.
 
   Sub-classes should implement the 'handle' method. They should put their
@@ -171,7 +181,7 @@ class JsonHandler(webapp.RequestHandler):
 
   def __init__(self, *args):
     """Initializer."""
-    super(JsonHandler, self).__init__(*args)
+    super(BaseHandler, self).__init__(*args)
     self.json_response = {}
 
   def base_path(self):

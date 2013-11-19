@@ -766,7 +766,7 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
     headers[util._MR_SHARD_ID_TASK_HEADER] = tstate.shard_id
 
     worker_task = model.HugeTask(
-        url=base_path + "/worker_callback/" + tstate.shard_id,
+        url=base_path + "/worker_callback",
         params=tstate.to_dict(),
         name=task_name,
         eta=eta,
@@ -913,7 +913,7 @@ class ControllerCallbackHandler(base_handler.HugeTaskHandler):
       logging.warning(
           "MR %r is not active. Looks like spurious controller task execution.",
           spec.mapreduce_id)
-      self._clean_up_mr(spec)
+      self._clean_up_mr(spec, self.base_path())
       return
 
     shard_states = model.ShardState.find_all_by_mapreduce_state(state)
@@ -921,7 +921,7 @@ class ControllerCallbackHandler(base_handler.HugeTaskHandler):
 
     if state.active:
       ControllerCallbackHandler.reschedule(
-          state, spec, self.serial_id() + 1)
+          state, self.base_path(), spec, self.serial_id() + 1)
 
   def _update_state_from_shard_states(self, state, shard_states, control):
     """Update mr state by examing shard states.
@@ -982,7 +982,7 @@ class ControllerCallbackHandler(base_handler.HugeTaskHandler):
       else:
         state.result_status = model.MapreduceState.RESULT_SUCCESS
       self._finalize_outputs(spec, state)
-      self._finalize_job(spec, state)
+      self._finalize_job(spec, state, self.base_path())
     else:
       @db.transactional(retries=5)
       def _put_state():
@@ -1021,7 +1021,7 @@ class ControllerCallbackHandler(base_handler.HugeTaskHandler):
       mapreduce_spec.mapper.output_writer_class().finalize_job(mapreduce_state)
 
   @classmethod
-  def _finalize_job(cls, mapreduce_spec, mapreduce_state):
+  def _finalize_job(cls, mapreduce_spec, mapreduce_state, base_path):
     """Finalize job execution.
 
     Invokes done callback and save mapreduce state in a transaction,
@@ -1030,6 +1030,7 @@ class ControllerCallbackHandler(base_handler.HugeTaskHandler):
     Args:
       mapreduce_spec: an instance of MapreduceSpec
       mapreduce_state: an instance of MapreduceState
+      base_path: handler_base path.
     """
     config = util.create_datastore_write_config(mapreduce_spec)
     queue_name = util.get_queue_name(mapreduce_spec.params.get(
@@ -1065,11 +1066,11 @@ class ControllerCallbackHandler(base_handler.HugeTaskHandler):
     _put_state()
     logging.info("Final result for job '%s' is '%s'",
                  mapreduce_spec.mapreduce_id, mapreduce_state.result_status)
-    cls._clean_up_mr(mapreduce_spec)
+    cls._clean_up_mr(mapreduce_spec, base_path)
 
   @classmethod
-  def _clean_up_mr(cls, mapreduce_spec):
-    FinalizeJobHandler.schedule(mapreduce_spec)
+  def _clean_up_mr(cls, mapreduce_spec, base_path):
+    FinalizeJobHandler.schedule(base_path, mapreduce_spec)
 
   @staticmethod
   def get_task_name(mapreduce_spec, serial_id):
@@ -1106,6 +1107,7 @@ class ControllerCallbackHandler(base_handler.HugeTaskHandler):
   @classmethod
   def reschedule(cls,
                  mapreduce_state,
+                 base_path,
                  mapreduce_spec,
                  serial_id,
                  queue_name=None):
@@ -1113,6 +1115,7 @@ class ControllerCallbackHandler(base_handler.HugeTaskHandler):
 
     Args:
       mapreduce_state: mapreduce state as model.MapreduceState
+      base_path: mapreduce handlers url base path as string.
       mapreduce_spec: mapreduce specification as MapreduceSpec.
       serial_id: id of the invocation as int.
       queue_name: The queue to schedule this task on. Will use the current
@@ -1126,8 +1129,7 @@ class ControllerCallbackHandler(base_handler.HugeTaskHandler):
       queue_name = os.environ.get("HTTP_X_APPENGINE_QUEUENAME", "default")
 
     controller_callback_task = model.HugeTask(
-        url=(mapreduce_spec.params["base_path"] + "/controller_callback/" +
-             mapreduce_spec.mapreduce_id),
+        url=base_path + "/controller_callback",
         name=task_name, params=task_params,
         countdown=parameters.config._CONTROLLER_PERIOD_SEC,
         parent=mapreduce_state,
@@ -1179,7 +1181,7 @@ class KickOffJobHandler(base_handler.TaskQueueHandler):
       state.active = False
       state.result_status = model.MapreduceState.RESULT_SUCCESS
       ControllerCallbackHandler._finalize_job(
-          state.mapreduce_spec, state)
+          state.mapreduce_spec, state, self.base_path())
       return False
 
     # Create output writers.
@@ -1195,12 +1197,11 @@ class KickOffJobHandler(base_handler.TaskQueueHandler):
 
     queue_name = self.request.headers.get("X-AppEngine-QueueName")
     KickOffJobHandler._schedule_shards(state.mapreduce_spec, readers,
-                                       queue_name,
-                                       state.mapreduce_spec.params["base_path"],
-                                       state)
+                                       queue_name, self.base_path(), state)
 
     ControllerCallbackHandler.reschedule(
-        state, state.mapreduce_spec, serial_id=0, queue_name=queue_name)
+        state, self.base_path(), state.mapreduce_spec, serial_id=0,
+        queue_name=queue_name)
 
   def _get_input_readers(self, state):
     """Get input readers.
@@ -1383,8 +1384,6 @@ class StartJobHandler(base_handler.PostJsonHandler):
         "mapper_params_validator", "mapper_params.")
     params = self._get_params(
         "params_validator", "params.")
-    if "base_path" not in params:
-      params["base_path"] = parameters.config.BASE_PATH
 
     # Set some mapper param defaults if not present.
     mapper_params["processing_rate"] = int(mapper_params.get(
@@ -1404,6 +1403,7 @@ class StartJobHandler(base_handler.PostJsonHandler):
         mapreduce_name,
         mapper_spec,
         params,
+        base_path=self.base_path(),
         queue_name=queue_name,
         _app=mapper_params.get("_app"))
     self.json_response["mapreduce_id"] = mapreduce_id
@@ -1460,6 +1460,7 @@ class StartJobHandler(base_handler.PostJsonHandler):
                  name,
                  mapper_spec,
                  mapreduce_params,
+                 base_path,
                  queue_name,
                  eta=None,
                  countdown=None,
@@ -1514,7 +1515,7 @@ class StartJobHandler(base_handler.PostJsonHandler):
     @db.transactional(propagation=propagation)
     def _txn():
       cls._create_and_save_state(mapreduce_spec, _app)
-      cls._add_kickoff_task(mapreduce_params["base_path"], mapreduce_spec, eta,
+      cls._add_kickoff_task(base_path, mapreduce_spec, eta,
                             countdown, queue_name)
     _txn()
 
@@ -1553,7 +1554,7 @@ class StartJobHandler(base_handler.PostJsonHandler):
     params = {"mapreduce_id": mapreduce_spec.mapreduce_id}
     # Task is not named so that it can be added within a transaction.
     kickoff_task = taskqueue.Task(
-        url=base_path + "/kickoffjob_callback/" + mapreduce_spec.mapreduce_id,
+        url=base_path + "/kickoffjob_callback",
         headers=util._get_task_headers(mapreduce_spec),
         params=params,
         eta=eta,
@@ -1585,7 +1586,7 @@ class FinalizeJobHandler(base_handler.TaskQueueHandler):
       db.delete(keys, config=config)
 
   @classmethod
-  def schedule(cls, mapreduce_spec):
+  def schedule(cls, base_path, mapreduce_spec):
     """Schedule finalize task.
 
     Args:
@@ -1594,8 +1595,7 @@ class FinalizeJobHandler(base_handler.TaskQueueHandler):
     task_name = mapreduce_spec.mapreduce_id + "-finalize"
     finalize_task = taskqueue.Task(
         name=task_name,
-        url=(mapreduce_spec.params["base_path"] + "/finalizejob_callback/" +
-             mapreduce_spec.mapreduce_id),
+        url=base_path + "/finalizejob_callback",
         params={"mapreduce_id": mapreduce_spec.mapreduce_id},
         headers=util._get_task_headers(mapreduce_spec))
     queue_name = util.get_queue_name(None)
