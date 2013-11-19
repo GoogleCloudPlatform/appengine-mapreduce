@@ -5,7 +5,11 @@
     <module>default</module>
   </dispatch>
   <dispatch>
-    <url>*/mapreduce/*</url>
+    <url>*/mapreduce/workerCallback/*</url>
+    <module>mapreduce</module>
+  </dispatch>
+  <dispatch>
+    <url>*/mapreduce/controllerCallback/*</url>
     <module>mapreduce</module>
   </dispatch>
 </dispatch-entries>
