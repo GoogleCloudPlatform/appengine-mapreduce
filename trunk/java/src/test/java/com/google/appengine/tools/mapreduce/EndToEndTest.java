@@ -19,7 +19,6 @@ import com.google.appengine.tools.cloudstorage.GcsInputChannel;
 import com.google.appengine.tools.cloudstorage.GcsService;
 import com.google.appengine.tools.cloudstorage.GcsServiceFactory;
 import com.google.appengine.tools.mapreduce.impl.HashingSharder;
-import com.google.appengine.tools.mapreduce.impl.InProcessMapReduce;
 import com.google.appengine.tools.mapreduce.inputs.ConsecutiveLongInput;
 import com.google.appengine.tools.mapreduce.inputs.DatastoreInput;
 import com.google.appengine.tools.mapreduce.inputs.NoInput;
@@ -78,13 +77,6 @@ public class EndToEndTest extends EndToEndTestCase {
     void verify(MapReduceResult<R> result) throws Exception;
   }
 
-  // (runWithPipeline is also in-process in our test setup, so this is a misnomer.)
-  private <I, K, V, O, R> void runInProcess(Preparer preparer,
-      MapReduceSpecification<I, K, V, O, R> mrSpec, Verifier<R> verifier) throws Exception {
-    preparer.prepare();
-    verifier.verify(InProcessMapReduce.runMapReduce(mrSpec));
-  }
-
   private <I, K, V, O, R> void runWithPipeline(Preparer preparer,
       MapReduceSpecification<I, K, V, O, R> mrSpec, Verifier<R> verifier) throws Exception {
     preparer.prepare();
@@ -102,7 +94,6 @@ public class EndToEndTest extends EndToEndTestCase {
 
   private <I, K, V, O, R> void runTest(Preparer preparer,
       MapReduceSpecification<I, K, V, O, R> mrSpec, Verifier<R> verifier) throws Exception {
-    runInProcess(preparer, mrSpec, verifier);
     runWithPipeline(preparer, mrSpec, verifier);
   }
 
