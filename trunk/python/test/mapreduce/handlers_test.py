@@ -404,11 +404,11 @@ class MapreduceHandlerTestBase(testutil.HandlerTestBase):
     """
     expected_task_name = handlers.MapperWorkerCallbackHandler.get_task_name(
         shard_id, slice_id)
-    self.assertEquals(expected_task_name, task["name"])
-    self.assertEquals("POST", task["method"])
-    self.assertEquals("/mapreduce/worker_callback", task["url"])
+    self.assertEqual(expected_task_name, task["name"])
+    self.assertEqual("POST", task["method"])
+    self.assertEqual("/mapreduce/worker_callback/" + shard_id, task["url"])
     if eta:
-      self.assertEquals(eta.strftime("%Y/%m/%d %H:%M:%S"), task["eta"])
+      self.assertEqual(eta.strftime("%Y/%m/%d %H:%M:%S"), task["eta"])
     if countdown:
       expected_etc_sec = time.time() + countdown
       eta_sec = time.mktime(time.strptime(task["eta"], "%Y/%m/%d %H:%M:%S"))
@@ -419,8 +419,8 @@ class MapreduceHandlerTestBase(testutil.HandlerTestBase):
     request.headers = dict(task["headers"])
 
     payload = model.HugeTask.decode_payload(request)
-    self.assertEquals(str(shard_id), payload["shard_id"])
-    self.assertEquals(str(slice_id), payload["slice_id"])
+    self.assertEqual(str(shard_id), payload["shard_id"])
+    self.assertEqual(str(slice_id), payload["slice_id"])
 
     self.assertTrue(payload["mapreduce_spec"])
     mapreduce_spec = model.MapreduceSpec.from_json_str(
@@ -498,8 +498,7 @@ class MapreduceHandlerTestBase(testutil.HandlerTestBase):
       kwargs: expected property values. Checks for default if property is not
         specified.
     """
-    self.assertEquals("POST", task["method"])
-    self.assertEquals("/mapreduce/controller_callback", task["url"])
+    self.assertEqual("POST", task["method"])
 
     request = mock_webapp.MockRequest()
     request.body = base64.b64decode(task["body"])
@@ -509,6 +508,9 @@ class MapreduceHandlerTestBase(testutil.HandlerTestBase):
     mapreduce_spec = model.MapreduceSpec.from_json_str(
         payload["mapreduce_spec"])
     self.verify_mapreduce_spec(mapreduce_spec, **kwargs)
+    self.assertEqual(
+        "/mapreduce/controller_callback/" + mapreduce_spec.mapreduce_id,
+        task["url"])
 
   def create_mapreduce_spec(self,
                             mapreduce_id,
@@ -802,7 +804,7 @@ class StartJobHandlerFunctionalTest(testutil.HandlerTestBase):
   OUTPUT_WRITER_SPEC = __name__ + ".TestOutputWriter"
   SHARD_COUNT = "9"
   QUEUE = "crazy-queue"
-  MAPREDUCE_SPEC_PARAMS = {"foo": "bar"}
+  MAPREDUCE_SPEC_PARAMS = {"foo": "bar", "base_path": "/foo"}
   HOOKS = __name__ + ".TestHooks"
 
   def setUp(self):
@@ -840,12 +842,11 @@ class StartJobHandlerFunctionalTest(testutil.HandlerTestBase):
     headers = dict(task["headers"])
     self.assertEqual(mr_id, headers[util._MR_ID_TASK_HEADER])
     self.assertTrue(headers["Host"], self.host)
-    self.assertEqual("/foo/kickoffjob_callback", task["url"])
+    self.assertEqual("/foo/kickoffjob_callback/" + mr_id, task["url"])
 
   def testSmoke(self):
     mr_id = handlers.StartJobHandler._start_map(
         self.NAME, self.mapper_spec,
-        base_path="/foo",
         mapreduce_params=self.MAPREDUCE_SPEC_PARAMS,
         queue_name=self.QUEUE)
 
@@ -859,7 +860,6 @@ class StartJobHandlerFunctionalTest(testutil.HandlerTestBase):
         TestEntity().put()
       return handlers.StartJobHandler._start_map(
           self.NAME, self.mapper_spec,
-          base_path="/foo",
           mapreduce_params=self.MAPREDUCE_SPEC_PARAMS,
           queue_name=self.QUEUE,
           in_xg_transaction=True)
@@ -876,7 +876,6 @@ class StartJobHandlerFunctionalTest(testutil.HandlerTestBase):
       TestEntity().put()
       return handlers.StartJobHandler._start_map(
           self.NAME, self.mapper_spec,
-          base_path="/foo",
           mapreduce_params=self.MAPREDUCE_SPEC_PARAMS,
           queue_name=self.QUEUE,
           in_xg_transaction=False)
@@ -887,7 +886,6 @@ class StartJobHandlerFunctionalTest(testutil.HandlerTestBase):
   def testWithHooks(self):
     mr_id = handlers.StartJobHandler._start_map(
         self.NAME, self.mapper_spec,
-        base_path="/foo",
         mapreduce_params=self.MAPREDUCE_SPEC_PARAMS,
         queue_name=self.QUEUE,
         hooks_class_name=self.HOOKS)
@@ -898,7 +896,6 @@ class StartJobHandlerFunctionalTest(testutil.HandlerTestBase):
   def testOtherApp(self):
     mr_id = handlers.StartJobHandler._start_map(
         self.NAME, self.mapper_spec,
-        base_path="/foo",
         mapreduce_params=self.MAPREDUCE_SPEC_PARAMS,
         queue_name=self.QUEUE,
         _app="otherapp")
@@ -912,21 +909,21 @@ class StartJobHandlerFunctionalTest(testutil.HandlerTestBase):
     self.mapper_spec.handler_spec = "does_not_exists"
     self.assertRaises(ImportError, handlers.StartJobHandler._start_map,
                       self.NAME, self.mapper_spec, {},
-                      base_path="/foo", queue_name=self.QUEUE)
+                      queue_name=self.QUEUE)
 
   def testInputReaderUnknown(self):
     """Tests when the input reader function cannot be found."""
     self.mapper_spec.input_reader_spec = "does_not_exists"
     self.assertRaises(ImportError, handlers.StartJobHandler._start_map,
                       self.NAME, self.mapper_spec, {},
-                      base_path="/foo", queue_name=self.QUEUE)
+                      queue_name=self.QUEUE)
 
   def testInvalidOutputWriter(self):
     """Tests setting output writer parameter."""
     self.mapper_spec.output_writer_spec = "does_not_exists"
     self.assertRaises(ImportError, handlers.StartJobHandler._start_map,
                       self.NAME, self.mapper_spec, {},
-                      base_path="/foo", queue_name=self.QUEUE)
+                      queue_name=self.QUEUE)
 
 
 class KickOffJobHandlerTest(testutil.HandlerTestBase):
@@ -939,7 +936,8 @@ class KickOffJobHandlerTest(testutil.HandlerTestBase):
   OUTPUT_WRITER_SPEC = __name__ + ".TestOutputWriter"
   SHARD_COUNT = "9"
   QUEUE = "crazy-queue"
-  MAPREDUCE_SPEC_PARAMS = {"foo": "bar"}
+  MAPREDUCE_SPEC_PARAMS = {"foo": "bar",
+                           "base_path": parameters.config.BASE_PATH}
   HOOKS = __name__ + ".TestHooks"
 
   def setUp(self):
@@ -956,7 +954,7 @@ class KickOffJobHandlerTest(testutil.HandlerTestBase):
     self.mapreduce_id = "foo_id"
     request = mock_webapp.MockRequest()
     request.headers["X-AppEngine-QueueName"] = self.QUEUE
-    request.path = "/mapreduce/kickoff_callback"
+    request.path = "/mapreduce/kickoff_callback/" + self.mapreduce_id
     self.handler.initialize(request,
                             mock_webapp.MockResponse())
 
@@ -988,7 +986,6 @@ class KickOffJobHandlerTest(testutil.HandlerTestBase):
     # Use StartJobHandler for setup.
     self.mr_id = handlers.StartJobHandler._start_map(
         self.NAME, self.mapper_spec,
-        base_path="/foo",
         mapreduce_params=self.MAPREDUCE_SPEC_PARAMS,
         queue_name=self.QUEUE,
         hooks_class_name=hooks_class_name)
@@ -1013,9 +1010,9 @@ class KickOffJobHandlerTest(testutil.HandlerTestBase):
       headers = dict(task["headers"])
       self.assertEqual(self.mr_id, headers[util._MR_ID_TASK_HEADER])
       self.assertEqual(self.host, headers["Host"])
-      if task["url"] == "/foo/worker_callback":
+      if task["url"].startswith("/mapreduce/worker_callback"):
         worker_tasks += 1
-      if task["url"] == "/foo/controller_callback":
+      if task["url"].startswith("/mapreduce/controller_callback"):
         controller_tasks += 1
     self.assertEqual(int(self.SHARD_COUNT), worker_tasks)
     self.assertEqual(1, controller_tasks)
@@ -1106,8 +1103,8 @@ class KickOffJobHandlerTest(testutil.HandlerTestBase):
     # Verify tasks.
     tasks = self.taskqueue.GetTasks(self.QUEUE)
     worker_tasks = 0
-    for task in tasks:
-      self.assertEqual("/foo/worker_callback", task["url"])
+    for task, ss in zip(tasks, shard_states):
+      self.assertEqual("/foo/worker_callback/" + ss.shard_id, task["url"])
       worker_tasks += 1
     self.assertEqual(int(self.SHARD_COUNT), worker_tasks)
 
@@ -1469,6 +1466,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
         hooks_class_name=hooks_class_name,
         output_writer_spec=output_writer_spec,
         mapper_parameters=mapper_parameters)
+    self.mapreduce_spec.params["base_path"] = parameters.config.BASE_PATH
 
     self.shard_number = 1
     self.slice_id = 0
@@ -1501,7 +1499,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
     request = mock_webapp.MockRequest()
     request.headers["X-AppEngine-QueueName"] = "default"
     request.headers["X-AppEngine-TaskName"] = "foo-task-name"
-    request.path = "/mapreduce/worker_callback"
+    request.path = "/mapreduce/worker_callback/" + self.shard_id
     request.headers[util._MR_ID_TASK_HEADER] = self.mapreduce_id
     request.headers[util._MR_SHARD_ID_TASK_HEADER] = self.shard_id
     request.headers[model.HugeTask.PAYLOAD_VERSION_HEADER] = (
@@ -1773,7 +1771,8 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
     self.assertEquals(1, len(self.taskqueue.GetTasks("default")))
     self.assertEquals(1, len(TestHooks.enqueue_worker_task_calls))
     task, queue_name = TestHooks.enqueue_worker_task_calls[0]
-    self.assertEquals("/mapreduce/worker_callback", task.url)
+    self.assertEquals("/mapreduce/worker_callback/" + self.shard_state.shard_id,
+                      task.url)
     self.assertEquals("default", queue_name)
 
   def testScheduleSlice_RaisingHooks(self):
@@ -2064,6 +2063,7 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
     mapreduce_spec = self.create_mapreduce_spec(self.mapreduce_id, 3)
     mapreduce_spec.params[PARAM_DONE_CALLBACK] = "/fin"
     mapreduce_spec.params[PARAM_DONE_CALLBACK_QUEUE] = "crazy-queue"
+    mapreduce_spec.params['base_path'] = parameters.config.BASE_PATH
 
     self.mapreduce_state.mapreduce_spec = mapreduce_spec
     self.mapreduce_state.chart_url = "http://chart.apis.google.com/chart?"
@@ -2079,7 +2079,7 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
     request.headers[util._MR_ID_TASK_HEADER] = self.mapreduce_id
     request.headers[model.HugeTask.PAYLOAD_VERSION_HEADER] = (
         model.HugeTask.PAYLOAD_VERSION)
-    request.path = "/mapreduce/controller_callback"
+    request.path = "/mapreduce/controller_callback/" + self.mapreduce_id
 
     self.request = request
     self.response = mock_webapp.MockResponse()
@@ -2141,7 +2141,8 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
     self.handler.post()
     tasks = self.taskqueue.GetTasks("default")
     self.assertEqual(1, len(tasks))
-    self.assertEqual("/mapreduce/finalizejob_callback", tasks[0]["url"])
+    self.assertEqual("/mapreduce/finalizejob_callback/" + self.mapreduce_id,
+                     tasks[0]["url"])
 
   def testDecodingPayloadFailed(self):
     for i in range(3):
@@ -2239,7 +2240,8 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
     tasks = self.taskqueue.GetTasks("default")
     # Finalize task should be spawned.
     self.assertEquals(1, len(tasks))
-    self.assertEquals("/mapreduce/finalizejob_callback", tasks[0]["url"])
+    self.assertEquals("/mapreduce/finalizejob_callback/" + self.mapreduce_id,
+                      tasks[0]["url"])
 
     # Done Callback task should be spawned
     self.verify_done_task()
@@ -2266,7 +2268,8 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
     tasks = self.taskqueue.GetTasks("default")
     # Finalize task should be spawned.
     self.assertEquals(1, len(tasks))
-    self.assertEquals("/mapreduce/finalizejob_callback", tasks[0]["url"])
+    self.assertEquals("/mapreduce/finalizejob_callback/" + self.mapreduce_id,
+                      tasks[0]["url"])
     headers = dict(tasks[0]["headers"])
     self.assertEqual(self.mapreduce_id, headers[util._MR_ID_TASK_HEADER])
     self.assertEqual(self.host, headers["Host"])
@@ -2279,7 +2282,7 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
 
   def testShardsDoneFinalizeOutputWriter(self):
     self.mapreduce_state.mapreduce_spec.mapper.output_writer_spec = (
-        __name__ + '.' + TestOutputWriter.__name__)
+        __name__ + "." + TestOutputWriter.__name__)
     self.mapreduce_state.put()
     self.handler.request.set("mapreduce_spec",
                              self.mapreduce_state.mapreduce_spec.to_json_str())
@@ -2372,7 +2375,8 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
     tasks = self.taskqueue.GetTasks("default")
     # Finalize task should be spawned.
     self.assertEquals(1, len(tasks))
-    self.assertEquals("/mapreduce/finalizejob_callback", tasks[0]["url"])
+    self.assertEquals("/mapreduce/finalizejob_callback/" + self.mapreduce_id,
+                      tasks[0]["url"])
 
     # Done Callback task should be spawned
     self.verify_done_task()
@@ -2437,7 +2441,8 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
     tasks = self.taskqueue.GetTasks("default")
     # Finalize task should be spawned.
     self.assertEquals(1, len(tasks))
-    self.assertEquals("/mapreduce/finalizejob_callback", tasks[0]["url"])
+    self.assertEquals("/mapreduce/finalizejob_callback/" + self.mapreduce_id,
+                      tasks[0]["url"])
 
     # Done Callback task should be spawned
     self.verify_done_task()
