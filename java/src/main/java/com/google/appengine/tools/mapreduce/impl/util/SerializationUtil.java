@@ -20,79 +20,235 @@ import com.google.appengine.api.datastore.Blob;
 import com.google.appengine.api.datastore.Entity;
 import com.google.appengine.tools.mapreduce.CorruptDataException;
 import com.google.appengine.tools.mapreduce.Marshaller;
+import com.google.common.io.Closeables;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.Externalizable;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.ObjectInput;
 import java.io.ObjectInputStream;
+import java.io.ObjectOutput;
 import java.io.ObjectOutputStream;
+import java.io.ObjectStreamClass;
+import java.io.OutputStream;
 import java.io.Serializable;
+import java.io.StreamCorruptedException;
 import java.nio.ByteBuffer;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.zip.Deflater;
+import java.util.zip.DeflaterOutputStream;
+import java.util.zip.Inflater;
+import java.util.zip.InflaterInputStream;
 
 /**
+ * A serialization utility class.
  *
  */
 public class SerializationUtil {
 
-  private SerializationUtil() {
-  }
+  /**
+   * Type of compression to optionally use when serializing/deserializing objects.
+   */
+  public enum CompressionType {
 
-  public static Serializable deserializeFromByteArray(byte[] bytes) {
-    try {
-      ObjectInputStream in = new ObjectInputStream(new ByteArrayInputStream(bytes));
-      try {
-        return deserializeFromStream(in);
-      } finally {
-        in.close();
+    NONE(1) {
+      @Override
+      ObjectInputStream wrap(ObjectInputStream sink) {
+        return sink;
       }
-    } catch (IOException e) {
-      throw new CorruptDataException("Deserialization error", e);
+
+      @Override
+      ObjectOutputStream wrap(ObjectOutputStream dest) {
+        return dest;
+      }
+    },
+    GZIP(2) {
+      @Override
+      ObjectInputStream wrap(ObjectInputStream sink) throws IOException {
+        Inflater inflater =  new Inflater(true);
+        return new ConciseObjectInputStream(new InflaterInputStream(sink, inflater), true);
+      }
+
+      @Override
+      ObjectOutputStream wrap(ObjectOutputStream dest) throws IOException {
+        Deflater deflater =  new Deflater(Deflater.BEST_COMPRESSION, true);
+        return new ConciseObjectOutputStream(new DeflaterOutputStream(dest, deflater), true);
+      }
+    };
+
+
+    private final Flag flag;
+
+    private CompressionType(int id) {
+      flag = new Flag((byte) id, this);
+    }
+
+    abstract ObjectInputStream wrap(ObjectInputStream sink) throws IOException;
+
+    abstract ObjectOutputStream wrap(ObjectOutputStream dest) throws IOException;
+
+    private Flag getFlag() {
+      return flag;
     }
   }
 
-  private static InputStream newInputStream(final ByteBuffer buf) {
-    return new InputStream() {
-      @Override public int read() {
-        if (!buf.hasRemaining()) {
-          return -1;
-        }
-        return buf.get();
-      }
+  @SuppressWarnings("hiding")
+  private static class Flag implements Externalizable {
 
-      @Override public int read(byte[] bytes, int off, int len) {
-        if (!buf.hasRemaining()) {
-          return -1;
-        }
-        int toRead = Math.min(len, buf.remaining());
-        buf.get(bytes, off, toRead);
-        return toRead;
-      }
-    };
+    private static final long serialVersionUID = 1L;
+    private static final Map<Byte, CompressionType> FLAG_TO_COMPRESSION_TYPE = new HashMap<>();
+    private byte id;
+
+    @SuppressWarnings("unused")
+    public Flag() {
+      // Needed for serialization
+    }
+
+    private Flag(byte id, CompressionType compressionType) {
+      this.id = id;
+      FLAG_TO_COMPRESSION_TYPE.put(id, compressionType);
+    }
+
+    private CompressionType getCompressionType() {
+      return FLAG_TO_COMPRESSION_TYPE.get(id);
+    }
+
+    @Override
+    public void writeExternal(ObjectOutput out) throws IOException {
+      out.writeByte(id);
+    }
+
+    @Override
+    public void readExternal(ObjectInput in) throws IOException, ClassNotFoundException {
+      id = in.readByte();
+    }
   }
 
-  public static <T> T deserializeFromByteBufferNoHeader(ByteBuffer bytes) {
-    ObjectInputStream in = null;
+  private static class ConciseObjectInputStream extends ObjectInputStream {
+
+    private final boolean ignoreHeader;
+
+    public ConciseObjectInputStream(InputStream in, boolean ignoreHeader) throws IOException {
+      super(in);
+      this.ignoreHeader = ignoreHeader;
+    }
+
+    @Override
+    protected void readStreamHeader() throws StreamCorruptedException, IOException {
+      if (!ignoreHeader) {
+        super.readStreamHeader();
+      }
+    }
+
+    @Override
+    protected ObjectStreamClass readClassDescriptor() throws IOException, ClassNotFoundException {
+      ObjectStreamClass streamClass = super.readClassDescriptor();
+      // Flag.class descriptor was replaced with Object.class descriptor in order to make
+      // the descriptor smaller. We need to replace it back.
+      if (Object.class.getName().equals(streamClass.getName())) {
+        return ObjectStreamClass.lookup(Flag.class);
+      } else {
+        return streamClass;
+      }
+    }
+  }
+
+  private static class ConciseObjectOutputStream extends ObjectOutputStream {
+
+    private final boolean ignoreHeader;
+
+    public ConciseObjectOutputStream(OutputStream in, boolean ignoreHeader) throws IOException {
+      super(in);
+      this.ignoreHeader = ignoreHeader;
+    }
+
+    @Override
+    protected void writeStreamHeader() throws IOException {
+      if (!ignoreHeader) {
+        super.writeStreamHeader();
+      }
+    }
+
+    @Override
+    protected void writeClassDescriptor(ObjectStreamClass desc) throws IOException {
+      // Replace Flag.class descriptor with Object.class descriptor as it is smaller and could
+      // not be provided otherwise.
+      if (Flag.class.getName().equals(desc.getName())) {
+        ObjectStreamClass streamClass = ObjectStreamClass.lookupAny(Object.class);
+        super.writeClassDescriptor(streamClass);
+      } else {
+        super.writeClassDescriptor(desc);
+      }
+    }
+  }
+
+  private static class ByteBufferInputStream extends InputStream {
+
+      private final ByteBuffer byteBuffer;
+
+      public ByteBufferInputStream(ByteBuffer byteBuffer) {
+        this.byteBuffer = byteBuffer;
+      }
+
+      @Override
+      public int read() {
+        if (!byteBuffer.hasRemaining()) {
+          return -1;
+        }
+        return byteBuffer.get() & 0xFF;
+      }
+
+      @Override
+      public int read(byte[] bytes, int offset, int length) {
+        if (!byteBuffer.hasRemaining()) {
+          return -1;
+        }
+
+        int toRead = Math.min(length, byteBuffer.remaining());
+        byteBuffer.get(bytes, offset, toRead);
+        return toRead;
+      }
+  }
+
+  private SerializationUtil() {
+    // Utility class
+  }
+
+  public static Serializable deserializeFromByteArray(byte[] bytes) {
+    return deserializeFromByteArray(bytes, false);
+  }
+
+  public static <T> T deserializeFromByteBuffer(ByteBuffer bytes, final boolean ignoreHeader) {
+    return deserializeFromStream(new ByteBufferInputStream(bytes), ignoreHeader);
+  }
+
+  public static <T> T deserializeFromByteArray(byte[] bytes, boolean ignoreHeader) {
+    return deserializeFromStream(new ByteArrayInputStream(bytes), ignoreHeader);
+  }
+
+  @SuppressWarnings({"unchecked", "resource"})
+  private static <T> T deserializeFromStream(InputStream in, final boolean ignoreHeader) {
+    ObjectInputStream oin = null;
     CorruptDataException e = null;
     try {
-      in = new ObjectInputStream(newInputStream(bytes)) {
-        @Override
-        protected void readStreamHeader() {
-          // do nothing
-        }
-      };
-      T value = deserializeFromStream(in);
-      if (in.read() != -1) {
-        throw new CorruptDataException("Trailing bytes in " + bytes + " after reading " + value);
+      oin = new ConciseObjectInputStream(in, ignoreHeader);
+      Object value = oin.readObject();
+      if (value instanceof Flag) {
+        CompressionType compression = ((Flag) value).getCompressionType();
+        oin = compression.wrap(oin);
+        value = oin.readObject();
       }
-      return value;
-    } catch (IOException e1) {
-      e = new CorruptDataException(e1);
+      return (T) value;
+    } catch (IOException | ClassNotFoundException e1) {
+      e = new CorruptDataException("Deserialization error: " + e1.getMessage(), e1);
       throw e;
     } finally {
-      if (in != null) {
+      if (oin != null) {
         try {
-          in.close();
+          oin.close();
         } catch (IOException e2) {
           if (e == null) {
             throw new RuntimeException(e2);
@@ -104,20 +260,6 @@ public class SerializationUtil {
     }
   }
 
-  public static <T> T deserializeFromByteArrayNoHeader(byte[] bytes) {
-    return deserializeFromByteBufferNoHeader(ByteBuffer.wrap(bytes));
-  }
-
-  public static <T> T deserializeFromStream(ObjectInputStream in) {
-    try {
-      @SuppressWarnings("unchecked")
-      T obj = (T) in.readObject();
-      return obj;
-    } catch (ClassNotFoundException | IOException e) {
-      throw new CorruptDataException("Deserialization error", e);
-    }
-  }
-
   public static <T extends Serializable> T deserializeFromDatastoreProperty(
       Entity entity, String propertyName) {
     @SuppressWarnings("unchecked")
@@ -126,37 +268,34 @@ public class SerializationUtil {
   }
 
   public static byte[] serializeToByteArray(Serializable o) {
-    try {
-      ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-      ObjectOutputStream out = new ObjectOutputStream(bytes);
-      try {
-        out.writeObject(o);
-      } finally {
-        out.close();
-      }
-      return bytes.toByteArray();
-    } catch (IOException e) {
-      throw new RuntimeException("Can't serialize object: " + o, e);
-    }
+    return serializeToByteArray(o, false, null);
   }
 
-  public static byte[] serializeToByteArrayNoHeader(Serializable o) {
+  public static byte[] serializeToByteArray(Serializable o, boolean ignoreHeader) {
+    return serializeToByteArray(o, ignoreHeader, null);
+  }
+
+  @SuppressWarnings("resource")
+  public static byte[] serializeToByteArray(
+      Serializable o, final boolean ignoreHeader, /*Nullable*/ CompressionType compression) {
+    ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+    ObjectOutputStream out = null;
     try {
-      ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-      ObjectOutputStream out =
-          new ObjectOutputStream(bytes) {
-            @Override protected void writeStreamHeader() {
-              // do nothing
-            }
-          };
-      try {
+      out = new ConciseObjectOutputStream(bytes, ignoreHeader);
+      if (compression == null) {
         out.writeObject(o);
-      } finally {
-        out.close();
+      } else {
+        out.writeObject(compression.getFlag());
+        out = compression.wrap(out);
+        out.writeObject(o);
       }
+      out.flush();
+      out.close();
       return bytes.toByteArray();
     } catch (IOException e) {
       throw new RuntimeException("Can't serialize object: " + o, e);
+    } finally {
+      Closeables.closeQuietly(out);
     }
   }
 

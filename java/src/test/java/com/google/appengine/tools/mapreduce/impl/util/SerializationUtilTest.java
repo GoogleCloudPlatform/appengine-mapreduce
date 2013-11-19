@@ -2,8 +2,11 @@
 
 package com.google.appengine.tools.mapreduce.impl.util;
 
+import com.google.appengine.tools.mapreduce.impl.util.SerializationUtil.CompressionType;
+
 import junit.framework.TestCase;
 
+import java.io.Serializable;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 
@@ -35,4 +38,53 @@ public class SerializationUtilTest extends TestCase {
     assertTrue(Arrays.equals(new byte[] { 0x12, 0x34 }, bytes));
   }
 
+  public void testSerializeToFromByteArrayWithNoParams() throws Exception {
+    Serializable original = "hello";
+    byte[] bytes = SerializationUtil.serializeToByteArray(original);
+    assertEquals(12, bytes.length);
+    bytes = SerializationUtil.serializeToByteArray(original, true);
+    assertEquals(12, bytes.length);
+    bytes = SerializationUtil.serializeToByteArray(original, true, CompressionType.NONE);
+    assertEquals(49, bytes.length);
+
+    /*
+    StringBuilder stBuilder = new StringBuilder();
+    for (byte b : bytes) {
+      char c = (char) b;
+      if (Character.isLetterOrDigit(c) || (c >= 32 && c <= 126)) {
+        stBuilder.append(c);
+      } else {
+        stBuilder.append('#');
+      }
+    }
+    System.out.println(stBuilder);
+    */
+
+    bytes = SerializationUtil.serializeToByteArray(original, true, CompressionType.GZIP);
+    assertEquals(57, bytes.length);
+    bytes = SerializationUtil.serializeToByteArray(original);
+    Object restored = SerializationUtil.deserializeFromByteArray(bytes);
+    assertEquals(original, restored);
+  }
+
+  public void testSerializeToFromByteArray() throws Exception {
+    Iterable<CompressionType> compressionTypes =
+        Arrays.asList(CompressionType.NONE, CompressionType.GZIP, null);
+    for (Serializable original : Arrays.asList(10L, "hello", CompressionType.GZIP)) {
+      for (boolean ignoreHeader : Arrays.asList(true, false)) {
+        for (CompressionType compression : compressionTypes) {
+          byte[] bytes =
+              SerializationUtil.serializeToByteArray(original, ignoreHeader, compression);
+          Object restored = SerializationUtil.deserializeFromByteArray(bytes, ignoreHeader);
+          assertEquals(original, restored);
+          ByteBuffer buffer  = ByteBuffer.wrap(bytes);
+          restored = SerializationUtil.deserializeFromByteBuffer(buffer, ignoreHeader);
+          assertEquals(original, restored);
+          bytes = SerializationUtil.serializeToByteArray(original, ignoreHeader);
+          restored = SerializationUtil.deserializeFromByteArray(bytes, ignoreHeader);
+          assertEquals(original, restored);
+        }
+      }
+    }
+  }
 }
