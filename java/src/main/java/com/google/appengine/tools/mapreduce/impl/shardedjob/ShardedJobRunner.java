@@ -252,7 +252,10 @@ class ShardedJobRunner<T extends IncrementalTask<T, R>, R extends Serializable> 
       log.info(taskId + ": Task gone");
       return;
     }
-    log.info("Running task " + taskId + " (job " + jobId + "), sequence number " + sequenceNumber);
+    String statusUrl = jobState.getSettings().getPipelineStatusUrl();
+    log.info("Running task " + taskId + " (job " + jobId + "), sequence number " + sequenceNumber
+        + (statusUrl != null ? " Progress can be monitored at: " + statusUrl : ""));
+
     if (taskState.getNextSequenceNumber() != sequenceNumber) {
       Preconditions.checkState(taskState.getNextSequenceNumber() > sequenceNumber,
           "%s: Task state is from the past: %s", taskId, taskState);
