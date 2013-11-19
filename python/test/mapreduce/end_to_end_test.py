@@ -121,20 +121,16 @@ class TestOutputWriter(output_writers.OutputWriter):
     pass
 
   @classmethod
-  def init_job(cls, mapreduce_state):
-    random_str = "".join(
-        random.choice(string.ascii_uppercase + string.digits)
-        for _ in range(64))
-    mapreduce_state.mapreduce_spec.params["writer_filename"] = random_str
-    cls.file_contents[random_str] = []
-
-  @classmethod
   def finalize_job(cls, mapreduce_state):
     pass
 
   @classmethod
-  def create(cls, mapreduce_state, shard_number):
-    return cls(mapreduce_state.mapreduce_spec.params["writer_filename"])
+  def create(cls, mr_spec, shard_number, shard_attempt, _writer_state=None):
+    random_str = "".join(
+        random.choice(string.ascii_uppercase + string.digits)
+        for _ in range(64))
+    cls.file_contents[random_str] = []
+    return cls(random_str)
 
   def to_json(self):
     return {"filename": self.filename}
@@ -293,32 +289,8 @@ class EndToEndTest(testutil.HandlerTestBase):
         output_writer_spec=__name__ + ".TestOutputWriter")
 
     test_support.execute_until_empty(self.taskqueue)
-    self.assertEquals(1, len(TestOutputWriter.file_contents))
     self.assertEquals(entity_count,
-                      len(TestOutputWriter.file_contents.values()[0]))
-
-  def testNdbOutputWriter(self):
-    """End-to-end test with output writer."""
-    entity_count = 1000
-
-    for i in range(entity_count):
-      NdbTestEntity().put()
-
-    mapreduce_id = control.start_map(
-        "test_map",
-        __name__ + ".test_handler_yield_ndb_key",
-        "mapreduce.input_readers.DatastoreInputReader",
-        {
-            "entity_kind": __name__ + "." + NdbTestEntity.__name__,
-        },
-        shard_count=4,
-        base_path="/mapreduce_base_path",
-        output_writer_spec=__name__ + ".TestOutputWriter")
-
-    test_support.execute_until_empty(self.taskqueue)
-    self.assertEquals(1, len(TestOutputWriter.file_contents))
-    self.assertEquals(entity_count,
-                      len(TestOutputWriter.file_contents.values()[0]))
+                      sum(map(len, TestOutputWriter.file_contents.values())))
 
   def testRecordsReader(self):
     """End-to-end test for records reader."""

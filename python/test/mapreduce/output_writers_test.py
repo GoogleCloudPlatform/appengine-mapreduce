@@ -330,7 +330,8 @@ class GoogleCloudStorageOutputWriterTest(GoogleCloudStorageOutputTestBase):
         {self.WRITER_CLS.BUCKET_NAME_PARAM: "test"})
     for shard_num in range(self.NUM_SHARDS):
       shard = self.create_shard_state(shard_num)
-      writer = self.WRITER_CLS.create(mapreduce_state, shard)
+      writer = self.WRITER_CLS.create(mapreduce_state.mapreduce_spec,
+                                      shard.shard_number, 0)
       shard.result_status = model.ShardState.RESULT_SUCCESS
       writer.finalize(None, shard)
       shard.put()
@@ -349,7 +350,8 @@ class GoogleCloudStorageOutputWriterTest(GoogleCloudStorageOutputTestBase):
     ctx = context.Context(mapreduce_state.mapreduce_spec, shard_state)
     context.Context._set(ctx)
 
-    writer = self.WRITER_CLS.create(mapreduce_state, shard_state)
+    writer = self.WRITER_CLS.create(mapreduce_state.mapreduce_spec,
+                                    shard_state.shard_number, 0)
     data = "fakedata"
     writer.write(data)
     writer.finalize(None, shard_state)
@@ -367,13 +369,17 @@ class GoogleCloudStorageOutputWriterTest(GoogleCloudStorageOutputTestBase):
     context.Context._set(ctx)
 
     # Create the writer for the 1st attempt
-    writer = self.WRITER_CLS.create(mapreduce_state, shard_state)
+    writer = self.WRITER_CLS.create(mapreduce_state.mapreduce_spec,
+                                    shard_state.shard_number,
+                                    shard_state.retries + 1)
     filename = writer._filename
     writer.write("badData")
 
     # Test re-creating the writer for a retry
     shard_state.reset_for_retry()
-    writer = self.WRITER_CLS.create(mapreduce_state, shard_state)
+    writer = self.WRITER_CLS.create(mapreduce_state.mapreduce_spec,
+                                    shard_state.shard_number,
+                                    shard_state.retries + 1)
     new_filename = writer._filename
     good_data = "goodData"
     writer.write(good_data)
@@ -398,7 +404,9 @@ class GoogleCloudStorageOutputWriterTest(GoogleCloudStorageOutputTestBase):
     ctx = context.Context(mapreduce_state.mapreduce_spec, shard_state)
     context.Context._set(ctx)
 
-    writer = self.WRITER_CLS.create(mapreduce_state, shard_state)
+    writer = self.WRITER_CLS.create(mapreduce_state.mapreduce_spec,
+                                    shard_state.shard_number,
+                                    0)
     writer.finalize(None, shard_state)
 
     filename = self.WRITER_CLS._get_filename(
@@ -416,7 +424,8 @@ class GoogleCloudStorageOutputWriterTest(GoogleCloudStorageOutputTestBase):
     ctx = context.Context(mapreduce_state.mapreduce_spec, shard_state)
     context.Context._set(ctx)
 
-    writer = self.WRITER_CLS.create(mapreduce_state, shard_state)
+    writer = self.WRITER_CLS.create(mapreduce_state.mapreduce_spec,
+                                    shard_state.shard_number, 0)
     # data expliclity contains binary data
     data = "\"fake\"\tdatathatishardtoencode"
     writer.write(data)
@@ -443,7 +452,8 @@ class GoogleCloudStorageOutputWriterTest(GoogleCloudStorageOutputTestBase):
         output_params=
         {self.WRITER_CLS.BUCKET_NAME_PARAM: "test"})
     shard_state = self.create_shard_state(0)
-    writer = self.WRITER_CLS.create(mapreduce_state, shard_state)
+    writer = self.WRITER_CLS.create(mapreduce_state.mapreduce_spec,
+                                    shard_state.shard_number, 0)
     ctx = context.Context(mapreduce_state.mapreduce_spec, shard_state)
     context.Context._set(ctx)
 
@@ -496,7 +506,9 @@ class GoogleCloudStorageRecordOutputWriterTest(
     """
     self.mapreduce_state = self.create_mapreduce_state()
     self.shard_state = self.create_shard_state(0)
-    self.writer = self.WRITER_CLS.create(self.mapreduce_state, self.shard_state)
+    self.writer = self.WRITER_CLS.create(self.mapreduce_state.mapreduce_spec,
+                                         self.shard_state.shard_number,
+                                         self.shard_state.retries + 1)
     self.ctx = context.Context(self.mapreduce_state.mapreduce_spec,
                                self.shard_state)
     context.Context._set(self.ctx)

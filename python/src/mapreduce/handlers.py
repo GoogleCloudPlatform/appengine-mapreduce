@@ -657,9 +657,8 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
                   parameters.config.SHARD_MAX_ATTEMPTS)
     output_writer = None
     if tstate.output_writer:
-      mr_state = model.MapreduceState.get_by_job_id(mr_id)
       output_writer = tstate.output_writer.create(
-          mr_state, shard_state)
+          tstate.mapreduce_spec, shard_state.shard_number, shard_attempts + 1)
     tstate.reset_for_retry(output_writer)
     return self._TASK_STATE.RETRY_SHARD
 
@@ -1320,7 +1319,10 @@ class KickOffJobHandler(base_handler.TaskQueueHandler):
     writers = [None] * len(readers)
     if writer_class:
       for shard_number, shard_state in enumerate(shard_states):
-        writers[shard_number] = writer_class.create(mr_state, shard_state)
+        writers[shard_number] = writer_class.create(
+            mr_state.mapreduce_spec,
+            shard_state.shard_number, shard_state.retries + 1,
+            mr_state.writer_state)
 
     # Schedule ALL shard tasks.
     # Since each task is named, _add_task will fall back gracefully if a

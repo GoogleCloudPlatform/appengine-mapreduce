@@ -205,7 +205,7 @@ class MapreducePipelineTest(testutil.HandlerTestBase):
     retries = 0
     for output_file in p.outputs.default.value:
       # Get the number of shard retries by parsing filename.
-      retries += int(output_file[-1])
+      retries += (int(output_file[-1]) - 1)
       with files.open(output_file, "r") as f:
         for record in records.RecordsReader(f):
           output_data.append(record)

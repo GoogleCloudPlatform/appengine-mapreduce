@@ -312,9 +312,8 @@ class TestOutputWriter(output_writers.OutputWriter):
     cls.events.append("finalize_job")
 
   @classmethod
-  def create(cls, mapreduce_state, shard_state):
-    assert isinstance(mapreduce_state, model.MapreduceState)
-    cls.events.append("create-" + str(shard_state.shard_number))
+  def create(cls, mr_spec, shard_number, shard_attempt, _writer_state=None):
+    cls.events.append("create-" + str(shard_number))
     return cls()
 
   def to_json(self):
