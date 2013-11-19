@@ -1,5 +1,7 @@
 package com.google.appengine.tools.mapreduce.impl.handlers;
 
+import com.google.appengine.tools.mapreduce.impl.shardedjob.RejectRequestException;
+
 import junit.framework.TestCase;
 
 /**

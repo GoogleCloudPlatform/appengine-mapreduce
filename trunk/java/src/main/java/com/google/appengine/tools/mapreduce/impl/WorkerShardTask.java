@@ -13,6 +13,8 @@ import com.google.appengine.tools.mapreduce.Worker;
 import com.google.appengine.tools.mapreduce.WorkerContext;
 import com.google.appengine.tools.mapreduce.impl.handlers.MemoryLimiter;
 import com.google.appengine.tools.mapreduce.impl.shardedjob.IncrementalTask;
+import com.google.appengine.tools.mapreduce.impl.shardedjob.RejectRequestException;
+import com.google.appengine.tools.mapreduce.impl.shardedjob.ShardFailureException;
 import com.google.common.base.Stopwatch;
 import com.google.common.collect.Lists;
 
@@ -32,9 +34,7 @@ public abstract class WorkerShardTask<I, O, C extends WorkerContext>
     implements IncrementalTask<WorkerShardTask<I, O, C>, WorkerResult<O>> {
 
   private static final Logger log = Logger.getLogger(WorkerShardTask.class.getName());
-
   private static final long serialVersionUID = 992552712402490981L;
-
   private static final MemoryLimiter LIMITER = new MemoryLimiter();
 
   protected final String mrJobId;
@@ -51,13 +51,8 @@ public abstract class WorkerShardTask<I, O, C extends WorkerContext>
 
   private boolean isFirstSlice = true;
 
-  protected WorkerShardTask(String mrJobId,
-      int shardNumber,
-      int shardCount,
-      InputReader<I> in,
-      Worker<C> worker,
-      OutputWriter<O> out,
-      String workerCallsCounterName,
+  protected WorkerShardTask(String mrJobId, int shardNumber, int shardCount, InputReader<I> in,
+      Worker<C> worker, OutputWriter<O> out, String workerCallsCounterName,
       String workerMillisCounterName) {
     this.mrJobId = checkNotNull(mrJobId, "Null mrJobId");
     this.shardNumber = shardNumber;
@@ -81,16 +76,9 @@ public abstract class WorkerShardTask<I, O, C extends WorkerContext>
   protected abstract String formatLastWorkItem(I item);
 
   /**
-   * @return true iff a checkpoint should be performed. (Not not mandate that one will)
+   * @return true iff a checkpoint should be performed.
    */
   protected abstract boolean shouldCheckpoint(long timeElapsed);
-
-  /**
-   * @return false iff a checkPoint MUST be performed immediately because more input cannot be
-   *         accepted.
-   */
-  protected abstract boolean canContinue();
-
   protected abstract long estimateMemoryNeeded();
 
   @Override
@@ -98,14 +86,23 @@ public abstract class WorkerShardTask<I, O, C extends WorkerContext>
     long claimedMemory = LIMITER.claim(estimateMemoryNeeded() / 1024 / 1024);
     try {
       return doWork();
+    } catch (RecoverableException | ShardFailureException | RejectRequestException ex) {
+      throw ex;
+    } catch (RuntimeException ex) {
+      throw new ShardFailureException(shardNumber, ex);
     } finally {
       LIMITER.release(claimedMemory);
     }
   }
 
   public RunResult<WorkerShardTask<I, O, C>, WorkerResult<O>> doWork() {
-
-    beginSlice();
+    try {
+      beginSlice();
+    } catch (RecoverableException | ShardFailureException | RejectRequestException ex) {
+      throw ex;
+    } catch (IOException | RuntimeException ex) {
+      throw new RecoverableException("Failed on beginSlice/beginShard", ex);
+    }
     overallStopwatch = Stopwatch.createStarted();
     inputStopwatch =  Stopwatch.createUnstarted();
     workerStopwatch = Stopwatch.createUnstarted();
@@ -124,14 +121,13 @@ public abstract class WorkerShardTask<I, O, C extends WorkerContext>
           inputExhausted = true;
           break;
         } catch (IOException e) {
-          if (workerCalls > 0) {
-            // We made progress, persist it.
-            log.log(Level.SEVERE, in + ".next() threw IOException, ending slice early", e);
-            // TODO(ohler): Abort if too many slices in sequence end early
-            // because of these exceptions.
-            break;
+          if (workerCalls == 0) {
+            // No progress, lets retry the slice
+            throw new RecoverableException("Failed on first input", e);
           }
-          throw new RuntimeException(in + ".next() threw IOException", e);
+          // We made progress, persist it.
+          log.log(Level.WARNING, "An IOException while reading input, ending slice early", e);
+          break;
         }
         inputStopwatch.stop();
 
@@ -142,9 +138,13 @@ public abstract class WorkerShardTask<I, O, C extends WorkerContext>
         // OutputWriter's time, and to subtract that from the time measured by
         // workerStopwatch.
         workerStopwatch.start();
+        // TODO(user): add a way to check if the writer is OK with a slice-retry
+        // and if so, wrap callWorker with try~catch and propagate as RecoverableException.
+        // Otherwise should be propagated as ShardFailureException and remove the
+        // individuals try~catch in the callWorker implementations.
         callWorker(next);
         workerStopwatch.stop();
-      } while (canContinue() && !shouldCheckpoint(overallStopwatch.elapsed(MILLISECONDS)));
+      } while (!shouldCheckpoint(overallStopwatch.elapsed(MILLISECONDS)));
     } finally {
       log.info("Ending slice after " + itemsRead + " items read and calling the worker "
           + workerCalls + " times");
@@ -157,7 +157,14 @@ public abstract class WorkerShardTask<I, O, C extends WorkerContext>
     counters.getCounter(workerCallsCounterName).increment(workerCalls);
     counters.getCounter(workerMillisCounterName).increment(workerStopwatch.elapsed(MILLISECONDS));
 
-    endSlice(inputExhausted);
+    try {
+      endSlice(inputExhausted);
+    } catch (IOException | RuntimeException ex) {
+      // TODO(user): similar to callWorker, if writer has a way to indicate that a slice-retry
+      // is OK we should consider a broader catch and possibly throwing RecoverableException
+      throw new ShardFailureException(shardNumber, "Failed on endSlice/endShard", ex);
+    }
+
     WorkerShardState workerShardState =
         new WorkerShardState(workerCalls, System.currentTimeMillis(), formatLastWorkItem(next));
     if (!inputExhausted) {
@@ -168,25 +175,13 @@ public abstract class WorkerShardTask<I, O, C extends WorkerContext>
     }
   }
 
-  protected void beginSlice() {
+  private void beginSlice() throws IOException {
     if (isFirstSlice) {
-      try {
-        out.open();
-        in.open();
-      } catch (IOException e) {
-        throw new RuntimeException(out + ".beginShard() threw IOException", e);
-      }
+      out.open();
+      in.open();
     }
-    try {
-      in.beginSlice();
-    } catch (IOException e) {
-      throw new RuntimeException(in + ".beginSlice() threw IOException", e);
-    }
-    try {
-      out.beginSlice();
-    } catch (IOException e) {
-      throw new RuntimeException(out + ".beginSlice() threw IOException", e);
-    }
+    in.beginSlice();
+    out.beginSlice();
     Counters counters = new CountersImpl();
     C context = getWorkerContext(counters);
     worker.setContext(context);
@@ -200,7 +195,7 @@ public abstract class WorkerShardTask<I, O, C extends WorkerContext>
     isFirstSlice = false;
   }
 
-  protected void endSlice(boolean inputExhausted) {
+  private void endSlice(boolean inputExhausted) throws IOException {
     worker.endSlice();
     if (inputExhausted) {
       worker.endShard();
@@ -209,36 +204,24 @@ public abstract class WorkerShardTask<I, O, C extends WorkerContext>
         Lists.reverse(worker.getLifecycleListenerRegistry().getListeners())) {
       listener.endSlice();
     }
-    try {
-      out.endSlice();
-    } catch (IOException e) {
-      throw new RuntimeException(out + ".endSlice() threw IOException", e);
-    }
-    try {
-      in.endSlice();
-    } catch (IOException e) {
-      throw new RuntimeException(in + ".endSlice() threw IOException", e);
-    }
+    worker.setContext(null);
+    out.endSlice();
+    in.endSlice();
     if (inputExhausted) {
-      try {
-        out.close();
-      } catch (IOException e) {
-        throw new RuntimeException(out + ".close() threw IOException", e);
-      }
+      out.close();
       try {
         in.close();
-      } catch (IOException e) {
-        throw new RuntimeException(in + ".close() threw IOException", e);
+      } catch (IOException ex) {
+        // Ignore - retrying a slice or shard will not fix that
       }
     }
   }
-
 
   protected static String abbrev(Object x) {
     if (x == null) {
       return null;
     }
-    String s = String.valueOf(x);
+    String s = x.toString();
     if (s.length() > MapReduceConstants.MAX_LAST_ITEM_STRING_SIZE) {
       return s.substring(0, MapReduceConstants.MAX_LAST_ITEM_STRING_SIZE) + "...";
     } else {

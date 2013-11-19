@@ -13,7 +13,7 @@ import javax.servlet.http.HttpServletRequest;
  * As part of its operation, the {@code ShardedJobService} will enqueue task
  * queue tasks that send requests to the URLs specified in
  * {@link ShardedJobSettings}.  It is the user's responsibility to arrange
- * for these requests to be passed back into {@link #handleControllerRequest}
+ * for these requests to be passed back into {@link #handleShardCompleteRequest}
  * and {@link #handleWorkerRequest}.
  *
  * @author ohler@google.com (Christian Ohler)

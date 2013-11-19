@@ -32,6 +32,16 @@ public interface ShardedJobController<T extends IncrementalTask<T, R>,
    *
    * Note that {@code partialResults} may be empty.
    */
+  // TODO(user): combineResults is used in very strange ways and have various side-effects
+  // and confusing code. Consider the following (backward incompatible to outstanding MRs) changes:
+  // 1. Change IncrementalTask#run to accept previous run result(could be null) and return
+  //      via its #getPartialResult the combined result (shard up-to-now).
+  // 2. Move combine logic to WorkerResult (called by WorkerShardTask#doWork,
+  //      AbstractWorkerController#completed and StatusHandler.handleGetJobDetails).
+  // 3. Change #completed() to receive a List of WorkerResult (one per shard).
+  // 4. Remove ShardedJobState#getAggregateResult and AGGREGATE_RESULT_PROPERTY datastore property
+  // 5. Add to ShardedJobState getCompletedResults and StatusHandler.handleGetJobDetails will
+  //      call it and use WorkerResult to combine it.
   /*Nullable*/ R combineResults(Iterable<R> partialResults);
 
   /**

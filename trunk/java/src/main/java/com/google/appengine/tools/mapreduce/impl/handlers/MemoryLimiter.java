@@ -1,6 +1,7 @@
 package com.google.appengine.tools.mapreduce.impl.handlers;
 
 import com.google.appengine.tools.mapreduce.impl.MapReduceConstants;
+import com.google.appengine.tools.mapreduce.impl.shardedjob.RejectRequestException;
 import com.google.common.base.Preconditions;
 import com.google.common.primitives.Ints;
 
@@ -18,15 +19,12 @@ import java.util.logging.Logger;
 public final class MemoryLimiter {
 
   private static final Logger log = Logger.getLogger(MemoryLimiter.class.getName());
-
-  private final int INITIAL_SIZE_MB = Ints.saturatedCast(
+  private static final int INITIAL_SIZE_MB = Ints.saturatedCast(
       (Runtime.getRuntime().maxMemory() - MapReduceConstants.ASSUMED_JVM_RAM_OVERHEAD) / 1024
       / 1024);
-  private final Semaphore AMOUNT_REMAINING = new Semaphore(INITIAL_SIZE_MB, true);
+  private static final int TIME_TO_WAIT = 5000;
+  private final Semaphore amountRemaining = new Semaphore(INITIAL_SIZE_MB, true);
 
-  private final int TIME_TO_WAIT = 5000;
-
-  public MemoryLimiter() {}
 
   private int capRequestedSize(long requested) {
     return (int) Math.min(INITIAL_SIZE_MB, requested);
@@ -51,12 +49,12 @@ public final class MemoryLimiter {
     int neededForRequest = capRequestedSize(toClaimMb);
     boolean acquired = false;
     try {
-      acquired = AMOUNT_REMAINING.tryAcquire(neededForRequest, TIME_TO_WAIT, TimeUnit.MILLISECONDS);
+      acquired = amountRemaining.tryAcquire(neededForRequest, TIME_TO_WAIT, TimeUnit.MILLISECONDS);
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
       throw new RejectRequestException("Was interupted", e);
     }
-    int remaining = AMOUNT_REMAINING.availablePermits();
+    int remaining = amountRemaining.availablePermits();
     if (acquired) {
       log.info("Target available memory was " + (neededForRequest + remaining) + "mb is now "
           + remaining + "mb");
@@ -78,10 +76,9 @@ public final class MemoryLimiter {
       return;
     }
     int toRelease = (int) ammountUsed;
-    AMOUNT_REMAINING.release(toRelease);
-    int remaining = AMOUNT_REMAINING.availablePermits();
+    amountRemaining.release(toRelease);
+    int remaining = amountRemaining.availablePermits();
     log.info(
         "Target available memory was " + (remaining - toRelease) + "mb is now " + remaining + "mb");
   }
-
 }

@@ -15,7 +15,7 @@
 package com.google.appengine.tools.mapreduce;
 
 import com.google.appengine.tools.mapreduce.impl.handlers.MapReduceServletImpl;
-import com.google.appengine.tools.mapreduce.impl.handlers.RejectRequestException;
+import com.google.appengine.tools.mapreduce.impl.shardedjob.RejectRequestException;
 
 import java.io.IOException;
 import java.util.logging.Level;
@@ -54,7 +54,7 @@ public class MapReduceServlet extends HttpServlet {
   private static final long serialVersionUID = 899229972193207939L;
   private static final Logger log = Logger.getLogger(MapReduceServlet.class.getName());
 
-  private static int REJECT_REQUEST_STATUSCODE = 429; // See rfc6585
+  private static final int REJECT_REQUEST_STATUSCODE = 429; // See rfc6585
 
   @Override
   public void doPost(HttpServletRequest req, HttpServletResponse resp) throws IOException {

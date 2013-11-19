@@ -1,4 +1,4 @@
-package com.google.appengine.tools.mapreduce.impl.handlers;
+package com.google.appengine.tools.mapreduce.impl.shardedjob;
 
 
 /**

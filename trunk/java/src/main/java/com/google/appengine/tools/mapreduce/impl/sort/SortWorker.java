@@ -3,7 +3,7 @@ package com.google.appengine.tools.mapreduce.impl.sort;
 import com.google.appengine.tools.mapreduce.KeyValue;
 import com.google.appengine.tools.mapreduce.Worker;
 import com.google.appengine.tools.mapreduce.impl.MapReduceConstants;
-import com.google.appengine.tools.mapreduce.impl.handlers.RejectRequestException;
+import com.google.appengine.tools.mapreduce.impl.shardedjob.RejectRequestException;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Stopwatch;
 import com.google.common.collect.ImmutableList;

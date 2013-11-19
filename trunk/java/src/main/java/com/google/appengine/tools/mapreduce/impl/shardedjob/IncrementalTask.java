@@ -20,17 +20,17 @@ public interface IncrementalTask<T extends IncrementalTask<T, R>, R extends Seri
    * follow-up task.
    */
   static class RunResult<T extends IncrementalTask<T, R>, R extends Serializable> {
+
     public static <T extends IncrementalTask<T, R>, R extends Serializable> RunResult<T, R> of(
         R partialResult, T followupTask) {
       return new RunResult<T, R>(partialResult, followupTask);
     }
 
     /*Nullable*/ private final R partialResult;
-    // Null means no followup task.
+    // Null means no follow-up task.
     /*Nullable*/ private final T followupTask;
 
-    public RunResult(/*Nullable*/ R partialResult,
-        /*Nullable*/ T followupTask) {
+    public RunResult(/*Nullable*/ R partialResult, /*Nullable*/ T followupTask) {
       this.partialResult = partialResult;
       this.followupTask = followupTask;
     }
@@ -43,11 +43,9 @@ public interface IncrementalTask<T extends IncrementalTask<T, R>, R extends Seri
       return followupTask;
     }
 
-    @Override public String toString() {
-      return getClass().getSimpleName() + "("
-          + partialResult + ", "
-          + followupTask
-          + ")";
+    @Override
+    public String toString() {
+      return getClass().getSimpleName() + "(" + partialResult + ", " + followupTask + ")";
     }
   }
 
@@ -58,7 +56,10 @@ public interface IncrementalTask<T extends IncrementalTask<T, R>, R extends Seri
    *
    * If this throws an exception, it may be retried a limited number of times
    * according to an unspecified retry policy.
+   *
+   * @throws RejectRequestException when this request should be ignored
+   * @throws ShardFailureException when shard should be retried
+   * @throws RuntimeException when a slice should be retried
    */
   RunResult<T, R> run();
-
 }

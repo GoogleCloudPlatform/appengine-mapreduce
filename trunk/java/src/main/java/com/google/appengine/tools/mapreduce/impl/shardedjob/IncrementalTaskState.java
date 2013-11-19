@@ -27,7 +27,8 @@ class IncrementalTaskState<T extends IncrementalTask<T, R>, R extends Serializab
   private final String taskId;
   private final String jobId;
   private long mostRecentUpdateMillis;
-  private int nextSequenceNumber = 0;
+  private int nextSequenceNumber;
+  private int retryCount;
   // If null, this task is finished.
   /*Nullable*/ private T nextTask;
   /*Nullable*/ private R partialResult;
@@ -74,6 +75,18 @@ class IncrementalTaskState<T extends IncrementalTask<T, R>, R extends Serializab
     return this;
   }
 
+  public int getRetryCount() {
+    return retryCount;
+  }
+
+  public int incrementAndGetRetryCount() {
+    return ++retryCount;
+  }
+
+  public void clearRetryCount() {
+    retryCount = 0;
+  }
+
   /*Nullable*/ public T getNextTask() {
     return nextTask;
   }
@@ -99,6 +112,7 @@ class IncrementalTaskState<T extends IncrementalTask<T, R>, R extends Serializab
         + jobId + ", "
         + mostRecentUpdateMillis + ", "
         + nextSequenceNumber + ", "
+        + retryCount + ", "
         + nextTask + ", "
         + partialResult + ")";
   }
@@ -110,6 +124,7 @@ class IncrementalTaskState<T extends IncrementalTask<T, R>, R extends Serializab
     private static final String JOB_ID_PROPERTY = "jobId";
     private static final String MOST_RECENT_UPDATE_MILLIS_PROPERTY = "mostRecentUpdateMillis";
     private static final String NEXT_SEQUENCE_NUMBER_PROPERTY = "sequenceNumber";
+    private static final String RETRY_COUNT_PROPERTY = "retryCount";
     private static final String NEXT_TASK_PROPERTY = "nextTask";
     private static final String PARTIAL_RESULT_PROPERTY = "partialResult";
 
@@ -123,6 +138,8 @@ class IncrementalTaskState<T extends IncrementalTask<T, R>, R extends Serializab
       taskState.setUnindexedProperty(
           MOST_RECENT_UPDATE_MILLIS_PROPERTY, in.getMostRecentUpdateMillis());
       taskState.setProperty(NEXT_SEQUENCE_NUMBER_PROPERTY, in.getNextSequenceNumber());
+      taskState.setProperty(RETRY_COUNT_PROPERTY, in.getRetryCount());
+
       if (in.getNextTask() != null) {
         taskState.setUnindexedProperty(NEXT_TASK_PROPERTY,
             SerializationUtil.serializeToDatastoreProperty(in.getNextTask(), CompressionType.GZIP));
@@ -139,7 +156,8 @@ class IncrementalTaskState<T extends IncrementalTask<T, R>, R extends Serializab
     static <T extends IncrementalTask<T, R>, R extends Serializable>
         IncrementalTaskState<T, R> fromEntity(Entity in) {
       Preconditions.checkArgument(ENTITY_KIND.equals(in.getKind()), "Unexpected kind: %s", in);
-      return new IncrementalTaskState(in.getKey().getName(),
+      IncrementalTaskState state = new IncrementalTaskState(
+          in.getKey().getName(),
           (String) in.getProperty(JOB_ID_PROPERTY),
           (Long) in.getProperty(MOST_RECENT_UPDATE_MILLIS_PROPERTY),
           in.hasProperty(NEXT_TASK_PROPERTY)
@@ -151,6 +169,10 @@ class IncrementalTaskState<T extends IncrementalTask<T, R>, R extends Serializab
               : null)
           .setNextSequenceNumber(
               Ints.checkedCast((Long) in.getProperty(NEXT_SEQUENCE_NUMBER_PROPERTY)));
+      if (in.hasProperty(RETRY_COUNT_PROPERTY)) {
+        state.retryCount = Ints.checkedCast((Long) in.getProperty(RETRY_COUNT_PROPERTY));
+      }
+      return state;
     }
 
     static <R extends Serializable> R getPartialResult(Entity in) {
