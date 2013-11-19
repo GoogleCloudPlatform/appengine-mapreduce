@@ -6,6 +6,13 @@ package com.google.appengine.tools.mapreduce;
  *
  */
 public final class CounterNames {
+
+  // TODO(user): There is a fundamental flaw with all of this counters.
+  // The counters only represent the aggregates of the last successful shard
+  // and ignore the calls/cost of slice retries. In order to change that
+  // we would need to move the notion of the counters to sharded-job or
+  // to persist counters separately from partialResult (R).
+
   /**
    * Number of times map function was called.
    */

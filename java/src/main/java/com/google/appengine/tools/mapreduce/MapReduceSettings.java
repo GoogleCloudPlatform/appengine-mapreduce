@@ -4,6 +4,8 @@ package com.google.appengine.tools.mapreduce;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
+import com.google.common.base.Preconditions;
+
 import java.io.Serializable;
 
 /**
@@ -26,9 +28,8 @@ public class MapReduceSettings implements Serializable {
   private String workerQueueName = "default";
   private String bucketName = null;
   private int millisPerSlice = 10000;
-
-  public MapReduceSettings() {
-  }
+  private int maxShardRetries = 4;
+  private int maxSliceRetries = 20;
 
   public String getBaseUrl() {
     return baseUrl;
@@ -80,7 +81,28 @@ public class MapReduceSettings implements Serializable {
   }
 
   public MapReduceSettings setMillisPerSlice(int millisPerSlice) {
+    Preconditions.checkArgument(millisPerSlice >= 0);
     this.millisPerSlice = millisPerSlice;
+    return this;
+  }
+
+  public int getMaxShardRetries() {
+    return maxShardRetries;
+  }
+
+  public MapReduceSettings setMaxShardRetries(int maxShardRetries) {
+    Preconditions.checkArgument(maxShardRetries >= 0);
+    this.maxShardRetries = maxShardRetries;
+    return this;
+  }
+
+  public int getMaxSliceRetries() {
+    return maxSliceRetries;
+  }
+
+  public MapReduceSettings setMaxSliceRetries(int maxSliceRetries) {
+    Preconditions.checkArgument(maxShardRetries >= 0);
+    this.maxSliceRetries = maxSliceRetries;
     return this;
   }
 
@@ -91,7 +113,8 @@ public class MapReduceSettings implements Serializable {
         + controllerQueueName + ", "
         + workerQueueName + ", "
         + bucketName + ", "
-        + millisPerSlice
-        + ")";
+        + millisPerSlice + ","
+        + maxSliceRetries + ","
+        + maxShardRetries + ")";
   }
 }

@@ -24,14 +24,15 @@ public final class ShardedJobSettings implements Serializable {
   private String controllerQueueName = "default";
   private String workerQueueName = "default";
   private int maxShardRetries = 4;
+  private int maxSliceRetries = 20;
 
   public ShardedJobSettings() {
   }
-  
+
   /*Nullable*/ public String getPipelineStatusUrl() {
     return pipelineStatusUrl;
   }
-  
+
   public ShardedJobSettings setPipelineStatusUrl(/*Nullable*/ String pipelineStatusUrl) {
     this.pipelineStatusUrl = pipelineStatusUrl;
     return this;
@@ -95,8 +96,18 @@ public final class ShardedJobSettings implements Serializable {
     return maxShardRetries;
   }
 
-  public void setMaxShardRetries(int maxShardRetries) {
+  public ShardedJobSettings setMaxShardRetries(int maxShardRetries) {
     this.maxShardRetries = maxShardRetries;
+    return this;
+  }
+
+  public int getMaxSliceRetries() {
+    return maxSliceRetries;
+  }
+
+  public ShardedJobSettings setMaxSliceRetries(int maxSliceRetries) {
+    this.maxSliceRetries = maxSliceRetries;
+    return this;
   }
 
   @Override public String toString() {
@@ -108,7 +119,8 @@ public final class ShardedJobSettings implements Serializable {
         + workerPath + ", "
         + controllerQueueName + ", "
         + workerQueueName + ", "
-        + maxShardRetries + ")";
+        + maxShardRetries + ", "
+        + maxSliceRetries + ")";
   }
 
 }

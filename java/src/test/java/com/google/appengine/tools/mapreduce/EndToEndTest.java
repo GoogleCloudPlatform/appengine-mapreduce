@@ -19,6 +19,7 @@ import com.google.appengine.tools.cloudstorage.GcsInputChannel;
 import com.google.appengine.tools.cloudstorage.GcsService;
 import com.google.appengine.tools.cloudstorage.GcsServiceFactory;
 import com.google.appengine.tools.mapreduce.impl.HashingSharder;
+import com.google.appengine.tools.mapreduce.impl.RecoverableException;
 import com.google.appengine.tools.mapreduce.inputs.ConsecutiveLongInput;
 import com.google.appengine.tools.mapreduce.inputs.DatastoreInput;
 import com.google.appengine.tools.mapreduce.inputs.NoInput;
@@ -49,10 +50,13 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Logger;
 
 /**
@@ -69,19 +73,28 @@ public class EndToEndTest extends EndToEndTestCase {
     pipelineService = PipelineServiceFactory.newPipelineService();
   }
 
-  private interface Preparer {
-    void prepare() throws Exception;
+  private static class Preparer {
+    MapReduceSettings prepare() {
+      return new MapReduceSettings();
+    }
   }
 
   private interface Verifier<R> {
     void verify(MapReduceResult<R> result) throws Exception;
   }
 
+  private class NopVerifier<R> implements Verifier<R> {
+    @Override
+    public void verify(MapReduceResult<R> result) {
+      // Do nothing
+    }
+  }
+
   private <I, K, V, O, R> void runWithPipeline(Preparer preparer,
       MapReduceSpecification<I, K, V, O, R> mrSpec, Verifier<R> verifier) throws Exception {
-    preparer.prepare();
+    MapReduceSettings mrSettings = preparer.prepare();
     String jobId = pipelineService.startNewPipeline(new MapReduceJob<I, K, V, O, R>(),
-        mrSpec, new MapReduceSettings());
+        mrSpec, mrSettings);
     assertFalse(jobId.isEmpty());
     executeTasksUntilEmpty("default");
     JobInfo info = pipelineService.getJobInfo(jobId);
@@ -98,79 +111,291 @@ public class EndToEndTest extends EndToEndTestCase {
   }
 
   public void testDoNothing() throws Exception {
-    runTest(new Preparer() {
-      @Override
-      public void prepare() throws Exception {}
-    }, MapReduceSpecification.of("Empty test MR",
-        new NoInput<Long>(1),
-        new Mod37Mapper(),
-        Marshallers.getStringMarshaller(),
-        Marshallers.getLongMarshaller(),
-        NoReducer.<String, Long, String>create(),
-        new NoOutput<String, String>(1)), new Verifier<String>() {
-      @Override
-      public void verify(MapReduceResult<String> result) throws Exception {
-        assertNull(result.getOutputResult());
-        assertEquals(0, result.getCounters().getCounter(CounterNames.MAPPER_CALLS).getValue());
-        assertEquals(0, result.getCounters().getCounter(CounterNames.REDUCER_CALLS).getValue());
-      }
-    });
+    runTest(new Preparer(),
+        MapReduceSpecification.of("Empty test MR",
+            new NoInput<Long>(1),
+            new Mod37Mapper(),
+            Marshallers.getStringMarshaller(),
+            Marshallers.getLongMarshaller(),
+            NoReducer.<String, Long, String>create(),
+            new NoOutput<String, String>(1)),
+        new Verifier<String>() {
+          @Override
+          public void verify(MapReduceResult<String> result) throws Exception {
+            assertNull(result.getOutputResult());
+            assertEquals(0, result.getCounters().getCounter(CounterNames.MAPPER_CALLS).getValue());
+            assertEquals(0, result.getCounters().getCounter(CounterNames.REDUCER_CALLS).getValue());
+          }
+        });
   }
 
   @SuppressWarnings("serial")
   private static class RougeMapper extends Mapper<Long, String, Long> {
 
-    private static int beginShardCount;
+    private static int[] beginShardCount;
+    private static int[] endShardCount;
+    private static int[] beginSliceCount;
+    private static int[] endSliceCount;
+    private static int[] totalMapCount;
+    private static int[] successfulMapCount;
+    private static Map<Integer, AtomicInteger>[] sliceAttemptsPerShardRetry;
+    private static int[] sliceFailureCount;
+    private static boolean firstSlice;
+    private final int sliceFailures;
     private final int shardFailures;
+    private int shardNum;
 
-    private RougeMapper(int shardFailures) {
+    @SuppressWarnings("unchecked")
+    private RougeMapper(int shards, int shardFailures, int sliceFailures) {
       this.shardFailures = shardFailures;
-      beginShardCount = 0;
+      this.sliceFailures = sliceFailures;
+      beginShardCount = new int[shards];
+      endShardCount = new int[shards];
+      beginSliceCount = new int[shards];
+      endSliceCount = new int[shards];
+      totalMapCount = new int[shards];
+      successfulMapCount = new int[shards];
+      sliceFailureCount = new int[shards];
+      sliceAttemptsPerShardRetry = new HashMap[shards];
+      for (int i = 0; i < shards; i++) {
+        sliceAttemptsPerShardRetry[i] = new HashMap<>();
+      }
+    }
+
+    @Override
+    public void setContext(MapperContext<String, Long> context) {
+      super.setContext(context);
+      if (context != null) {
+        shardNum = context.getShardNumber();
+      }
+    }
+
+    private void incrementCounter(String name) {
+      getContext().incrementCounter(name + "[" + shardNum + "]");
+    }
+
+    private void incrementCounter(String name, int... indexes) {
+      String counterName = name + "[" + shardNum + "]";
+      for (int idx : indexes) {
+        counterName += "[" + idx + "]";
+      }
+      getContext().incrementCounter(counterName);
     }
 
     @Override
     public void beginShard() {
-      beginShardCount++;
+      // We expect this to be one (as counter should be reset upon beginShard)
+      incrementCounter("beginShard");
+      sliceAttemptsPerShardRetry[shardNum].put(++beginShardCount[shardNum], new AtomicInteger());
+      firstSlice = true;
+    }
+
+    @Override
+    public void beginSlice() {
+      sliceAttemptsPerShardRetry[shardNum].get(beginShardCount[shardNum]).getAndIncrement();
+      // We expect only beginSlice[last_successful_attempt] to be available
+
+      incrementCounter("beginSlice", beginShardCount[shardNum]);
+      // Start with slice failures after, shard failure and a first successful slice
+      beginSliceCount[shardNum]++;
+      if (!firstSlice) {
+        if (++sliceFailureCount[shardNum] <= sliceFailures) {
+          throw new RecoverableException("bla", null);
+        }
+      }
+    }
+
+    @Override
+    public void endSlice() {
+      // We expect only endSlice[last_successful_attempt] to be available
+      incrementCounter("endSlice", beginShardCount[shardNum]);
+      endSliceCount[shardNum]++;
+      firstSlice = false;
+    }
+
+    @Override
+    public void endShard() {
+      // We expect both to be equal to 1
+      endShardCount[shardNum]++;
+      incrementCounter("endShard");
     }
 
     @Override
     public void map(Long input) {
-      getContext().incrementCounter("counter1");
-      if (beginShardCount <= shardFailures) {
+      totalMapCount[shardNum]++;
+      incrementCounter("map");
+      if (beginShardCount[shardNum] <= shardFailures) {
         throw new RuntimeException("Bad state");
       }
+      // TODO(user): Once we support slice failure during map phase
+      // by checking with the writer, we should have a test for it here.
+      successfulMapCount[shardNum]++;
+    }
+  }
+
+  private static class RougeMapperPreparer extends Preparer {
+
+    public RougeMapperPreparer(RandomLongInput input) {
+      input.setSeed(0L);
+    }
+
+    @Override
+    public MapReduceSettings prepare() {
+      MapReduceSettings settings = super.prepare();
+      settings.setMillisPerSlice(0);
+      return settings;
+    }
+  }
+
+  private static class RougeMapperVerifier implements Verifier<String> {
+
+    private final int shards;
+    private final int mapCount;
+    private final int shardFailures;
+    private final int sliceFailures;
+    private final int shardFailuresDueToSliceRetry;
+    private final int successfulMapCount; // we process one map call per slice
+    private final int totalMapCount; // ShardFailure occur in the map
+    private final int beginShardCount;
+    private final int endShardCount;
+    private final int beginSliceCount;
+    private final int endSliceCount;
+    private final Map<String, Integer> countersMap = new HashMap<>();
+
+    private static final int SLICE_RETRIES = 20;
+    private static final int SLICE_ATTEMPTS = 1 + SLICE_RETRIES;
+
+    RougeMapperVerifier(int shards, int mapCount, int shardFailures, int sliceFailures) {
+      this.shards = shards;
+      this.mapCount = mapCount;
+      this.shardFailures = shardFailures;
+      this.sliceFailures = sliceFailures;
+      shardFailuresDueToSliceRetry = sliceFailures / SLICE_ATTEMPTS;
+      successfulMapCount = mapCount + shardFailuresDueToSliceRetry;
+      totalMapCount = mapCount + shardFailures + shardFailuresDueToSliceRetry;
+      beginShardCount = shardFailures + shardFailuresDueToSliceRetry + 1;
+      endShardCount = 1; // always 1
+      // 1 extra for eof (for both [begin/end]Slice)
+      beginSliceCount = shardFailures + shardFailuresDueToSliceRetry + sliceFailures + mapCount + 1;
+      endSliceCount = mapCount + shardFailuresDueToSliceRetry + 1;
+    }
+
+    @Override
+    public void verify(MapReduceResult<String> result) throws Exception {
+      Counters counters = result.getCounters();
+      assertEquals(shards * mapCount, counters.getCounter(CounterNames.MAPPER_CALLS).getValue());
+      assertEquals(0, counters.getCounter(CounterNames.REDUCER_CALLS).getValue());
+      countersMap.clear();
+      for (Counter counter : counters.getCounters()) {
+        countersMap.put(counter.getName(), (int) counter.getValue());
+      }
+      for (int i = 0; i < shards; i++){
+        verify(i);
+      }
+    }
+
+    private int getCounter(int shard, String name, int... indexes) {
+      String counterName = name + "[" + shard + "]";
+      for (int index : indexes) {
+        counterName += "[" + index + "]";
+      }
+      return countersMap.containsKey(counterName) ? countersMap.get(counterName) : -1;
+    }
+
+    private void verify(int shard) {
+      assertEquals(beginShardCount, RougeMapper.beginShardCount[shard]);
+      assertEquals(endShardCount, RougeMapper.endShardCount[shard]);
+      assertEquals(beginSliceCount, RougeMapper.beginSliceCount[shard]);
+      assertEquals(endSliceCount, RougeMapper.endSliceCount[shard]);
+      assertEquals(successfulMapCount, RougeMapper.successfulMapCount[shard]);
+      assertEquals(totalMapCount, RougeMapper.totalMapCount[shard]);
+
+      // check counter for shard failures
+      for (int i = 1; i < shardFailures; i++) {
+        assertEquals(1, RougeMapper.sliceAttemptsPerShardRetry[shard].get(i).intValue());
+      }
+      for (int i = shardFailures + 1; i < beginShardCount; i++) {
+        // 1 go through, 1 fail + 20 retries fail
+        assertEquals(1 + SLICE_ATTEMPTS,
+            RougeMapper.sliceAttemptsPerShardRetry[shard].get(i).intValue());
+      }
+      if (shardFailuresDueToSliceRetry > 0){
+        assertEquals(mapCount + 1 + sliceFailures % SLICE_ATTEMPTS,
+            RougeMapper.sliceAttemptsPerShardRetry[shard].get(beginShardCount).intValue());
+      } else {
+        assertEquals(successfulMapCount + sliceFailures + 1,
+            RougeMapper.sliceAttemptsPerShardRetry[shard].get(beginShardCount).intValue());
+      }
+
+      for (int i = 1; i < beginShardCount; i++) {
+        assertEquals(-1, getCounter(shard, "beginSlice", i));
+        assertEquals(-1, getCounter(shard, "endSlice", i));
+      }
+      // our MR process 1 map per slice (and failures do not count)
+      assertEquals(mapCount + 1, getCounter(shard, "beginSlice", beginShardCount));
+      assertEquals(mapCount + 1, getCounter(shard, "endSlice", beginShardCount));
+      // always 1 because counters are reset per shard
+      assertEquals(1, getCounter(shard, "beginShard"));
+      assertEquals(1, getCounter(shard, "endShard"));
+      assertEquals(mapCount, getCounter(shard, "map"));
     }
   }
 
   public void testShardRetriesSuccess() throws Exception {
-    final RandomLongInput input = new RandomLongInput(10, 1);
-    input.setSeed(0L);
-
-    runWithPipeline(new Preparer() {
-      @Override
-      public void prepare() throws Exception {}
-    }, MapReduceSpecification.of("Shard-retry test",
-        input,
-        new RougeMapper(2),
-        Marshallers.getStringMarshaller(),
-        Marshallers.getLongMarshaller(),
-        NoReducer.<String, Long, String>create(),
-        new NoOutput<String, String>(1)), new Verifier<String>() {
-      @Override
-      public void verify(MapReduceResult<String> result) throws Exception {
-        assertNull(result.getOutputResult());
-        assertEquals(10, result.getCounters().getCounter(CounterNames.MAPPER_CALLS).getValue());
-        assertEquals(10, result.getCounters().getCounter("counter1").getValue());
-        assertEquals(0, result.getCounters().getCounter(CounterNames.REDUCER_CALLS).getValue());
-      }
-    });
+    int shardsCount = 1;
+    // {input-size, shard-failure, slice-failure}
+    int[][] runs = {{10, 2, 0}, {10, 0, 10}, {10, 3, 5}, {10, 0, 22}, {10, 1, 50}};
+    for (int[] run : runs) {
+      RandomLongInput input = new RandomLongInput(run[0], shardsCount);
+      runWithPipeline(new RougeMapperPreparer(input),
+          MapReduceSpecification.of("Shard-retry test",
+              input,
+              new RougeMapper(shardsCount, run[1], run[2]),
+              Marshallers.getStringMarshaller(),
+              Marshallers.getLongMarshaller(),
+              NoReducer.<String, Long, String>create(),
+              new NoOutput<String, String>(1)),
+          new RougeMapperVerifier(shardsCount, run[0], run[1], run[2]) {
+            @Override
+            public void verify(MapReduceResult<String> result) throws Exception {
+              super.verify(result);
+              assertNull(result.getOutputResult());
+            }
+          });
+    }
   }
 
   public void testShardRetriesFailure() throws Exception {
-    final RandomLongInput input = new RandomLongInput(10, 1);
+    int shardsCount = 1;
+    // {shard-failure, slice-failure}
+    int[][] runs = {{5, 0}, {4, 21}, {3, 50}};
+    for (int[] run : runs) {
+      RandomLongInput input = new RandomLongInput(10, shardsCount);
+      MapReduceSettings mrSettings = new RougeMapperPreparer(input).prepare();
+      MapReduceSpecification<Long, String, Long, String, String> mrSpec =
+          MapReduceSpecification.of(
+              "Shard-retry failed", input, new RougeMapper(shardsCount, run[0], run[1]),
+          Marshallers.getStringMarshaller(), Marshallers.getLongMarshaller(),
+          NoReducer.<String, Long, String>create(), new NoOutput<String, String>(1));
+      String jobId = pipelineService.startNewPipeline(
+          new MapReduceJob<Long, String, Long, String, String>(), mrSpec, mrSettings);
+      assertFalse(jobId.isEmpty());
+      executeTasksUntilEmpty("default");
+      JobInfo info = pipelineService.getJobInfo(jobId);
+      assertNull(info.getOutput());
+      assertEquals(JobInfo.State.STOPPED_BY_ERROR, info.getJobState());
+      assertTrue(info.getException().getMessage().matches(
+          "Stage map-.* was not completed successfuly \\(status=ERROR\\)"));
+    }
+  }
+
+  // Slice exceeds max allowed and fallback to shard-retry
+  public void testSliceRetriesFailure() throws Exception {
+    int shardsCount = 1;
+    final RandomLongInput input = new RandomLongInput(10, shardsCount);
     input.setSeed(0L);
     MapReduceSpecification<Long, String, Long, String, String> mrSpec =
-        MapReduceSpecification.of("Shard-retry failed", input, new RougeMapper(5),
+        MapReduceSpecification.of("Shard-retry failed", input, new RougeMapper(shardsCount, 5, 0),
         Marshallers.getStringMarshaller(), Marshallers.getLongMarshaller(),
         NoReducer.<String, Long, String>create(), new NoOutput<String, String>(1));
     String jobId = pipelineService.startNewPipeline(
@@ -186,94 +411,95 @@ public class EndToEndTest extends EndToEndTestCase {
     assertEquals("Bad state", info.getException().getCause().getCause().getMessage());
   }
 
+  @SuppressWarnings("deprecation")
   public void testPassThroughToString() throws Exception {
     final RandomLongInput input = new RandomLongInput(10, 1);
     input.setSeed(0L);
-    runTest(new Preparer() {
-      @Override
-      public void prepare() throws Exception {}
-    }, MapReduceSpecification.of("TestPassThroughToString",
-        input,
-        new Mod37Mapper(),
-        Marshallers.getStringMarshaller(),
-        Marshallers.getLongMarshaller(),
-        ValueProjectionReducer.<String, Long>create(),
-        new StringOutput<Long, List<AppEngineFile>>(
-            ",", new BlobFileOutput("Foo-%02d", "testType", 1))),
-            new Verifier<List<AppEngineFile>>() {
-      @Override
-      public void verify(MapReduceResult<List<AppEngineFile>> result) throws Exception {
-        assertEquals(1, result.getOutputResult().size());
-        assertEquals(10, result.getCounters().getCounter(CounterNames.MAPPER_CALLS).getValue());
-        AppEngineFile file = result.getOutputResult().get(0);
-        FileReadChannel ch = FileServiceFactory.getFileService().openReadChannel(file, false);
-        BufferedReader reader =
-            new BufferedReader(Channels.newReader(ch, Charsets.US_ASCII.newDecoder(), -1));
-        String line = reader.readLine();
-        List<String> strings = Arrays.asList(line.split(","));
-        assertEquals(10, strings.size());
-        input.setSeed(0L);
-        InputReader<Long> source = input.createReaders().get(0);
-        for (int i = 0; i < 10; i++) {
-          assertTrue(strings.contains(source.next().toString()));
-        }
-      }
-    });
+    runTest(new Preparer(),
+        MapReduceSpecification.of("TestPassThroughToString",
+            input,
+            new Mod37Mapper(),
+            Marshallers.getStringMarshaller(),
+            Marshallers.getLongMarshaller(),
+            ValueProjectionReducer.<String, Long>create(),
+            new StringOutput<Long, List<AppEngineFile>>(
+                ",", new BlobFileOutput("Foo-%02d", "testType", 1))),
+        new Verifier<List<AppEngineFile>>() {
+          @SuppressWarnings("resource")
+          @Override
+          public void verify(MapReduceResult<List<AppEngineFile>> result) throws Exception {
+            assertEquals(1, result.getOutputResult().size());
+            assertEquals(10, result.getCounters().getCounter(CounterNames.MAPPER_CALLS).getValue());
+            AppEngineFile file = result.getOutputResult().get(0);
+            FileReadChannel ch = FileServiceFactory.getFileService().openReadChannel(file, false);
+            BufferedReader reader =
+                new BufferedReader(Channels.newReader(ch, Charsets.US_ASCII.newDecoder(), -1));
+            String line = reader.readLine();
+            List<String> strings = Arrays.asList(line.split(","));
+            assertEquals(10, strings.size());
+            input.setSeed(0L);
+            InputReader<Long> source = input.createReaders().get(0);
+            for (int i = 0; i < 10; i++) {
+              assertTrue(strings.contains(source.next().toString()));
+            }
+          }
+        });
   }
 
   public void testPassByteBufferToGcs() throws Exception {
     final RandomLongInput input = new RandomLongInput(10, 1);
     input.setSeed(0L);
-    runTest(new Preparer() {
-      @Override
-      public void prepare() throws Exception {}
-    }, MapReduceSpecification.of("TestPassThroughToByteBuffer",
-        input,
-        new LongToBytesMapper(),
-        Marshallers.getByteBufferMarshaller(),
-        Marshallers.getByteBufferMarshaller(),
-        ValueProjectionReducer.<ByteBuffer, ByteBuffer>create(),
-        new GoogleCloudStorageFileOutput("bucket", "fileNamePattern-%04d",
-            "application/octet-stream", 2)), new Verifier<GoogleCloudStorageFileSet>() {
-      @Override
-      public void verify(MapReduceResult<GoogleCloudStorageFileSet> result) throws Exception {
-        assertEquals(2, result.getOutputResult().getNumFiles());
-        assertEquals(10, result.getCounters().getCounter(CounterNames.MAPPER_CALLS).getValue());
-        ArrayList<Long> results = new ArrayList<Long>();
-        GcsService gcsService = GcsServiceFactory.createGcsService();
-        ByteBuffer holder = ByteBuffer.allocate(8);
-        for (GcsFilename file : result.getOutputResult().getAllFiles()) {
-          GcsInputChannel readChannel = gcsService.openPrefetchingReadChannel(file, 0, 4096);
-          int read = readChannel.read(holder);
-          while (read != -1) {
-            holder.rewind();
-            results.add(holder.getLong());
-            holder.rewind();
-            read = readChannel.read(holder);
+    runTest(new Preparer(),
+        MapReduceSpecification.of("TestPassThroughToByteBuffer",
+            input,
+            new LongToBytesMapper(),
+            Marshallers.getByteBufferMarshaller(),
+            Marshallers.getByteBufferMarshaller(),
+            ValueProjectionReducer.<ByteBuffer, ByteBuffer>create(),
+            new GoogleCloudStorageFileOutput("bucket", "fileNamePattern-%04d",
+                "application/octet-stream", 2)),
+        new Verifier<GoogleCloudStorageFileSet>() {
+          @Override
+          public void verify(MapReduceResult<GoogleCloudStorageFileSet> result) throws Exception {
+            assertEquals(2, result.getOutputResult().getNumFiles());
+            assertEquals(10, result.getCounters().getCounter(CounterNames.MAPPER_CALLS).getValue());
+            ArrayList<Long> results = new ArrayList<Long>();
+            GcsService gcsService = GcsServiceFactory.createGcsService();
+            ByteBuffer holder = ByteBuffer.allocate(8);
+            for (GcsFilename file : result.getOutputResult().getAllFiles()) {
+              try (GcsInputChannel channel = gcsService.openPrefetchingReadChannel(file, 0, 4096)) {
+                int read = channel.read(holder);
+                while (read != -1) {
+                  holder.rewind();
+                  results.add(holder.getLong());
+                  holder.rewind();
+                  read = channel.read(holder);
+                }
+              }
+            }
+            assertEquals(10, results.size());
+            RandomLongInput input = new RandomLongInput(10, 1);
+            input.setSeed(0L);
+            InputReader<Long> source = input.createReaders().get(0);
+            for (int i = 0; i < results.size(); i++) {
+              Long expected = source.next();
+              assertTrue(results.contains(expected));
+            }
           }
-        }
-        assertEquals(10, results.size());
-        RandomLongInput input = new RandomLongInput(10, 1);
-        input.setSeed(0L);
-        InputReader<Long> source = input.createReaders().get(0);
-        for (int i = 0; i < results.size(); i++) {
-          Long expected = source.next();
-          assertTrue(results.contains(expected));
-        }
-      }
-    });
+        });
   }
 
-  @SuppressWarnings({"unchecked", "rawtypes"})
+  @SuppressWarnings({"unchecked"})
   public void testLifeCycleMethodsCalled() throws Exception {
     Input<Long> mockInput = createStrictMock(Input.class);
     InputReader<Long> inputReader = createStrictMock(InputReader.class);
     Output<ByteBuffer, Void> mockOutput = createStrictMock(Output.class);
     OutputWriter<ByteBuffer> outputWriter = createStrictMock(OutputWriter.class);
 
-    List/*<InputReader<Long>>*/ readers = ImmutableList.of(inputReader);
+    @SuppressWarnings("rawtypes")
+    List readers = ImmutableList.of(inputReader);
     expect(mockInput.createReaders()).andReturn(readers);
-    expect(inputReader.estimateMemoryRequirment()).andReturn(0l).anyTimes();
+    expect(inputReader.estimateMemoryRequirment()).andReturn(0L).anyTimes();
     inputReader.open();
     inputReader.beginSlice();
     expect(inputReader.next()).andThrow(new NoSuchElementException());
@@ -281,39 +507,37 @@ public class EndToEndTest extends EndToEndTestCase {
     inputReader.close();
 
     expect(mockOutput.getNumShards()).andReturn(1).times(0, Integer.MAX_VALUE);
-    List/*<OutputWriter<ByteBuffer>>*/ writers = ImmutableList.of(outputWriter);
+    @SuppressWarnings("rawtypes")
+    List writers = ImmutableList.of(outputWriter);
     expect(mockOutput.createWriters()).andReturn(writers);
-    expect(outputWriter.estimateMemoryRequirment()).andReturn(0l).anyTimes();
+    expect(outputWriter.estimateMemoryRequirment()).andReturn(0L).anyTimes();
     outputWriter.open();
     outputWriter.beginSlice();
     outputWriter.endSlice();
     outputWriter.close();
     expect(mockOutput.finish(isA(Collection.class))).andReturn(null);
     replay(mockInput, inputReader, mockOutput, outputWriter);
-    runWithPipeline(new Preparer() {
-      @Override
-      public void prepare() throws Exception {}
-    }, MapReduceSpecification.of("testLifeCycleMethodsCalled",
-        mockInput,
-        new LongToBytesMapper(),
-        Marshallers.getByteBufferMarshaller(),
-        Marshallers.getByteBufferMarshaller(),
-        ValueProjectionReducer.<ByteBuffer, ByteBuffer>create(),
-        mockOutput), new Verifier<Void>() {
-      @Override
-      public void verify(MapReduceResult<Void> result) throws Exception {}
-    });
+    runWithPipeline(new Preparer(),
+        MapReduceSpecification.of("testLifeCycleMethodsCalled",
+            mockInput,
+            new LongToBytesMapper(),
+            Marshallers.getByteBufferMarshaller(),
+            Marshallers.getByteBufferMarshaller(),
+            ValueProjectionReducer.<ByteBuffer, ByteBuffer>create(),
+            mockOutput),
+        new NopVerifier<Void>());
   }
 
   public void testDatastoreData() throws Exception {
     final DatastoreService datastoreService = DatastoreServiceFactory.getDatastoreService();
-    runTest(
-        new Preparer() {
-          @Override public void prepare() throws Exception {
+    runTest(new Preparer() {
+          @Override
+          public MapReduceSettings prepare() {
             // Datastore restriction: id cannot be zero.
             for (long i = 1; i <= 100; ++i) {
               datastoreService.put(new Entity(KeyFactory.createKey("Test", i)));
             }
+            return super.prepare();
           }
         },
         MapReduceSpecification.of("Test MR",
@@ -324,8 +548,8 @@ public class EndToEndTest extends EndToEndTestCase {
             new TestReducer(),
             new InMemoryOutput<KeyValue<String, List<Long>>>(1)),
         new Verifier<List<List<KeyValue<String, List<Long>>>>>() {
-          @Override public void verify(
-              MapReduceResult<List<List<KeyValue<String, List<Long>>>>> result)
+          @Override
+          public void verify(MapReduceResult<List<List<KeyValue<String, List<Long>>>>> result)
               throws Exception {
             Counters counters = result.getCounters();
             log.info("counters=" + counters);
@@ -374,11 +598,7 @@ public class EndToEndTest extends EndToEndTestCase {
   }
 
   public void testNoData() throws Exception {
-    runTest(
-        new Preparer() {
-          @Override public void prepare() throws Exception {
-          }
-        },
+    runTest(new Preparer(),
         MapReduceSpecification.of("Test MR",
             new DatastoreInput("Test", 2),
             new TestMapper(),
@@ -387,7 +607,8 @@ public class EndToEndTest extends EndToEndTestCase {
             NoReducer.<String, Long, Void>create(),
             NoOutput.<Void, Void>create(1)),
         new Verifier<Void>() {
-          @Override public void verify(MapReduceResult<Void> result) throws Exception {
+          @Override
+          public void verify(MapReduceResult<Void> result) throws Exception {
             Counters counters = result.getCounters();
             assertNotNull(counters);
 
@@ -405,7 +626,9 @@ public class EndToEndTest extends EndToEndTestCase {
 
   @SuppressWarnings("serial")
   private static class Mod37Mapper extends Mapper<Long, String, Long> {
-    @Override public void map(Long input) {
+
+    @Override
+    public void map(Long input) {
       String mod37 = "" + (Math.abs(input) % 37);
       getContext().emit(mod37, input);
     }
@@ -413,7 +636,9 @@ public class EndToEndTest extends EndToEndTestCase {
 
   @SuppressWarnings("serial")
   private static class LongToBytesMapper extends Mapper<Long, ByteBuffer, ByteBuffer> {
-    @Override public void map(Long input) {
+
+    @Override
+    public void map(Long input) {
       ByteBuffer key = ByteBuffer.allocate(8);
       key.putLong(input);
       key.rewind();
@@ -425,11 +650,7 @@ public class EndToEndTest extends EndToEndTestCase {
   }
 
   public void testSomeNumbers() throws Exception {
-    runTest(
-        new Preparer() {
-          @Override public void prepare() throws Exception {
-          }
-        },
+    runTest(new Preparer(),
         MapReduceSpecification.of("Test MR",
             new ConsecutiveLongInput(-10000, 10000, 10),
             new Mod37Mapper(),
@@ -438,8 +659,8 @@ public class EndToEndTest extends EndToEndTestCase {
             new TestReducer(),
             new InMemoryOutput<KeyValue<String, List<Long>>>(5)),
         new Verifier<List<List<KeyValue<String, List<Long>>>>>() {
-          @Override public void verify(
-              MapReduceResult<List<List<KeyValue<String, List<Long>>>>> result)
+          @Override
+          public void verify(MapReduceResult<List<List<KeyValue<String, List<Long>>>>> result)
               throws Exception {
             Counters counters = result.getCounters();
             assertEquals(20000, counters.getCounter(CounterNames.MAPPER_CALLS).getValue());
@@ -475,45 +696,46 @@ public class EndToEndTest extends EndToEndTestCase {
    * ignores the values.
    */
   public void testReduceOnlyLooksAtKeys() throws Exception {
-    runTest(new Preparer() {
-      @Override
-      public void prepare() throws Exception {}
-    }, MapReduceSpecification.of("Test MR",
-        new ConsecutiveLongInput(-10000, 10000, 10),
-        new Mod37Mapper(),
-        Marshallers.getStringMarshaller(),
-        Marshallers.getLongMarshaller(),
-        KeyProjectionReducer.<String, Long>create(),
-        new InMemoryOutput<String>(5)), new Verifier<List<List<String>>>() {
-      @Override
-      public void verify(MapReduceResult<List<List<String>>> result) throws Exception {
-        Counters counters = result.getCounters();
-        assertEquals(20000, counters.getCounter(CounterNames.MAPPER_CALLS).getValue());
-        assertEquals(37, counters.getCounter(CounterNames.REDUCER_CALLS).getValue());
+    runTest(new Preparer(),
+        MapReduceSpecification.of("Test MR",
+            new ConsecutiveLongInput(-10000, 10000, 10),
+            new Mod37Mapper(),
+            Marshallers.getStringMarshaller(),
+            Marshallers.getLongMarshaller(),
+            KeyProjectionReducer.<String, Long>create(),
+            new InMemoryOutput<String>(5)),
+        new Verifier<List<List<String>>>() {
+          @Override
+          public void verify(MapReduceResult<List<List<String>>> result) throws Exception {
+            Counters counters = result.getCounters();
+            assertEquals(20000, counters.getCounter(CounterNames.MAPPER_CALLS).getValue());
+            assertEquals(37, counters.getCounter(CounterNames.REDUCER_CALLS).getValue());
 
-        List<List<String>> actualOutput = result.getOutputResult();
-        assertEquals(5, actualOutput.size());
-        List<String> allKeys = new ArrayList<String>();
-        for (int shard = 0; shard < 5; shard++) {
-          allKeys.addAll(actualOutput.get(shard));
-        }
-        assertEquals(37, allKeys.size());
-        for (int i = 0; i < 37; i++) {
-          assertTrue("" + i, allKeys.contains("" + i));
-        }
-      }
-    });
+            List<List<String>> actualOutput = result.getOutputResult();
+            assertEquals(5, actualOutput.size());
+            List<String> allKeys = new ArrayList<String>();
+            for (int shard = 0; shard < 5; shard++) {
+              allKeys.addAll(actualOutput.get(shard));
+            }
+            assertEquals(37, allKeys.size());
+            for (int i = 0; i < 37; i++) {
+              assertTrue("" + i, allKeys.contains("" + i));
+            }
+          }
+        });
   }
 
   @SuppressWarnings("serial")
   static class SideOutputMapper extends Mapper<Long, String, Void> {
     transient BlobFileOutputWriter sideOutput;
 
-    @Override public void beginSlice() {
+    @Override
+    public void beginSlice() {
       sideOutput = BlobFileOutputWriter.forWorker(this, "test file", "application/octet-stream");
     }
 
-    @Override public void map(Long input) {
+    @Override
+    public void map(Long input) {
       log.info("map(" + input + ") in shard " + getContext().getShardNumber());
       try {
         sideOutput.write(Marshallers.getLongMarshaller().toBytes(input));
@@ -522,7 +744,9 @@ public class EndToEndTest extends EndToEndTestCase {
       }
     }
 
-    @Override public void endSlice() {
+    @SuppressWarnings("deprecation")
+    @Override
+    public void endSlice() {
       log.info("endShard() in shard " + getContext().getShardNumber());
       try {
         sideOutput.close();
@@ -534,11 +758,7 @@ public class EndToEndTest extends EndToEndTestCase {
   }
 
   public void testSideOutput() throws Exception {
-    runTest(
-        new Preparer() {
-          @Override public void prepare() throws Exception {
-          }
-        },
+    runTest(new Preparer(),
         MapReduceSpecification.of("Test MR",
             new ConsecutiveLongInput(0, 6, 6),
             new SideOutputMapper(),
@@ -547,8 +767,8 @@ public class EndToEndTest extends EndToEndTestCase {
             KeyProjectionReducer.<String, Void>create(),
             new InMemoryOutput<String>(1)),
         new Verifier<List<List<String>>>() {
-          @Override public void verify(MapReduceResult<List<List<String>>> result)
-              throws Exception {
+          @Override
+          public void verify(MapReduceResult<List<List<String>>> result) throws Exception {
             List<List<String>> outputResult = result.getOutputResult();
             Set<Long> expected = new HashSet<>();
             for (long i = 0; i < 6; i++) {
@@ -559,12 +779,12 @@ public class EndToEndTest extends EndToEndTestCase {
               assertEquals(6, files.size());
               for (String file : files) {
                 ByteBuffer buf = ByteBuffer.allocate(8);
-                FileReadChannel ch =
+                try (@SuppressWarnings("deprecation") FileReadChannel ch =
                     FileServiceFactory.getFileService().openReadChannel(
-                        new AppEngineFile(file), false);
-                assertEquals(8, ch.read(buf));
-                assertEquals(-1, ch.read(ByteBuffer.allocate(1)));
-                ch.close();
+                        new AppEngineFile(file), false)) {
+                  assertEquals(8, ch.read(buf));
+                  assertEquals(-1, ch.read(ByteBuffer.allocate(1)));
+                }
                 buf.flip();
                 assertTrue(expected.remove(Marshallers.getLongMarshaller().fromBytes(buf)));
               }
@@ -578,7 +798,9 @@ public class EndToEndTest extends EndToEndTestCase {
   static class TestMapper extends Mapper<Entity, String, Long> {
 
     transient DatastoreMutationPool pool;
-    @Override public void map(Entity entity) {
+
+    @Override
+    public void map(Entity entity) {
       getContext().incrementCounter("map");
       try {
         Thread.sleep(1);
@@ -600,20 +822,24 @@ public class EndToEndTest extends EndToEndTestCase {
       pool.put(entity);
     }
 
-    @Override public void beginShard() {
+    @Override
+    public void beginShard() {
       getContext().incrementCounter("beginShard");
     }
 
-    @Override public void endShard() {
+    @Override
+    public void endShard() {
       getContext().incrementCounter("endShard");
     }
 
-    @Override public void beginSlice() {
+    @Override
+    public void beginSlice() {
       pool = DatastoreMutationPool.forManualFlushing();
       getContext().incrementCounter("beginSlice");
     }
 
-    @Override public void endSlice() {
+    @Override
+    public void endSlice() {
       pool.flush();
       getContext().incrementCounter("endSlice");
     }
@@ -621,7 +847,8 @@ public class EndToEndTest extends EndToEndTestCase {
 
   @SuppressWarnings("serial")
   static class TestReducer extends Reducer<String, Long, KeyValue<String, List<Long>>> {
-    @Override public void reduce(String property, ReducerInput<Long> matchingValues) {
+    @Override
+    public void reduce(String property, ReducerInput<Long> matchingValues) {
       ImmutableList.Builder<Long> out = ImmutableList.builder();
       while (matchingValues.hasNext()) {
         long value = matchingValues.next();
@@ -632,5 +859,4 @@ public class EndToEndTest extends EndToEndTestCase {
       getContext().emit(KeyValue.of(property, values));
     }
   }
-
 }

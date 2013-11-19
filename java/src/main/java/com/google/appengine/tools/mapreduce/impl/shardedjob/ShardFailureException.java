@@ -10,4 +10,8 @@ public class ShardFailureException extends RuntimeException {
   public ShardFailureException(int shardNumber, Throwable rootCause) {
     super("Shard " + shardNumber + " failed.", rootCause);
   }
+
+  public ShardFailureException(int shardNumber, String message, Throwable rootCause) {
+    super("Shard " + shardNumber + " failed: " + message, rootCause);
+  }
 }

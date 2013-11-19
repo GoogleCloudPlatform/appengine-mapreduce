@@ -134,7 +134,9 @@ public class MapReduceJob<I, K, V, O, R>
         .setControllerBackend(mrSettings.getBackend())
         .setWorkerBackend(mrSettings.getBackend())
         .setControllerQueueName(mrSettings.getControllerQueueName())
-        .setWorkerQueueName(mrSettings.getWorkerQueueName());
+        .setWorkerQueueName(mrSettings.getWorkerQueueName())
+        .setMaxShardRetries(mrSettings.getMaxShardRetries())
+        .setMaxSliceRetries(mrSettings.getMaxSliceRetries());
   }
 
   private static class ResultAndStatus<R> implements Serializable {

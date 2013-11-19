@@ -2,9 +2,11 @@
 
 package com.google.appengine.tools.mapreduce.impl;
 
+import static com.google.appengine.tools.mapreduce.CounterNames.MAPPER_CALLS;
+import static com.google.appengine.tools.mapreduce.CounterNames.MAPPER_WALLTIME_MILLIS;
+import static com.google.appengine.tools.mapreduce.impl.MapReduceConstants.ASSUMED_BASE_MEMORY_PER_REQUEST;
 import static com.google.common.base.Preconditions.checkNotNull;
 
-import com.google.appengine.tools.mapreduce.CounterNames;
 import com.google.appengine.tools.mapreduce.Counters;
 import com.google.appengine.tools.mapreduce.InputReader;
 import com.google.appengine.tools.mapreduce.KeyValue;
@@ -26,15 +28,9 @@ public class MapShardTask<I, K, V> extends WorkerShardTask<I, KeyValue<K, V>, Ma
   private final Mapper<I, K, V> mapper;
   private final long millisPerSlice;
 
-  public MapShardTask(String mrJobId,
-      int shardNumber, int shardCount,
-      InputReader<I> in,
-      Mapper<I, K, V> mapper,
-      OutputWriter<KeyValue<K, V>> out,
-      long millisPerSlice) {
-    super(mrJobId, shardNumber, shardCount,
-        in, mapper, out,
-        CounterNames.MAPPER_CALLS, CounterNames.MAPPER_WALLTIME_MILLIS);
+  public MapShardTask(String mrJobId, int shardNumber, int shardCount, InputReader<I> in,
+      Mapper<I, K, V> mapper, OutputWriter<KeyValue<K, V>> out, long millisPerSlice) {
+    super(mrJobId, shardNumber, shardCount, in, mapper, out, MAPPER_CALLS, MAPPER_WALLTIME_MILLIS);
     this.mapper = checkNotNull(mapper, "Null mapper");
     this.millisPerSlice = millisPerSlice;
   }
@@ -60,18 +56,12 @@ public class MapShardTask<I, K, V> extends WorkerShardTask<I, KeyValue<K, V>, Ma
 
   @Override
   protected boolean shouldCheckpoint(long timeElapsed) {
-    return timeElapsed > millisPerSlice;
-  }
-
-  @Override
-  protected boolean canContinue() {
-    return true;
+    return timeElapsed >= millisPerSlice;
   }
 
   @Override
   protected long estimateMemoryNeeded() {
     return in.estimateMemoryRequirment() + out.estimateMemoryRequirment()
-        + MapReduceConstants.ASSUMED_BASE_MEMORY_PER_REQUEST;
+        + ASSUMED_BASE_MEMORY_PER_REQUEST;
   }
-
 }
