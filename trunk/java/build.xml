@@ -24,7 +24,6 @@
   <property name="ui" location="src/main/resources/ui"/>
   <property name="example" location="example"/>
   <property name="example_src" location="${example}/src"/>
-  <property name="example_war" location="${example}/war"/>
 
   <!-- Ivy Bootstrap Properties -->
   <property name="ivy_version" value="2.3.0"/>
@@ -154,7 +153,6 @@
         <fileset dir="${lib_sdk}">
           <include name="*.jar"/>
         </fileset>
-        <pathelement path="${example_war}/WEB-INF/classes" />
       </classpath>
       <formatter type="brief" usefile="false" />
     </junit>
@@ -180,7 +178,6 @@
         <fileset dir="${lib_sdk}">
           <include name="*.jar"/>
         </fileset>
-        <pathelement path="${example_war}/WEB-INF/classes"/>
       </classpath>
       <formatter type="brief" usefile="false"/>
     </junit>
@@ -218,20 +215,25 @@
   </target>
 
   <target name="copy_libs_to_example" depends="dist">
-    <mkdir dir="${example_war}/WEB-INF/lib"/>
-    <copy todir="${example_war}/WEB-INF/lib">
+    <mkdir dir="${example}/default/WEB-INF/lib"/>
+    <copy todir="${example}/default/WEB-INF/lib">
+      <fileset dir="${dist}"/>
+      <fileset dir="${lib_sdk}"/>
+    </copy>
+    <mkdir dir="${example}/mapreduce/WEB-INF/lib"/>
+    <copy todir="${example}/mapreduce/WEB-INF/lib">
       <fileset dir="${dist}"/>
       <fileset dir="${lib_sdk}"/>
     </copy>
   </target>
 
   <target name="compile_example" depends="dependencies_test,dependencies_sdk,copy_libs_to_example">
-    <mkdir dir="${example_war}/WEB-INF/classes"/>
-    <javac srcdir="${example_src}" destdir="${example_war}/WEB-INF/classes" debug="on"
+    <mkdir dir="${example}/default/WEB-INF/classes"/>
+    <javac srcdir="${example_src}" destdir="${example}/default/WEB-INF/classes" debug="on"
            debuglevel="lines,source" includeantruntime="false">
       <compilerarg value="-Xlint:all"/>
       <classpath>
-        <fileset dir="${example_war}/WEB-INF/lib"/>
+        <fileset dir="${example}/default/WEB-INF/lib"/>
         <fileset dir="${lib_sdk}">
           <include name="*.jar"/>
         </fileset>
@@ -240,12 +242,18 @@
         </fileset>
       </classpath>
     </javac>
+    <mkdir dir="${example}/mapreduce/WEB-INF/classes"/>
+    <copy todir="${example}/mapreduce/WEB-INF/classes">
+      <fileset dir="${example}/default/WEB-INF/classes"/>
+    </copy>
   </target>
 
   <target name="clean_example">
-    <delete dir="${example_war}/WEB-INF/lib"/>
-    <delete dir="${example_war}/WEB-INF/classes"/>
-    <delete dir="${example_war}/WEB-INF/appengine-generated"/>
-    <delete dir="${example_war}/javadoc"/>
+    <delete dir="${example}/default/WEB-INF/lib"/>
+    <delete dir="${example}/default/WEB-INF/classes"/>
+    <delete dir="${example}/default/WEB-INF/appengine-generated"/>
+    <delete dir="${example}/mapreduce/WEB-INF/lib"/>
+    <delete dir="${example}/mapreduce/WEB-INF/classes"/>
+    <delete dir="${example}/javadoc"/>
   </target>
 </project>
