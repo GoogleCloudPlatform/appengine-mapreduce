@@ -769,7 +769,7 @@ class Pipeline(object):
 
       status_record.put()
     except Exception, e:
-      raise PipelineRuntimeError('Could not set status for %s#%s: %s' % 
+      raise PipelineRuntimeError('Could not set status for %s#%s: %s' %
           (self, self.pipeline_id, str(e)))
 
   def complete(self, default_output=None):
@@ -990,14 +990,11 @@ The Pipeline API
 
   # Internal methods.
   @classmethod
-  def _set_class_path(cls, module_dict=sys.modules):
+  def _set_class_path(cls):
     """Sets the absolute path to this class as a string.
 
     Used by the Pipeline API to reconstruct the Pipeline sub-class object
     at execution time instead of passing around a serialized function.
-
-    Args:
-      module_dict: Used for testing.
     """
     # Do not traverse the class hierarchy fetching the class path attribute.
     found = cls.__dict__.get('_class_path')
@@ -1011,26 +1008,7 @@ The Pipeline API
     if cls is Pipeline:
       return
 
-    # This is a brute-force approach to solving the module reverse-lookup
-    # problem, where we want to refer to a class by its stable module name
-    # but have no built-in facility for doing so in Python.
-    found = None
-    for name, module in module_dict.items():
-      if name == '__main__':
-        continue
-      found = getattr(module, cls.__name__, None)
-      if found is cls:
-        break
-    else:
-      # If all else fails, try the main module.
-      name = '__main__'
-      module = module_dict.get(name)
-      found = getattr(module, cls.__name__, None)
-      if found is not cls:
-        raise ImportError('Could not determine path for Pipeline '
-                          'function/class "%s"' % cls.__name__)
-
-    cls._class_path = '%s.%s' % (name, cls.__name__)
+    cls._class_path = '%s.%s' % (cls.__module__, cls.__name__)
 
   def _set_values_internal(self,
                            context,
@@ -2905,7 +2883,7 @@ def get_status_tree(root_pipeline_id):
     raise PipelineStatusError(
         'Could not find pipeline ID "%s"' % root_pipeline_id)
 
-  if (root_pipeline_key != 
+  if (root_pipeline_key !=
       _PipelineRecord.root_pipeline.get_value_for_datastore(
           root_pipeline_record)):
     raise PipelineStatusError(
