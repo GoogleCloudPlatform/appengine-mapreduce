@@ -49,6 +49,7 @@ from google.appengine.api import files
 from google.appengine.api.files import file_service_pb
 from mapreduce import context
 from mapreduce import errors
+from mapreduce import json_util
 from mapreduce import model
 from mapreduce import operation
 from mapreduce import records
@@ -71,7 +72,7 @@ COUNTER_IO_WRITE_BYTES = "io-write-bytes"
 COUNTER_IO_WRITE_MSEC = "io-write-msec"
 
 
-class OutputWriter(model.JsonMixin):
+class OutputWriter(json_util.JsonMixin):
   """Abstract base class for output writers.
 
   Output writers process all mapper handler output, which is not

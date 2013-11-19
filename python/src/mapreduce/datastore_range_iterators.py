@@ -9,6 +9,7 @@ from google.appengine.datastore import datastore_query
 from google.appengine.datastore import datastore_rpc
 from google.appengine.ext import db
 from google.appengine.ext import key_range
+from mapreduce import json_util
 from mapreduce import key_ranges
 from mapreduce import model
 from mapreduce import namespace_range
@@ -75,7 +76,7 @@ class RangeIteratorFactory(object):
     return _RANGE_ITERATORS[json["name"]].from_json(json)
 
 
-class RangeIterator(model.JsonMixin):
+class RangeIterator(json_util.JsonMixin):
   """Interface for DatastoreInputReader helper iterators.
 
   RangeIterator defines Python's generator interface and additional
@@ -272,7 +273,7 @@ _RANGE_ITERATORS = {
     }
 
 
-class AbstractKeyRangeIterator(model.JsonMixin):
+class AbstractKeyRangeIterator(json_util.JsonMixin):
   """Iterates over a single key_range.KeyRange and yields value for each key."""
 
   def __init__(self, k_range, query_spec):

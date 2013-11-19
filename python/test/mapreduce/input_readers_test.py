@@ -21,14 +21,13 @@
 # pylint: disable=g-bad-name
 
 # os_compat must be first to ensure timezones are UTC.
-
+# pylint: disable=g-bad-import-order
 from google.appengine.tools import os_compat  # pylint: disable=unused-import
 
 import cStringIO
 import datetime
 import logging
 import math
-from testlib import mox
 import os
 import random
 import string
@@ -37,20 +36,23 @@ import time
 import unittest
 import zipfile
 
-from google.appengine.ext import ndb
+from testlib import mox
 
+from google.appengine.datastore import entity_pb
+from google.appengine.ext import ndb
 from google.appengine.api import apiproxy_stub_map
-from google.appengine.api.blobstore import blobstore_stub
-from google.appengine.api.blobstore import dict_blob_storage
 from google.appengine.api import datastore
 from google.appengine.api import datastore_file_stub
 from google.appengine.api import datastore_types
 from google.appengine.api import files
+from google.appengine.api.files import file_service_pb
 from google.appengine.api import logservice
+from google.appengine.api import namespace_manager
+from google.appengine.api.blobstore import blobstore_stub
+from google.appengine.api.blobstore import dict_blob_storage
 from google.appengine.api.logservice import log_service_pb
 from google.appengine.api.logservice import logservice_stub
 from google.appengine.datastore import datastore_stub_util
-from google.appengine.api import namespace_manager
 from google.appengine.ext import blobstore
 from google.appengine.ext import db
 from google.appengine.ext import key_range
@@ -59,11 +61,12 @@ from google.appengine.ext.blobstore import blobstore as blobstore_internal
 from mapreduce import errors
 from mapreduce import file_format_root
 from mapreduce import input_readers
+from mapreduce import json_util
 from mapreduce import model
 from mapreduce import namespace_range
 from mapreduce import records
 from testlib import testutil
-from google.appengine.datastore import entity_pb
+
 
 # pylint: disable=g-import-not-at-top
 # TODO(user): Cleanup imports if/when cloudstorage becomes part of runtime.
@@ -91,8 +94,8 @@ class TestJsonType(object):
 class TestEntity(db.Model):
   """Test entity class."""
 
-  json_property = model.JsonProperty(TestJsonType)
-  json_property_default_value = model.JsonProperty(
+  json_property = json_util.JsonProperty(TestJsonType)
+  json_property_default_value = json_util.JsonProperty(
       TestJsonType, default=TestJsonType())
   int_property = db.IntegerProperty()
   datetime_property = db.DateTimeProperty(auto_now=True)
@@ -2295,6 +2298,138 @@ class LogInputReaderTest(unittest.TestCase):
                                             start_time=0, end_time=101 * 1e6,
                                             offset=log.offset)
       self.verifyLogs(expected, fetched_logs + list(reader))
+
+
+class ReducerReaderTest(testutil.HandlerTestBase):
+  """Tests for _ReducerReader."""
+
+  def testMultipleRequests(self):
+    """Tests restoring the reader state across multiple requests."""
+    input_file = files.blobstore.create()
+
+    # Create a file with two records.
+    with files.open(input_file, "a") as f:
+      with records.RecordsWriter(f) as w:
+        proto = file_service_pb.KeyValues()
+        proto.set_key("key2")
+        proto.value_list().extend(["a", "b"])
+        proto.set_partial(True)
+        w.write(proto.Encode())
+
+        proto = file_service_pb.KeyValues()
+        proto.set_key("key2")
+        proto.value_list().extend(["c", "d"])
+        w.write(proto.Encode())
+
+    files.finalize(input_file)
+    input_file = files.blobstore.get_file_name(
+        files.blobstore.get_blob_key(input_file))
+
+    # Now read the records in two attempts, serializing and recreating the
+    # input reader as if it's a separate request.
+    reader = input_readers._ReducerReader([input_file], 0)
+    it = iter(reader)
+    self.assertEquals(input_readers.ALLOW_CHECKPOINT, it.next())
+
+    reader_state = reader.to_json()
+    other_reader = input_readers._ReducerReader.from_json(reader_state)
+    it = iter(reader)
+    self.assertEquals(("key2", ["a", "b", "c", "d"]), it.next())
+
+  def testSingleRequest(self):
+    """Tests when a key can be handled during a single request."""
+    input_file = files.blobstore.create()
+
+    with files.open(input_file, "a") as f:
+      with records.RecordsWriter(f) as w:
+        # First record is full
+        proto = file_service_pb.KeyValues()
+        proto.set_key("key1")
+        proto.value_list().extend(["a", "b"])
+        w.write(proto.Encode())
+        # Second record is partial
+        proto = file_service_pb.KeyValues()
+        proto.set_key("key2")
+        proto.value_list().extend(["a", "b"])
+        proto.set_partial(True)
+        w.write(proto.Encode())
+        proto = file_service_pb.KeyValues()
+        proto.set_key("key2")
+        proto.value_list().extend(["c", "d"])
+        w.write(proto.Encode())
+
+    files.finalize(input_file)
+    input_file = files.blobstore.get_file_name(
+        files.blobstore.get_blob_key(input_file))
+
+    reader = input_readers._ReducerReader([input_file], 0)
+    self.assertEquals(
+        [("key1", ["a", "b"]),
+         input_readers.ALLOW_CHECKPOINT,
+         ("key2", ["a", "b", "c", "d"])],
+        list(reader))
+
+    # now test state serialization
+    reader = input_readers._ReducerReader([input_file], 0)
+    i = reader.__iter__()
+    self.assertEquals(
+        {"position": 0,
+         "current_values": "Ti4=",
+         "current_key": "Ti4=",
+         "filenames": [input_file]},
+        reader.to_json())
+
+    self.assertEquals(("key1", ["a", "b"]), i.next())
+    self.assertEquals(
+        {"position": 19,
+         "current_values": "Ti4=",
+         "current_key": "Ti4=",
+         "filenames": [input_file]},
+        reader.to_json())
+
+    self.assertEquals(input_readers.ALLOW_CHECKPOINT, i.next())
+    self.assertEquals(
+        {"position": 40,
+         "current_values": "KGxwMApTJ2EnCnAxCmFTJ2InCnAyCmEu",
+         "current_key": "UydrZXkyJwpwMAou",
+         "filenames": [input_file]},
+        reader.to_json())
+
+    self.assertEquals(("key2", ["a", "b", "c", "d"]), i.next())
+    self.assertEquals(
+        {"position": 59,
+         "current_values": "Ti4=",
+         "current_key": "Ti4=",
+         "filenames": [input_file]},
+        reader.to_json())
+
+    try:
+      i.next()
+      self.fail("Exception expected")
+    except StopIteration:
+      # expected
+      pass
+
+    # now do test deserialization at every moment.
+    reader = input_readers._ReducerReader([input_file], 0)
+    i = reader.__iter__()
+    reader = input_readers._ReducerReader.from_json(reader.to_json())
+
+    self.assertEquals(("key1", ["a", "b"]), i.next())
+    reader = input_readers._ReducerReader.from_json(reader.to_json())
+
+    self.assertEquals(input_readers.ALLOW_CHECKPOINT, i.next())
+    reader = input_readers._ReducerReader.from_json(reader.to_json())
+
+    self.assertEquals(("key2", ["a", "b", "c", "d"]), i.next())
+    reader = input_readers._ReducerReader.from_json(reader.to_json())
+
+    try:
+      i.next()
+      self.fail("Exception expected")
+    except StopIteration:
+      # expected
+      pass
 
 
 class FileInputReaderTest(unittest.TestCase):

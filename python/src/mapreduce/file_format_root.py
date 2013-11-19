@@ -24,11 +24,10 @@ __all__ = ['FileFormatRoot',
            'split']
 
 import copy
-import mapreduce.file_format_parser as parser
-
 from google.appengine.api.files import file as files
-from mapreduce import model
 from mapreduce import file_formats
+from mapreduce import json_util
+import mapreduce.file_format_parser as parser
 
 
 def split(filenames, format_string, shards):
@@ -128,7 +127,7 @@ def _deep_split(filenames, size_per_shard, parsed_formats):
   return roots
 
 
-class _FileRange(model.JsonMixin):
+class _FileRange(json_util.JsonMixin):
   """Describe a range of a file to read.
 
   FileFormatRootFactory creates instances of this class and
@@ -164,7 +163,7 @@ class _FileRange(model.JsonMixin):
     return cls(json[cls.FILENAME], json[cls.RANGE])
 
 
-class FileFormatRoot(model.JsonMixin):
+class FileFormatRoot(json_util.JsonMixin):
   """FileFormatRoot.
 
   FileFormatRoot takes a list of FileFormats as processing units and

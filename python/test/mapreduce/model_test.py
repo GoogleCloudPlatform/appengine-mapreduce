@@ -27,7 +27,6 @@ import unittest
 import urlparse
 
 from google.appengine.api import apiproxy_stub_map
-from google.appengine.api import datastore_errors
 from google.appengine.api import datastore_file_stub
 from google.appengine.ext import db
 from google.appengine.ext import testbed
@@ -68,42 +67,6 @@ def test_handler_function(entity):
   pass
 
 
-class TestJsonType(object):
-  """Test class with to_json/from_json methods."""
-
-  def __init__(self, size=0):
-    self.size = size
-
-  def to_json(self):
-    return {"size": self.size}
-
-  @classmethod
-  def from_json(cls, json):
-    return cls(json["size"])
-
-
-class EmptyDictJsonType(object):
-  """Test class which serializes to empty json dict."""
-
-  def to_json(self):
-    return {}
-
-  @classmethod
-  def from_json(cls, json):
-    return cls()
-
-
-class TestEntity(db.Model):
-  """Test entity class."""
-
-  json_property = model.JsonProperty(TestJsonType)
-  json_property_default_value = model.JsonProperty(
-      TestJsonType, default=TestJsonType())
-  empty_json_property = model.JsonProperty(EmptyDictJsonType)
-
-ENTITY_KIND = "__main__.TestEntity"
-
-
 class HugeTaskTest(unittest.TestCase):
   """HugeTask tests.
 
@@ -119,61 +82,6 @@ class HugeTaskTest(unittest.TestCase):
     self.assertRaises(DeprecationWarning,
                       model.HugeTask.decode_payload,
                       request)
-
-
-class JsonSerializationTest(unittest.TestCase):
-  """Test custom json encoder and decoder."""
-
-  def testE2e(self):
-    now = datetime.datetime.now()
-    obj = {"a": 1, "b": [{"c": "d"}], "e": now}
-    new_obj = model.simplejson.loads(model.simplejson.dumps(
-        obj, cls=model.JsonEncoder), cls=model.JsonDecoder)
-    self.assertEquals(obj, new_obj)
-
-
-class JsonPropertyTest(unittest.TestCase):
-  """Test model.JsonProperty."""
-
-  def testGetValueForDatastore(self):
-    """Test get_value_for_datastore method."""
-    e = TestEntity()
-    self.assertEquals(None, TestEntity.json_property.get_value_for_datastore(e))
-    e.json_property = TestJsonType(5)
-    self.assertEquals(
-        u'{"size": 5}', TestEntity.json_property.get_value_for_datastore(e))
-
-    e.empty_json_property = EmptyDictJsonType()
-    self.assertEquals(
-        None, TestEntity.empty_json_property.get_value_for_datastore(e))
-
-  def testMakeValueFromDatastore(self):
-    """Test make_value_from_datastore method."""
-    self.assertEquals(
-        None, TestEntity.json_property.make_value_from_datastore(None))
-    self.assertEquals(
-        TestJsonType,
-        type(TestEntity.json_property.make_value_from_datastore('{"size":4}')))
-    self.assertTrue(
-        4,
-        TestEntity.json_property.make_value_from_datastore('{"size":4}').size)
-
-  def testValidate(self):
-    """Test validate method."""
-    self.assertRaises(
-        datastore_errors.BadValueError,
-        TestEntity.json_property.validate, "a")
-
-  def testEmpty(self):
-    """Test empty() method."""
-    self.assertTrue(TestEntity.json_property.empty(None))
-    self.assertFalse(TestEntity.json_property.empty("abcd"))
-
-  def testDefaultValue(self):
-    """Test default value."""
-    e = TestEntity()
-    self.assertEquals(None, e.json_property)
-    self.assertTrue(e.json_property_default_value is not None)
 
 
 class GetDescendingKeyTest(unittest.TestCase):
@@ -201,6 +109,7 @@ class TestWriter(object):
 class MapperSpecTest(unittest.TestCase):
   """Tests model.MapperSpec."""
 
+  ENTITY_KIND = "__main__.TestEntity"
   TEST_HANDLER = __name__ + "." + TestHandler.__name__
   TEST_READER = __name__ + "." + TestReader.__name__
   TEST_WRITER = __name__ + "." + TestWriter.__name__
@@ -209,14 +118,14 @@ class MapperSpecTest(unittest.TestCase):
     self.default_json = {
         "mapper_handler_spec": self.TEST_HANDLER,
         "mapper_input_reader": self.TEST_READER,
-        "mapper_params": {"entity_kind": ENTITY_KIND},
+        "mapper_params": {"entity_kind": self.ENTITY_KIND},
         "mapper_shard_count": 8}
 
   def testToJson(self):
     mapper_spec = model.MapperSpec(
         self.TEST_HANDLER,
         self.TEST_READER,
-        {"entity_kind": ENTITY_KIND},
+        {"entity_kind": self.ENTITY_KIND},
         8)
     self.assertEquals(self.default_json,
                       mapper_spec.to_json())
@@ -224,7 +133,7 @@ class MapperSpecTest(unittest.TestCase):
     mapper_spec = model.MapperSpec(
         self.TEST_HANDLER,
         self.TEST_READER,
-        {"entity_kind": ENTITY_KIND},
+        {"entity_kind": self.ENTITY_KIND},
         8,
         output_writer_spec=self.TEST_WRITER)
     d = dict(self.default_json)
