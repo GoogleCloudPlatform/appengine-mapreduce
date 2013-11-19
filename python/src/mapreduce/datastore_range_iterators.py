@@ -163,19 +163,22 @@ class _PropertyRangeModelIterator(RangeIterator):
 
   def to_json(self):
     """Inherit doc."""
-    cursor_object = False
+    cursor = self._cursor
     if self._query is not None:
       if isinstance(self._query, db.Query):
-        self._cursor = self._query.cursor()
+        cursor = self._query.cursor()
       else:
-        cursor_object = True
-        self._cursor = self._query.cursor_after().to_websafe_string()
+        cursor = self._query.cursor_after()
+
+    if isinstance(cursor, basestring):
+      cursor_object = False
     else:
-      self._cursor = None
+      cursor_object = True
+      cursor = cursor.to_websafe_string()
 
     return {"property_range": self._property_range.to_json(),
             "query_spec": self._query_spec.to_json(),
-            "cursor": self._cursor,
+            "cursor": cursor,
             "ns_range": self._ns_range.to_json_object(),
             "name": self.__class__.__name__,
             "cursor_object": cursor_object}
@@ -236,7 +239,6 @@ class _KeyRangesIterator(RangeIterator):
         self._current_iter = self._key_range_iter_cls(k_range,
                                                       self._query_spec)
       except StopIteration:
-        self._current_iter = None
         break
 
   def to_json(self):
@@ -353,11 +355,13 @@ class KeyRangeModelIterator(AbstractKeyRangeIterator):
         yield model_instance
 
   def _get_cursor(self):
-    if self._query is not None:
-      if isinstance(self._query, db.Query):
-        return self._query.cursor()
-      else:
-        return self._query.cursor_after()
+    if self._query is None:
+      return self._cursor
+
+    if isinstance(self._query, db.Query):
+      return self._query.cursor()
+    else:
+      return self._query.cursor_after()
 
 
 class KeyRangeEntityIterator(AbstractKeyRangeIterator):
@@ -375,8 +379,9 @@ class KeyRangeEntityIterator(AbstractKeyRangeIterator):
       yield entity
 
   def _get_cursor(self):
-    if self._query is not None:
-      return self._query.GetCursor()
+    if self._query is None:
+      return self._cursor
+    return self._query.GetCursor()
 
 
 class KeyRangeKeyIterator(KeyRangeEntityIterator):
@@ -407,8 +412,9 @@ class KeyRangeEntityProtoIterator(AbstractKeyRangeIterator):
       yield entity_proto
 
   def _get_cursor(self):
-    if self._query is not None:
-      return self._query.cursor()
+    if self._query is None:
+      return self._cursor
+    return self._query.cursor()
 
 
 # TODO(user): update this map automatically using metaclass if needed.
