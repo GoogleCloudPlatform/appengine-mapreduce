@@ -29,7 +29,6 @@ from google.appengine.api import yaml_errors
 from google.appengine.api import yaml_listener
 from google.appengine.api import yaml_object
 from google.appengine.ext import db
-from google.appengine.ext import webapp
 from mapreduce import base_handler
 from mapreduce import errors
 from mapreduce import model
@@ -261,7 +260,7 @@ def get_mapreduce_yaml(parse=parse_mapreduce_yaml):
     mr_yaml_file.close()
 
 
-class ResourceHandler(webapp.RequestHandler):
+class ResourceHandler(base_handler.BaseHandler):
   """Handler for static resources."""
 
   _RESOURCE_MAP = {

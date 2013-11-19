@@ -19,13 +19,13 @@
 
 
 import base64
+import cgi
 import collections
 import logging
 import os
 import re
 
 from mapreduce import main
-from mapreduce import model
 from google.appengine.ext.webapp import mock_webapp
 
 # TODO(user): Add tests for this file.
@@ -48,8 +48,13 @@ def decode_task_payload(task):
     return {}
   # taskqueue_stub base64 encodes body when it returns the task to us.
   body = base64.b64decode(task["body"])
-  # pylint: disable=protected-access
-  return model.HugeTask._decode_payload(body)
+  result = {}
+  for (name, value) in cgi.parse_qs(body).items():
+    if len(value) == 1:
+      result[name] = value[0]
+    else:
+      result[name] = value
+  return result
 
 
 def execute_task(task, retries=0, handlers_map=None):
