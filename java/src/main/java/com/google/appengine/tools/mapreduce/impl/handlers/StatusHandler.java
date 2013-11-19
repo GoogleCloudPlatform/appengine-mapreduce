@@ -120,6 +120,10 @@ final class StatusHandler {
     return retValue;
   }
 
+  private static int getChartWidth(int shardCount) {
+    return Math.max(300, Math.min(700, 70 * (int) Math.sqrt(shardCount)));
+  }
+
   private static String getChartUrl(int shardCount,
       Map<Integer, WorkerShardState> workerShardStates) {
     List<Long> processedCounts = Lists.newArrayListWithCapacity(workerShardStates.size());
@@ -146,7 +150,7 @@ final class StatusHandler {
     BarChart countChart = GCharts.newBarChart(countPlot);
     countChart.addYAxisLabels(AxisLabelsFactory.newNumericRangeAxisLabels(0, maxPlusOne));
     countChart.addXAxisLabels(AxisLabelsFactory.newAxisLabels(countLabels));
-    countChart.setSize(300, 200);
+    countChart.setSize(getChartWidth(shardCount), 200);
     countChart.setBarWidth(BarChart.AUTO_RESIZE);
     countChart.setSpaceBetweenGroupsOfBars(1);
     return countChart.toURLString();
@@ -181,6 +185,7 @@ final class StatusHandler {
         jobObject.put("chart_url",
             getChartUrl(state.getTotalTaskCount(),
                 aggregateResult.getWorkerShardStates()));
+        jobObject.put("chart_width", getChartWidth(state.getTotalTaskCount()));
 
         // HACK(ohler): We don't put the actual mapper parameters in here since
         // the Pipeline UI already shows them (in the toString() of the

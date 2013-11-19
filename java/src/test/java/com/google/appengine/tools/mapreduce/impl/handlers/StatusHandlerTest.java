@@ -82,6 +82,7 @@ public class StatusHandlerTest extends EndToEndTestCase {
     assertTrue(
         jobDetail.toString().matches(
             "\\{\"mapreduce_id\":\"testGetJobDetail_populated\"," +
+                "\"chart_width\":300," +
                 "\"shards\":\\[\\{\"shard_description\":\"\"," +
                 "\"active\":false," +
                 "\"result_status\":\"initializing\"," +
@@ -113,6 +114,7 @@ public class StatusHandlerTest extends EndToEndTestCase {
     assertTrue(
         jobDetail.toString().matches(
             "\\{\"mapreduce_id\":\"testGetJobDetail_populated\"," +
+                "\"chart_width\":300," +
                 "\"shards\":\\[\\{" +
                 "\"last_work_item\":\"3\"," +
                 "\"shard_description\":\"\"," +
