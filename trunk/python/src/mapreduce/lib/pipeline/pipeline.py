@@ -832,11 +832,14 @@ class Pipeline(object):
     kwargs['method'] = 'POST'
     return taskqueue.Task(*args, **kwargs)
 
-  def send_result_email(self):
+  def send_result_email(self, sender=None):
     """Sends an email to admins indicating this Pipeline has completed.
 
     For developer convenience. Automatically called from finalized for root
     Pipelines that do not override the default action.
+
+    Args:
+      sender: (optional) Override the sender's email address.
     """
     status = 'successful'
     if self.was_aborted:
@@ -880,7 +883,8 @@ The Pipeline API
 </body></html>
 """ % param_dict
 
-    sender = '%s@%s.appspotmail.com' % (app_id, app_id)
+    if sender is None:
+      sender = '%s@%s.appspotmail.com' % (app_id, app_id)
     try:
       self._send_mail(sender, subject, body, html=html)
     except (mail.InvalidSenderError, mail.InvalidEmailError):
