@@ -18,8 +18,7 @@
 
 __all__ = ["for_name",
            "JsonEncoder",
-           "JsonDecoder",
-           "JSON_DEFAULTS"]
+           "JsonDecoder"]
 
 #pylint: disable=g-bad-name
 
@@ -158,8 +157,8 @@ class JsonEncoder(simplejson.JSONEncoder):
 
   def default(self, o):
     """Inherit docs."""
-    if type(o) in JSON_DEFAULTS:
-      encoder = JSON_DEFAULTS[type(o)][0]
+    if type(o) in _TYPE_TO_ENCODER:
+      encoder = _TYPE_TO_ENCODER[type(o)]
       json_struct = encoder(o)
       json_struct[self.TYPE_ID] = type(o).__name__
       return json_struct
@@ -179,12 +178,12 @@ class JsonDecoder(simplejson.JSONDecoder):
     if JsonEncoder.TYPE_ID not in d:
       return d
 
-    obj_type = d.pop(JsonEncoder.TYPE_ID)
-    if obj_type in _TYPE_IDS:
-      decoder = JSON_DEFAULTS[_TYPE_IDS[obj_type]][1]
+    type_name = d.pop(JsonEncoder.TYPE_ID)
+    if type_name in _TYPE_NAME_TO_DECODER:
+      decoder = _TYPE_NAME_TO_DECODER[type_name]
       return decoder(d)
     else:
-      raise TypeError("Invalid type %s.", obj_type)
+      raise TypeError("Invalid type %s.", type_name)
 
 
 _DATETIME_FORMAT = "%Y-%m-%d %H:%M:%S.%f"
@@ -207,12 +206,24 @@ def _json_decode_datetime(d):
   return datetime.datetime.strptime(d["isostr"], _DATETIME_FORMAT)
 
 
-# To extend what Pipeline can json serialize, add to this where
-# key is the type and value is a tuple of encoder and decoder function.
-JSON_DEFAULTS = {
-    datetime.datetime: (_json_encode_datetime, _json_decode_datetime),
-}
+def _register_json_primitive(object_type, encoder, decoder):
+  """Extend what Pipeline can serialize.
+
+  Args:
+    object_type: type of the object.
+    encoder: a function that takes in an object and returns
+      a dict of json primitives.
+    decoder: inverse function of encoder.
+  """
+  global _TYPE_TO_ENCODER
+  global _TYPE_NAME_TO_DECODER
+  if object_type not in _TYPE_TO_ENCODER:
+    _TYPE_TO_ENCODER[object_type] = encoder
+    _TYPE_NAME_TO_DECODER[object_type.__name__] = decoder
 
 
-_TYPE_IDS = dict(zip([cls.__name__ for cls in JSON_DEFAULTS],
-                     JSON_DEFAULTS.keys()))
+_TYPE_TO_ENCODER = {}
+_TYPE_NAME_TO_DECODER = {}
+_register_json_primitive(datetime.datetime,
+                         _json_encode_datetime,
+                         _json_decode_datetime)

@@ -1680,7 +1680,6 @@ class _PipelineContext(object):
     # Adjust all pipeline output keys for this Pipeline to be children of
     # the _PipelineRecord, that way we can write them all and submit in a
     # single transaction.
-    entities_to_put = []
     for name, slot in pipeline.outputs._output_dict.iteritems():
       slot.key = db.Key.from_path(
           *slot.key.to_path(), **dict(parent=pipeline._pipeline_key))
@@ -1688,6 +1687,7 @@ class _PipelineContext(object):
     _, output_slots, params_text, params_blob = _generate_args(
         pipeline, pipeline.outputs, self.queue_name, self.base_path)
 
+    @db.transactional(propagation=db.INDEPENDENT)
     def txn():
       pipeline_record = db.get(pipeline._pipeline_key)
       if pipeline_record is not None:
@@ -1732,7 +1732,7 @@ class _PipelineContext(object):
         return task
       task.add(queue_name=self.queue_name, transactional=True)
 
-    task = db.run_in_transaction(txn)
+    task = txn()
     # Immediately mark the output slots as existing so they can be filled
     # by asynchronous pipelines or used in test mode.
     for output_slot in pipeline.outputs._output_dict.itervalues():
