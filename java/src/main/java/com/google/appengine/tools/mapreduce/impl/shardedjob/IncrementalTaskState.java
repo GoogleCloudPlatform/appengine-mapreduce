@@ -4,11 +4,11 @@ package com.google.appengine.tools.mapreduce.impl.shardedjob;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
-import com.google.appengine.api.datastore.Blob;
 import com.google.appengine.api.datastore.Entity;
 import com.google.appengine.api.datastore.Key;
 import com.google.appengine.api.datastore.KeyFactory;
 import com.google.appengine.tools.mapreduce.impl.util.SerializationUtil;
+import com.google.appengine.tools.mapreduce.impl.util.SerializationUtil.CompressionType;
 import com.google.common.base.Preconditions;
 import com.google.common.primitives.Ints;
 
@@ -125,11 +125,12 @@ class IncrementalTaskState<T extends IncrementalTask<T, R>, R extends Serializab
       taskState.setProperty(NEXT_SEQUENCE_NUMBER_PROPERTY, in.getNextSequenceNumber());
       if (in.getNextTask() != null) {
         taskState.setUnindexedProperty(NEXT_TASK_PROPERTY,
-            new Blob(SerializationUtil.serializeToByteArray(in.getNextTask())));
+            SerializationUtil.serializeToDatastoreProperty(in.getNextTask(), CompressionType.GZIP));
       }
       if (in.getPartialResult() != null) {
         taskState.setUnindexedProperty(PARTIAL_RESULT_PROPERTY,
-            new Blob(SerializationUtil.serializeToByteArray(in.getPartialResult())));
+            SerializationUtil.serializeToDatastoreProperty(
+                in.getPartialResult(), CompressionType.GZIP));
       }
       return taskState;
     }

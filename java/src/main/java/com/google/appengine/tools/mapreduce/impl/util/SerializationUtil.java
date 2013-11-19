@@ -275,6 +275,14 @@ public class SerializationUtil {
     return obj;
   }
 
+  public static Blob serializeToDatastoreProperty(Serializable o) {
+    return new Blob(serializeToByteArray(o, false, null));
+  }
+
+  public static Blob serializeToDatastoreProperty(Serializable o, CompressionType compression) {
+    return new Blob(serializeToByteArray(o, false, compression));
+  }
+
   public static byte[] serializeToByteArray(Serializable o) {
     return serializeToByteArray(o, false, null);
   }
