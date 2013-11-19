@@ -25,15 +25,20 @@ public class Marshallers {
   private static class SerializationMarshaller<T extends Serializable> extends Marshaller<T> {
     private static final long serialVersionUID = 401446902678227352L;
 
-    @Override 
+    @Override
     public ByteBuffer toBytes(T object) {
-      return ByteBuffer.wrap(SerializationUtil.serializeToByteArrayNoHeader(object));
+      return ByteBuffer.wrap(SerializationUtil.serializeToByteArray(object, true));
     }
 
-    @SuppressWarnings("unchecked")
+
     @Override
     public T fromBytes(ByteBuffer in) {
-      return (T) SerializationUtil.deserializeFromByteBufferNoHeader(in);
+      @SuppressWarnings("unchecked")
+      T value = (T) SerializationUtil.deserializeFromByteBuffer(in, true);
+      if (in.hasRemaining()) {
+        throw new CorruptDataException("Trailing bytes after reading object");
+      }
+      return value;
     }
   }
 
@@ -63,7 +68,7 @@ public class Marshallers {
       }
     }
   }
-  
+
   /**
    * Returns a {@code Marshaller} for {@code String}s. They will be encoded in UTF-8.
    */
@@ -103,7 +108,7 @@ public class Marshallers {
   private static class IntegerMarshaller extends Marshaller<Integer> {
     private static final long serialVersionUID = 116841732914441971L;
 
-    @Override 
+    @Override
     public ByteBuffer toBytes(Integer x) {
       /* This xor is done to get an unsigned representation that sorts lexicographically */
       ByteBuffer out = ByteBuffer.allocate(4).putInt(x ^ Integer.MIN_VALUE);
@@ -134,12 +139,12 @@ public class Marshallers {
   private static class VoidMarshaller extends Marshaller<Void> {
     private static final long serialVersionUID = 534040781414531156L;
 
-    @Override 
+    @Override
     public ByteBuffer toBytes(Void x) {
       return ByteBuffer.wrap(EMPTY_BYTE_ARRAY);
     }
 
-    @Override 
+    @Override
     public Void fromBytes(ByteBuffer in) {
       if (in.remaining() != 0) {
         throw new CorruptDataException("Expected 0 bytes, not " + in.remaining());
@@ -147,7 +152,7 @@ public class Marshallers {
       return null;
     }
   }
-  
+
   /**
    * Returns a {@code Marshaller} for {@code Void}.
    */
@@ -160,19 +165,19 @@ public class Marshallers {
    */
   public static class ByteBufferMarshaller extends Marshaller<ByteBuffer> {
     private static final long serialVersionUID = -8188886996472169025L;
-    
+
     @Override
     public ByteBuffer toBytes(ByteBuffer object) {
       return object.slice();
     }
-    
+
     @Override
     public ByteBuffer fromBytes(ByteBuffer b)  {
       return b.slice();
     }
-    
+
   }
-  
+
   /**
    * Returns a {@code Marshaller} for {@code ByteBuffer}.
    */
@@ -189,7 +194,7 @@ public class Marshallers {
       Marshaller<V> valueMarshaller) {
     return new KeyValueMarshaller<K, V>(keyMarshaller, valueMarshaller);
   }
-  
+
   /**
    * Returns a {@code Marshaller} for key-values pairs based on
    * {@code keyMarshaller} and {@code valueMarshaller}.
