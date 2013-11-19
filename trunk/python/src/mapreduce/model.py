@@ -26,12 +26,7 @@ serialized to/from json and passed around with other means.
 
 
 
-__all__ = ["JsonEncoder",
-           "JsonDecoder",
-           "JSON_DEFAULTS",
-           "JsonMixin",
-           "JsonProperty",
-           "MapreduceState",
+__all__ = ["MapreduceState",
            "MapperSpec",
            "MapreduceControl",
            "MapreduceSpec",
@@ -42,26 +37,24 @@ __all__ = ["JsonEncoder",
            "HugeTask"]
 
 import cgi
-import copy
 import datetime
-import logging
 import os
 import random
-from mapreduce.lib import simplejson
 import time
 import urllib
 import zlib
 
-from google.appengine.api import datastore_errors
-from google.appengine.api import datastore_types
+from mapreduce.lib.graphy.backends import google_chart_api
+from mapreduce.lib import simplejson
+
 from google.appengine.api import memcache
 from google.appengine.api import taskqueue
 from google.appengine.datastore import datastore_rpc
 from google.appengine.ext import db
 from mapreduce import context
 from mapreduce import hooks
+from mapreduce import json_util
 from mapreduce import util
-from mapreduce.lib.graphy.backends import google_chart_api
 
 
 # Special datastore kinds for MR.
@@ -228,211 +221,6 @@ class HugeTask(object):
     return result
 
 
-class JsonEncoder(simplejson.JSONEncoder):
-  """MR customized json encoder."""
-
-  TYPE_ID = "__mr_json_type"
-
-  def default(self, o):
-    """Inherit docs."""
-    if type(o) in JSON_DEFAULTS:
-      encoder = JSON_DEFAULTS[type(o)][0]
-      json_struct = encoder(o)
-      json_struct[self.TYPE_ID] = type(o).__name__
-      return json_struct
-    return super(JsonEncoder, self).default(o)
-
-
-class JsonDecoder(simplejson.JSONDecoder):
-  """MR customized json decoder."""
-
-  def __init__(self, **kwargs):
-    if "object_hook" not in kwargs:
-      kwargs["object_hook"] = self._dict_to_obj
-    super(JsonDecoder, self).__init__(**kwargs)
-
-  def _dict_to_obj(self, d):
-    """Converts a dictionary of json object to a Python object."""
-    if JsonEncoder.TYPE_ID not in d:
-      return d
-
-    obj_type = d.pop(JsonEncoder.TYPE_ID)
-    if obj_type in _TYPE_IDS:
-      decoder = JSON_DEFAULTS[_TYPE_IDS[obj_type]][1]
-      return decoder(d)
-    else:
-      raise TypeError("Invalid type %s.", obj_type)
-
-
-_DATETIME_FORMAT = "%Y-%m-%d %H:%M:%S.%f"
-
-
-def _json_encode_datetime(o):
-  """Json encode a datetime object.
-
-  Args:
-    o: a datetime object.
-
-  Returns:
-    A dict of json primitives.
-  """
-  return {"isostr": o.strftime(_DATETIME_FORMAT)}
-
-
-def _json_decode_datetime(d):
-  """Converts a dict of json primitives to a datetime object."""
-  return datetime.datetime.strptime(d["isostr"], _DATETIME_FORMAT)
-
-
-# To extend what Pipeline can json serialize, add to this where
-# key is the type and value is a tuple of encoder and decoder function.
-JSON_DEFAULTS = {
-    datetime.datetime: (_json_encode_datetime, _json_decode_datetime),
-}
-
-
-_TYPE_IDS = dict(zip([_cls.__name__ for _cls in JSON_DEFAULTS],
-                     JSON_DEFAULTS.keys()))
-
-
-class JsonMixin(object):
-  """Simple, stateless json utilities mixin.
-
-  Requires class to implement two methods:
-    to_json(self): convert data to json-compatible datastructure (dict,
-      list, strings, numbers)
-    @classmethod from_json(cls, json): load data from json-compatible structure.
-  """
-
-  def to_json_str(self):
-    """Convert data to json string representation.
-
-    Returns:
-      json representation as string.
-    """
-    json = self.to_json()
-    try:
-      return simplejson.dumps(json, sort_keys=True, cls=JsonEncoder)
-    except:
-      logging.exception("Could not serialize JSON: %r", json)
-      raise
-
-  @classmethod
-  def from_json_str(cls, json_str):
-    """Convert json string representation into class instance.
-
-    Args:
-      json_str: json representation as string.
-
-    Returns:
-      New instance of the class with data loaded from json string.
-    """
-    return cls.from_json(simplejson.loads(json_str, cls=JsonDecoder))
-
-
-class JsonProperty(db.UnindexedProperty):
-  """Property type for storing json representation of data.
-
-  Requires data types to implement two methods:
-    to_json(self): convert data to json-compatible datastructure (dict,
-      list, strings, numbers)
-    @classmethod from_json(cls, json): load data from json-compatible structure.
-  """
-
-  def __init__(self, data_type, default=None, **kwargs):
-    """Constructor.
-
-    Args:
-      data_type: underlying data type as class.
-      default: default value for the property. The value is deep copied
-        fore each model instance.
-      kwargs: remaining arguments.
-    """
-    kwargs["default"] = default
-    super(JsonProperty, self).__init__(**kwargs)
-    self.data_type = data_type
-
-  def get_value_for_datastore(self, model_instance):
-    """Gets value for datastore.
-
-    Args:
-      model_instance: instance of the model class.
-
-    Returns:
-      datastore-compatible value.
-    """
-    value = super(JsonProperty, self).get_value_for_datastore(model_instance)
-    if not value:
-      return None
-    json_value = value
-    if not isinstance(value, dict):
-      json_value = value.to_json()
-    if not json_value:
-      return None
-    return datastore_types.Text(simplejson.dumps(
-        json_value, sort_keys=True, cls=JsonEncoder))
-
-  def make_value_from_datastore(self, value):
-    """Convert value from datastore representation.
-
-    Args:
-      value: datastore value.
-
-    Returns:
-      value to store in the model.
-    """
-
-    if value is None:
-      return None
-    json = simplejson.loads(value, cls=JsonDecoder)
-    if self.data_type == dict:
-      return json
-    return self.data_type.from_json(json)
-
-  def validate(self, value):
-    """Validate value.
-
-    Args:
-      value: model value.
-
-    Returns:
-      Whether the specified value is valid data type value.
-
-    Raises:
-      BadValueError: when value is not of self.data_type type.
-    """
-    if value is not None and not isinstance(value, self.data_type):
-      raise datastore_errors.BadValueError(
-          "Property %s must be convertible to a %s instance (%s)" %
-          (self.name, self.data_type, value))
-    return super(JsonProperty, self).validate(value)
-
-  def empty(self, value):
-    """Checks if value is empty.
-
-    Args:
-      value: model value.
-
-    Returns:
-      True passed value is empty.
-    """
-    return not value
-
-  def default_value(self):
-    """Create default model value.
-
-    If default option was specified, then it will be deeply copied.
-    None otherwise.
-
-    Returns:
-      default model value.
-    """
-    if self.default:
-      return copy.deepcopy(self.default)
-    else:
-      return None
-
-
 # Ridiculous future UNIX epoch time, 500 years from now.
 _FUTURE_TIME = 2**34
 
@@ -457,7 +245,7 @@ def _get_descending_key(gettime=time.time):
   return "%d%s" % (now_descending, request_id_hash)
 
 
-class CountersMap(JsonMixin):
+class CountersMap(json_util.JsonMixin):
   """Maintains map from counter name to counter value.
 
   The class is used to provide basic arithmetics of counter values (buil
@@ -565,7 +353,7 @@ class CountersMap(JsonMixin):
     return self.counters
 
 
-class MapperSpec(JsonMixin):
+class MapperSpec(json_util.JsonMixin):
   """Contains a specification for the mapper phase of the mapreduce.
 
   MapperSpec instance can be changed only during mapreduce starting process,
@@ -673,7 +461,7 @@ class MapperSpec(JsonMixin):
     return self.to_json() == other.to_json()
 
 
-class MapreduceSpec(JsonMixin):
+class MapreduceSpec(json_util.JsonMixin):
   """Contains a specification for the whole mapreduce.
 
   MapreduceSpec instance can be changed only during mapreduce starting process,
@@ -817,12 +605,13 @@ class MapreduceState(db.Model):
   _RESULTS = frozenset([RESULT_SUCCESS, RESULT_FAILED, RESULT_ABORTED])
 
   # Functional properties.
-  mapreduce_spec = JsonProperty(MapreduceSpec, indexed=False)
+  mapreduce_spec = json_util.JsonProperty(MapreduceSpec, indexed=False)
   active = db.BooleanProperty(default=True, indexed=False)
   last_poll_time = db.DateTimeProperty(required=True)
-  counters_map = JsonProperty(CountersMap, default=CountersMap(), indexed=False)
+  counters_map = json_util.JsonProperty(
+      CountersMap, default=CountersMap(), indexed=False)
   app_id = db.StringProperty(required=False, indexed=True)
-  writer_state = JsonProperty(dict, indexed=False)
+  writer_state = json_util.JsonProperty(dict, indexed=False)
   active_shards = db.IntegerProperty(default=0, indexed=False)
   failed_shards = db.IntegerProperty(default=0, indexed=False)
   aborted_shards = db.IntegerProperty(default=0, indexed=False)
@@ -1007,11 +796,11 @@ class TransientShardState(object):
     mapreduce_spec = MapreduceSpec.from_json_str(request.get("mapreduce_spec"))
     mapper_spec = mapreduce_spec.mapper
     input_reader_spec_dict = simplejson.loads(request.get("input_reader_state"),
-                                              cls=JsonDecoder)
+                                              cls=json_util.JsonDecoder)
     input_reader = mapper_spec.input_reader_class().from_json(
         input_reader_spec_dict)
     initial_input_reader_spec_dict = simplejson.loads(
-        request.get("initial_input_reader_state"), cls=JsonDecoder)
+        request.get("initial_input_reader_state"), cls=json_util.JsonDecoder)
     initial_input_reader = mapper_spec.input_reader_class().from_json(
         initial_input_reader_spec_dict)
 
@@ -1019,7 +808,7 @@ class TransientShardState(object):
     if mapper_spec.output_writer_class():
       output_writer = mapper_spec.output_writer_class().from_json(
           simplejson.loads(request.get("output_writer_state", "{}"),
-                           cls=JsonDecoder))
+                           cls=json_util.JsonDecoder))
       assert isinstance(output_writer, mapper_spec.output_writer_class()), (
           "%s.from_json returned an instance of wrong class: %s" % (
               mapper_spec.output_writer_class(),
@@ -1103,10 +892,11 @@ class ShardState(db.Model):
 
   # Functional properties.
   active = db.BooleanProperty(default=True, indexed=False)
-  counters_map = JsonProperty(CountersMap, default=CountersMap(), indexed=False)
+  counters_map = json_util.JsonProperty(
+      CountersMap, default=CountersMap(), indexed=False)
   result_status = db.StringProperty(choices=_RESULTS, indexed=False)
   retries = db.IntegerProperty(default=0, indexed=False)
-  writer_state = JsonProperty(dict, indexed=False)
+  writer_state = json_util.JsonProperty(dict, indexed=False)
   slice_id = db.IntegerProperty(default=0, indexed=False)
   slice_start_time = db.DateTimeProperty(indexed=False)
   slice_request_id = db.ByteStringProperty(indexed=False)

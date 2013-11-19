@@ -24,8 +24,8 @@
 
 import httplib
 import logging
-from mapreduce.lib import simplejson
 
+from mapreduce.lib import simplejson
 
 try:
   from mapreduce import pipeline_base
@@ -41,6 +41,7 @@ except ImportError:
 
 from google.appengine.ext import webapp
 from mapreduce import errors
+from mapreduce import json_util
 from mapreduce import model
 from mapreduce import parameters
 
@@ -210,7 +211,7 @@ class JsonHandler(webapp.RequestHandler):
 
     self.response.headers["Content-Type"] = "text/javascript"
     try:
-      output = simplejson.dumps(self.json_response, cls=model.JsonEncoder)
+      output = simplejson.dumps(self.json_response, cls=json_util.JsonEncoder)
     except:
       logging.exception("Could not serialize to JSON")
       self.response.set_status(500, message="Could not serialize to JSON")

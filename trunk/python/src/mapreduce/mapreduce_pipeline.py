@@ -29,24 +29,16 @@ __all__ = [
     "ShufflePipeline",
     ]
 
-import base64
-import pickle
-
 
 from mapreduce.lib import pipeline
 from mapreduce.lib.pipeline import common as pipeline_common
 from google.appengine.api import files
-from google.appengine.api.files import file_service_pb
-from mapreduce import context
-from mapreduce import errors
 from mapreduce import input_readers
 from mapreduce import mapper_pipeline
 from mapreduce import model
-from mapreduce import operation
 from mapreduce import output_writers
 from mapreduce import pipeline_base
 from mapreduce import shuffler
-from mapreduce import util
 
 # pylint: disable=g-bad-name
 # pylint: disable=protected-access
@@ -58,6 +50,9 @@ MapperPipeline = mapper_pipeline.MapperPipeline
 ShufflePipeline = shuffler.ShufflePipeline
 
 CleanupPipeline = mapper_pipeline._CleanupPipeline
+
+# For backward compatibilty.
+_ReducerReader = input_readers._ReducerReader
 
 
 class MapPipeline(pipeline_base._OutputSlotsMixin,
@@ -92,108 +87,6 @@ class MapPipeline(pipeline_base._OutputSlotsMixin,
             output_writers.__name__ + ".KeyValueBlobstoreOutputWriter",
         params=params,
         shards=shards)
-
-
-class _ReducerReader(input_readers.RecordsReader):
-  """Reader to read KeyValues records files from Files API."""
-
-  expand_parameters = True
-
-  def __init__(self, filenames, position):
-    super(_ReducerReader, self).__init__(filenames, position)
-    self.current_key = None
-    self.current_values = None
-
-  def __iter__(self):
-    ctx = context.get()
-    combiner = None
-
-    if ctx:
-      combiner_spec = ctx.mapreduce_spec.mapper.params.get("combiner_spec")
-      if combiner_spec:
-        combiner = util.handler_for_name(combiner_spec)
-
-    for binary_record in super(_ReducerReader, self).__iter__():
-      proto = file_service_pb.KeyValues()
-      proto.ParseFromString(binary_record)
-
-      if self.current_key is None:
-        self.current_key = proto.key()
-        self.current_values = []
-      else:
-        assert proto.key() == self.current_key, (
-            "inconsistent key sequence. Expected %s but got %s" %
-            (self.current_key, proto.key()))
-
-      if combiner:
-        combiner_result = combiner(
-            self.current_key, proto.value_list(), self.current_values)
-
-        if not util.is_generator(combiner_result):
-          raise errors.BadCombinerOutputError(
-              "Combiner %s should yield values instead of returning them (%s)" %
-              (combiner, combiner_result))
-
-        self.current_values = []
-        for value in combiner_result:
-          if isinstance(value, operation.Operation):
-            value(ctx)
-          else:
-            # with combiner current values always come from combiner
-            self.current_values.append(value)
-      else:
-        # without combiner we just accumulate values.
-        self.current_values.extend(proto.value_list())
-
-      if not proto.partial():
-        key = self.current_key
-        values = self.current_values
-        # This is final value, don't try to serialize it.
-        self.current_key = None
-        self.current_values = None
-        yield (key, values)
-      else:
-        yield input_readers.ALLOW_CHECKPOINT
-
-  @staticmethod
-  def encode_data(data):
-    """Encodes the given data, which may have include raw bytes.
-
-    Works around limitations in JSON encoding, which cannot handle raw bytes.
-    """
-    # TODO(user): Use something less slow/ugly.
-    return base64.b64encode(pickle.dumps(data))
-
-  @staticmethod
-  def decode_data(data):
-    """Decodes data encoded with the encode_data function."""
-    return pickle.loads(base64.b64decode(data))
-
-  def to_json(self):
-    """Returns an input shard state for the remaining inputs.
-
-    Returns:
-      A json-izable version of the remaining InputReader.
-    """
-    result = super(_ReducerReader, self).to_json()
-    result["current_key"] = _ReducerReader.encode_data(self.current_key)
-    result["current_values"] = _ReducerReader.encode_data(self.current_values)
-    return result
-
-  @classmethod
-  def from_json(cls, json):
-    """Creates an instance of the InputReader for the given input shard state.
-
-    Args:
-      json: The InputReader state as a dict-like object.
-
-    Returns:
-      An instance of the InputReader configured using the values of json.
-    """
-    result = super(_ReducerReader, cls).from_json(json)
-    result.current_key = _ReducerReader.decode_data(json["current_key"])
-    result.current_values = _ReducerReader.decode_data(json["current_values"])
-    return result
 
 
 class ReducePipeline(pipeline_base._OutputSlotsMixin,
