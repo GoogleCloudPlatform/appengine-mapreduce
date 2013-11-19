@@ -162,15 +162,18 @@ class OutputWriter(json_util.JsonMixin):
                               self.__class__)
 
   @classmethod
-  def create(cls, mapreduce_state, shard_state):
+  def create(cls, mr_spec, shard_number, shard_attempt, _writer_state=None):
     """Create new writer for a shard.
 
     Args:
-      mapreduce_state: an instance of model.MapreduceState describing current
-      job. State can NOT be modified.
-      shard_state: shard state can NOT be modified. Output file state should
-      be contained in the output writer instance. The serialized output writer
-      instance will be saved by mapreduce across slices.
+      mr_spec: an instance of model.MapreduceSpec describing current job.
+      shard_number: int shard number.
+      shard_attempt: int shard attempt.
+      _writer_state: deprecated. This is for old writers that share file
+        across shards. For new writers, each shard must have its own
+        dedicated outputs. Output state should be contained in
+        the output writer instance. The serialized output writer
+        instance will be saved by mapreduce across slices.
     """
     raise NotImplementedError("create() not implemented in %s" % cls)
 
@@ -630,33 +633,21 @@ class FileOutputWriterBase(OutputWriter):
     return False
 
   @classmethod
-  def create(cls, mapreduce_state, shard_state):
-    """Create new writer for a shard.
-
-    Args:
-      mapreduce_state: an instance of model.MapreduceState describing current
-        job.
-      shard_state: an instance of mode.ShardState describing the shard
-        outputing this file.
-
-    Returns:
-      an output writer instance for this shard.
-    """
-    output_sharding = cls._get_output_sharding(mapreduce_state=mapreduce_state)
-    shard_number = shard_state.shard_number
+  def create(cls, mr_spec, shard_number, shard_attempt, _writer_state=None):
+    """Inherit docs."""
+    mapper_spec = mr_spec.mapper
+    output_sharding = cls._get_output_sharding(mapper_spec=mapper_spec)
     if output_sharding == cls.OUTPUT_SHARDING_INPUT_SHARDS:
-      mapper_spec = mapreduce_state.mapreduce_spec.mapper
       params = _get_params(mapper_spec)
       mime_type = params.get("mime_type", "application/octet-stream")
       filesystem = cls._get_filesystem(mapper_spec=mapper_spec)
       bucket = params.get(cls.GS_BUCKET_NAME_PARAM)
       acl = params.get(cls.GS_ACL_PARAM)  # When None using default object ACLs.
-      retries = shard_state.retries
 
       request_filename = (
-          mapreduce_state.mapreduce_spec.name + "-" +
-          mapreduce_state.mapreduce_spec.mapreduce_id + "-output-" +
-          str(shard_number) + "-retry-" + str(retries))
+          mr_spec.name + "-" +
+          mr_spec.mapreduce_id + "-output-" +
+          str(shard_number) + "-attempt-" + str(shard_attempt))
       if bucket is not None:
         request_filename = "%s/%s" % (bucket, request_filename)
       filename = cls._create_file(filesystem,
@@ -664,7 +655,7 @@ class FileOutputWriterBase(OutputWriter):
                                   mime_type,
                                   acl=acl)
     else:
-      state = cls._State.from_json(mapreduce_state.writer_state)
+      state = cls._State.from_json(_writer_state)
       filename = state.filenames[0]
       request_filename = state.request_filenames[0]
     return cls(filename, request_filename)
@@ -832,7 +823,7 @@ class _GoogleCloudStorageOutputWriter(OutputWriter):
         $name - the name of the job
         $id - the id assigned to the job
         $num - the shard number
-        $retry - the retry count for this shard
+        $attempt - the attempt count for this shard
       If there is more than one shard $num must be used. An arbitrary suffix may
       be applied by the writer.
     CONTENT_TYPE_PARAM: mime type to apply on the files. If not provided, Google
@@ -846,7 +837,7 @@ class _GoogleCloudStorageOutputWriter(OutputWriter):
   CONTENT_TYPE_PARAM = "content_type"
 
   # Default settings
-  DEFAULT_NAMING_FORMAT = "$name-$id-output-$num-retry-$retry"
+  DEFAULT_NAMING_FORMAT = "$name-$id-output-$num-attempt-$attempt"
 
   # Internal parameters
   _ACCOUNT_ID_PARAM = "account_id"
@@ -867,7 +858,7 @@ class _GoogleCloudStorageOutputWriter(OutputWriter):
 
   @classmethod
   def _generate_filename(cls, writer_spec, name, job_id, num,
-                         retry):
+                         attempt):
     """Generates a filename for a shard / retry count.
 
     Args:
@@ -875,7 +866,7 @@ class _GoogleCloudStorageOutputWriter(OutputWriter):
       name: name of the job.
       job_id: the ID number assigned to the job.
       num: shard number.
-      retry: the retry number.
+      attempt: the shard attempt number.
 
     Returns:
       a string containing the filename.
@@ -889,7 +880,7 @@ class _GoogleCloudStorageOutputWriter(OutputWriter):
     template = string.Template(naming_format)
     try:
       # Check that template doesn't use undefined mappings and is formatted well
-      return template.substitute(name=name, id=job_id, num=num, retry=retry)
+      return template.substitute(name=name, id=job_id, num=num, attempt=attempt)
     except ValueError, error:
       raise errors.BadWriterParamsError("Naming template is bad, %s" % (error))
     except KeyError, error:
@@ -921,28 +912,17 @@ class _GoogleCloudStorageOutputWriter(OutputWriter):
       raise errors.BadWriterParamsError("Bad bucket name, %s" % (error))
 
     # Validate the naming format does not throw any errors using dummy values
-    cls._generate_filename(writer_spec, "name", "id", 0, 0)
+    cls._generate_filename(writer_spec, "name", "id", 0, 1)
 
   @classmethod
-  def create(cls, mapreduce_state, shard_state):
-    """Create new writer for a shard.
-
-    Args:
-      mapreduce_state: an instance of model.MapreduceState describing current
-        job. State can NOT be modified.
-      shard_state: an instance of model.ShardState.
-
-    Returns:
-      an output writer for the requested shard.
-    """
-    # Get the current job state
-    job_spec = mapreduce_state.mapreduce_spec
-    writer_spec = _get_params(job_spec.mapper, allow_old=False)
+  def create(cls, mr_spec, shard_number, shard_attempt, _writer_state=None):
+    """Inherit docs."""
+    writer_spec = _get_params(mr_spec.mapper, allow_old=False)
 
     # Determine parameters
-    key = cls._generate_filename(writer_spec, job_spec.name,
-                                 job_spec.mapreduce_id,
-                                 shard_state.shard_number, shard_state.retries)
+    key = cls._generate_filename(writer_spec, mr_spec.name,
+                                 mr_spec.mapreduce_id,
+                                 shard_number, shard_attempt)
     # GoogleCloudStorage format for filenames, Initial slash is required
     filename = "/%s/%s" % (writer_spec[cls.BUCKET_NAME_PARAM], key)
 
