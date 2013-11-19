@@ -78,15 +78,14 @@ public class ConsecutiveLongInput extends Input<Long> {
   @Override public List<? extends InputReader<Long>> createReaders() {
     ImmutableList.Builder<InputReader<Long>> b = ImmutableList.builder();
     long valuesTotal = Math.max(0, limit - start);
-    long valuesPerShard = valuesTotal / shardCount;
-    long remainder = valuesTotal % shardCount;
-    long nextStart = start;
-    for (int i = 0; i < shardCount; i++) {
-      long thisLimit = nextStart + valuesPerShard + (i < remainder ? 1 : 0);
-      b.add(new Reader(nextStart, thisLimit));
-      nextStart = thisLimit;
+    double valuesPerShard = valuesTotal / (double) shardCount;
+    long shardStart = start;
+    for (int i = 1; i <= shardCount; i++) {
+      long shardLimit  = start + Math.round(i * valuesPerShard);
+      b.add(new Reader(shardStart, shardLimit));
+      shardStart = shardLimit;
     }
-    Preconditions.checkState(nextStart == limit, "%s != %s", nextStart, limit);
+    assert shardStart == limit;
     return b.build();
   }
 

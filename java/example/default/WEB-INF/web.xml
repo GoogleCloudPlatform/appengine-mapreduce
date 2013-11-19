@@ -18,6 +18,17 @@
   </servlet-mapping>
 
   <servlet>
+    <servlet-name>mapreduce-ui</servlet-name>
+    <servlet-class>
+      com.google.appengine.tools.mapreduce.MapReduceServlet
+    </servlet-class>
+  </servlet>
+  <servlet-mapping>
+    <servlet-name>mapreduce-ui</servlet-name>
+    <url-pattern>/mapreduce/command/*</url-pattern>
+  </servlet-mapping>
+
+  <servlet>
     <servlet-name>kickoff</servlet-name>
     <servlet-class>
       com.google.appengine.demos.mapreduce.randomcollisions.CollisionFindingServlet
