@@ -20,8 +20,16 @@ public abstract class Mapper<I, K, V> extends Worker<MapperContext<K, V>> {
   private static final long serialVersionUID = 1966174340710715049L;
 
   /**
-   * Processes a single input value, emitting output through the context
-   * returned by {@link Worker#getContext}.
+   * Processes a single input value, emitting output through the context returned by
+   * {@link Worker#getContext}.
    */
   public abstract void map(I value);
+
+  /**
+   * Syntactic sugar for {@code getContext().emit(key, value);}
+   */
+  protected void emit(K key, V value) {
+    getContext().emit(key, value);
+  }
+
 }
