@@ -4,6 +4,7 @@ package com.google.appengine.tools.mapreduce.impl.shardedjob;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
+import java.io.IOException;
 import java.io.Serializable;
 
 /**
@@ -15,18 +16,43 @@ public final class ShardedJobSettings implements Serializable {
 
   private static final long serialVersionUID = 286995366653078363L;
 
-  /*Nullable*/ private String controllerBackend = null;
-  /*Nullable*/ private String workerBackend = null;
+  // TODO(user): remove fields and readObject once we no longer care about outstanding jobs
+  // before the rename/removal.
+  private String controllerBackend;
+  private String workerBackend;
+  private String controllerQueueName;
+  private String workerQueueName;
+
+  /*Nullable*/ private String backend;
+  /*Nullable*/ private String module;
+  /*Nullable*/ private String version;
   // TODO(ohler): Integrate with pipeline and put this under /_ah/pipeline.
-  /*Nullable*/ private String pipelineStatusUrl = null;
+  /*Nullable*/ private String pipelineStatusUrl;
   private String controllerPath = "/mapreduce/controllerCallback";
   private String workerPath = "/mapreduce/workerCallback";
-  private String controllerQueueName = "default";
-  private String workerQueueName = "default";
+  private String queueName = "default";
   private int maxShardRetries = 4;
   private int maxSliceRetries = 20;
 
   public ShardedJobSettings() {
+  }
+
+  private void readObject(java.io.ObjectInputStream in) throws IOException, ClassNotFoundException {
+    in.defaultReadObject();
+    if (backend == null) {
+      backend = workerBackend == null ? controllerBackend : workerBackend;
+    }
+    if (queueName == null || queueName.equals("default")) {
+      queueName = workerQueueName == null ? controllerQueueName : workerQueueName;
+      if (queueName == null) {
+        queueName = "default";
+      }
+    }
+
+    controllerBackend = null;
+    workerBackend = null;
+    controllerQueueName = null;
+    workerQueueName = null;
   }
 
   /*Nullable*/ public String getPipelineStatusUrl() {
@@ -38,21 +64,30 @@ public final class ShardedJobSettings implements Serializable {
     return this;
   }
 
-  /*Nullable*/ public String getControllerBackend() {
-    return controllerBackend;
+  /*Nullable*/ public String getBackend() {
+    return backend;
   }
 
-  public ShardedJobSettings setControllerBackend(/*Nullable*/ String controllerBackend) {
-    this.controllerBackend = controllerBackend;
+  public ShardedJobSettings setBackend(/*Nullable*/ String backend) {
+    this.backend = backend;
     return this;
   }
 
-  /*Nullable*/ public String getWorkerBackend() {
-    return workerBackend;
+  public String getModule() {
+    return module;
   }
 
-  public ShardedJobSettings setWorkerBackend(/*Nullable*/ String workerBackend) {
-    this.workerBackend = workerBackend;
+  public ShardedJobSettings setModule(String module) {
+    this.module = module;
+    return this;
+  }
+
+  public String getVersion() {
+    return version;
+  }
+
+  public ShardedJobSettings setVersion(String version) {
+    this.version = version;
     return this;
   }
 
@@ -74,21 +109,12 @@ public final class ShardedJobSettings implements Serializable {
     return this;
   }
 
-  public String getControllerQueueName() {
-    return controllerQueueName;
+  public String getQueueName() {
+    return queueName;
   }
 
-  public ShardedJobSettings setControllerQueueName(String controllerQueueName) {
-    this.controllerQueueName = checkNotNull(controllerQueueName, "Null controllerQueueName");
-    return this;
-  }
-
-  public String getWorkerQueueName() {
-    return workerQueueName;
-  }
-
-  public ShardedJobSettings setWorkerQueueName(String workerQueueName) {
-    this.workerQueueName = checkNotNull(workerQueueName, "Null workerQueueName");
+  public ShardedJobSettings setQueueName(String queueName) {
+    this.queueName = checkNotNull(queueName, "Null queueName");
     return this;
   }
 
@@ -110,17 +136,17 @@ public final class ShardedJobSettings implements Serializable {
     return this;
   }
 
-  @Override public String toString() {
+  @Override
+  public String toString() {
     return getClass().getSimpleName() + "("
-        + controllerBackend + ", "
-        + workerBackend + ", "
+        + backend + ", "
         + pipelineStatusUrl + ", "
         + controllerPath + ", "
         + workerPath + ", "
-        + controllerQueueName + ", "
-        + workerQueueName + ", "
+        + queueName + ", "
         + maxShardRetries + ", "
-        + maxSliceRetries + ")";
+        + maxSliceRetries + ", "
+        + module + ", "
+        + version + ")";
   }
-
 }
