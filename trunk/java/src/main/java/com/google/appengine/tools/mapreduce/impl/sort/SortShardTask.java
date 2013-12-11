@@ -26,7 +26,7 @@ public class SortShardTask extends WorkerShardTask<
     KeyValue<ByteBuffer, ByteBuffer>, KeyValue<ByteBuffer, Iterator<ByteBuffer>>, SortContext> {
 
   private static final long serialVersionUID = -8041992113450564646L;
-  private static final int SORT_MEMORY_OVERHEAD = 8 * 1024 * 1024; // Estimate.
+  private static final long SORT_MEMORY_OVERHEAD = 8 * 1024 * 1024; // Estimate.
 
   private SortWorker inMemSorter;
 
