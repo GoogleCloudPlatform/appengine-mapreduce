@@ -85,31 +85,38 @@ class MapreducePipelineTest(testutil.HandlerTestBase):
     self.emails.append((sender, subject, body, html))
 
   def testFailedMapReduce(self):
-     # Add some random data.
-    entity_count = 200
+    max_attempts_before = pipeline.pipeline._DEFAULT_MAX_ATTEMPTS
+    try:
+      pipeline.pipeline._DEFAULT_MAX_ATTEMPTS = 1
 
-    for i in range(entity_count):
-      TestEntity(data=str(i)).put()
-      TestEntity(data=str(i)).put()
+      # Add some random data.
+      entity_count = 200
 
-    p = mapreduce_pipeline.MapreducePipeline(
-        "test",
-        __name__ + ".test_failed_map",
-        __name__ + ".test_mapreduce_reduce",
-        input_reader_spec=input_readers.__name__ + ".DatastoreInputReader",
-        output_writer_spec=(
-            output_writers.__name__ + ".BlobstoreRecordsOutputWriter"),
-        mapper_params={
-            "entity_kind": __name__ + "." + TestEntity.__name__,
-            },
-        shards=16)
-    p.start()
-    test_support.execute_until_empty(self.taskqueue)
+      print dir(pipeline.pipeline)
 
-    p = mapreduce_pipeline.MapreducePipeline.from_id(p.pipeline_id)
-    self.assertEqual(model.MapreduceState.RESULT_FAILED,
-                     p.outputs.result_status.value)
-    self.assertEqual(0, len(p.outputs.default.value))
+      for i in range(entity_count):
+        TestEntity(data=str(i)).put()
+        TestEntity(data=str(i)).put()
+
+      p = mapreduce_pipeline.MapreducePipeline(
+          "test",
+          __name__ + ".test_failed_map",
+          __name__ + ".test_mapreduce_reduce",
+          input_reader_spec=input_readers.__name__ + ".DatastoreInputReader",
+          output_writer_spec=(
+              output_writers.__name__ + ".BlobstoreRecordsOutputWriter"),
+          mapper_params={
+              "entity_kind": __name__ + "." + TestEntity.__name__,
+              },
+          shards=3)
+      p.max_attempts = 1
+      p.start()
+      test_support.execute_until_empty(self.taskqueue)
+
+      p = mapreduce_pipeline.MapreducePipeline.from_id(p.pipeline_id)
+      self.assertTrue(p.was_aborted)
+    finally:
+      pipeline.pipeline._DEFAULT_MAX_ATTEMPTS = max_attempts_before
 
   def testMapReduce(self):
     # Prepare test data

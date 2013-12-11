@@ -246,6 +246,8 @@ class MapperPipelineTest(testutil.HandlerTestBase):
     for i in range(1):
       TestEntity(data=str(i)).put()
 
+    pipeline.pipeline._DEFAULT_MAX_ATTEMPTS = 1
+
     p = mapper_pipeline.MapperPipeline(
         "test",
         handler_spec=__name__ + ".test_fail_map",
@@ -259,18 +261,18 @@ class MapperPipelineTest(testutil.HandlerTestBase):
     p.start()
     test_support.execute_until_empty(self.taskqueue)
 
-    self.assertEquals(1, len(self.emails))
-    self.assertTrue(self.emails[0][1].startswith(
-        "Pipeline successful:"))
-
     p = mapper_pipeline.MapperPipeline.from_id(p.pipeline_id)
+    self.assertTrue(p.was_aborted)
 
     self.assertTrue(p.outputs.job_id.filled)
     state = model.MapreduceState.get_by_job_id(p.outputs.job_id.value)
     self.assertEqual(model.MapreduceState.RESULT_FAILED, state.result_status)
-    self.assertEqual(model.MapreduceState.RESULT_FAILED,
-                     p.outputs.result_status.value)
-    self.assertEqual([], p.outputs.default.value)
+    self.assertFalse(p.outputs.result_status.filled)
+    self.assertFalse(p.outputs.default.filled)
+
+    self.assertEquals(1, len(self.emails))
+    self.assertTrue(self.emails[0][1].startswith(
+        "Pipeline aborted:"))
 
   def testProcessEntities(self):
     """Test empty mapper over non-empty dataset."""
@@ -393,14 +395,16 @@ class MapperPipelineTest(testutil.HandlerTestBase):
             },
         },
         shards=5)
+    p.max_attempts = 1
     p.start()
     test_support.execute_until_empty(self.taskqueue)
 
-    self.assertEquals(1, len(self.emails))
-    self.assertTrue(self.emails[0][1].startswith(
-        "Pipeline successful:"))
     state = model.MapreduceState.all().get()
     self.assertEqual(model.MapreduceState.RESULT_FAILED, state.result_status)
+
+    self.assertEquals(1, len(self.emails))
+    self.assertTrue(self.emails[0][1].startswith(
+        "Pipeline aborted:"))
 
 
 if __name__ == "__main__":
