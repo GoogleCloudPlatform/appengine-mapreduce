@@ -34,15 +34,10 @@ class ShardedJobStateImpl<T extends IncrementalTask<T, R>, R extends Serializabl
   private long mostRecentUpdateTimeMillis;
   private BitSet shardsCompleted;
   private Status status;
-  /*Nullable*/ private R aggregateResult;
+  private transient R aggregateResult;
 
-  public ShardedJobStateImpl(String jobId,
-      ShardedJobController<T, R> controller,
-      ShardedJobSettings settings,
-      int totalTaskCount,
-      long startTimeMillis,
-      Status status,
-      R initialAggregateResult) {
+  public ShardedJobStateImpl(String jobId, ShardedJobController<T, R> controller,
+      ShardedJobSettings settings, int totalTaskCount, long startTimeMillis, Status status) {
     this.jobId = checkNotNull(jobId, "Null jobId");
     this.controller = checkNotNull(controller, "Null controller");
     this.settings = checkNotNull(settings, "Null settings");
@@ -51,7 +46,6 @@ class ShardedJobStateImpl<T extends IncrementalTask<T, R>, R extends Serializabl
     this.startTimeMillis = startTimeMillis;
     this.mostRecentUpdateTimeMillis = startTimeMillis;
     this.status = checkNotNull(status, "Null status");
-    this.aggregateResult = initialAggregateResult;
   }
 
   @Override
@@ -83,11 +77,11 @@ class ShardedJobStateImpl<T extends IncrementalTask<T, R>, R extends Serializabl
   public long getMostRecentUpdateTimeMillis() {
     return mostRecentUpdateTimeMillis;
   }
-  
+
   @Override public int getActiveTaskCount() {
     return totalTaskCount - shardsCompleted.cardinality();
   }
-  
+
   public void markShardCompleted(int shard) {
     shardsCompleted.set(shard);
   }
@@ -96,7 +90,7 @@ class ShardedJobStateImpl<T extends IncrementalTask<T, R>, R extends Serializabl
     this.shardsCompleted = shardsCompleted;
     return this;
   }
-  
+
   ShardedJobStateImpl<T, R> setMostRecentUpdateTimeMillis(long mostRecentUpdateTimeMillis) {
     this.mostRecentUpdateTimeMillis = mostRecentUpdateTimeMillis;
     return this;
@@ -143,7 +137,6 @@ class ShardedJobStateImpl<T extends IncrementalTask<T, R>, R extends Serializabl
     private static final String MOST_RECENT_UPDATE_TIME_PROPERTY = "mostRecentUpdateTimeMillis";
     private static final String SHARDS_COMPLETED_PROPERTY = "activeShards";
     private static final String STATUS_PROPERTY = "status";
-    private static final String AGGREGATE_RESULT_PROPERTY = "result";
 
     static Key makeKey(String jobId) {
       return KeyFactory.createKey(ENTITY_KIND, jobId);
@@ -163,10 +156,6 @@ class ShardedJobStateImpl<T extends IncrementalTask<T, R>, R extends Serializabl
           new Blob(SerializationUtil.serializeToByteArray(in.shardsCompleted)));
       out.setUnindexedProperty(STATUS_PROPERTY,
           new Blob(SerializationUtil.serializeToByteArray(in.getStatus())));
-      if (in.getAggregateResult() != null) {
-        out.setUnindexedProperty(AGGREGATE_RESULT_PROPERTY,
-            new Blob(SerializationUtil.serializeToByteArray(in.getAggregateResult())));
-      }
       return out;
     }
 
@@ -181,14 +170,10 @@ class ShardedJobStateImpl<T extends IncrementalTask<T, R>, R extends Serializabl
               in, SETTINGS_PROPERTY),
           Ints.checkedCast((Long) in.getProperty(TOTAL_TASK_COUNT_PROPERTY)),
           (Long) in.getProperty(START_TIME_PROPERTY),
-          SerializationUtil.<Status>deserializeFromDatastoreProperty(in, STATUS_PROPERTY),
-          in.hasProperty(AGGREGATE_RESULT_PROPERTY) ?
-              SerializationUtil.<R>deserializeFromDatastoreProperty(in, AGGREGATE_RESULT_PROPERTY)
-              : null).setMostRecentUpdateTimeMillis(
-          (Long) in.getProperty(MOST_RECENT_UPDATE_TIME_PROPERTY)).setShardsCompleted(
-          (BitSet) SerializationUtil.deserializeFromDatastoreProperty(in,
-              SHARDS_COMPLETED_PROPERTY));
+          SerializationUtil.<Status>deserializeFromDatastoreProperty(in, STATUS_PROPERTY))
+          .setMostRecentUpdateTimeMillis((Long) in.getProperty(MOST_RECENT_UPDATE_TIME_PROPERTY))
+          .setShardsCompleted((BitSet)
+              SerializationUtil.deserializeFromDatastoreProperty(in, SHARDS_COMPLETED_PROPERTY));
     }
   }
-
 }

@@ -16,7 +16,6 @@ import com.google.appengine.tools.cloudstorage.ExceptionHandler;
 import com.google.appengine.tools.cloudstorage.RetryHelper;
 import com.google.appengine.tools.cloudstorage.RetryParams;
 import com.google.apphosting.api.ApiProxy.ApiProxyException;
-import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
 
 import java.io.Serializable;
@@ -104,31 +103,6 @@ public class DatastoreMutationPool {
   private DatastoreMutationPool(DatastoreService ds, Params params) {
     this.ds = ds;
     this.params = params;
-  }
-
-  private static class Listener extends LifecycleListener {
-    // Will never actually be serialized since it removes itself from the
-    // registry on endSlice().  Declaring serialVersionUID only to avoid
-    // compiler warning.
-    private static final long serialVersionUID = 121172329066475329L;
-
-    private DatastoreMutationPool pool;
-    private final LifecycleListenerRegistry registry;
-
-    Listener(DatastoreMutationPool pool, LifecycleListenerRegistry registry) {
-      this.pool = checkNotNull(pool, "Null pool");
-      this.registry = checkNotNull(registry, "Null registry");
-    }
-
-    @Override public void endSlice() {
-      Preconditions.checkState(pool != null, "%s: endSlice() called twice?", this);
-      registry.removeListener(this);
-      try {
-        pool.flush();
-      } finally {
-        pool = null;
-      }
-    }
   }
 
   public static DatastoreMutationPool forManualFlushing(DatastoreService ds, Params params) {

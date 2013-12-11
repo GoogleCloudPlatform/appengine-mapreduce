@@ -64,8 +64,7 @@ public class ShardedJobStorageTest extends EndToEndTestCase {
         new ShardedJobSettings(),
         10,
         System.currentTimeMillis(),
-        new Status(Status.StatusCode.INITIALIZING),
-        1);
+        new Status(Status.StatusCode.RUNNING));
   }
 
   public void testQueryByKind() {
