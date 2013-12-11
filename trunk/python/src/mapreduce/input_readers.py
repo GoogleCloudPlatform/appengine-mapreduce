@@ -858,7 +858,6 @@ DatastoreEntityInputReader = RawDatastoreInputReader
 
 
 # TODO(user): Remove this after the only dependency GroomerMarkReader is
-# refactored to use megastore safetime.
 class _OldAbstractDatastoreInputReader(InputReader):
   """Abstract base class for classes that iterate over datastore entities.
 

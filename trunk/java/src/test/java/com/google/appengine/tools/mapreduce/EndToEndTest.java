@@ -61,6 +61,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Logger;
 
 /**
+ * @author ohler@google.com (Christian Ohler)
  */
 public class EndToEndTest extends EndToEndTestCase {
 
