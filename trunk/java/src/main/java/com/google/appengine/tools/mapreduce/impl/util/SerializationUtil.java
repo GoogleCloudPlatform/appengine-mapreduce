@@ -68,14 +68,32 @@ public class SerializationUtil {
     GZIP(2) {
       @Override
       ObjectInputStream wrap(ObjectInputStream sink) throws IOException {
-        Inflater inflater =  new Inflater(true);
-        return new ConciseObjectInputStream(new InflaterInputStream(sink, inflater), true);
+        final Inflater inflater =  new Inflater(true);
+        InputStream in = new InflaterInputStream(sink, inflater) {
+          @Override public void close() throws IOException {
+            try {
+              super.close();
+            } finally {
+              inflater.end();
+            }
+          }
+        };
+        return new ConciseObjectInputStream(in, true);
       }
 
       @Override
       ObjectOutputStream wrap(ObjectOutputStream dest) throws IOException {
-        Deflater deflater =  new Deflater(Deflater.BEST_COMPRESSION, true);
-        return new ConciseObjectOutputStream(new DeflaterOutputStream(dest, deflater), true);
+        final Deflater deflater =  new Deflater(Deflater.BEST_COMPRESSION, true);
+        OutputStream out = new DeflaterOutputStream(dest, deflater) {
+          @Override public void close() throws IOException {
+            try {
+              super.close();
+            } finally {
+              deflater.end();
+            }
+          }
+        };
+        return new ConciseObjectOutputStream(out, true);
       }
     };
 
