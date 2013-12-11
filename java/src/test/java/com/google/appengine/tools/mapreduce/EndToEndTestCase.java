@@ -63,7 +63,7 @@ public abstract class EndToEndTestCase extends TestCase {
     helper.setUp();
     Map<String, String> envAttributes = getEnvAttributes();
     if (envAttributes != null) {
-      helper.getApiProxyLocal().appendProperties(envAttributes);
+      LocalServiceTestHelper.getApiProxyLocal().appendProperties(envAttributes);
     }
     taskQueue = LocalTaskQueueTestConfig.getLocalTaskQueue();
     ApiProxyLocal proxy = (ApiProxyLocal) ApiProxy.getDelegate();

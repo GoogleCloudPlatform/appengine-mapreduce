@@ -217,14 +217,12 @@ public class MapReduceJob<I, K, V, O, R>
     private final Counters initialCounters;
     private final Output<O, R> output;
     private final String resultPromiseHandle;
-    private final MapReduceSettings settings;
 
     WorkerController(String shardedJobName, Counters initialCounters, Output<O, R> output,
-        MapReduceSettings settings, String resultPromiseHandle) {
+        String resultPromiseHandle) {
       super(shardedJobName);
       this.initialCounters = checkNotNull(initialCounters, "Null initialCounters");
       this.output = checkNotNull(output, "Null output");
-      this.settings = checkNotNull(settings, "Null MR settings");
       this.resultPromiseHandle = checkNotNull(resultPromiseHandle, "Null resultPromiseHandle");
     }
 
@@ -242,7 +240,6 @@ public class MapReduceJob<I, K, V, O, R>
       Status status = new Status(Status.StatusCode.DONE);
       ResultAndStatus<R> resultAndStatus = new ResultAndStatus<>(
           new MapReduceResultImpl<>(outputResult, totalCounters), status);
-      // makeJobSettings(settings)
       submitPromisedJob(resultAndStatus);
     }
 
@@ -251,30 +248,18 @@ public class MapReduceJob<I, K, V, O, R>
       submitPromisedJob(new ResultAndStatus<R>(null, status));
     }
 
-    // TODO(user): consider replacing after b/12067201 is fixed.
+    // TODO(user): consider using a pipeline for it after b/12067201 is fixed.
     private void submitPromisedJob(final ResultAndStatus<R> resultAndStatus) {
-      DeferredTask submitPromisedJobTask = new DeferredTask() {
-
-        private static final long serialVersionUID = 8597048355222936151L;
-
-        @Override
-        public void run() {
-          try {
-            PipelineServiceFactory.newPipelineService().submitPromisedValue(
-                resultPromiseHandle, resultAndStatus);
-          } catch (OrphanedObjectException e) {
-            log.warning("Discarding an orphaned promiseHandle: " + resultPromiseHandle);
-          } catch (NoSuchObjectException e) {
-            // Let taskqueue retry.
-            throw new RuntimeException(
-                resultPromiseHandle + ": Handle not found, can't submit " + resultAndStatus, e);
-          }
-        }
-      };
-
-      Queue queue = QueueFactory.getQueue(settings.getWorkerQueueName());
-      queue.add(TaskOptions.Builder.withPayload(submitPromisedJobTask)
-          .retryOptions(RetryOptions.Builder.withMinBackoffSeconds(300).maxBackoffSeconds(300)));
+      try {
+        PipelineServiceFactory.newPipelineService().submitPromisedValue(resultPromiseHandle,
+            resultAndStatus);
+      } catch (OrphanedObjectException e) {
+        log.warning("Discarding an orphaned promiseHandle: " + resultPromiseHandle);
+      } catch (NoSuchObjectException e) {
+        // Let taskqueue retry.
+        throw new RuntimeException(
+            resultPromiseHandle + ": Handle not found, can't submit " + resultAndStatus, e);
+      }
     }
   }
 
@@ -343,8 +328,8 @@ public class MapReduceJob<I, K, V, O, R>
       ShardedJobSettings shardedJobSettings =
           makeShardedJobSettings(shardedJobId, settings, getPipelineKey());
       WorkerController<I, KeyValue<K, V>, List<GoogleCloudStorageFileSet>, MapperContext<K, V>>
-          workerController = new WorkerController<>(shardedJobName, new CountersImpl(), output,
-              settings, resultAndStatus.getHandle());
+          workerController = new WorkerController<>(
+              shardedJobName, new CountersImpl(), output, resultAndStatus.getHandle());
       ShardedJob<?, ?> shardedJob =
           new ShardedJob<>(shardedJobId, mapTasks.build(), workerController, shardedJobSettings);
       futureCall(shardedJob, makeJobSettings(settings, statusConsoleUrl(statusConsoleUrl)));
@@ -437,7 +422,7 @@ public class MapReduceJob<I, K, V, O, R>
           makeShardedJobSettings(shardedJobId, settings, getPipelineKey());
       WorkerController<KeyValue<ByteBuffer, ByteBuffer>, KeyValue<ByteBuffer, Iterator<ByteBuffer>>,
           List<GoogleCloudStorageFileSet>, SortContext> workerController = new WorkerController<>(
-              shardedJobName, new CountersImpl(), output, settings, resultAndStatus.getHandle());
+              shardedJobName, new CountersImpl(), output, resultAndStatus.getHandle());
       ShardedJob<?, ?> shardedJob =
           new ShardedJob<>(shardedJobId, sortTasks.build(), workerController, shardedJobSettings);
       futureCall(shardedJob, makeJobSettings(settings, statusConsoleUrl(statusConsoleUrl)));
@@ -505,7 +490,7 @@ public class MapReduceJob<I, K, V, O, R>
       ShardedJobSettings shardedJobSettings =
           makeShardedJobSettings(shardedJobId, settings, getPipelineKey());
       WorkerController<KeyValue<K, Iterator<V>>, O, R, ReducerContext<O>> workerController =
-          new WorkerController<>(shardedJobName, mapResult.getCounters(), output, settings,
+          new WorkerController<>(shardedJobName, mapResult.getCounters(), output,
               resultAndStatus.getHandle());
       ShardedJob<?, ?> shardedJob =
           new ShardedJob<>(shardedJobId, reduceTasks.build(), workerController, shardedJobSettings);

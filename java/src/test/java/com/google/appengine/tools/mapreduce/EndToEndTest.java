@@ -120,6 +120,25 @@ public class EndToEndTest extends EndToEndTestCase {
     runWithPipeline(preparer, mrSpec, verifier);
   }
 
+  public void testDoNothingWithEmptyReadersList() throws Exception {
+    runTest(new Preparer(),
+        MapReduceSpecification.of("Empty test MR",
+            new NoInput<Long>(0),
+            new Mod37Mapper(),
+            Marshallers.getStringMarshaller(),
+            Marshallers.getLongMarshaller(),
+            NoReducer.<String, Long, String>create(),
+            new NoOutput<String, String>(1)),
+        new Verifier<String>() {
+          @Override
+          public void verify(MapReduceResult<String> result) throws Exception {
+            assertNull(result.getOutputResult());
+            assertEquals(0, result.getCounters().getCounter(CounterNames.MAPPER_CALLS).getValue());
+            assertEquals(0, result.getCounters().getCounter(CounterNames.REDUCER_CALLS).getValue());
+          }
+        });
+  }
+
   public void testDoNothing() throws Exception {
     runTest(new Preparer(),
         MapReduceSpecification.of("Empty test MR",
