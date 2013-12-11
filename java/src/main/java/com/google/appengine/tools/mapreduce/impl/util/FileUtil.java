@@ -89,7 +89,6 @@ public class FileUtil {
       // understand why all the other work it's doing is needed.
       return new AppEngineFile(file.getFileSystem(), getBlobKey(file).getKeyString());
     } else {
-      // TODO(ohler): Figure out what needs to happen for bigstore files.
       return file;
     }
   }

@@ -25,6 +25,7 @@ import java.util.NoSuchElementException;
  * <p>This class is really an interface that might be evolving. In order to avoid breaking
  * users when we change the interface, we made it an abstract class.
  *
+ * @author ohler@google.com (Christian Ohler)
  *
  * @param <I> type of values produced by this input
  */

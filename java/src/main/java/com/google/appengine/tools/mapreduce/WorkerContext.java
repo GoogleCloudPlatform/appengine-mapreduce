@@ -7,6 +7,7 @@ import static com.google.common.base.Preconditions.checkNotNull;
 /**
  * Context for each worker (mapper or reducer) shard.
  *
+ * @author ohler@google.com (Christian Ohler)
  */
 public abstract class WorkerContext {
 
