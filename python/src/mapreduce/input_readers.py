@@ -2724,14 +2724,6 @@ class _ReducerReader(RecordsReader):
     self.current_key = None
     self.current_values = None
 
-  def _yield_current_pair(self):
-    key = self.current_key
-    values = self.current_values
-    # This is final value for the current key, don't try to serialize it.
-    self.current_key = None
-    self.current_values = None
-    return (key, values)
-
   def __iter__(self):
     ctx = context.get()
     combiner = None
@@ -2745,12 +2737,11 @@ class _ReducerReader(RecordsReader):
       proto = file_service_pb.KeyValues()
       proto.ParseFromString(binary_record)
 
+      to_yield = None
       if self.current_key is not None and self.current_key != proto.key():
-        yield self._yield_current_pair()
-        # Only do check-pointing after a key is yielded. This ensures the
-        # key and values don't have to be serializable before they are passed
-        # to the reducer function.
-        yield ALLOW_CHECKPOINT
+        to_yield = (self.current_key, self.current_values)
+        self.current_key = None
+        self.current_values = None
 
       if self.current_key is None:
         self.current_key = proto.key()
@@ -2770,21 +2761,30 @@ class _ReducerReader(RecordsReader):
           if isinstance(value, operation.Operation):
             value(ctx)
           else:
-            # with combiner current values always come from combiner
+            # With combiner the current values always come from the combiner.
             self.current_values.append(value)
 
-        # Allow check-pointing after a combiner has run. When you're using
-        # combiners the key and combiner output values must be serializable,
-        # so we can check-point at any time.
-        yield ALLOW_CHECKPOINT
+        # Check-point after each combiner call is run only when there's nothing
+        # that needs to be yielded below. Otherwise allowing a check-point here
+        # would cause the current to_yield data to be lost.
+        if not to_yield:
+          yield ALLOW_CHECKPOINT
       else:
-        # without combiner we just accumulate values.
+        # Without combiner we just accumulate values.
         self.current_values.extend(proto.value_list())
 
-    # There may be some accumulated reducer values left at the end of a file
-    # so be sure to yield them too.
+      if to_yield:
+        yield to_yield
+        # Check-point after each key is yielded.
+        yield ALLOW_CHECKPOINT
+
+    # There may be some accumulated values left at the end of an input file
+    # so be sure to yield those too.
     if self.current_key is not None:
-      yield self._yield_current_pair()
+      to_yield = (self.current_key, self.current_values)
+      self.current_key = None
+      self.current_values = None
+      yield to_yield
 
   @staticmethod
   def encode_data(data):
@@ -2806,8 +2806,8 @@ class _ReducerReader(RecordsReader):
       A json-izable version of the remaining InputReader.
     """
     result = super(_ReducerReader, self).to_json()
-    result["current_key"] = _ReducerReader.encode_data(self.current_key)
-    result["current_values"] = _ReducerReader.encode_data(self.current_values)
+    result["current_key"] = self.encode_data(self.current_key)
+    result["current_values"] = self.encode_data(self.current_values)
     return result
 
   @classmethod
