@@ -30,7 +30,7 @@ public abstract class Output<O, R> implements Serializable {
    * <p>The number of output writers returned is equal to the number of shards.
    */
   public abstract List<? extends OutputWriter<O>> createWriters();
-  
+
   /**
    * When this class is used for a reduce output, this method will determine the number of reduce
    * shards.
@@ -51,7 +51,8 @@ public abstract class Output<O, R> implements Serializable {
    * <p>Should return null if no such result makes sense for this kind of output.
    *
    * <p>Called after all {@code OutputWriter}s have been closed (with
-   * {@link OutputWriter#close}).
+   * {@link OutputWriter#close}). It is possible for this method to be called
+   * more than once with the same {@code writers} collection.
    *
    * <p>The {@code writers} argument will contain the same writers that
    * {@link #createWriters} returned (modulo serialization -- typically,
