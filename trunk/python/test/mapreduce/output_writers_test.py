@@ -215,7 +215,7 @@ class FileOutputWriterTest(testutil.HandlerTestBase):
             params={"filesystem": "gs", "bucket_name": "foo"}))
 
 
-class GoogleCloudStorageOutputTestBase(testutil.CloudStorageTestBase):
+class GCSOutputTestBase(testutil.CloudStorageTestBase):
   """Base class for running output tests with Google Cloud Storage.
 
   Subclasses must define WRITER_NAME and may redefine NUM_SHARDS.
@@ -276,7 +276,113 @@ class GoogleCloudStorageOutputTestBase(testutil.CloudStorageTestBase):
     return shard_state
 
 
-class GoogleCloudStorageOutputWriterTest(GoogleCloudStorageOutputTestBase):
+class GCSOutputWriterNoDupModeTest(GCSOutputTestBase):
+
+  WRITER_CLS = output_writers._GoogleCloudStorageOutputWriter
+  WRITER_NAME = output_writers.__name__ + "." + WRITER_CLS.__name__
+
+  def setUp(self):
+    super(GCSOutputWriterNoDupModeTest, self).setUp()
+    self.mr_state = self.create_mapreduce_state(
+        output_params=
+        {self.WRITER_CLS.BUCKET_NAME_PARAM: "test",
+         self.WRITER_CLS._NO_DUPLICATE: True})
+
+  def testValidate_NoDuplicateParam(self):
+    # Good.
+    self.WRITER_CLS.validate(self.create_mapper_spec(
+        output_params={self.WRITER_CLS.BUCKET_NAME_PARAM: "test",
+                       self.WRITER_CLS._NO_DUPLICATE: True}))
+
+    # Bad. Expect a boolean.
+    self.assertRaises(
+        errors.BadWriterParamsError,
+        self.WRITER_CLS.validate,
+        self.create_mapper_spec(
+            output_params=
+            {self.WRITER_CLS.BUCKET_NAME_PARAM: "test",
+             self.WRITER_CLS._NO_DUPLICATE: "False"}))
+
+  def testSmoke(self):
+    tmp_files = set()
+    final_files = set()
+    for shard_num in range(self.NUM_SHARDS):
+      shard = self.create_shard_state(shard_num)
+      writer = self.WRITER_CLS.create(self.mr_state.mapreduce_spec,
+                                      shard.shard_number, 0)
+      # Verify files are created under tmp dir.
+      tmp_file = writer._streaming_buffer.name
+      self.assertTrue(self.WRITER_CLS._MR_TMP in tmp_file)
+      tmp_files.add(tmp_file)
+      cxt = context.Context(self.mr_state.mapreduce_spec, shard)
+      writer.finalize(cxt, shard)
+      # Verify the integrity of writer state.
+      self.assertEqual(
+          writer._streaming_buffer.name,
+          (shard.writer_state[self.WRITER_CLS._SEG_PREFIX] +
+           str(shard.writer_state[self.WRITER_CLS._LAST_SEG_INDEX])))
+      final_file = shard.writer_state["filename"]
+      self.assertFalse(self.WRITER_CLS._MR_TMP in final_file)
+      final_files.add(final_file)
+
+    # Verify all filenames are different.
+    self.assertEqual(self.NUM_SHARDS, len(tmp_files))
+    self.assertEqual(self.NUM_SHARDS, len(final_files))
+
+  def testSerialization(self):
+    mr_spec = self.mr_state.mapreduce_spec
+    shard_state = self.create_shard_state(0)
+    ctx = context.Context(mr_spec, shard_state)
+    context.Context._set(ctx)
+
+    writer = self.WRITER_CLS.create(mr_spec, 0, 0)
+    writer._seg_index = 1
+    writer.write("abcde")
+
+    writer = self.WRITER_CLS.from_json_str(writer.to_json_str())
+    # _seg_index doesn't change.
+    self.assertEqual(1, writer._seg_index)
+    # _seg_valid_length is updated to what was in the buffer.
+    self.assertEqual(len("abcde"), writer._seg_valid_length)
+
+  def testRecoverNothingWrittenInFailedInstance(self):
+    mr_spec = self.mr_state.mapreduce_spec
+    writer = self.WRITER_CLS.create(mr_spec, 0, 0)
+    self.assertEqual(0, writer._seg_index)
+    new_writer = writer._recover(mr_spec, 0, 0)
+    # Old instance is not finalized.
+    self.assertFalse(0, writer._streaming_buffer.closed)
+    # seg index is not incremented.
+    self.assertEqual(0, new_writer._seg_index)
+
+  def testRecoverSomethingWrittenInFailedInstance(self):
+    mr_spec = self.mr_state.mapreduce_spec
+    shard_state = self.create_shard_state(0)
+    ctx = context.Context(mr_spec, shard_state)
+    context.Context._set(ctx)
+
+    writer = self.WRITER_CLS.create(mr_spec, 0, 0)
+    writer.write("123")
+    writer = self.WRITER_CLS.from_json(writer.to_json())
+    writer.write("4")
+
+    new_writer = writer._recover(mr_spec, 0, 0)
+    # Old instance is finalized and valid offset saved.
+    old_stat = cloudstorage.stat(writer._streaming_buffer.name)
+    self.assertEqual(
+        len("123"),
+        int(old_stat.metadata[self.WRITER_CLS._VALID_LENGTH]))
+    # New instance is created with an incremented seg index.
+    self.assertEqual(writer._seg_index + 1, new_writer._seg_index)
+
+    # Verify filenames.
+    self.assertTrue(
+        writer._streaming_buffer.name.endswith(str(writer._seg_index)))
+    self.assertTrue(
+        new_writer._streaming_buffer.name.endswith(str(new_writer._seg_index)))
+
+
+class GCSOutputWriterTest(GCSOutputTestBase):
 
   WRITER_CLS = output_writers._GoogleCloudStorageOutputWriter
   WRITER_NAME = output_writers.__name__ + "." + WRITER_CLS.__name__
@@ -332,8 +438,10 @@ class GoogleCloudStorageOutputWriterTest(GoogleCloudStorageOutputTestBase):
       shard = self.create_shard_state(shard_num)
       writer = self.WRITER_CLS.create(mapreduce_state.mapreduce_spec,
                                       shard.shard_number, 0)
+      cxt = context.Context(mapreduce_state.mapreduce_spec,
+                            shard)
       shard.result_status = model.ShardState.RESULT_SUCCESS
-      writer.finalize(None, shard)
+      writer.finalize(cxt, shard)
       shard.put()
     filenames = self.WRITER_CLS.get_filenames(mapreduce_state)
     # Verify we have the correct number of filenames
@@ -354,7 +462,7 @@ class GoogleCloudStorageOutputWriterTest(GoogleCloudStorageOutputTestBase):
                                     shard_state.shard_number, 0)
     data = "fakedata"
     writer.write(data)
-    writer.finalize(None, shard_state)
+    writer.finalize(ctx, shard_state)
     filename = self.WRITER_CLS._get_filename(shard_state)
 
     self.assertNotEquals(None, filename)
@@ -372,7 +480,6 @@ class GoogleCloudStorageOutputWriterTest(GoogleCloudStorageOutputTestBase):
     writer = self.WRITER_CLS.create(mapreduce_state.mapreduce_spec,
                                     shard_state.shard_number,
                                     shard_state.retries + 1)
-    filename = writer._filename
     writer.write("badData")
 
     # Test re-creating the writer for a retry
@@ -380,13 +487,10 @@ class GoogleCloudStorageOutputWriterTest(GoogleCloudStorageOutputTestBase):
     writer = self.WRITER_CLS.create(mapreduce_state.mapreduce_spec,
                                     shard_state.shard_number,
                                     shard_state.retries + 1)
-    new_filename = writer._filename
+    new_filename = writer._streaming_buffer.name
     good_data = "goodData"
     writer.write(good_data)
-    writer.finalize(None, shard_state)
-
-    # Verify the retry has a different filename
-    self.assertNotEqual(filename, new_filename)
+    writer.finalize(ctx, shard_state)
 
     # Verify the badData is not in the final file
     self.assertEqual(good_data, cloudstorage.open(new_filename).read())
@@ -407,7 +511,7 @@ class GoogleCloudStorageOutputWriterTest(GoogleCloudStorageOutputTestBase):
     writer = self.WRITER_CLS.create(mapreduce_state.mapreduce_spec,
                                     shard_state.shard_number,
                                     0)
-    writer.finalize(None, shard_state)
+    writer.finalize(ctx, shard_state)
 
     filename = self.WRITER_CLS._get_filename(
         shard_state)
@@ -436,7 +540,7 @@ class GoogleCloudStorageOutputWriterTest(GoogleCloudStorageOutputTestBase):
 
     # Serialize/deserialize writer after more data written
     writer = self.WRITER_CLS.from_json(writer.to_json())
-    writer.finalize(None, shard_state)
+    writer.finalize(ctx, shard_state)
 
     # Serialize/deserialize writer after finalization
     writer = self.WRITER_CLS.from_json(writer.to_json())
@@ -477,8 +581,7 @@ class GoogleCloudStorageOutputWriterTest(GoogleCloudStorageOutputTestBase):
     self.assertEqual([], self.WRITER_CLS.get_filenames(mapreduce_state))
 
 
-class GoogleCloudStorageRecordOutputWriterTest(
-    GoogleCloudStorageOutputTestBase):
+class GCSRecordOutputWriterTest(GCSOutputTestBase):
 
   BUCKET_NAME = "test"
   WRITER_CLS = output_writers._GoogleCloudStorageRecordOutputWriter
@@ -495,8 +598,8 @@ class GoogleCloudStorageRecordOutputWriterTest(
     """
     all_params = {self.WRITER_CLS.BUCKET_NAME_PARAM: self.BUCKET_NAME}
     all_params.update(output_params or {})
-    return super(GoogleCloudStorageRecordOutputWriterTest,
-                 self).create_mapreduce_state(all_params)
+    return super(GCSRecordOutputWriterTest, self).create_mapreduce_state(
+        all_params)
 
   def setupWriter(self):
     """Create an Google Cloud Storage LevelDB record output writer.

@@ -332,6 +332,13 @@ class TestOutputWriter(output_writers.OutputWriter):
     assert isinstance(ctx, context.Context)
     self.events.append("finalize-" + str(shard_state.shard_number))
 
+  def _supports_slice_recovery(self, mapper_spec):
+    return True
+
+  def _recover(self, mr_spec, shard_number, shard_attempt):
+    self.events.append("recover")
+    return self.__class__()
+
 
 class UnfinalizableTestOutputWriter(TestOutputWriter):
   """An output writer where all calls to finalize fail."""
@@ -1297,7 +1304,7 @@ class MapperWorkerCallbackHandlerLeaseTest(testutil.HandlerTestBase):
                                         parameters.config._SLICE_DURATION_SEC),
                      lambda: now)
     # Logs API doesn't think the request has ended.
-    self.assertFalse(handler._old_request_ended(self.shard_state))
+    self.assertFalse(handler._has_old_request_ended(self.shard_state))
     # Request has not timed out.
     self.assertTrue(handler._wait_time(
         self.shard_state,
@@ -1318,7 +1325,7 @@ class MapperWorkerCallbackHandlerLeaseTest(testutil.HandlerTestBase):
                                         parameters.config._LEASE_GRACE_PERIOD +
                                         parameters.config._SLICE_DURATION_SEC))
     # Logs API doesn't think the request has ended.
-    self.assertFalse(handler._old_request_ended(self.shard_state))
+    self.assertFalse(handler._has_old_request_ended(self.shard_state))
     # But request has timed out.
     self.assertEqual(0, handler._wait_time(
         self.shard_state, parameters.config._REQUEST_EVENTUAL_TIMEOUT))
@@ -1341,7 +1348,7 @@ class MapperWorkerCallbackHandlerLeaseTest(testutil.HandlerTestBase):
     self.shard_state.slice_id -= 1
     handler, tstate = self._create_handler()
     self.assertEqual(
-        handler._TASK_STATE.RETRY_TASK,
+        handler._TASK_DIRECTIVE.RETRY_TASK,
         # Use old shard state.
         handler._try_acquire_lease(self.shard_state, tstate))
 
@@ -1434,12 +1441,16 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
     MapreduceHandlerTestBase.setUp(self)
     self.original_task_add = taskqueue.Task.add
     self.original_slice_duration = parameters.config._SLICE_DURATION_SEC
+    self.original_supports_slice_recovery = (
+        TestOutputWriter._supports_slice_recovery)
     self.init()
 
   def tearDown(self):
     handlers._TEST_INJECTED_FAULTS.clear()
     taskqueue.Task.add = self.original_task_add
     parameters.config._SLICE_DURATION_SEC = self.original_slice_duration
+    TestOutputWriter._supports_slice_recovery = (
+        self.original_supports_slice_recovery)
     MapreduceHandlerTestBase.tearDown(self)
 
   def init(self,
@@ -1473,12 +1484,16 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
     self.shard_state = self.create_and_store_shard_state(
         self.mapreduce_id, self.shard_number)
     self.shard_state.retries = shard_retries
+    self.shard_state.slice_id = self.slice_id
     self.shard_state.put()
     self.shard_id = self.shard_state.shard_id
 
     output_writer = None
     if self.mapreduce_spec.mapper.output_writer_class():
-      output_writer = self.mapreduce_spec.mapper.output_writer_class()()
+      output_writer_cls = self.mapreduce_spec.mapper.output_writer_class()
+      output_writer = output_writer_cls.create(self.mapreduce_spec,
+                                               self.shard_number,
+                                               shard_retries + 1)
 
     reader_iter = db_iters.RangeIteratorFactory.create_key_ranges_iterator(
         key_ranges.KeyRangesFactory.create_from_list([key_range.KeyRange()]),
@@ -1681,12 +1696,12 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
     self.assertEquals(tasks[0]['eta_delta'], '0:00:02 from now')
 
   def testLongProcessDataWithAllowCheckpoint(self):
-    """Tests that process_data works with input_readers.ALLOW_CHECKPOINT."""
+    """Tests that process_datum works with input_readers.ALLOW_CHECKPOINT."""
     self.handler._start_time = 0
-    self.assertFalse(self.handler.process_data(input_readers.ALLOW_CHECKPOINT,
-                                               None,
-                                               None,
-                                               None))
+    self.assertFalse(self.handler._process_datum(input_readers.ALLOW_CHECKPOINT,
+                                                 None,
+                                                 None,
+                                                 None))
 
   def testScheduleSlice(self):
     """Test _schedule_slice method."""
@@ -1845,6 +1860,89 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
         active=True,
         result_status=None,
         processed=1)
+
+  def testSliceRecoveryNotCalledWithNoOutputWriter(self):
+    shard_state = model.ShardState.get_by_shard_id(self.shard_id)
+    # This slice had acquired shard lock in previous attempt.
+    shard_state.acquired_once = True
+    shard_state.put()
+
+    self.handler.post()
+    self.verify_shard_state(
+        model.ShardState.get_by_shard_id(self.shard_id),
+        active=False,
+        result_status=model.ShardState.RESULT_SUCCESS,
+        processed=0)
+
+  def testSliceRecoveryNotCalledWithOutputWriter(self):
+    """Test when output writer doesn't support slice recovery."""
+    self.init(output_writer_spec=__name__ + ".TestOutputWriter")
+    TestOutputWriter._supports_slice_recovery = lambda self, spec: False
+
+    shard_state = model.ShardState.get_by_shard_id(self.shard_id)
+    # This slice had acquired shard lock in previous attempt.
+    shard_state.acquired_once = True
+    shard_state.put()
+
+    self.handler.post()
+    self.verify_shard_state(
+        model.ShardState.get_by_shard_id(self.shard_id),
+        active=False,
+        result_status=model.ShardState.RESULT_SUCCESS)
+    self.assertFalse("recover" in TestOutputWriter.events)
+
+  def testSliceRecoveryNotCalledWithOutputWriter2(self):
+    """Test when the slice isn't a retry."""
+    self.init(output_writer_spec=__name__ + ".TestOutputWriter")
+
+    self.handler.post()
+    self.verify_shard_state(
+        model.ShardState.get_by_shard_id(self.shard_id),
+        active=False,
+        result_status=model.ShardState.RESULT_SUCCESS)
+    self.assertFalse("recover" in TestOutputWriter.events)
+
+  def testSliceRecoveryCalled(self):
+    output_writer_spec = __name__ + ".TestOutputWriter"
+    self.init(output_writer_spec=output_writer_spec)
+    shard_state = model.ShardState.get_by_shard_id(self.shard_id)
+    # This slice had acquired shard lock in previous attempt.
+    shard_state.acquired_once = True
+    shard_state.put()
+
+    self.handler.post()
+    self.verify_shard_state(
+        model.ShardState.get_by_shard_id(self.shard_id),
+        active=True,
+        result_status=None,
+        slice_id=self.slice_id+2)
+
+    tasks = self.taskqueue.GetTasks("default")
+    self.assertEqual(1, len(tasks))
+    self.verify_shard_task(tasks[0], self.shard_id, self.slice_id+2,
+                           output_writer_spec=output_writer_spec)
+    self.assertTrue("recover" in TestOutputWriter.events)
+
+  def testSliceRecoveryFailed(self):
+    """Test that slice recovery failures are retried like all other failures."""
+    self.init(output_writer_spec=__name__ + ".TestOutputWriter")
+    def _raise(self):
+      raise Exception("Raise an exception on intention.")
+    TestOutputWriter._supports_slice_recovery = _raise
+
+    shard_state = model.ShardState.get_by_shard_id(self.shard_id)
+    # This slice had acquired shard lock in previous attempt.
+    shard_state.acquired_once = True
+    shard_state.put()
+
+    self.handler.post()
+    # Slice gets retried.
+    self.assertEqual(httplib.SERVICE_UNAVAILABLE, self.handler.response.status)
+    self.verify_shard_state(
+        model.ShardState.get_by_shard_id(self.shard_id),
+        active=True,
+        result_status=None,
+        slice_retries=1)
 
   def testSliceAndShardRetries(self):
     """Test when a handler throws a non fatal exception."""
@@ -2043,10 +2141,11 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
     self.handler.post()
 
     self.assertEquals(
-        ["write-" + str(e1),
+        ["create-1",
+         "write-" + str(e1),
          "write-" + str(e2),
          "finalize-1",
-         ], TestOutputWriter.events)
+        ], TestOutputWriter.events)
 
 
 class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):

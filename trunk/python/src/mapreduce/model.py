@@ -57,6 +57,9 @@ from mapreduce import json_util
 from mapreduce import util
 
 
+# pylint: disable=protected-access
+
+
 # Special datastore kinds for MR.
 _MAP_REDUCE_KINDS = ("_AE_MR_MapreduceControl",
                      "_AE_MR_MapreduceState",
@@ -716,10 +719,13 @@ class MapreduceState(db.Model):
 
 
 class TransientShardState(object):
-  """Shard's state kept in task payload.
+  """A shard's states that are kept in task payload.
 
-  TransientShardState holds a port of all shard processing state, which is not
-  saved in datastore, but rather is passed in task payload.
+  TransientShardState holds two types of states:
+  1. Some states just don't need to be saved to datastore. e.g.
+     serialized input reader and output writer instances.
+  2. Some states are duplicated from datastore, e.g. slice_id, shard_id.
+     These are used to validate the task.
   """
 
   def __init__(self,
@@ -735,7 +741,7 @@ class TransientShardState(object):
     """Init.
 
     Args:
-      base_path: base path of this mapreduce job.
+      base_path: base path of this mapreduce job. Deprecated.
       mapreduce_spec: an instance of MapReduceSpec.
       shard_id: shard id.
       slice_id: slice id. When enqueuing task for the next slice, this number
@@ -757,6 +763,7 @@ class TransientShardState(object):
     self.output_writer = output_writer
     self.retries = retries
     self.handler = handler
+    self._input_reader_json = self.input_reader.to_json()
 
   def reset_for_retry(self, output_writer):
     """Reset self for shard retry.
@@ -770,9 +777,20 @@ class TransientShardState(object):
     self.output_writer = output_writer
     self.handler = self.mapreduce_spec.mapper.handler
 
-  def advance_for_next_slice(self):
-    """Advance relavent states for next slice."""
-    self.slice_id += 1
+  def advance_for_next_slice(self, recovery_slice=False):
+    """Advance relavent states for next slice.
+
+    Args:
+      recovery_slice: True if this slice is running recovery logic.
+        See handlers.MapperWorkerCallbackHandler._attempt_slice_recovery
+        for more info.
+    """
+    if recovery_slice:
+      self.slice_id += 2
+      # Restore input reader to the beginning of the slice.
+      self.input_reader = self.input_reader.from_json(self._input_reader_json)
+    else:
+      self.slice_id += 1
 
   def to_dict(self):
     """Convert state to dictionary to save in task payload."""
@@ -835,7 +853,16 @@ class ShardState(db.Model):
   The shard state is stored in the datastore and is later aggregated by
   controller task. ShardState key_name is equal to shard_id.
 
-  Properties:
+  Shard state contains critical state to ensure the correctness of
+  shard execution. It is the single source of truth about a shard's
+  progress. For example:
+  1. A slice is allowed to run only if its payload matches shard state's
+     expectation.
+  2. A slice is considered running only if it has acquired the shard's lock.
+  3. A slice is considered done only if it has successfully committed shard
+     state to db.
+
+  Properties about the shard:
     active: if we have this shard still running as boolean.
     counters_map: shard's counters map as CountersMap. All counters yielded
       within mapreduce are stored here.
@@ -847,18 +874,21 @@ class ShardState(db.Model):
     update_time: The last time this shard state was updated.
     shard_description: A string description of the work this shard will do.
     last_work_item: A string description of the last work item processed.
-    writer_state: writer state for this shard. This is filled when a job
-      has one output per shard by MR worker after finalizing output files.
-    slice_id: slice id of current executing slice. A task
+    writer_state: writer state for this shard. The shard's output writer
+      instance can save in-memory output references to this field in its
+      "finalize" method.
+
+   Properties about slice management:
+    slice_id: slice id of current executing slice. A slice's task
       will not run unless its slice_id matches this. Initial
       value is 0. By the end of slice execution, this number is
       incremented by 1.
     slice_start_time: a slice updates this to now at the beginning of
-      execution transactionally. If transaction succeeds, the current task holds
+      execution. If the transaction succeeds, the current task holds
       a lease of slice duration + some grace period. During this time, no
       other task with the same slice_id will execute. Upon slice failure,
       the task should try to unset this value to allow retries to carry on
-      ASAP. slice_start_time is only meaningful when slice_id is the same.
+      ASAP.
     slice_request_id: the request id that holds/held the lease. When lease has
       expired, new request needs to verify that said request has indeed
       ended according to logs API. Do this only when lease has expired
@@ -868,15 +898,11 @@ class ShardState(db.Model):
       proceed after a long conservative timeout.
     slice_retries: the number of times a slice has been retried due to
       processing data when lock is held. Taskqueue/datastore errors
-      related to shard management are not counted. This count is
+      related to slice/shard management are not counted. This count is
       only a lower bound and is used to determined when to fail a slice
       completely.
     acquired_once: whether the lock for this slice has been acquired at
       least once. When this is True, duplicates in outputs are possible.
-      This is very different from when slice_retries is 0, e.g. when
-      outputs have been written but a taskqueue problem prevents a slice
-      to continue, acquired_once would be True but slice_retries would be
-      0.
   """
 
   RESULT_SUCCESS = "success"
@@ -891,6 +917,7 @@ class ShardState(db.Model):
   _MAX_STATES_IN_MEMORY = 10
 
   # Functional properties.
+  mapreduce_id = db.StringProperty(required=True)
   active = db.BooleanProperty(default=True, indexed=False)
   counters_map = json_util.JsonProperty(
       CountersMap, default=CountersMap(), indexed=False)
@@ -904,7 +931,6 @@ class ShardState(db.Model):
   acquired_once = db.BooleanProperty(default=False, indexed=False)
 
   # For UI purposes only.
-  mapreduce_id = db.StringProperty(required=True)
   update_time = db.DateTimeProperty(auto_now=True, indexed=False)
   shard_description = db.TextProperty(default="")
   last_work_item = db.TextProperty(default="")
@@ -948,13 +974,22 @@ class ShardState(db.Model):
     self.slice_retries = 0
     self.acquired_once = False
 
-  def advance_for_next_slice(self):
-    """Advance self for next slice."""
-    self.slice_id += 1
+  def advance_for_next_slice(self, recovery_slice=False):
+    """Advance self for next slice.
+
+    Args:
+      recovery_slice: True if this slice is running recovery logic.
+        See handlers.MapperWorkerCallbackHandler._attempt_slice_recovery
+        for more info.
+    """
     self.slice_start_time = None
     self.slice_request_id = None
     self.slice_retries = 0
     self.acquired_once = False
+    if recovery_slice:
+      self.slice_id += 2
+    else:
+      self.slice_id += 1
 
   def set_for_failure(self):
     self.active = False
