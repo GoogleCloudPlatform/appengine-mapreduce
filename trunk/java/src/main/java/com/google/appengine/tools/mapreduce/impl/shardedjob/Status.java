@@ -21,10 +21,6 @@ public class Status implements Serializable {
    * The possible status codes for {@code Status}.
    */
   public enum StatusCode {
-    /**
-     * Job is initializing.
-     */
-    INITIALIZING,
 
     /**
      * Job is running.
@@ -62,7 +58,7 @@ public class Status implements Serializable {
   }
 
   public boolean isActive() {
-    return statusCode == StatusCode.INITIALIZING || statusCode == StatusCode.RUNNING;
+    return statusCode == StatusCode.RUNNING;
   }
 
   public StatusCode getStatusCode() {

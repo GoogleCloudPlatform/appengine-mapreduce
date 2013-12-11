@@ -5,7 +5,6 @@ package com.google.appengine.tools.mapreduce.impl.shardedjob;
 import static com.google.appengine.tools.mapreduce.impl.shardedjob.Status.StatusCode.ABORTED;
 import static com.google.appengine.tools.mapreduce.impl.shardedjob.Status.StatusCode.DONE;
 import static com.google.appengine.tools.mapreduce.impl.shardedjob.Status.StatusCode.ERROR;
-import static com.google.appengine.tools.mapreduce.impl.shardedjob.Status.StatusCode.INITIALIZING;
 import static com.google.appengine.tools.mapreduce.impl.shardedjob.Status.StatusCode.RUNNING;
 import static java.util.concurrent.Executors.callable;
 
@@ -407,6 +406,7 @@ class ShardedJobRunner<T extends IncrementalTask<T, R>, R extends Serializable> 
   private void createTasks(ShardedJobController<T, R> controller, ShardedJobSettings settings,
       String jobId, List<? extends T> initialTasks, long startTimeMillis) {
     log.info(jobId + ": Creating " + initialTasks.size() + " tasks");
+    R initialResult = controller.combineResults(ImmutableList.<R>of());
     int id = 0;
     for (T initialTask : initialTasks) {
       // TODO(user): shardId (as known to WorkerShardTask) and taskId happen to be the same
@@ -420,7 +420,6 @@ class ShardedJobRunner<T extends IncrementalTask<T, R>, R extends Serializable> 
           log.info(jobId + ": Task already exists: " + taskState);
           continue;
         }
-        R initialResult = controller.combineResults(ImmutableList.<R>of());
         taskState = IncrementalTaskState.<T, R>create(
             taskId, jobId, startTimeMillis, initialTask, initialResult);
         ShardRetryState<T, R> retryState = ShardRetryState.createFor(taskState);
@@ -436,26 +435,18 @@ class ShardedJobRunner<T extends IncrementalTask<T, R>, R extends Serializable> 
     }
   }
 
-  // Returns true on success, false if the job is already finished according to the datastore.
-  private boolean writeInitialJobState(ShardedJobStateImpl<T, R> jobState) {
+  private void writeInitialJobState(ShardedJobStateImpl<T, R> jobState) {
     String jobId = jobState.getJobId();
-    log.fine(jobId + ": Writing initial job state");
     Transaction tx = DATASTORE.beginTransaction();
     try {
       ShardedJobState<T, R> existing = lookupJobState(tx, jobId);
       if (existing == null) {
         DATASTORE.put(tx, ShardedJobStateImpl.ShardedJobSerializer.toEntity(jobState));
         tx.commit();
+        log.info(jobId + ": Writing initial job state");
       } else {
-        if (!existing.getStatus().isActive()) {
-          // Maybe a concurrent initialization finished before us, and the
-          // job was very quick and has already completed as well.
-          log.info(jobId + ": Attempt to reinitialize inactive job: " + existing);
-          return false;
-        }
-        log.info(jobId + ": Reinitializing job: " + existing);
+        log.info(jobId + ": Ignoring Attempt to reinitialize job state: " + existing);
       }
-      return true;
     } finally {
       if (tx.isActive()) {
         tx.rollback();
@@ -469,21 +460,17 @@ class ShardedJobRunner<T extends IncrementalTask<T, R>, R extends Serializable> 
     Preconditions.checkArgument(!Iterables.any(initialTasks, Predicates.isNull()),
         "Task list must not contain null values");
     ShardedJobStateImpl<T, R> jobState = new ShardedJobStateImpl<T, R>(jobId, controller, settings,
-        initialTasks.size(), startTimeMillis, new Status(INITIALIZING), null);
+        initialTasks.size(), startTimeMillis, new Status(RUNNING));
     if (initialTasks.isEmpty()) {
       log.info(jobId + ": No tasks, immediately complete: " + controller);
-      Status status = new Status(DONE);
-      jobState.setStatus(status);
+      jobState.setStatus(new Status(DONE));
       DATASTORE.put(ShardedJobStateImpl.ShardedJobSerializer.toEntity(jobState));
       controller.completed(controller.combineResults(ImmutableList.<R>of()));
       return;
     }
-    if (!writeInitialJobState(jobState)) {
-      return;
-    }
+    writeInitialJobState(jobState);
     createTasks(controller, settings, jobId, initialTasks, startTimeMillis);
-    changeJobStatus(jobId, new Status(RUNNING));
-    log.info(jobId + ": Started");
+    log.info(jobId + ": All tasks were created");
   }
 
   ShardedJobState<T, R> getJobState(String jobId) {
