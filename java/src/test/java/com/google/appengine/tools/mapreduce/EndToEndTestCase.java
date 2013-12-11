@@ -52,10 +52,19 @@ public abstract class EndToEndTestCase extends TestCase {
           new LocalModulesServiceTestConfig());
   private LocalTaskQueue taskQueue;
 
+  /** Implement in sub-classes to set system environment properties for tests. */
+  protected Map<String, String> getEnvAttributes() throws Exception {
+    return null;
+  }
+
   @Override
   protected void setUp() throws Exception {
     super.setUp();
     helper.setUp();
+    Map<String, String> envAttributes = getEnvAttributes();
+    if (envAttributes != null) {
+      helper.getApiProxyLocal().appendProperties(envAttributes);
+    }
     taskQueue = LocalTaskQueueTestConfig.getLocalTaskQueue();
     ApiProxyLocal proxy = (ApiProxyLocal) ApiProxy.getDelegate();
     // Creating files is not allowed in some test execution environments, so don't.
