@@ -43,6 +43,11 @@
       <version>${appengine.target.version}</version>
     </dependency>
     <dependency>
+      <groupId>com.google.appengine</groupId>
+      <artifactId>appengine-api-labs</artifactId>
+      <version>${appengine.target.version}</version>
+    </dependency>
+    <dependency>
       <groupId>javax.servlet</groupId>
       <artifactId>servlet-api</artifactId>
       <version>2.5</version>
@@ -56,7 +61,7 @@
     <dependency>
       <groupId>com.google.appengine.tools</groupId>
       <artifactId>appengine-pipeline</artifactId>
-      <version>[0.2.1,0.3)</version>
+      <version>[0.2.2,0.3)</version>
     </dependency>
     <dependency>
       <groupId>com.googlecode.charts4j</groupId>

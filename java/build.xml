@@ -8,7 +8,7 @@
   <property name="thirdparty" value="thirdparty"/>
   <property name="sdk" value="sdk"/>
   <property name="test" value="test"/>
-  <property name="sdk_version" value="1.8.5"/>
+  <property name="sdk_version" value="[1.8.8,1.9)"/>
 
   <!-- Paths -->
   <property name="src" location="src/main/java"/>
@@ -131,9 +131,10 @@
       <batchtest>
         <fileset dir="${test_src}">
           <include name="**/*Test*.java" />
-          <!-- We must exclude class that has "Test" in the name AND does not have tests (i.e. a 
+          <!-- We must exclude class that has "Test" in the name AND does not have tests (i.e. a
                test helper or abstract class) to prevent spurious JUnit errors -->
           <exclude name="com/google/appengine/tools/mapreduce/EndToEndTestCase.java" />
+          <exclude name="com/google/appengine/tools/mapreduce/LocalModulesServiceTestConfig.java" />
           <exclude name="com/google/appengine/tools/mapreduce/impl/TestWorkerTask.java" />
           <exclude name="com/google/appengine/tools/mapreduce/impl/shardedjob/EndToEndTestCase.java" />
           <exclude name="com/google/appengine/tools/mapreduce/impl/shardedjob/TestController.java" />

@@ -20,9 +20,10 @@ import org.easymock.EasyMock;
  */
 public class MapReduceJobTest extends TestCase {
 
-    private final LocalServiceTestHelper helper =
-      new LocalServiceTestHelper(new LocalDatastoreServiceTestConfig());
+    private final LocalServiceTestHelper helper = new LocalServiceTestHelper(
+          new LocalDatastoreServiceTestConfig(), new LocalModulesServiceTestConfig());
 
+    @SuppressWarnings("serial")
     private static class DummyMapper extends Mapper<Long, String, Long> {
       @Override public void map(Long value) {}
     }
@@ -53,7 +54,7 @@ public class MapReduceJobTest extends TestCase {
       });
 
     MapReduceSettings settings = new MapReduceSettings();
-    settings.setControllerQueueName("bad-queue");
+    settings.setWorkerQueueName("bad-queue");
     MapReduceSpecification<Long, String, Long, String, String> specification =
         MapReduceSpecification.of("Empty test MR", new NoInput<Long>(1), new DummyMapper(),
             Marshallers.getStringMarshaller(), Marshallers.getLongMarshaller(),
