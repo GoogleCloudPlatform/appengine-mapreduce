@@ -12,21 +12,22 @@ import java.io.Serializable;
  * Settings that affect how a MapReduce is executed.  May affect performance and
  * resource usage, but should not affect the result (unless the result is
  * dependent on the performance or resource usage of the computation, or if
- * different backends or different base urls have different versions of the
- * code).
+ * different backends, modules or different base urls have different versions of the code).
  *
  * @author ohler@google.com (Christian Ohler)
  */
 public class MapReduceSettings implements Serializable {
+
   private static final long serialVersionUID = 610088354289299175L;
 
   public static final String DEFAULT_BASE_URL = "/mapreduce/";
 
   private String baseUrl = DEFAULT_BASE_URL;
-  /*Nullable*/ private String backend = null;
+  private String backend;
+  private String module;
   private String controllerQueueName = "default";
   private String workerQueueName = "default";
-  private String bucketName = null;
+  private String bucketName;
   private int millisPerSlice = 10000;
   private int maxShardRetries = 4;
   private int maxSliceRetries = 20;
@@ -40,19 +41,40 @@ public class MapReduceSettings implements Serializable {
     return this;
   }
 
+  /*Nullable*/ public String getModule() {
+    return module;
+  }
+
+  public MapReduceSettings setModule(/*Nullable*/ String module) {
+    Preconditions.checkArgument(
+        module == null || backend == null, "Module and Backend cannot be combined");
+    this.module = module;
+    return this;
+  }
+
   /*Nullable*/ public String getBackend() {
     return backend;
   }
 
   public MapReduceSettings setBackend(/*Nullable*/ String backend) {
+    Preconditions.checkArgument(
+        module == null || backend == null, "Module and Backend cannot be combined");
     this.backend = backend;
     return this;
   }
 
+  /**
+   * @deprecated Controller queue is not used.
+   */
+  @Deprecated
   public String getControllerQueueName() {
     return controllerQueueName;
   }
 
+  /**
+   * @deprecated Controller queue is not used.
+   */
+  @Deprecated
   public MapReduceSettings setControllerQueueName(String controllerQueueName) {
     this.controllerQueueName = checkNotNull(controllerQueueName, "Null controllerQueueName");
     return this;
@@ -106,15 +128,17 @@ public class MapReduceSettings implements Serializable {
     return this;
   }
 
-  @Override public String toString() {
+  @Override
+  public String toString() {
     return getClass().getSimpleName() + "("
         + baseUrl + ", "
         + backend + ", "
+        + module + ", "
         + controllerQueueName + ", "
         + workerQueueName + ", "
         + bucketName + ", "
-        + millisPerSlice + ","
-        + maxSliceRetries + ","
+        + millisPerSlice + ", "
+        + maxSliceRetries + ", "
         + maxShardRetries + ")";
   }
 }

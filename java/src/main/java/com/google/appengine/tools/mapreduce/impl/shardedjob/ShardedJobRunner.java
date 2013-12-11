@@ -18,6 +18,7 @@ import com.google.appengine.api.datastore.Entity;
 import com.google.appengine.api.datastore.EntityNotFoundException;
 import com.google.appengine.api.datastore.Key;
 import com.google.appengine.api.datastore.Transaction;
+import com.google.appengine.api.labs.modules.ModulesServiceFactory;
 import com.google.appengine.api.taskqueue.QueueFactory;
 import com.google.appengine.api.taskqueue.TaskOptions;
 import com.google.appengine.tools.cloudstorage.ExceptionHandler;
@@ -191,11 +192,8 @@ class ShardedJobRunner<T extends IncrementalTask<T, R>, R extends Serializable> 
       ShardedJobSettings settings) {
     TaskOptions taskOptions = TaskOptions.Builder.withMethod(TaskOptions.Method.POST)
         .url(settings.getControllerPath()).param(JOB_ID_PARAM, jobId).param(TASK_ID_PARAM, taskId);
-    if (settings.getControllerBackend() != null) {
-      taskOptions.header("Host", BackendServiceFactory.getBackendService().getBackendAddress(
-          settings.getControllerBackend()));
-    }
-    QueueFactory.getQueue(settings.getControllerQueueName()).add(tx, taskOptions);
+    taskOptions.header("Host", getTaskQueueHostHeader(settings));
+    QueueFactory.getQueue(settings.getQueueName()).add(tx, taskOptions);
   }
 
   private void scheduleWorkerTask(Transaction tx,
@@ -205,11 +203,17 @@ class ShardedJobRunner<T extends IncrementalTask<T, R>, R extends Serializable> 
         .param(TASK_ID_PARAM, state.getTaskId())
         .param(JOB_ID_PARAM, state.getJobId())
         .param(SEQUENCE_NUMBER_PARAM, String.valueOf(state.getNextSequenceNumber()));
-    if (settings.getWorkerBackend() != null) {
-      taskOptions.header("Host",
-          BackendServiceFactory.getBackendService().getBackendAddress(settings.getWorkerBackend()));
+    taskOptions.header("Host", getTaskQueueHostHeader(settings));
+    QueueFactory.getQueue(settings.getQueueName()).add(tx, taskOptions);
+  }
+
+  private String getTaskQueueHostHeader(ShardedJobSettings settings) {
+    if (settings.getBackend() != null) {
+      return BackendServiceFactory.getBackendService().getBackendAddress(settings.getBackend());
     }
-    QueueFactory.getQueue(settings.getWorkerQueueName()).add(tx, taskOptions);
+    // TODO(user): change to getVersionHostname when 1.8.9 is released
+    return ModulesServiceFactory.getModulesService().getModuleHostname(
+        settings.getModule(), settings.getVersion());
   }
 
   void completeShard(final String jobId, final String taskId) {
@@ -241,10 +245,12 @@ class ShardedJobRunner<T extends IncrementalTask<T, R>, R extends Serializable> 
           }
         }, DATASTORE_RETRY_PARAMS , EXCEPTION_HANDLER);
     if (jobState.getActiveTaskCount() == 0) {
-      log.info("Calling completed on: " + jobId);
       if (jobState.getStatus().getStatusCode() == DONE) {
+        log.info("Calling completed for " + jobId);
+        // TODO(user): consider trying failed if completed failed after N attempts
         jobState.getController().completed(aggregateState(jobState.getController(), jobState));
       } else {
+        log.info("Calling failed for " + jobId + ", status=" + jobState.getStatus());
         jobState.getController().failed(jobState.getStatus());
       }
     }
@@ -459,7 +465,7 @@ class ShardedJobRunner<T extends IncrementalTask<T, R>, R extends Serializable> 
     long startTimeMillis = System.currentTimeMillis();
     Preconditions.checkArgument(!Iterables.any(initialTasks, Predicates.isNull()),
         "Task list must not contain null values");
-    ShardedJobStateImpl<T, R> jobState = new ShardedJobStateImpl<T, R>(jobId, controller, settings,
+    ShardedJobStateImpl<T, R> jobState = new ShardedJobStateImpl<>(jobId, controller, settings,
         initialTasks.size(), startTimeMillis, new Status(RUNNING));
     if (initialTasks.isEmpty()) {
       log.info(jobId + ": No tasks, immediately complete: " + controller);
