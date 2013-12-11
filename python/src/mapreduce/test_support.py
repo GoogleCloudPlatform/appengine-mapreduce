@@ -21,6 +21,7 @@
 import base64
 import collections
 import logging
+import traceback
 import os
 import re
 
@@ -174,6 +175,8 @@ def execute_all_tasks(taskqueue, queue="default", handlers_map=None):
   taskqueue.FlushQueue(queue)
   task_run_counts = collections.defaultdict(lambda: 0)
   for task in tasks:
+    import logging
+    logging.error(task)
     retries = 0
     while True:
       try:
@@ -192,6 +195,8 @@ def execute_all_tasks(taskqueue, queue="default", handlers_map=None):
             "Task %s is being retried for the %s time",
             task["name"],
             retries)
+        logging.debug(traceback.format_exc())
+
   return task_run_counts
 
 
