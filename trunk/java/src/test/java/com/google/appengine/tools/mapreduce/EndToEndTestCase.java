@@ -38,11 +38,8 @@ import javax.servlet.http.HttpServletResponse;
 /**
  */
 public abstract class EndToEndTestCase extends TestCase {
-// --------------------------- STATIC FIELDS ---------------------------
 
   private static final Logger logger = Logger.getLogger(EndToEndTestCase.class.getName());
-
-// ------------------------------ FIELDS ------------------------------
 
   private final MapReduceServlet mrServlet = new MapReduceServlet();
   private final PipelineServlet pipelineServlet = new PipelineServlet();
@@ -51,10 +48,9 @@ public abstract class EndToEndTestCase extends TestCase {
           new LocalDatastoreServiceTestConfig(),
           new LocalTaskQueueTestConfig().setDisableAutoTaskExecution(true),
           new LocalMemcacheServiceTestConfig(),
-          new LocalFileServiceTestConfig());
+          new LocalFileServiceTestConfig(),
+          new LocalModulesServiceTestConfig());
   private LocalTaskQueue taskQueue;
-
-// ------------------------ OVERRIDING METHODS ------------------------
 
   @Override
   protected void setUp() throws Exception {
@@ -71,8 +67,6 @@ public abstract class EndToEndTestCase extends TestCase {
     helper.tearDown();
     super.tearDown();
   }
-
-// -------------------------- INSTANCE METHODS --------------------------
 
   private void executeTask(String queueName, QueueStateInfo.TaskStateInfo taskStateInfo)
       throws Exception {
@@ -101,8 +95,7 @@ public abstract class EndToEndTestCase extends TestCase {
     expect(request.getHeader("X-AppEngine-TaskName")).andReturn(taskStateInfo.getTaskName())
         .anyTimes();
     // Pipeline looks at this header but uses the value only for diagnostic messages
-    expect(request.getHeader(TaskHandler.TASK_RETRY_COUNT_HEADER))
-        .andReturn("HACK: not implemented").anyTimes();
+    expect(request.getIntHeader(TaskHandler.TASK_RETRY_COUNT_HEADER)).andReturn(-1).anyTimes();
     for (HeaderWrapper header : taskStateInfo.getHeaders()) {
       int value = parseAsQuotedInt(header.getValue());
       expect(request.getIntHeader(header.getKey())).andReturn(value).anyTimes();
@@ -156,12 +149,10 @@ public abstract class EndToEndTestCase extends TestCase {
     }
   }
 
-// -------------------------- STATIC METHODS --------------------------
-
   // Sadly there's no way to parse query string with JDK. This is a good enough approximation.
   private static Map<String, String> decodeParameters(String requestBody)
       throws UnsupportedEncodingException {
-    Map<String, String> result = new HashMap<String, String>();
+    Map<String, String> result = new HashMap<>();
 
     String[] params = requestBody.split("&");
     for (String param : params) {

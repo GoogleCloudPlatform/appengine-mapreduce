@@ -11,6 +11,7 @@ import com.google.appengine.api.taskqueue.dev.QueueStateInfo;
 import com.google.appengine.tools.development.testing.LocalDatastoreServiceTestConfig;
 import com.google.appengine.tools.development.testing.LocalServiceTestHelper;
 import com.google.appengine.tools.development.testing.LocalTaskQueueTestConfig;
+import com.google.appengine.tools.mapreduce.LocalModulesServiceTestConfig;
 
 import junit.framework.TestCase;
 
@@ -26,16 +27,14 @@ import javax.servlet.http.HttpServletRequest;
 /**
  */
 public abstract class EndToEndTestCase extends TestCase {
-// --------------------------- STATIC FIELDS ---------------------------
 
   private static final Logger logger = Logger.getLogger(EndToEndTestCase.class.getName());
-
-// ------------------------------ FIELDS ------------------------------
 
   private final LocalServiceTestHelper helper =
       new LocalServiceTestHelper(
           new LocalDatastoreServiceTestConfig(),
-          new LocalTaskQueueTestConfig().setDisableAutoTaskExecution(true));
+          new LocalTaskQueueTestConfig().setDisableAutoTaskExecution(true),
+          new LocalModulesServiceTestConfig());
   private LocalTaskQueue taskQueue;
 
   protected final ShardedJobService service = ShardedJobServiceFactory.getShardedJobService();
@@ -43,8 +42,6 @@ public abstract class EndToEndTestCase extends TestCase {
   protected final String controllerPath = "controller";
   protected final String workerPath = "worker";
   protected ShardedJobSettings settings;
-
-// ------------------------ OVERRIDING METHODS ------------------------
 
   @Override
   protected void setUp() throws Exception {
@@ -61,8 +58,6 @@ public abstract class EndToEndTestCase extends TestCase {
     helper.tearDown();
     super.tearDown();
   }
-
-// -------------------------- INSTANCE METHODS --------------------------
 
   private void executeTask(String queueName, QueueStateInfo.TaskStateInfo taskStateInfo)
       throws Exception {
@@ -122,12 +117,10 @@ public abstract class EndToEndTestCase extends TestCase {
     }
   }
 
-// -------------------------- STATIC METHODS --------------------------
-
   // Sadly there's no way to parse query string with JDK. This is a good enough approximation.
   private static Map<String, String> decodeParameters(String requestBody)
       throws UnsupportedEncodingException {
-    Map<String, String> result = new HashMap<String, String>();
+    Map<String, String> result = new HashMap<>();
 
     String[] params = requestBody.split("&");
     for (String param : params) {
