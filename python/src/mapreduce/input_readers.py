@@ -2713,6 +2713,7 @@ class _GoogleCloudStorageRecordInputReader(_GoogleCloudStorageInputReader):
         self._record_reader = None
 
 
+# TODO(user): Use _GoogleCloudStorageInputReader instead of the File API.
 class _ReducerReader(RecordsReader):
   """Reader to read KeyValues records files from Files API."""
 
@@ -2722,6 +2723,14 @@ class _ReducerReader(RecordsReader):
     super(_ReducerReader, self).__init__(filenames, position)
     self.current_key = None
     self.current_values = None
+
+  def _yield_current_pair(self):
+    key = self.current_key
+    values = self.current_values
+    # This is final value for the current key, don't try to serialize it.
+    self.current_key = None
+    self.current_values = None
+    return (key, values)
 
   def __iter__(self):
     ctx = context.get()
@@ -2736,13 +2745,16 @@ class _ReducerReader(RecordsReader):
       proto = file_service_pb.KeyValues()
       proto.ParseFromString(binary_record)
 
+      if self.current_key is not None and self.current_key != proto.key():
+        yield self._yield_current_pair()
+        # Only do check-pointing after a key is yielded. This ensures the
+        # key and values don't have to be serializable before they are passed
+        # to the reducer function.
+        yield ALLOW_CHECKPOINT
+
       if self.current_key is None:
         self.current_key = proto.key()
         self.current_values = []
-      else:
-        assert proto.key() == self.current_key, (
-            "inconsistent key sequence. Expected %s but got %s" %
-            (self.current_key, proto.key()))
 
       if combiner:
         combiner_result = combiner(
@@ -2760,19 +2772,19 @@ class _ReducerReader(RecordsReader):
           else:
             # with combiner current values always come from combiner
             self.current_values.append(value)
+
+        # Allow check-pointing after a combiner has run. When you're using
+        # combiners the key and combiner output values must be serializable,
+        # so we can check-point at any time.
+        yield ALLOW_CHECKPOINT
       else:
         # without combiner we just accumulate values.
         self.current_values.extend(proto.value_list())
 
-      if not proto.partial():
-        key = self.current_key
-        values = self.current_values
-        # This is final value, don't try to serialize it.
-        self.current_key = None
-        self.current_values = None
-        yield (key, values)
-      else:
-        yield ALLOW_CHECKPOINT
+    # There may be some accumulated reducer values left at the end of a file
+    # so be sure to yield them too.
+    if self.current_key is not None:
+      yield self._yield_current_pair()
 
   @staticmethod
   def encode_data(data):
@@ -2780,7 +2792,6 @@ class _ReducerReader(RecordsReader):
 
     Works around limitations in JSON encoding, which cannot handle raw bytes.
     """
-    # TODO(user): Use something less slow/ugly.
     return base64.b64encode(pickle.dumps(data))
 
   @staticmethod

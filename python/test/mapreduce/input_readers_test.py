@@ -58,6 +58,7 @@ from google.appengine.ext import db
 from google.appengine.ext import key_range
 from google.appengine.ext import testbed
 from google.appengine.ext.blobstore import blobstore as blobstore_internal
+from mapreduce import context
 from mapreduce import errors
 from mapreduce import file_format_root
 from mapreduce import input_readers
@@ -2300,20 +2301,33 @@ class LogInputReaderTest(unittest.TestCase):
       self.verifyLogs(expected, fetched_logs + list(reader))
 
 
+def TestCombiner(unused_key, values, left_fold):
+  """Test combiner for ReducerReaderTest."""
+  if left_fold:
+    for value in left_fold:
+      yield value
+  for value in values:
+    yield ord(value)
+
+
 class ReducerReaderTest(testutil.HandlerTestBase):
   """Tests for _ReducerReader."""
+
+  def setUp(self):
+    super(ReducerReaderTest, self).setUp()
+    # Clear any context that is set.
+    context.Context._set(None)
 
   def testMultipleRequests(self):
     """Tests restoring the reader state across multiple requests."""
     input_file = files.blobstore.create()
 
-    # Create a file with two records.
+    # Create a file with one key across two records.
     with files.open(input_file, "a") as f:
       with records.RecordsWriter(f) as w:
         proto = file_service_pb.KeyValues()
         proto.set_key("key2")
         proto.value_list().extend(["a", "b"])
-        proto.set_partial(True)
         w.write(proto.Encode())
 
         proto = file_service_pb.KeyValues()
@@ -2325,16 +2339,38 @@ class ReducerReaderTest(testutil.HandlerTestBase):
     input_file = files.blobstore.get_file_name(
         files.blobstore.get_blob_key(input_file))
 
+    # Set up a combiner for the _ReducerReader to drive.
+    combiner_spec = "%s.%s" % (TestCombiner.__module__, TestCombiner.__name__)
+    mapreduce_spec = model.MapreduceSpec(
+        "DummyMapReduceJobName",
+        "DummyMapReduceJobId",
+        model.MapperSpec(
+            "DummyHandler",
+            "DummyInputReader",
+            dict(combiner_spec=combiner_spec),
+            1).to_json())
+    ctx = context.Context(
+        mapreduce_spec,
+        model.ShardState.create_new("DummyMapReduceJobId", 0))
+    context.Context._set(ctx)
+
     # Now read the records in two attempts, serializing and recreating the
-    # input reader as if it's a separate request.
+    # input reader as if it's a separate request. This check-points twice
+    # because when we have a combiner we check-point after each record from
+    # the input file is consumed and passed through the combiner function.
     reader = input_readers._ReducerReader([input_file], 0)
     it = iter(reader)
     self.assertEquals(input_readers.ALLOW_CHECKPOINT, it.next())
 
     reader_state = reader.to_json()
-    other_reader = input_readers._ReducerReader.from_json(reader_state)
+    reader = input_readers._ReducerReader.from_json(reader_state)
     it = iter(reader)
-    self.assertEquals(("key2", ["a", "b", "c", "d"]), it.next())
+    self.assertEquals(input_readers.ALLOW_CHECKPOINT, it.next())
+
+    reader_state = reader.to_json()
+    reader = input_readers._ReducerReader.from_json(reader_state)
+    it = iter(reader)
+    self.assertEquals(("key2", [97, 98, 99, 100]), it.next())
 
   def testSingleRequest(self):
     """Tests when a key can be handled during a single request."""
@@ -2342,20 +2378,19 @@ class ReducerReaderTest(testutil.HandlerTestBase):
 
     with files.open(input_file, "a") as f:
       with records.RecordsWriter(f) as w:
-        # First record is full
+        # First key is all in one record
         proto = file_service_pb.KeyValues()
         proto.set_key("key1")
         proto.value_list().extend(["a", "b"])
         w.write(proto.Encode())
-        # Second record is partial
-        proto = file_service_pb.KeyValues()
-        proto.set_key("key2")
-        proto.value_list().extend(["a", "b"])
-        proto.set_partial(True)
-        w.write(proto.Encode())
+        # Second key is split across two records
         proto = file_service_pb.KeyValues()
         proto.set_key("key2")
         proto.value_list().extend(["c", "d"])
+        w.write(proto.Encode())
+        proto = file_service_pb.KeyValues()
+        proto.set_key("key2")
+        proto.value_list().extend(["e", "f"])
         w.write(proto.Encode())
 
     files.finalize(input_file)
@@ -2366,7 +2401,7 @@ class ReducerReaderTest(testutil.HandlerTestBase):
     self.assertEquals(
         [("key1", ["a", "b"]),
          input_readers.ALLOW_CHECKPOINT,
-         ("key2", ["a", "b", "c", "d"])],
+         ("key2", ["c", "d", "e", "f"])],
         list(reader))
 
     # now test state serialization
@@ -2381,7 +2416,7 @@ class ReducerReaderTest(testutil.HandlerTestBase):
 
     self.assertEquals(("key1", ["a", "b"]), i.next())
     self.assertEquals(
-        {"position": 19,
+        {"position": 38,
          "current_values": "Ti4=",
          "current_key": "Ti4=",
          "filenames": [input_file]},
@@ -2389,18 +2424,18 @@ class ReducerReaderTest(testutil.HandlerTestBase):
 
     self.assertEquals(input_readers.ALLOW_CHECKPOINT, i.next())
     self.assertEquals(
-        {"position": 40,
-         "current_values": "KGxwMApTJ2EnCnAxCmFTJ2InCnAyCmEu",
-         "current_key": "UydrZXkyJwpwMAou",
-         "filenames": [input_file]},
-        reader.to_json())
-
-    self.assertEquals(("key2", ["a", "b", "c", "d"]), i.next())
-    self.assertEquals(
-        {"position": 59,
+        {"position": 38,
          "current_values": "Ti4=",
          "current_key": "Ti4=",
          "filenames": [input_file]},
+        reader.to_json())
+
+    self.assertEquals(("key2", ["c", "d", "e", "f"]), i.next())
+    self.assertEquals(
+        {"position": 0,
+         "current_values": "Ti4=",
+         "current_key": "Ti4=",
+         "filenames": []},
         reader.to_json())
 
     try:
@@ -2421,7 +2456,7 @@ class ReducerReaderTest(testutil.HandlerTestBase):
     self.assertEquals(input_readers.ALLOW_CHECKPOINT, i.next())
     reader = input_readers._ReducerReader.from_json(reader.to_json())
 
-    self.assertEquals(("key2", ["a", "b", "c", "d"]), i.next())
+    self.assertEquals(("key2", ["c", "d", "e", "f"]), i.next())
     reader = input_readers._ReducerReader.from_json(reader.to_json())
 
     try:
