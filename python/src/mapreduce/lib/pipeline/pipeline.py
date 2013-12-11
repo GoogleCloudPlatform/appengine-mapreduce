@@ -413,6 +413,17 @@ class Pipeline(object):
   _class_path = None  # Set for each class
   _send_mail = mail.send_mail_to_admins  # For testing
 
+  # callback_xg_transaction: Determines whether callbacks are processed within
+  # a single entity-group transaction (False), a cross-entity-group
+  # transaction (True), or no transaction (None, default). It is generally
+  # unsafe for a callback to modify pipeline state outside of a transaction, in
+  # particular any pre-initialized state from the pipeline record, such as the
+  # outputs. If a transaction is used, the callback method must operate within
+  # the datastore's transaction time limits.
+  # TODO(user): Make non-internal once other API calls are considered for
+  # transaction support.
+  _callback_xg_transaction = None
+
   def __init__(self, *args, **kwargs):
     """Initializer.
 
@@ -1433,7 +1444,8 @@ class _PipelineContext(object):
             headers={'X-Ae-Slot-Key': slot.key,
                      'X-Ae-Filler-Pipeline-Key': filler_pipeline_key})
         task.add(queue_name=self.queue_name, transactional=True)
-      db.run_in_transaction(txn)
+      db.run_in_transaction_options(
+          db.create_transaction_options(propagation=db.ALLOWED), txn)
 
     self.session_filled_output_names.add(slot.name)
 
@@ -2610,18 +2622,29 @@ class _CallbackHandler(webapp.RequestHandler):
         self.response.set_status(400)
         return
 
-    stage = pipeline_func_class.from_id(pipeline_id)
-    if stage is None:
-      logging.error('Pipeline ID "%s" deleted during callback', pipeline_id)
-      self.response.set_status(400)
-      return
-
     kwargs = {}
     for key in self.request.arguments():
       if key != 'pipeline_id':
         kwargs[str(key)] = self.request.get(key)
 
-    callback_result = stage._callback_internal(kwargs)
+    def perform_callback():
+      stage = pipeline_func_class.from_id(pipeline_id)
+      if stage is None:
+        logging.error('Pipeline ID "%s" deleted during callback', pipeline_id)
+        self.response.set_status(400)
+        return
+      return stage._callback_internal(kwargs)
+
+    # callback_xg_transaction is a 3-valued setting (None=no trans,
+    # False=1-eg-trans, True=xg-trans)
+    if pipeline_func_class._callback_xg_transaction is not None:
+      transaction_options = db.create_transaction_options(
+          xg=pipeline_func_class._callback_xg_transaction)
+      callback_result = db.run_in_transaction_options(transaction_options,
+                                                      perform_callback)
+    else:
+      callback_result = perform_callback()
+
     if callback_result is not None:
       status_code, content_type, content = callback_result
       self.response.set_status(status_code)
