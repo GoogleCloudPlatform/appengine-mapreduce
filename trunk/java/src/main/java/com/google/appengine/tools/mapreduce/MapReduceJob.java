@@ -56,6 +56,7 @@ import com.google.appengine.tools.pipeline.PipelineServiceFactory;
 import com.google.appengine.tools.pipeline.PromisedValue;
 import com.google.appengine.tools.pipeline.Value;
 import com.google.appengine.tools.pipeline.impl.servlets.PipelineServlet;
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
@@ -131,19 +132,28 @@ public class MapReduceJob<I, K, V, O, R>
     return getClass().getSimpleName() + "()";
   }
 
-  private static ShardedJobSettings makeShardedJobSettings(
+  @VisibleForTesting
+  static ShardedJobSettings makeShardedJobSettings(
       String shardedJobId, MapReduceSettings mrSettings, Key pipelineKey) {
     String backend = mrSettings.getBackend();
     String module = mrSettings.getModule();
     String version = null;
     if (backend == null) {
       ModulesService modulesService = ModulesServiceFactory.getModulesService();
+      String currentModule = modulesService.getCurrentModule();
       if (module == null) {
-        module = modulesService.getCurrentModule();
+        module = currentModule;
+        version = modulesService.getCurrentVersion();
+      } else {
+        if (module.equals(currentModule)) {
+          version = modulesService.getCurrentVersion();
+        } else {
+          // TODO(user): we may want to support providing a version for a module
+          version = modulesService.getDefaultVersion(module);
+        }
       }
-      version = modulesService.getDefaultVersion(module);
     }
-    return new ShardedJobSettings()
+    return new ShardedJobSettings.Builder()
         .setControllerPath(mrSettings.getBaseUrl() + CONTROLLER_PATH + "/" + shardedJobId)
         .setWorkerPath(mrSettings.getBaseUrl() + WORKER_PATH + "/" + shardedJobId)
         .setPipelineStatusUrl(PipelineServlet.makeViewerUrl(pipelineKey, pipelineKey))
@@ -152,10 +162,12 @@ public class MapReduceJob<I, K, V, O, R>
         .setVersion(version)
         .setQueueName(mrSettings.getWorkerQueueName())
         .setMaxShardRetries(mrSettings.getMaxShardRetries())
-        .setMaxSliceRetries(mrSettings.getMaxSliceRetries());
+        .setMaxSliceRetries(mrSettings.getMaxSliceRetries())
+        .build();
   }
 
-  private static JobSetting[] makeJobSettings(MapReduceSettings mrSettings, JobSetting... extra) {
+  @VisibleForTesting
+  static JobSetting[] makeJobSettings(MapReduceSettings mrSettings, JobSetting... extra) {
     JobSetting[] settings = new JobSetting[3 + extra.length];
     settings[0] = new JobSetting.OnBackend(mrSettings.getBackend());
     settings[1] = new JobSetting.OnModule(mrSettings.getModule());
@@ -257,8 +269,8 @@ public class MapReduceJob<I, K, V, O, R>
         log.warning("Discarding an orphaned promiseHandle: " + resultPromiseHandle);
       } catch (NoSuchObjectException e) {
         // Let taskqueue retry.
-        throw new RuntimeException(
-            resultPromiseHandle + ": Handle not found, can't submit " + resultAndStatus, e);
+        throw new RuntimeException(resultPromiseHandle + ": Handle not found, can't submit "
+            + resultAndStatus + " going to retry.", e);
       }
     }
   }
