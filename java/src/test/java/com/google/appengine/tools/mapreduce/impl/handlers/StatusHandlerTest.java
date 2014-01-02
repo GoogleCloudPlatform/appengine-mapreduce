@@ -42,7 +42,7 @@ public class StatusHandlerTest extends EndToEndTestCase {
   // Tests that an job that has just been initialized returns a reasonable job detail.
   public void testGetJobDetail_empty() throws Exception {
     ShardedJobService jobService = ShardedJobServiceFactory.getShardedJobService();
-    ShardedJobSettings settings = new ShardedJobSettings();
+    ShardedJobSettings settings = new ShardedJobSettings.Builder().build();
     ShardedJobController<TestWorkerTask, WorkerResult<Integer>>
     controller = new DummyWorkerController("Namey");
     jobService.startJob(
@@ -59,7 +59,7 @@ public class StatusHandlerTest extends EndToEndTestCase {
   // Tests that a populated job (with a couple of shards) generates a reasonable job detail.
   public void testGetJobDetail_populated() throws Exception {
     ShardedJobService jobService = ShardedJobServiceFactory.getShardedJobService();
-    ShardedJobSettings settings = new ShardedJobSettings();
+    ShardedJobSettings settings = new ShardedJobSettings.Builder().build();
     ShardedJobController<TestWorkerTask, WorkerResult<Integer>> controller =
         new DummyWorkerController("Namey");
     TestWorkerTask three = new TestWorkerTask(0, 3, null);

@@ -21,6 +21,9 @@ public class MapReduceSettings implements Serializable {
   private static final long serialVersionUID = 610088354289299175L;
 
   public static final String DEFAULT_BASE_URL = "/mapreduce/";
+  public static final int DEFAULT_MILLIS_PER_SLICE = 10000;
+  public static final int DEFAULT_SHARD_RETREIES = 4;
+  public static final int DEFAULT_SLICE_RETREIES = 20;
 
   private String baseUrl = DEFAULT_BASE_URL;
   private String backend;
@@ -28,9 +31,9 @@ public class MapReduceSettings implements Serializable {
   private String controllerQueueName = "default";
   private String workerQueueName = "default";
   private String bucketName;
-  private int millisPerSlice = 10000;
-  private int maxShardRetries = 4;
-  private int maxSliceRetries = 20;
+  private int millisPerSlice = DEFAULT_MILLIS_PER_SLICE;
+  private int maxShardRetries = DEFAULT_SHARD_RETREIES;
+  private int maxSliceRetries = DEFAULT_SLICE_RETREIES;
 
   public String getBaseUrl() {
     return baseUrl;

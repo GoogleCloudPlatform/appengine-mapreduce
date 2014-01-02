@@ -48,9 +48,10 @@ public abstract class EndToEndTestCase extends TestCase {
     super.setUp();
     helper.setUp();
     taskQueue = LocalTaskQueueTestConfig.getLocalTaskQueue();
-    settings = new ShardedJobSettings()
+    settings = new ShardedJobSettings.Builder()
         .setControllerPath("/controller")
-        .setWorkerPath("/worker");
+        .setWorkerPath("/worker")
+        .build();
   }
 
   @Override

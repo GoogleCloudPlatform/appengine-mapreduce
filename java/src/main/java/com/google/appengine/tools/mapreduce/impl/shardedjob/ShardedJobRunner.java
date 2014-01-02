@@ -8,7 +8,6 @@ import static com.google.appengine.tools.mapreduce.impl.shardedjob.Status.Status
 import static com.google.appengine.tools.mapreduce.impl.shardedjob.Status.StatusCode.RUNNING;
 import static java.util.concurrent.Executors.callable;
 
-import com.google.appengine.api.backends.BackendServiceFactory;
 import com.google.appengine.api.datastore.CommittedButStillApplyingException;
 import com.google.appengine.api.datastore.DatastoreFailureException;
 import com.google.appengine.api.datastore.DatastoreService;
@@ -18,7 +17,6 @@ import com.google.appengine.api.datastore.Entity;
 import com.google.appengine.api.datastore.EntityNotFoundException;
 import com.google.appengine.api.datastore.Key;
 import com.google.appengine.api.datastore.Transaction;
-import com.google.appengine.api.labs.modules.ModulesServiceFactory;
 import com.google.appengine.api.taskqueue.QueueFactory;
 import com.google.appengine.api.taskqueue.TaskOptions;
 import com.google.appengine.tools.cloudstorage.ExceptionHandler;
@@ -192,7 +190,7 @@ class ShardedJobRunner<T extends IncrementalTask<T, R>, R extends Serializable> 
       ShardedJobSettings settings) {
     TaskOptions taskOptions = TaskOptions.Builder.withMethod(TaskOptions.Method.POST)
         .url(settings.getControllerPath()).param(JOB_ID_PARAM, jobId).param(TASK_ID_PARAM, taskId);
-    taskOptions.header("Host", getTaskQueueHostHeader(settings));
+    taskOptions.header("Host", settings.getTaskQueueTarget());
     QueueFactory.getQueue(settings.getQueueName()).add(tx, taskOptions);
   }
 
@@ -203,17 +201,8 @@ class ShardedJobRunner<T extends IncrementalTask<T, R>, R extends Serializable> 
         .param(TASK_ID_PARAM, state.getTaskId())
         .param(JOB_ID_PARAM, state.getJobId())
         .param(SEQUENCE_NUMBER_PARAM, String.valueOf(state.getNextSequenceNumber()));
-    taskOptions.header("Host", getTaskQueueHostHeader(settings));
+    taskOptions.header("Host", settings.getTaskQueueTarget());
     QueueFactory.getQueue(settings.getQueueName()).add(tx, taskOptions);
-  }
-
-  private String getTaskQueueHostHeader(ShardedJobSettings settings) {
-    if (settings.getBackend() != null) {
-      return BackendServiceFactory.getBackendService().getBackendAddress(settings.getBackend());
-    }
-    // TODO(user): change to getVersionHostname when 1.8.9 is released
-    return ModulesServiceFactory.getModulesService().getModuleHostname(
-        settings.getModule(), settings.getVersion());
   }
 
   void completeShard(final String jobId, final String taskId) {
