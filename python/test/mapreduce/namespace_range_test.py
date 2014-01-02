@@ -21,7 +21,11 @@
 import os
 import unittest
 
+
+from testlib import mox
+
 from google.appengine.api import apiproxy_stub_map
+from google.appengine.api import datastore
 from google.appengine.api import datastore_file_stub
 from google.appengine.api import namespace_manager
 from google.appengine.ext import db
@@ -99,13 +103,59 @@ class JsonTest(unittest.TestCase):
                  app='myapp')))
 
 
+class NamespaceRangeIterationTest(unittest.TestCase):
+  """Tests iterating over a NamespaceRange."""
+
+  def setUp(self):
+    unittest.TestCase.setUp(self)
+    namespace_range._setup_constants('abc', 3, 3)
+    self.app_id = 'testapp'
+    os.environ['APPLICATION_ID'] = self.app_id
+    self.mox = mox.Mox()
+
+  def tearDown(self):
+    namespace_range._setup_constants()
+    unittest.TestCase.tearDown(self)
+    try:
+      self.mox.VerifyAll()
+    finally:
+      self.mox.UnsetStubs()
+
+  def testQueryPaging(self):
+    self.mox.StubOutClassWithMocks(datastore, 'Query')
+    ns_range = namespace_range.NamespaceRange(
+        namespace_start='a', namespace_end='b', _app=self.app_id)
+    ns_kind = '__namespace__'
+    ns_key = lambda ns: db.Key.from_path(ns_kind, ns)
+    filters = {'__key__ >= ': ns_key('a'), '__key__ <= ': ns_key('b')}
+
+    def ExpectQuery(cursor):
+      return datastore.Query(
+          ns_kind, filters=filters, keys_only=True, cursor=cursor,
+          _app=self.app_id)
+
+    query = ExpectQuery(None)
+    query.Run(limit=3).AndReturn([ns_key(ns) for ns in ['a', 'aa', 'aaa']])
+    query.GetCursor().AndReturn('c1')
+
+    query = ExpectQuery('c1')
+    query.Run(limit=3).AndReturn([ns_key(ns) for ns in ['aab', 'ab', 'ac']])
+    query.GetCursor().AndReturn('c2')
+
+    query = ExpectQuery('c2')
+    query.Run(limit=3).AndReturn([ns_key('b')])
+
+    self.mox.ReplayAll()
+    self.assertEqual(7, len(list(ns_range)))
+
+
 class NamespaceRangeSplitTest(unittest.TestCase):
   """Tests namespace_range.NamespaceRange.split() with contiguous=False"""
 
   def setUp(self):
     unittest.TestCase.setUp(self)
 
-    namespace_range._setup_constants('abc', 3)
+    namespace_range._setup_constants('abc', 3, 3)
     self.app_id = 'testapp'
     os.environ['APPLICATION_ID'] = self.app_id
     self.datastore = datastore_file_stub.DatastoreFileStub(
@@ -127,6 +177,15 @@ class NamespaceRangeSplitTest(unittest.TestCase):
       pet.put()
     finally:
       namespace_manager.set_namespace(old_ns)
+
+  def testSplitMultipleNamespacesPerShard(self):
+    ns = [x + y + z
+          for x in list('cba') for y in list('abc') for z in list('bac')]
+    db.put([Pet(key=db.Key.from_path('Pet', '1', namespace=x)) for x in ns])
+    ranges = namespace_range.NamespaceRange.split(
+        3, contiguous=False, can_query=lambda: True)
+    self.assertEqual(3, len(ranges))
+    self.assertEqual(27, sum([len(list(r)) for r in ranges]))
 
   def testSplitWithoutQueries(self):
     self.assertEqual(
