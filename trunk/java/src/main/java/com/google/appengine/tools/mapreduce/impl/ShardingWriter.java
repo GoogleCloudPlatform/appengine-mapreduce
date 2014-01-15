@@ -84,10 +84,10 @@ final class ShardingWriter<K, V, R> extends
   }
 
   @Override
-  public long estimateMemoryRequirment() {
+  public long estimateMemoryRequirement() {
     long total = 0;
     for (OutputWriter<KeyValue<K, V>> writer : writers) {
-      total += writer.estimateMemoryRequirment();
+      total += writer.estimateMemoryRequirement();
     }
     return total;
   }

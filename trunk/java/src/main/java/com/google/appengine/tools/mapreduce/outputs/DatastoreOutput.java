@@ -58,7 +58,7 @@ public class DatastoreOutput extends Output<Entity, Void> {
     }
 
     @Override
-    public long estimateMemoryRequirment() {
+    public long estimateMemoryRequirement() {
       return poolParams.getBytesLimit();
     }
   }

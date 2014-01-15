@@ -101,7 +101,7 @@ class GoogleCloudStorageLineInputReader extends InputReader<byte[]> {
   }
 
   @Override
-  public long estimateMemoryRequirment() {
+  public long estimateMemoryRequirement() {
     return bufferSize * 2; // Double buffered
   }
 }

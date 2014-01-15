@@ -528,7 +528,7 @@ public class EndToEndTest extends EndToEndTestCase {
     @SuppressWarnings("rawtypes")
     List readers = ImmutableList.of(inputReader);
     expect(mockInput.createReaders()).andReturn(readers);
-    expect(inputReader.estimateMemoryRequirment()).andReturn(0L).anyTimes();
+    expect(inputReader.estimateMemoryRequirement()).andReturn(0L).anyTimes();
     inputReader.open();
     inputReader.beginSlice();
     expect(inputReader.next()).andThrow(new NoSuchElementException());
@@ -539,7 +539,7 @@ public class EndToEndTest extends EndToEndTestCase {
     @SuppressWarnings("rawtypes")
     List writers = ImmutableList.of(outputWriter);
     expect(mockOutput.createWriters()).andReturn(writers);
-    expect(outputWriter.estimateMemoryRequirment()).andReturn(0L).anyTimes();
+    expect(outputWriter.estimateMemoryRequirement()).andReturn(0L).anyTimes();
     outputWriter.open();
     outputWriter.beginSlice();
     outputWriter.endSlice();

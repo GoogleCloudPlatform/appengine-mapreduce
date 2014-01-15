@@ -81,10 +81,10 @@ public abstract class InputReader<I> implements Serializable {
   public void close() throws IOException {}
 
   /**
-   * @return The estimated mininum memory that will be used by this reader.
+   * @return The estimated minimum memory that will be used by this reader.
    * (This is normally just set to the size of the buffers used by the implementation)
    */
-  public long estimateMemoryRequirment() {
+  public long estimateMemoryRequirement() {
     return 0;
   }
 }
