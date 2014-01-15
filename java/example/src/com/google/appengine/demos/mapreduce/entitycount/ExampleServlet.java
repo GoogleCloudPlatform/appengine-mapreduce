@@ -39,12 +39,12 @@ public class ExampleServlet extends HttpServlet {
 
   private static final Logger log = Logger.getLogger(ExampleServlet.class.getName());
 
+  private static final String GCS_BUCKET_NAME = "mapreduce-example.appspot.com";
+
   private final MemcacheService memcache = MemcacheServiceFactory.getMemcacheService();
   private final UserService userService = UserServiceFactory.getUserService();
   private final PipelineService pipelineService = PipelineServiceFactory.newPipelineService();
   private final SecureRandom random = new SecureRandom();
-
-  private static final boolean USE_BACKENDS = false;
 
   private void writeResponse(HttpServletResponse resp) throws IOException {
     String token = String.valueOf(random.nextLong() & Long.MAX_VALUE);
@@ -99,12 +99,8 @@ public class ExampleServlet extends HttpServlet {
   }
 
   private MapReduceSettings getSettings() {
-    MapReduceSettings settings = new MapReduceSettings()
-        .setWorkerQueueName("mapreduce-workers");
-    if (USE_BACKENDS) {
-      settings.setBackend("worker");
-    }
-    return settings;
+    return new MapReduceSettings().setWorkerQueueName("mapreduce-workers")
+        .setBucketName(GCS_BUCKET_NAME).setModule("mapreduce");
   }
 
   private String startCreationJob(int bytesPerEntity, int entitiesPerShard, int shardCount) {
