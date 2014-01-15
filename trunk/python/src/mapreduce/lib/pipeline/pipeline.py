@@ -2912,14 +2912,20 @@ def get_status_tree(root_pipeline_id):
     raise PipelineStatusError(
         'Pipeline ID "%s" is not a root pipeline!' % root_pipeline_id)
 
-  found_pipeline_dict = dict((stage.key(), stage) for stage in
-      _PipelineRecord.all().filter('root_pipeline =', root_pipeline_key))
-  found_slot_dict = dict((slot.key(), slot) for slot in
-      _SlotRecord.all().filter('root_pipeline =', root_pipeline_key))
-  found_barrier_dict = dict((barrier.key(), barrier) for barrier in
-      _BarrierRecord.all().filter('root_pipeline =', root_pipeline_key))
-  found_status_dict = dict((status.key(), status) for status in
-      _StatusRecord.all().filter('root_pipeline =', root_pipeline_key))
+  # Run all queries asynchronously.
+  queries = {}
+  for model in (_PipelineRecord, _SlotRecord, _BarrierRecord, _StatusRecord):
+    queries[model] = model.all().filter(
+        'root_pipeline =', root_pipeline_key).run(batch_size=1000)
+
+  found_pipeline_dict = dict(
+      (stage.key(), stage) for stage in queries[_PipelineRecord])
+  found_slot_dict = dict(
+      (slot.key(), slot) for slot in queries[_SlotRecord])
+  found_barrier_dict = dict(
+      (barrier.key(), barrier) for barrier in queries[_BarrierRecord])
+  found_status_dict = dict(
+      (status.key(), status) for status in queries[_StatusRecord])
 
   # Breadth-first traversal of _PipelineRecord instances by following
   # _PipelineRecord.fanned_out property values.
