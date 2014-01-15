@@ -78,8 +78,7 @@ public abstract class Worker<C extends WorkerContext> implements Serializable {
 
   /**
    * Prepares the worker for processing a new shard, after possibly having gone
-   * through serialization and deserialization, and prepares it for possible
-   * serialization.
+   * through serialization and deserialization.
    */
   public void beginShard() {}
 
