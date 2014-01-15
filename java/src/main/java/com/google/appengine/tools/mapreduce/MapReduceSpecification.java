@@ -20,6 +20,7 @@ import java.io.Serializable;
  * @param <R> type of result returned by the {@link Output}
  */
 public final class MapReduceSpecification<I, K, V, O, R> implements Serializable {
+
   private static final long serialVersionUID = 4773121986957455423L;
 
   /**
@@ -46,21 +47,15 @@ public final class MapReduceSpecification<I, K, V, O, R> implements Serializable
    *     {@code} reducer, and produces the result value of the
    *     {@link MapReduceJob}
    */
-  public static <I, K, V, O, R>
-      MapReduceSpecification<I, K, V, O, R> of(
-          String jobName,
-          Input<I> input,
-          Mapper<I, K, V> mapper,
-          Marshaller<K> intermediateKeyMarshaller,
-          Marshaller<V> intermediateValueMarshaller,
-          Reducer<K, V, O> reducer,
-          Output<O, R> output) {
-    return new MapReduceSpecification<I, K, V, O, R>(
+  public static <I, K, V, O, R> MapReduceSpecification<I, K, V, O, R> of(
+      String jobName, Input<I> input, Mapper<I, K, V> mapper,
+      Marshaller<K> intermediateKeyMarshaller, Marshaller<V> intermediateValueMarshaller,
+      Reducer<K, V, O> reducer, Output<O, R> output) {
+    return new MapReduceSpecification<>(
         jobName, input, mapper, intermediateKeyMarshaller, intermediateValueMarshaller,
         reducer, output);
   }
 
-  // User-specified name for the job.  Need not be unique.
   private String jobName;
   private Input<I> input;
   private Mapper<I, K, V> mapper;
@@ -68,18 +63,10 @@ public final class MapReduceSpecification<I, K, V, O, R> implements Serializable
   private Marshaller<V> intermediateValueMarshaller;
   private Reducer<K, V, O> reducer;
   private Output<O, R> output;
-  // TODO(ohler): Add these features.  It's tricky to do it in a way that avoids
-  // unnecessary unmarshalling in the default case (byte comparison) though.
-  ///*Nullable*/ private Comparator<K> intermediateKeyComparator = null;
-  ///*Nullable*/ private ReduceShardFunction<K> reduceShardFunction = null;
 
-  private MapReduceSpecification(String jobName,
-      Input<I> input,
-      Mapper<I, K, V> mapper,
-      Marshaller<K> intermediateKeyMarshaller,
-      Marshaller<V> intermediateValueMarshaller,
-      Reducer<K, V, O> reducer,
-      Output<O, R> output) {
+  private MapReduceSpecification(String jobName, Input<I> input, Mapper<I, K, V> mapper,
+      Marshaller<K> intermediateKeyMarshaller, Marshaller<V> intermediateValueMarshaller,
+      Reducer<K, V, O> reducer, Output<O, R> output) {
     this.jobName = checkNotNull(jobName, "Null jobName");
     this.input = checkNotNull(input, "Null input");
     this.mapper = checkNotNull(mapper, "Null mapper");
@@ -158,13 +145,9 @@ public final class MapReduceSpecification<I, K, V, O, R> implements Serializable
     return this;
   }
 
-  @Override public String toString() {
-    return getClass().getSimpleName() + "("
-        + jobName + ", "
-        + input + ", "
-        + mapper + ", "
-        + reducer + ", "
-        + output
-        + ")";
+  @Override
+  public String toString() {
+    return getClass().getSimpleName() + "(" + jobName + ", " + input + ", " + mapper + ", "
+        + reducer + ", " + output + ")";
   }
 }

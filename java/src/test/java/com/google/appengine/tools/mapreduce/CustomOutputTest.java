@@ -1,5 +1,6 @@
 package com.google.appengine.tools.mapreduce;
 
+import com.google.appengine.api.datastore.Entity;
 import com.google.appengine.tools.mapreduce.EndToEndTest.TestMapper;
 import com.google.appengine.tools.mapreduce.inputs.DatastoreInput;
 import com.google.appengine.tools.mapreduce.reducers.ValueProjectionReducer;
@@ -26,6 +27,7 @@ public class CustomOutputTest extends EndToEndTestCase {
     pipelineService = PipelineServiceFactory.newPipelineService();
   }
 
+  @SuppressWarnings("serial")
   static class CustomWriter extends OutputWriter<Long> {
     final int id;
 
@@ -44,6 +46,7 @@ public class CustomOutputTest extends EndToEndTestCase {
     }
   }
 
+  @SuppressWarnings("serial")
   static class CustomOutput extends Output<Long, Boolean> {
 
     @Override
@@ -77,21 +80,16 @@ public class CustomOutputTest extends EndToEndTestCase {
   }
 
   public void testOutputInOrder() throws Exception {
-    MapReduceSpecification mrSpec = MapReduceSpecification.of("Test MR",
-        new DatastoreInput("Test", 2),
-        new TestMapper(),
-        Marshallers.getStringMarshaller(),
-        Marshallers.getLongMarshaller(),
-        ValueProjectionReducer.<String, Long>create(),
-        new CustomOutput());
-
+    MapReduceSpecification<Entity, String, Long, Long, Boolean> mrSpec =
+        MapReduceSpecification.of("Test MR", new DatastoreInput("Test", 2), new TestMapper(),
+        Marshallers.getStringMarshaller(), Marshallers.getLongMarshaller(),
+        ValueProjectionReducer.<String, Long>create(), new CustomOutput());
     MapReduceSettings mrSettings = new MapReduceSettings();
-    String jobId = pipelineService.startNewPipeline(new MapReduceJob<>(),
-        mrSpec, mrSettings);
+    String jobId = pipelineService.startNewPipeline(
+        new MapReduceJob<Entity, String, Long, Long, Boolean>(), mrSpec, mrSettings);
     assertFalse(jobId.isEmpty());
     executeTasksUntilEmpty("default");
     JobInfo info = pipelineService.getJobInfo(jobId);
-    @SuppressWarnings("unchecked")
     MapReduceResult<Boolean> result = (MapReduceResult<Boolean>) info.getOutput();
     assertNotNull(result);
     assertTrue(result.getOutputResult());

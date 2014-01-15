@@ -26,7 +26,7 @@ import java.util.logging.Logger;
  * An input to read entities of a specified kind from the datastore.
  *
  */
-public class DatastoreInput extends Input<Entity> {
+public final class DatastoreInput extends Input<Entity> {
 
   private static final Logger logger = Logger.getLogger(DatastoreInput.class.getName());
   private static final String SCATTER_RESERVED_PROPERTY = Entity.SCATTER_RESERVED_PROPERTY;

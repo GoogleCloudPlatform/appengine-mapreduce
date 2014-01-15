@@ -4,7 +4,6 @@ import com.google.appengine.tools.mapreduce.GoogleCloudStorageFileSet;
 import com.google.appengine.tools.mapreduce.Output;
 import com.google.appengine.tools.mapreduce.OutputWriter;
 
-import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -30,15 +29,13 @@ public class GoogleCloudStorageLevelDbOutput extends Output<ByteBuffer, GoogleCl
    */
   public GoogleCloudStorageLevelDbOutput(String bucket, String fileNamePattern, String mimeType,
       int shardCount) {
-    output =
-        new GoogleCloudStorageFileOutput(bucket, fileNamePattern, mimeType, shardCount);
+    output = new GoogleCloudStorageFileOutput(bucket, fileNamePattern, mimeType, shardCount);
   }
 
   @Override
   public List<? extends OutputWriter<ByteBuffer>> createWriters() {
     List<GoogleCloudStorageFileOutputWriter> writers = output.createWriters();
-    List<GoogleCloudStorageLevelDbOutputWriter> result =
-        new ArrayList<GoogleCloudStorageLevelDbOutputWriter>(writers.size());
+    List<GoogleCloudStorageLevelDbOutputWriter> result = new ArrayList<>(writers.size());
     for (GoogleCloudStorageFileOutputWriter writer : writers) {
       result.add(new GoogleCloudStorageLevelDbOutputWriter(writer));
     }
@@ -46,10 +43,8 @@ public class GoogleCloudStorageLevelDbOutput extends Output<ByteBuffer, GoogleCl
   }
 
   @Override
-  public GoogleCloudStorageFileSet finish(Collection<? extends OutputWriter<ByteBuffer>> writers)
-      throws IOException {
-    ArrayList<OutputWriter<ByteBuffer>> wrapped =
-        new ArrayList<OutputWriter<ByteBuffer>>(writers.size());
+  public GoogleCloudStorageFileSet finish(Collection<? extends OutputWriter<ByteBuffer>> writers) {
+    ArrayList<OutputWriter<ByteBuffer>> wrapped = new ArrayList<>(writers.size());
     for (OutputWriter<ByteBuffer> w : writers) {
       GoogleCloudStorageLevelDbOutputWriter writer = (GoogleCloudStorageLevelDbOutputWriter) w;
       wrapped.add(writer.getDelegate());

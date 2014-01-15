@@ -15,7 +15,6 @@ import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 import java.util.Collection;
 import java.util.List;
-import java.util.logging.Logger;
 
 /**
  * An output that accepts objects, invokes {@link #toString()} (or an arbitrary
@@ -31,10 +30,8 @@ import java.util.logging.Logger;
  * @param <R> type of result returned by the underlying output
  */
 public class StringOutput<O, R> extends Output<O, R> {
-  private static final long serialVersionUID = 390838532348847158L;
 
-  @SuppressWarnings("unused")
-  private static final Logger log = Logger.getLogger(StringOutput.class.getName());
+  private static final long serialVersionUID = 390838532348847158L;
 
   private static class Writer<O> extends ForwardingOutputWriter<O> {
     private static final long serialVersionUID = 142086167097140914L;
@@ -46,9 +43,7 @@ public class StringOutput<O, R> extends Output<O, R> {
 
     private transient Charset charset;
 
-    Writer(OutputWriter<ByteBuffer> out,
-        Function<O, String> fn,
-        String terminator,
+    Writer(OutputWriter<ByteBuffer> out, Function<O, String> fn, String terminator,
         String charsetName) {
       this.out = checkNotNull(out, "Null out");
       this.fn = checkNotNull(fn, "Null fn");
@@ -56,25 +51,30 @@ public class StringOutput<O, R> extends Output<O, R> {
       this.charsetName = checkNotNull(charsetName, "Null charsetName");
     }
 
-    @Override public void beginSlice() throws IOException {
+    @Override
+    public void beginSlice() throws IOException {
       super.beginSlice();
       charset = Charset.forName(charsetName);
     }
 
-    @Override protected OutputWriter<?> getDelegate() {
+    @Override
+    protected OutputWriter<?> getDelegate() {
       return out;
     }
 
-    @Override public void write(O value) throws IOException {
+    @Override
+    public void write(O value) throws IOException {
       out.write(charset.encode(fn.apply(value) + terminator));
     }
   }
 
   private static class ToStringFn<O> implements Function<O, String>, Serializable {
+
     private static final long serialVersionUID = 158579098752936256L;
 
-    @Override public String apply(O in) {
-      return "" + in;
+    @Override
+    public String apply(O in) {
+      return String.valueOf(in);
     }
   }
 
@@ -84,9 +84,7 @@ public class StringOutput<O, R> extends Output<O, R> {
   private final String charsetName;
   private final Output<ByteBuffer, R> sink;
 
-  public StringOutput(Function<O, String> fn,
-      String terminator,
-      String charsetName,
+  public StringOutput(Function<O, String> fn, String terminator, String charsetName,
       Output<ByteBuffer, R> sink) {
     this.fn = checkNotNull(fn, "Null fn");
     this.terminator = checkNotNull(terminator, "Null terminator");
@@ -108,7 +106,7 @@ public class StringOutput<O, R> extends Output<O, R> {
     List<? extends OutputWriter<ByteBuffer>> sinkWriters = sink.createWriters();
     ImmutableList.Builder<Writer<O>> out = ImmutableList.builder();
     for (OutputWriter<ByteBuffer> sinkWriter : sinkWriters) {
-      out.add(new Writer<O>(sinkWriter, fn, terminator, charsetName));
+      out.add(new Writer<>(sinkWriter, fn, terminator, charsetName));
     }
     return out.build();
   }
@@ -116,7 +114,8 @@ public class StringOutput<O, R> extends Output<O, R> {
   /**
    * Returns whatever the underlying {@code Output}'s {@link #finish} method returns.
    */
-  @Override public R finish(Collection<? extends OutputWriter<O>> writers) throws IOException {
+  @Override
+  public R finish(Collection<? extends OutputWriter<O>> writers) throws IOException {
     ImmutableList.Builder<OutputWriter<ByteBuffer>> sinkWriters = ImmutableList.builder();
     for (OutputWriter<O> w : writers) {
       Writer<O> writer = (Writer<O>) w;

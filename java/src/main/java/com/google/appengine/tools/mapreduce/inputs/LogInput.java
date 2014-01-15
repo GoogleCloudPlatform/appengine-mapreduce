@@ -12,27 +12,28 @@ import java.util.List;
 /**
  * Reads RequestLogs from the App Engine Logs API
  */
-public class LogInput extends Input<RequestLogs> {
+public final class LogInput extends Input<RequestLogs> {
+
   private static final long serialVersionUID = 3676527210213105533L;
 
   public static final long EARLIEST_LOG_TIME = 1136073600000000L; // 2006-01-01 00:00 UTC
 
-  private LogQuery logQuery;
-  private int shardCount;
+  private final LogQuery logQuery;
+  private final int shardCount;
 
   /**
    * Create a new Input for getting App Engine Logs
-   * 
+   *
    *  Shards are created by assuming a uniform distribution of logs over the entire time specified
    * and naively dividing the distance between the start and end times equally. If the logs are not
    * uniformly distributed between the start and end time then the distribution of work performed by
    * each shard will not be equal. For example using a start time of 0 (Jan 1, 1970) will likely
    * cause all work to be performed by the last shard(s).
-   * 
+   *
    * @param logQuery
    *          a query with at least a start and end time specified. Additional query options may
    *          also be specified to indicate which log data should be read.
-   * 
+   *
    * @param shardCount
    *          the desired number of shards
    */
@@ -57,11 +58,12 @@ public class LogInput extends Input<RequestLogs> {
     // Ensure that we increment by at least 1 usec per shard
     perShardTimeUsec = (perShardTimeUsec < 1) ? 1 : perShardTimeUsec;
 
-    List<LogInputReader> readers = new ArrayList<LogInputReader>();
+    ArrayList<LogInputReader> readers = new ArrayList<>(shardCount);
     long curStartTimeUsec = startTimeUsec;
     for (int i = 1; i <= shardCount; i++) {
       if (curStartTimeUsec >= endTimeUsec) {
         // The time range is not large enough to support the requested number of shards
+        readers.trimToSize();
         break;
       }
       long curEndTimeUsec = Math.round(startTimeUsec + (i * perShardTimeUsec));

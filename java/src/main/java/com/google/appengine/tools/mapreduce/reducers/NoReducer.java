@@ -16,19 +16,20 @@ import com.google.appengine.tools.mapreduce.ReducerInput;
  * @param <O> type of output formally (but not actually) emitted by this reducer
  */
 public class NoReducer<K, V, O> extends Reducer<K, V, O> {
+
   private static final long serialVersionUID = 904068928342205092L;
 
   public static <K, V, O> NoReducer<K, V, O> create() {
-    return new NoReducer<K, V, O>();
+    return new NoReducer<>();
   }
 
   private NoReducer() {
   }
 
-  @Override public void reduce(K key, ReducerInput<V> values) {
-    // TODO(ohler): Make this an exception that immediately aborts the entire MR
-    // rather than causing a retry.
-    throw new RuntimeException(getClass().getSimpleName() + " received input: "
-        + key + ", " + values);
+  @Override
+  public void reduce(K key, ReducerInput<V> values) {
+    // TODO(user): throw JobFailureException once b/11898267 is implemented.
+    throw new RuntimeException(
+        getClass().getSimpleName() + ": reduce function was called for " + key);
   }
 }

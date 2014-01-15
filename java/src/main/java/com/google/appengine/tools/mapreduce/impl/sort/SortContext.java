@@ -29,6 +29,6 @@ public class SortContext extends AbstractWorkerContext {
    * Emits a list of values for a given key
    */
   public void emit(ByteBuffer key, List<ByteBuffer> values) throws IOException {
-    output.write(new KeyValue<ByteBuffer, Iterator<ByteBuffer>>(key, values.iterator()));
+    output.write(new KeyValue<>(key, values.iterator()));
   }
 }

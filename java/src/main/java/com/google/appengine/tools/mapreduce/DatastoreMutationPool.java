@@ -47,6 +47,9 @@ public class DatastoreMutationPool {
   private final Collection<Key> deletes = Lists.newArrayList();
   private int deletesBytes;
 
+  /**
+   * DatastoreMutationPool params.
+   */
   public static class Params implements Serializable {
 
     private static final long serialVersionUID = -4072996713626072011L;
@@ -73,6 +76,9 @@ public class DatastoreMutationPool {
       return bytesLimit;
     }
 
+    /**
+     * DatastoreMutationPool Params builder.
+     */
     public static class Builder {
 
       private int bytesLimit = DEFAULT_BYTES_LIMIT;

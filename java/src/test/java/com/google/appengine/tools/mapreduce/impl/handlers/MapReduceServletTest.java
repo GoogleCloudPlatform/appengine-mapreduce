@@ -42,15 +42,12 @@ import javax.servlet.http.HttpServletResponse;
  *
  */
 public class MapReduceServletTest extends TestCase {
-// ------------------------------ FIELDS ------------------------------
 
   private final LocalServiceTestHelper helper =
       new LocalServiceTestHelper(new LocalDatastoreServiceTestConfig(),
           new LocalTaskQueueTestConfig(), new LocalMemcacheServiceTestConfig());
 
   private MapReduceServlet servlet;
-
-// ------------------------ OVERRIDING METHODS ------------------------
 
   @Override
   public void setUp() throws Exception {
@@ -64,8 +61,6 @@ public class MapReduceServletTest extends TestCase {
     helper.tearDown();
     super.tearDown();
   }
-
-// -------------------------- TEST METHODS --------------------------
 
   public void testBailsOnBadHandler() throws Exception {
     HttpServletRequest request = createMockRequest("fizzle", true, true);
@@ -166,8 +161,6 @@ public class MapReduceServletTest extends TestCase {
     verify(resp, sos);
   }
 
-// -------------------------- STATIC METHODS --------------------------
-
   private static HttpServletRequest createMockRequest(
       String handler, boolean taskQueueRequest, boolean ajaxRequest) {
     HttpServletRequest request = createMock(HttpServletRequest.class);
@@ -194,5 +187,4 @@ public class MapReduceServletTest extends TestCase {
         .anyTimes();
     return request;
   }
-
 }

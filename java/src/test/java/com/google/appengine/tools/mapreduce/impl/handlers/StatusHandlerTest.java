@@ -133,8 +133,6 @@ public class StatusHandlerTest extends EndToEndTestCase {
                 "\"result_status\":\"DONE\"}"));
   }
 
-  // -------------------------- STATIC METHODS --------------------------
-
   /**
    * Compares a string representation of the expected JSON object
    * with the actual, ignoring white space and converting single quotes

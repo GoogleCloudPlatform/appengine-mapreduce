@@ -15,13 +15,11 @@ import com.google.appengine.tools.mapreduce.outputs.MarshallingOutputWriter;
 import com.google.appengine.tools.mapreduce.outputs.SlicingOutputWriter;
 import com.google.appengine.tools.mapreduce.outputs.SlicingWriterCreator;
 
-import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
-import java.util.logging.Logger;
 
 /**
  * Defines the way data is written out by the sorter. This consists of a single GCS file containing
@@ -35,19 +33,15 @@ public class GoogleCloudStorageSortOutput extends
 
   private static final long serialVersionUID = 8332978108336443982L;
 
-  @SuppressWarnings("unused")
-  private static final Logger log =
-      Logger.getLogger(GoogleCloudStorageSortOutput.class.getName());
-
   private final String bucket;
   private final int shardCount;
   private final String mrJobId;
 
-
-  private static class WriterCreatorImpl implements SlicingWriterCreator<
-      KeyValue<ByteBuffer, Iterator<ByteBuffer>>> {
+  private static class WriterCreatorImpl implements
+      SlicingWriterCreator<KeyValue<ByteBuffer, Iterator<ByteBuffer>>> {
 
     private static final long serialVersionUID = -6765187605013451624L;
+
     private final String bucket;
     private final String fileNamePattern;
     private int sliceNumber;
@@ -61,7 +55,7 @@ public class GoogleCloudStorageSortOutput extends
       this.bucket = checkNotNull(bucket, "Null bucket");
       this.fileNamePattern = checkNotNull(fileNamePattern, "Null fileNamePattern");
       this.sliceNumber = 0;
-      this.fileNames = new ArrayList<String>();
+      this.fileNames = new ArrayList<>();
     }
 
 
@@ -74,7 +68,7 @@ public class GoogleCloudStorageSortOutput extends
       // Uses LevelDbOutputWriter wrapping GoogleCloudStorageFileOutputWriter rather than
       // GoogleCloudStorageLevelDbOutputWriter because the padding at the end of the slice is
       // unneeded as the file is being finalized.
-      return new MarshallingOutputWriter<KeyValue<ByteBuffer, Iterator<ByteBuffer>>>(
+      return new MarshallingOutputWriter<>(
           new LevelDbOutputWriter(new GoogleCloudStorageFileOutputWriter(
               new GcsFilename(bucket, fileName), MapReduceConstants.REDUCE_INPUT_MIME_TYPE)),
           Marshallers.getKeyValuesMarshaller(identity, identity));
@@ -94,24 +88,20 @@ public class GoogleCloudStorageSortOutput extends
   @Override
   public List<? extends OutputWriter<KeyValue<ByteBuffer, Iterator<ByteBuffer>>>> createWriters() {
     List<SlicingOutputWriter<KeyValue<ByteBuffer, Iterator<ByteBuffer>>, WriterCreatorImpl>>
-        result = new ArrayList<SlicingOutputWriter<KeyValue<ByteBuffer, Iterator<ByteBuffer>>,
-            WriterCreatorImpl>>(shardCount);
+        result = new ArrayList<>(shardCount);
     for (int i = 0; i < shardCount; i++) {
       String formatStringForShard =
           String.format(MapReduceConstants.SORT_OUTPUT_DIR_FORMAT, mrJobId, i);
-      result.add(new SlicingOutputWriter<KeyValue<ByteBuffer, Iterator<ByteBuffer>>,
-          WriterCreatorImpl>(new WriterCreatorImpl(bucket, formatStringForShard)));
+      result.add(new SlicingOutputWriter<>(new WriterCreatorImpl(bucket, formatStringForShard)));
     }
     return result;
   }
 
   @Override
   public List<GoogleCloudStorageFileSet> finish(
-      Collection<? extends OutputWriter<KeyValue<ByteBuffer, Iterator<ByteBuffer>>>> writers)
-      throws IOException {
+      Collection<? extends OutputWriter<KeyValue<ByteBuffer, Iterator<ByteBuffer>>>> writers) {
     assert writers.size() == shardCount;
-    List<GoogleCloudStorageFileSet> filesByShard =
-        new ArrayList<GoogleCloudStorageFileSet>(shardCount);
+    List<GoogleCloudStorageFileSet> filesByShard = new ArrayList<>(shardCount);
     for (OutputWriter<KeyValue<ByteBuffer, Iterator<ByteBuffer>>> w : writers) {
       @SuppressWarnings("unchecked")
       SlicingOutputWriter<KeyValue<ByteBuffer, Iterator<ByteBuffer>>, WriterCreatorImpl> writer =

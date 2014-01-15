@@ -14,33 +14,30 @@ import com.google.common.collect.Lists;
 import java.nio.ByteBuffer;
 import java.util.Collection;
 import java.util.List;
-import java.util.logging.Logger;
 
 /**
  * An {@link Output} that writes bytes to a set of blob files, one per shard.
  *
  * @author ohler@google.com (Christian Ohler)
  */
-public class BlobFileOutput extends Output<ByteBuffer, List<AppEngineFile>> {
-  private static final long serialVersionUID = 868276534742230776L;
+@SuppressWarnings("deprecation")
+public final class BlobFileOutput extends Output<ByteBuffer, List<AppEngineFile>> {
 
-  @SuppressWarnings("unused")
-  private static final Logger log = Logger.getLogger(BlobFileOutput.class.getName());
+  private static final long serialVersionUID = 868276534742230776L;
 
   private final int shardCount;
   private final String mimeType;
   private final String fileNamePattern;
 
-  public BlobFileOutput(String fileNamePattern,
-      String mimeType,
-      int shardCount) {
+  public BlobFileOutput(String fileNamePattern, String mimeType, int shardCount) {
     Preconditions.checkArgument(shardCount > 0, "Shard count not positive: %s", shardCount);
     this.mimeType = checkNotNull(mimeType, "Null mimeType");
     this.fileNamePattern = checkNotNull(fileNamePattern, "Null fileNamePattern");
     this.shardCount = shardCount;
   }
 
-  @Override public List<? extends OutputWriter<ByteBuffer>> createWriters() {
+  @Override
+  public List<? extends OutputWriter<ByteBuffer>> createWriters() {
     ImmutableList.Builder<OutputWriter<ByteBuffer>> out = ImmutableList.builder();
     for (int i = 0; i < shardCount; i++) {
       out.add(new BlobFileOutputWriter(String.format(fileNamePattern, i), mimeType));

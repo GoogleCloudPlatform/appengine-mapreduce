@@ -5,7 +5,6 @@ import com.google.appengine.tools.mapreduce.InputReader;
 import com.google.appengine.tools.mapreduce.impl.util.Crc32c;
 import com.google.appengine.tools.mapreduce.impl.util.LevelDbConstants;
 import com.google.appengine.tools.mapreduce.impl.util.LevelDbConstants.RecordType;
-import com.google.appengine.tools.mapreduce.outputs.LevelDbOutputWriter;
 import com.google.common.annotations.VisibleForTesting;
 
 import java.io.IOException;
@@ -15,7 +14,8 @@ import java.nio.channels.ReadableByteChannel;
 import java.util.NoSuchElementException;
 
 /**
- * Reads LevelDB formatted input. (Which is produced by {@link LevelDbOutputWriter}
+ * Reads LevelDB formatted input. (Which is produced by
+ * {@link com.google.appengine.tools.mapreduce.outputs.LevelDbOutputWriter})
  *
  * If you want to read about the format it is here:
  * {@linkplain "https://code.google.com/p/leveldb/"}
@@ -95,7 +95,7 @@ public abstract class LevelDbInputReader extends InputReader<ByteBuffer> {
   }
 
   @Override
-  public void beginSlice() throws IOException {
+  public void beginSlice() {
     tmpBuffer = ByteBuffer.allocate(blockSize);
     tmpBuffer.order(ByteOrder.LITTLE_ENDIAN);
     finalRecord = ByteBuffer.allocate(blockSize);
@@ -119,7 +119,6 @@ public abstract class LevelDbInputReader extends InputReader<ByteBuffer> {
       return this.type;
     }
   }
-
 
   /**
    * @return How far into the file has been read.

@@ -24,7 +24,7 @@ import java.util.NoSuchElementException;
 public class InMemoryInputOutputTest extends TestCase {
 
   public void testReaderWriter() throws IOException, ClassNotFoundException {
-    InMemoryOutput<Object> output = new InMemoryOutput<Object>(1);
+    InMemoryOutput<Object> output = new InMemoryOutput<>(1);
     Collection<? extends OutputWriter<Object>> writers = output.createWriters();
     assertEquals(1, writers.size());
     OutputWriter<Object> writer = writers.iterator().next();
@@ -40,7 +40,7 @@ public class InMemoryInputOutputTest extends TestCase {
     writer.endSlice();
     writer.close();
     List<List<Object>> data = output.finish(ImmutableList.of(writer));
-    InMemoryInput<Object> input = new InMemoryInput<Object>(data);
+    InMemoryInput<Object> input = new InMemoryInput<>(data);
     List<? extends InputReader<Object>> readers = input.createReaders();
     assertEquals(1, readers.size());
     InputReader<Object> reader = readers.get(0);
@@ -57,21 +57,20 @@ public class InMemoryInputOutputTest extends TestCase {
     reader.endSlice();
   }
 
-  @SuppressWarnings("unchecked")
   private OutputWriter<Object> reconstruct(OutputWriter<Object> writer) throws IOException,
       ClassNotFoundException {
     ByteArrayOutputStream bout = new ByteArrayOutputStream();
-    ObjectOutputStream oout = new ObjectOutputStream(bout);
-    oout.writeObject(writer);
-    oout.close();
+    try (ObjectOutputStream oout = new ObjectOutputStream(bout)) {
+      oout.writeObject(writer);
+    }
     ByteArrayInputStream bin = new ByteArrayInputStream(bout.toByteArray());
     ObjectInputStream oin = new ObjectInputStream(bin);
     return (OutputWriter<Object>) oin.readObject();
   }
 
-  public void testManyShards() throws IOException {
+  public void testManyShards() {
     int numShards = 10;
-    InMemoryOutput<Object> output = new InMemoryOutput<Object>(numShards);
+    InMemoryOutput<Object> output = new InMemoryOutput<>(numShards);
     assertEquals(numShards, output.getNumShards());
 
     Collection<? extends OutputWriter<Object>> writers = output.createWriters();
@@ -79,10 +78,8 @@ public class InMemoryInputOutputTest extends TestCase {
 
     List<List<Object>> data = output.finish(writers);
 
-    InMemoryInput<Object> input = new InMemoryInput<Object>(data);
+    InMemoryInput<Object> input = new InMemoryInput<>(data);
     List<? extends InputReader<Object>> readers = input.createReaders();
     assertEquals(numShards, readers.size());
-
   }
-
 }

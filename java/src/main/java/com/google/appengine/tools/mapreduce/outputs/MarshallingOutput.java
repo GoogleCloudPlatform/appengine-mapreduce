@@ -34,20 +34,17 @@ public class MarshallingOutput<O, R> extends Output<O, R> {
   @Override
   public List<MarshallingOutputWriter<O>> createWriters() {
     List<? extends OutputWriter<ByteBuffer>> writers = sink.createWriters();
-    List<MarshallingOutputWriter<O>> result =
-        new ArrayList<MarshallingOutputWriter<O>>(writers.size());
+    List<MarshallingOutputWriter<O>> result = new ArrayList<>(writers.size());
     for (OutputWriter<ByteBuffer> writer : writers) {
-      result.add(new MarshallingOutputWriter<O>(writer, marshaller));
+      result.add(new MarshallingOutputWriter<>(writer, marshaller));
     }
     return result;
   }
 
   @Override
   public R finish(Collection<? extends OutputWriter<O>> writers) throws IOException {
-    ArrayList<OutputWriter<ByteBuffer>> wrapped =
-        new ArrayList<OutputWriter<ByteBuffer>>(writers.size());
+    ArrayList<OutputWriter<ByteBuffer>> wrapped = new ArrayList<>(writers.size());
     for (OutputWriter<O> w : writers) {
-      @SuppressWarnings("unchecked")
       MarshallingOutputWriter<O> writer = (MarshallingOutputWriter<O>) w;
       wrapped.add(writer.getDelegate());
     }

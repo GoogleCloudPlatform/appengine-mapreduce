@@ -24,7 +24,7 @@ public class BlobstoreInputReaderTest extends BlobstoreInputTestCase {
 
   public void testAllSplitPoints() throws Exception {
     for (int splitPoint = 1; splitPoint < blobSize - 1; splitPoint++) {
-      List<BlobstoreInputReader> readers = new ArrayList<BlobstoreInputReader>();
+      List<BlobstoreInputReader> readers = new ArrayList<>();
       readers.add(new BlobstoreInputReader(blobKey.getKeyString(), 0, splitPoint, (byte) '\n'));
       readers.add(
           new BlobstoreInputReader(blobKey.getKeyString(), splitPoint, blobSize, (byte) '\n'));
@@ -34,7 +34,7 @@ public class BlobstoreInputReaderTest extends BlobstoreInputTestCase {
 
   public void testAllSplitPointsWithSerialization() throws Exception {
     for (int splitPoint = 1; splitPoint < blobSize - 1; splitPoint++) {
-      List<BlobstoreInputReader> readers = new ArrayList<BlobstoreInputReader>();
+      List<BlobstoreInputReader> readers = new ArrayList<>();
       readers.add(new BlobstoreInputReader(blobKey.getKeyString(), 0, splitPoint, (byte) '\n'));
       readers.add(
           new BlobstoreInputReader(blobKey.getKeyString(), splitPoint, blobSize, (byte) '\n'));

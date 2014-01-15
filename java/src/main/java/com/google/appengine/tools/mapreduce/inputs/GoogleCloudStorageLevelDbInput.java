@@ -8,7 +8,6 @@ import com.google.appengine.tools.mapreduce.GoogleCloudStorageFileSet;
 import com.google.appengine.tools.mapreduce.Input;
 import com.google.appengine.tools.mapreduce.InputReader;
 import com.google.appengine.tools.mapreduce.impl.MapReduceConstants;
-import com.google.appengine.tools.mapreduce.outputs.LevelDbOutput;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -16,10 +15,11 @@ import java.util.List;
 
 /**
  * GoogleCloudStorageLevelDbInput creates LevelDbInputReaders to read input written out by
- * {@link LevelDbOutput} to files in Google Cloud Storage.
+ * {@link com.google.appengine.tools.mapreduce.outputs.LevelDbOutput} to files in
+ * Google Cloud Storage.
  *
  */
-public class GoogleCloudStorageLevelDbInput extends Input<ByteBuffer> {
+public final class GoogleCloudStorageLevelDbInput extends Input<ByteBuffer> {
 
   private static final long serialVersionUID = -5135725511174133847L;
   private final GoogleCloudStorageFileSet files;
@@ -42,7 +42,7 @@ public class GoogleCloudStorageLevelDbInput extends Input<ByteBuffer> {
 
   @Override
   public List<InputReader<ByteBuffer>> createReaders() {
-    List<InputReader<ByteBuffer>> result = new ArrayList<InputReader<ByteBuffer>>();
+    List<InputReader<ByteBuffer>> result = new ArrayList<>();
     for (GcsFilename file : files.getAllFiles()) {
       result.add(new GoogleCloudStorageLevelDbInputReader(file, bufferSize));
     }

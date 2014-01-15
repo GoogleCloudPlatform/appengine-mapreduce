@@ -11,23 +11,17 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * BlobstoreLineInput shards files in Blobstore on separator boundries.
+ * BlobstoreLineInput shards files in Blobstore on separator boundaries.
  *
  */
-public class BlobstoreInput extends Input<byte[]> {
-// --------------------------- STATIC FIELDS ---------------------------
+public final class BlobstoreInput extends Input<byte[]> {
 
   private static final long MIN_SHARD_SIZE = 1024L;
-
   private static final long serialVersionUID = 2235444204028285444L;
-
-// ------------------------------ FIELDS ------------------------------
 
   private final String blobKey;
   private final byte separator;
   private final int shardCount;
-
-// --------------------------- CONSTRUCTORS ---------------------------
 
   public BlobstoreInput(String blobKey, byte separator, int shardCount) {
     this.blobKey = blobKey;
@@ -35,18 +29,13 @@ public class BlobstoreInput extends Input<byte[]> {
     this.shardCount = shardCount;
   }
 
-// ------------------------ IMPLEMENTING METHODS ------------------------
-
   @Override
   public List<? extends InputReader<byte[]>> createReaders() {
     long blobSize = new BlobInfoFactory().loadBlobInfo(new BlobKey(blobKey)).getSize();
     return split(blobKey, blobSize, shardCount);
   }
 
-// -------------------------- INSTANCE METHODS --------------------------
-
-  private List<? extends InputReader<byte[]>> split(String blobKey,
-      long blobSize, int shardCount) {
+  private List<? extends InputReader<byte[]>> split(String blobKey, long blobSize, int shardCount) {
     Preconditions.checkNotNull(blobKey);
     Preconditions.checkArgument(shardCount > 0);
     Preconditions.checkArgument(blobSize >= 0);
@@ -58,7 +47,7 @@ public class BlobstoreInput extends Input<byte[]> {
 
     long splitLength = blobSize / shardCount;
 
-    List<BlobstoreInputReader> result = new ArrayList<BlobstoreInputReader>();
+    List<BlobstoreInputReader> result = new ArrayList<>();
 
     long startOffset = 0L;
     for (int i = 1; i < shardCount; i++) {

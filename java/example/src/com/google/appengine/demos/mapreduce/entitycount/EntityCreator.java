@@ -17,6 +17,7 @@ import java.util.Random;
  * @author ohler@google.com (Christian Ohler)
  */
 class EntityCreator extends Mapper<Long, Void, Void> {
+
   private static final long serialVersionUID = 409204195454478863L;
 
   private final String kind;
@@ -39,24 +40,19 @@ class EntityCreator extends Mapper<Long, Void, Void> {
 
   @Override
   public void beginSlice() {
-    super.beginSlice();
     pool = DatastoreMutationPool.forManualFlushing();
   }
 
   @Override
   public void endSlice() {
     pool.flush();
-    super.endSlice();
   }
 
   @Override
   public void map(Long ignored) {
-    String name = "" + (random.nextLong() & Long.MAX_VALUE);
-    Entity e = new Entity(kind, name);
-    // TODO(ohler): Verify that the datastore encodes text as 8 bits per
-    // character, or use Blob instead.
-    e.setProperty("payload", new Text(randomString(payloadBytesPerEntity)));
-    pool.put(e);
+    String name = String.valueOf(random.nextLong() & Long.MAX_VALUE);
+    Entity entity = new Entity(kind, name);
+    entity.setProperty("payload", new Text(randomString(payloadBytesPerEntity)));
+    pool.put(entity);
   }
-
 }

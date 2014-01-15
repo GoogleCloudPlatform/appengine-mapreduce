@@ -6,7 +6,7 @@ import com.google.common.primitives.Ints;
 import java.util.Random;
 
 /**
- * Maps each incoming seed using Java's Random to the first generated number. 
+ * Maps each incoming seed using Java's Random to the first generated number.
  */
 final class SeedToRandomMapper extends Mapper<Long, Integer, Integer> {
 
@@ -15,6 +15,6 @@ final class SeedToRandomMapper extends Mapper<Long, Integer, Integer> {
   @Override
   public void map(Long sequence) {
     Random r = new Random(sequence);
-    getContext().emit(r.nextInt(), Ints.checkedCast(sequence));
+    emit(r.nextInt(), Ints.checkedCast(sequence));
   }
 }

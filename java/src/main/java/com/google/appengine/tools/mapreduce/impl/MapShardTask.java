@@ -23,6 +23,7 @@ import com.google.appengine.tools.mapreduce.impl.shardedjob.ShardFailureExceptio
  * @param <V> type of intermediate values produced by this mapper
  */
 public class MapShardTask<I, K, V> extends WorkerShardTask<I, KeyValue<K, V>, MapperContext<K, V>> {
+
   private static final long serialVersionUID = 978040803132974582L;
 
   private final Mapper<I, K, V> mapper;
@@ -31,13 +32,8 @@ public class MapShardTask<I, K, V> extends WorkerShardTask<I, KeyValue<K, V>, Ma
   private final OutputWriter<KeyValue<K, V>> out;
   private final IncrementalTaskContext context;
 
-  public MapShardTask(String mrJobId,
-      int shardNumber,
-      int shardCount,
-      InputReader<I> in,
-      Mapper<I, K, V> mapper,
-      OutputWriter<KeyValue<K, V>> out,
-      long millisPerSlice) {
+  public MapShardTask(String mrJobId, int shardNumber, int shardCount, InputReader<I> in,
+      Mapper<I, K, V> mapper, OutputWriter<KeyValue<K, V>> out, long millisPerSlice) {
     this.in = checkNotNull(in, "Null in");
     this.out = checkNotNull(out, "Null out");
     this.mapper = checkNotNull(mapper, "Null mapper");
@@ -88,7 +84,7 @@ public class MapShardTask<I, K, V> extends WorkerShardTask<I, KeyValue<K, V>, Ma
 
   @Override
   protected void setContextOnWorker() {
-    mapper.setContext(new MapperContextImpl<K, V>(out, context));
+    mapper.setContext(new MapperContextImpl<>(out, context));
   }
 
   @Override

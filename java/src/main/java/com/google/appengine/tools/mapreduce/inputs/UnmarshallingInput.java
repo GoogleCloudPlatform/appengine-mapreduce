@@ -5,10 +5,10 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import com.google.appengine.tools.mapreduce.Input;
 import com.google.appengine.tools.mapreduce.InputReader;
 import com.google.appengine.tools.mapreduce.Marshaller;
-import com.google.common.collect.Lists;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -16,8 +16,10 @@ import java.util.List;
  *
  * @param <I> type of values produced by this input
  */
-public class UnmarshallingInput<I> extends Input<I> {
+public final class UnmarshallingInput<I> extends Input<I> {
+
   private static final long serialVersionUID = 6893854789021758519L;
+
   private final Input<ByteBuffer> input;
   private final Marshaller<I> marshaller;
 
@@ -33,9 +35,9 @@ public class UnmarshallingInput<I> extends Input<I> {
   @Override
   public List<InputReader<I>> createReaders() throws IOException {
     List<? extends InputReader<ByteBuffer>> readers = input.createReaders();
-    List<InputReader<I>> result = Lists.newArrayListWithCapacity(readers.size());
+    List<InputReader<I>> result = new ArrayList<>(readers.size());
     for (InputReader<ByteBuffer> reader : readers) {
-      result.add(new UnmarshallingInputReader<I>(reader, marshaller));
+      result.add(new UnmarshallingInputReader<>(reader, marshaller));
     }
     return result;
   }

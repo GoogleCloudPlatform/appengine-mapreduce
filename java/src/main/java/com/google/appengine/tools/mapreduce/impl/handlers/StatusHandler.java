@@ -40,21 +40,19 @@ import javax.servlet.http.HttpServletResponse;
  *
  */
 final class StatusHandler {
+
   private static final Logger log = Logger.getLogger(StatusHandler.class.getName());
 
   public static final int DEFAULT_JOBS_PER_PAGE_COUNT = 50;
+
   // Command paths
   public static final String LIST_JOBS_PATH = "list_jobs";
   public static final String CLEANUP_JOB_PATH = "cleanup_job";
   public static final String ABORT_JOB_PATH = "abort_job";
   public static final String GET_JOB_DETAIL_PATH = "get_job_detail";
 
-  // --------------------------- CONSTRUCTORS ---------------------------
-
   private StatusHandler() {
   }
-
-  // -------------------------- STATIC METHODS --------------------------
 
   private static JSONObject handleCleanupJob(String jobId) throws JSONException {
     JSONObject retValue = new JSONObject();
@@ -132,7 +130,7 @@ final class StatusHandler {
     // at a minimum, a range from 0 to 1 - when all shards are just starting.
     long maxPlusOne = workerCallCounts.length == 0 ? 1 : Longs.max(workerCallCounts) + 1;
 
-    List<String> countLabels = new ArrayList<String>();
+    List<String> countLabels = new ArrayList<>();
     for (int i = 0; i < workerCallCounts.length; i++) {
       countLabels.add(String.valueOf(i));
     }
@@ -169,7 +167,7 @@ final class StatusHandler {
         jobObject.put("active", true);
       } else {
         jobObject.put("active", false);
-        jobObject.put("result_status", "" + state.getStatus().getStatusCode());
+        jobObject.put("result_status", String.valueOf(state.getStatus().getStatusCode()));
       }
       jobObject.put("shards", state.getTotalTaskCount());
       jobObject.put("active_shards", state.getActiveTaskCount());

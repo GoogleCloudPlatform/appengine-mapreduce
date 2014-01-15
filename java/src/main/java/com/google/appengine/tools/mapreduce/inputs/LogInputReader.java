@@ -8,7 +8,6 @@ import com.google.appengine.api.search.checkers.Preconditions;
 import com.google.appengine.tools.mapreduce.InputReader;
 import com.google.common.annotations.VisibleForTesting;
 
-import java.io.Serializable;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
 import java.util.logging.Logger;
@@ -17,7 +16,8 @@ import java.util.logging.Logger;
  * Reads App Engine RequestLogs for a specified time range. Assumes that logs are uniformly
  * distributed over the time range for reporting progress.
  */
-public class LogInputReader extends InputReader<RequestLogs> implements Serializable {
+public final class LogInputReader extends InputReader<RequestLogs> {
+
   private static final long serialVersionUID = 6242327077444737301L;
   private static final Logger log = Logger.getLogger(LogInputReader.class.getName());
 
@@ -31,7 +31,7 @@ public class LogInputReader extends InputReader<RequestLogs> implements Serializ
    * Fetch all RequestLogs that satisfy the log query, which has start and end times specific to
    * this shard.
    */
-  protected LogInputReader(LogQuery shardLogQuery) {
+  LogInputReader(LogQuery shardLogQuery) {
     Preconditions.checkArgument((shardLogQuery.getStartTimeUsec() == null)
         || (shardLogQuery.getEndTimeUsec() == null)
         || (shardLogQuery.getEndTimeUsec() > shardLogQuery.getStartTimeUsec()),
@@ -39,7 +39,7 @@ public class LogInputReader extends InputReader<RequestLogs> implements Serializ
         shardLogQuery.getStartTimeUsec());
     this.shardLogQuery = shardLogQuery;
   }
-  
+
   @Override
   public void open() {
     lastOffset = null;
@@ -60,8 +60,6 @@ public class LogInputReader extends InputReader<RequestLogs> implements Serializ
     if (lastOffset != null) {
       shardLogQuery.offset(lastOffset);
     }
-
-    // Execute the query
     logIterator = logService.fetch(shardLogQuery).iterator();
   }
 

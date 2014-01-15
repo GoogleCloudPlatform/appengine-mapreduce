@@ -23,7 +23,6 @@ import javax.servlet.http.HttpServletResponse;
 /**
  */
 public final class MapReduceServletImpl {
-// --------------------------- STATIC FIELDS ---------------------------
 
   private static final Logger log = Logger.getLogger(MapReduceServlet.class.getName());
 
@@ -32,12 +31,8 @@ public final class MapReduceServletImpl {
   public static final String SHUFFLE_CALLBACK_PATH = "shuffleCallback";
   static final String COMMAND_PATH = "command";
 
-// --------------------------- CONSTRUCTORS ---------------------------
-
   private MapReduceServletImpl() {
   }
-
-// -------------------------- STATIC METHODS --------------------------
 
   /**
    * Handle GET http requests.

@@ -9,6 +9,7 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.NoSuchElementException;
 
 /**
@@ -16,32 +17,25 @@ import java.util.NoSuchElementException;
  *
  */
 class BlobstoreInputReader extends InputReader<byte[]> {
-  // --------------------------- STATIC FIELDS ---------------------------
 
   private static final long serialVersionUID = -1869136825803030034L;
-
-  // ------------------------------ FIELDS ------------------------------
 
   @VisibleForTesting final long startOffset;
   @VisibleForTesting final long endOffset;
   private final String blobKey;
   private long offset = 0L;
+  private final byte terminator;
 
   private transient LineInputStream in;
 
-  private final byte terminator;
-
-  // --------------------------- CONSTRUCTORS ---------------------------
 
   BlobstoreInputReader(String blobKey, long startOffset, long endOffset, byte terminator) {
+    Preconditions.checkArgument(endOffset >= startOffset);
     this.terminator = terminator;
     this.blobKey = blobKey;
-    Preconditions.checkArgument(endOffset >= startOffset);
     this.startOffset = startOffset;
     this.endOffset = endOffset;
   }
-
-  // --------------------------- METHODS ---------------------------
 
   @Override
   public Double getProgress() {
@@ -62,9 +56,9 @@ class BlobstoreInputReader extends InputReader<byte[]> {
   @Override
   public void beginSlice() throws IOException {
     Preconditions.checkState(in == null, "%s: Already initialized.", this);
-    in = new LineInputStream(
-        new BlobstoreInputStream(new BlobKey(blobKey), startOffset + offset),
-        endOffset - startOffset - offset, terminator);
+    InputStream blobInputStream =
+        new BlobstoreInputStream(new BlobKey(blobKey), startOffset + offset);
+    in = new LineInputStream(blobInputStream, endOffset - startOffset - offset, terminator);
     skipRecordReadByPreviousShard();
   }
 
@@ -90,7 +84,7 @@ class BlobstoreInputReader extends InputReader<byte[]> {
   }
 
   @Override
-  public byte[] next() throws IOException, NoSuchElementException {
+  public byte[] next() throws NoSuchElementException {
     return in.next();
   }
 

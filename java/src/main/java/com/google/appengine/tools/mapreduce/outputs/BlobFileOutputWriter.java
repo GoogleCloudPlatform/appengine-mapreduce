@@ -22,7 +22,8 @@ import java.nio.ByteBuffer;
  *
  * @author ohler@google.com (Christian Ohler)
  */
-public class BlobFileOutputWriter extends OutputWriter<ByteBuffer> {
+public final class BlobFileOutputWriter extends OutputWriter<ByteBuffer> {
+
   private static final long serialVersionUID = 744830273254378964L;
 
   private static final FileService FILE_SERVICE = FileServiceFactory.getFileService();

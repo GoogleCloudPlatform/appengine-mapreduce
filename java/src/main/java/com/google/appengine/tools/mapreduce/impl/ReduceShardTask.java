@@ -27,24 +27,17 @@ import java.util.Iterator;
  */
 public class ReduceShardTask<K, V, O>
     extends WorkerShardTask<KeyValue<K, Iterator<V>>, O, ReducerContext<O>> {
+
   private static final long serialVersionUID = 874429568286446321L;
 
   private final Reducer<K, V, O> reducer;
-
   private final long millisPerSlice;
-
   private final InputReader<KeyValue<K, Iterator<V>>> in;
-
   private final OutputWriter<O> out;
-
   private final IncrementalTaskContext context;
 
-  public ReduceShardTask(String mrJobId,
-      int shardNumber,
-      int shardCount,
-      InputReader<KeyValue<K, Iterator<V>>> in,
-      Reducer<K, V, O> reducer,
-      OutputWriter<O> out,
+  public ReduceShardTask(String mrJobId, int shardNumber, int shardCount,
+      InputReader<KeyValue<K, Iterator<V>>> in, Reducer<K, V, O> reducer, OutputWriter<O> out,
       long millisPerSlice) {
     this.in = checkNotNull(in, "Null in");
     this.out = checkNotNull(out, "Null out");
@@ -88,7 +81,7 @@ public class ReduceShardTask<K, V, O>
 
   @Override
   protected void setContextOnWorker() {
-    reducer.setContext(new ReducerContextImpl<O>(context, out));
+    reducer.setContext(new ReducerContextImpl<>(context, out));
   }
 
   @Override

@@ -97,13 +97,12 @@ public class DatastoreOutputTest extends TestCase {
     assertEquals(entity3, ds.get(entity3.getKey()));
   }
 
-  @SuppressWarnings("unchecked")
   private OutputWriter<Entity> reconstruct(OutputWriter<Entity> writer) throws IOException,
       ClassNotFoundException {
     ByteArrayOutputStream bout = new ByteArrayOutputStream();
-    ObjectOutputStream oout = new ObjectOutputStream(bout);
-    oout.writeObject(writer);
-    oout.close();
+    try (ObjectOutputStream oout = new ObjectOutputStream(bout)) {
+      oout.writeObject(writer);
+    }
     assertTrue(bout.size() < 1000 * 1000); // Should fit in datastore.
     ByteArrayInputStream bin = new ByteArrayInputStream(bout.toByteArray());
     ObjectInputStream oin = new ObjectInputStream(bin);

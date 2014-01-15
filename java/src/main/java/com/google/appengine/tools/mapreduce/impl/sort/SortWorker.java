@@ -46,7 +46,6 @@ public class SortWorker extends Worker<SortContext> {
    * proportion is unavailable. If the smallest is unavailable sort will fail.
    */
   private static final double[] TARGET_SORT_RAM_PROPORTIONS = {0.30, 0.25, 0.15};
-
   private static final int MEMORY_ALLOCATION_ATTEMPTS = TARGET_SORT_RAM_PROPORTIONS.length;
 
   // Items are batched to save storage cost, but not too big to limit memory use.
@@ -54,7 +53,7 @@ public class SortWorker extends Worker<SortContext> {
 
   static final int POINTER_SIZE_BYTES = 3 * 4; // 3 ints: KeyIndex, ValueIndex, Length
 
-  private transient ByteBuffer memoryBuffer = null;
+  private transient ByteBuffer memoryBuffer;
   private transient int valuesHeld;
   private transient KeyValue<ByteBuffer, ByteBuffer> leftover;
   private transient boolean isFull;
@@ -88,8 +87,6 @@ public class SortWorker extends Worker<SortContext> {
       swapPointers(a, b);
     }
   }
-
-  public SortWorker() {}
 
   @Override
   public void beginSlice() {
@@ -143,7 +140,7 @@ public class SortWorker extends Worker<SortContext> {
     SortContext localContext = getContext();
 
     ByteBuffer currentKey = getKeyValueFromPointer(0).getKey();
-    List<ByteBuffer> currentValues = new ArrayList<ByteBuffer>();
+    List<ByteBuffer> currentValues = new ArrayList<>();
     int totalSize = 0;
 
     for (int i = 0; i < valuesHeld; i++) {
@@ -191,8 +188,8 @@ public class SortWorker extends Worker<SortContext> {
         leftover = null;
       }
     }
-    if (values.size() > 0) {
-      localContext.emit(key, new ArrayList<ByteBuffer>(values));
+    if (!values.isEmpty()) {
+      localContext.emit(key, new ArrayList<>(values));
       values.clear();
     }
   }
@@ -212,7 +209,7 @@ public class SortWorker extends Worker<SortContext> {
       throw new IllegalArgumentException("Already full");
     }
     if (value.remaining() + key.remaining() + POINTER_SIZE_BYTES > memoryBuffer.remaining()) {
-      leftover = new KeyValue<ByteBuffer, ByteBuffer>(key, value);
+      leftover = new KeyValue<>(key, value);
       isFull = true;
     } else {
       int keyPos = spliceIn(key, memoryBuffer);
@@ -250,7 +247,7 @@ public class SortWorker extends Worker<SortContext> {
     assert valuePos >= keyPos;
     ByteBuffer key = sliceOutRange(keyPos, valuePos);
     ByteBuffer value = sliceOutRange(valuePos, valuePos + valueLength);
-    return new KeyValue<ByteBuffer, ByteBuffer>(key, value);
+    return new KeyValue<>(key, value);
   }
 
   /**
@@ -396,5 +393,4 @@ public class SortWorker extends Worker<SortContext> {
   public int getValuesHeld() {
     return valuesHeld;
   }
-
 }

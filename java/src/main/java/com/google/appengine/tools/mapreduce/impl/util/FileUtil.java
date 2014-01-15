@@ -26,6 +26,7 @@ import java.util.logging.Logger;
  *
  * @author ohler@google.com (Christian Ohler)
  */
+@SuppressWarnings("deprecation")
 public class FileUtil {
 
   private static final Logger log = Logger.getLogger(FileUtil.class.getName());
@@ -67,10 +68,12 @@ public class FileUtil {
   public static BlobKey getBlobKey(final AppEngineFile finalizedBlobFile) {
     return RetryHelper.runWithRetries(
         new Callable<BlobKey>() {
-          @Override public String toString() {
+          @Override
+          public String toString() {
             return "get BlobKey for " + finalizedBlobFile;
           }
-          @Override public BlobKey call() throws IOException {
+          @Override
+          public BlobKey call() throws IOException {
             BlobKey key = FILE_SERVICE.getBlobKey(finalizedBlobFile);
             if (key == null) {
               // I have the impression that this can happen because of HRD's
@@ -99,19 +102,18 @@ public class FileUtil {
   public static AppEngineFile ensureFinalized(final AppEngineFile file) {
     return RetryHelper.runWithRetries(
         new Callable<AppEngineFile>() {
-          @Override public String toString() {
+          @Override
+          public String toString() {
             return "finalizing file " + file;
           }
-          @SuppressWarnings("unused") String stage = "init";
           FileWriteChannel out = null;
-          @Override public AppEngineFile call() throws IOException {
+          @Override
+          public AppEngineFile call() throws IOException {
             if (out != null) {
-              stage = "close previous";
               tryClosingOnce(out);
               out = null;
             }
             boolean alreadyFinalized;
-            stage = "acquire lock";
             try {
               out = FILE_SERVICE.openWriteChannel(file, true);
               alreadyFinalized = false;
@@ -127,7 +129,6 @@ public class FileUtil {
               }
             }
             if (!alreadyFinalized) {
-              stage = "close and finalize";
               out.closeFinally();
             } else {
               Preconditions.checkState(out == null, "%s: %s", this, out);

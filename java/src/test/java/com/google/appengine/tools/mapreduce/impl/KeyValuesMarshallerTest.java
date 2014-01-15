@@ -23,7 +23,7 @@ public class KeyValuesMarshallerTest extends TestCase {
 
   private <K, V> void assertRoundTripEquality(KeyValuesMarshaller<K, V> marshaller, K key,
       List<V> values) {
-    ByteBuffer bytes = marshaller.toBytes(new KeyValue<K, Iterator<V>>(key, values.iterator()));
+    ByteBuffer bytes = marshaller.toBytes(new KeyValue<>(key, values.iterator()));
     KeyValue<K, Iterator<V>> reconstructed = marshaller.fromBytes(bytes.slice());
     validateEqual(key, values, reconstructed);
 
@@ -43,11 +43,11 @@ public class KeyValuesMarshallerTest extends TestCase {
   public void testRandomData() {
     Marshaller<ByteBuffer> byteBufferMarshaller = Marshallers.getByteBufferMarshaller();
     KeyValuesMarshaller<ByteBuffer, ByteBuffer> m =
-        new KeyValuesMarshaller<ByteBuffer, ByteBuffer>(byteBufferMarshaller, byteBufferMarshaller);
+        new KeyValuesMarshaller<>(byteBufferMarshaller, byteBufferMarshaller);
     Random r = new Random(0);
     for (int i = 0; i < 1000; i++) {
       ByteBuffer key = getRandomByteBuffer(r);
-      ArrayList<ByteBuffer> values = new ArrayList<ByteBuffer>();
+      ArrayList<ByteBuffer> values = new ArrayList<>();
       for (int j = 0; j < 10; j++) {
         values.add(getRandomByteBuffer(r));
       }
@@ -58,7 +58,7 @@ public class KeyValuesMarshallerTest extends TestCase {
   public void testNoValues() {
     Marshaller<String> stringMarshaller = Marshallers.getStringMarshaller();
     KeyValuesMarshaller<String, String> m =
-        new KeyValuesMarshaller<String, String>(stringMarshaller, stringMarshaller);
+        new KeyValuesMarshaller<>(stringMarshaller, stringMarshaller);
     String key = "Foo";
     assertRoundTripEquality(m, key, new ArrayList<String>(0));
   }
@@ -66,7 +66,7 @@ public class KeyValuesMarshallerTest extends TestCase {
   public void testThrowsCorruptDataException() {
     Marshaller<ByteBuffer> byteBufferMarshaller = Marshallers.getByteBufferMarshaller();
     KeyValuesMarshaller<ByteBuffer, ByteBuffer> m =
-        new KeyValuesMarshaller<ByteBuffer, ByteBuffer>(byteBufferMarshaller, byteBufferMarshaller);
+        new KeyValuesMarshaller<>(byteBufferMarshaller, byteBufferMarshaller);
     Random r = new Random(0);
     ByteBuffer key = getRandomByteBuffer(r);
     try {
@@ -87,30 +87,25 @@ public class KeyValuesMarshallerTest extends TestCase {
     Marshaller<Integer> intMarshaller = Marshallers.getIntegerMarshaller();
     Marshaller<String> stringMarshaller = Marshallers.getStringMarshaller();
     KeyValuesMarshaller<Integer, String> nestedMarshaller =
-        new KeyValuesMarshaller<Integer, String>(intMarshaller, stringMarshaller);
+        new KeyValuesMarshaller<>(intMarshaller, stringMarshaller);
     KeyValuesMarshaller<KeyValue<Integer, Iterator<String>>, KeyValue<Integer, Iterator<String>>>
-        m = new KeyValuesMarshaller<
-        KeyValue<Integer, Iterator<String>>, KeyValue<Integer, Iterator<String>>>(
-        nestedMarshaller, nestedMarshaller);
+        m = new KeyValuesMarshaller<>(nestedMarshaller, nestedMarshaller);
 
-    ArrayList<String> keyStrings = new ArrayList<String>();
-    ArrayList<String> valueStrings = new ArrayList<String>();
+    ArrayList<String> keyStrings = new ArrayList<>();
+    ArrayList<String> valueStrings = new ArrayList<>();
     for (int k = 0; k < 10; k++) {
       keyStrings.add("KeyString-" + k);
       valueStrings.add("ValueString-" + k);
     }
 
     for (int i = 0; i < 10; i++) {
-      KeyValue<Integer, Iterator<String>> key =
-          new KeyValue<Integer, Iterator<String>>(i, keyStrings.iterator());
-      List<KeyValue<Integer, Iterator<String>>> valueValues =
-          new ArrayList<KeyValue<Integer, Iterator<String>>>();
+      KeyValue<Integer, Iterator<String>> key = new KeyValue<>(i, keyStrings.iterator());
+      List<KeyValue<Integer, Iterator<String>>> valueValues = new ArrayList<>();
       for (int j = 0; j < 10000; j++) {
-        valueValues.add(new KeyValue<Integer, Iterator<String>>(-i, valueStrings.iterator()));
+        valueValues.add(new KeyValue<>(-i, valueStrings.iterator()));
       }
 
-      ByteBuffer bytes = m.toBytes(new KeyValue<KeyValue<Integer, Iterator<String>>,
-          Iterator<KeyValue<Integer, Iterator<String>>>>(key, valueValues.iterator()));
+      ByteBuffer bytes = m.toBytes(new KeyValue<>(key, valueValues.iterator()));
       KeyValue<KeyValue<Integer, Iterator<String>>, Iterator<KeyValue<Integer, Iterator<String>>>>
           reconstructed = m.fromBytes(bytes.slice());
       validateEqual(key.getKey(), keyStrings, reconstructed.getKey());
@@ -130,5 +125,4 @@ public class KeyValuesMarshallerTest extends TestCase {
     ByteBuffer b = ByteBuffer.wrap(bytes);
     return b;
   }
-
 }

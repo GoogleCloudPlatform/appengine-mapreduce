@@ -1,10 +1,10 @@
 package com.google.appengine.tools.mapreduce.impl.util;
 
-import com.google.appengine.tools.mapreduce.inputs.LevelDbInputReader;
-import com.google.appengine.tools.mapreduce.outputs.LevelDbOutputWriter;
 
 /**
- * A set of constants needed by {@link LevelDbInputReader} and {@link LevelDbOutputWriter}.
+ * A set of constants needed by
+ * {@link com.google.appengine.tools.mapreduce.inputs.LevelDbInputReader} and
+ * {@link com.google.appengine.tools.mapreduce.outputs.LevelDbOutputWriter}.
  */
 public final class LevelDbConstants {
 
@@ -29,7 +29,7 @@ public final class LevelDbConstants {
    * An enumerated type that describes the type of the record being stored.
    * These byte values must match those of the leveldb log format for
    * compatibility between different implementations
-   * of the {@link LevelDbOutputWriter}.
+   * of the {@link com.google.appengine.tools.mapreduce.outputs.LevelDbOutputWriter}.
    *
    */
   public enum RecordType {
@@ -72,24 +72,24 @@ public final class LevelDbConstants {
   }
 
   /**
-   * Masks the crc.
+   * Masks the CRC.
    *
    * Motivation taken from leveldb:
    *    it is problematic to compute the CRC of a string that
    *    contains embedded CRCs.  Therefore we recommend that CRCs stored
    *    somewhere (e.g., in files) should be masked before being stored.
-   * @param crc the crc to mask.
-   * @return the masked crc.
+   * @param crc the CRC to mask.
+   * @return the masked CRC.
    */
   public static long maskCrc(long crc) {
     return ((((crc >> 15) | (crc << 17)) + LevelDbConstants.CRC_MASK_DELTA) & 0xFFFFFFFFL);
   }
 
   /**
-   * Unmasks the crc.
+   * Unmasks the CRC.
    *
-   * @param maskedCrc a masked crc.
-   * @return an unmasked crc.
+   * @param maskedCrc a masked CRC.
+   * @return an unmasked CRC.
    */
   public static long unmaskCrc(long maskedCrc) {
     long rot = (maskedCrc - CRC_MASK_DELTA) & 0xFFFFFFFFL;

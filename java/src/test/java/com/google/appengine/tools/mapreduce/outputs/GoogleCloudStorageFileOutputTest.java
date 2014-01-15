@@ -121,27 +121,25 @@ public class GoogleCloudStorageFileOutputTest extends TestCase {
       assertNotNull(metadata);
       assertEquals(expectedContent.capacity(), metadata.getLength());
       assertEquals(MIME_TYPE, metadata.getOptions().getMimeType());
-      ReadableByteChannel readChannel = gcsService.openReadChannel(files.getFile(i), 0);
-      int read = readChannel.read(actualContent);
-      assertEquals(read, content.length * 2);
-      actualContent.limit(actualContent.position());
-      actualContent.rewind();
-      assertEquals(expectedContent, actualContent);
-      readChannel.close();
+      try (ReadableByteChannel readChannel = gcsService.openReadChannel(files.getFile(i), 0)) {
+        int read = readChannel.read(actualContent);
+        assertEquals(read, content.length * 2);
+        actualContent.limit(actualContent.position());
+        actualContent.rewind();
+        assertEquals(expectedContent, actualContent);
+      }
     }
   }
 
-  @SuppressWarnings("unchecked")
   private OutputWriter<ByteBuffer> reconstruct(OutputWriter<ByteBuffer> writer) throws IOException,
       ClassNotFoundException {
     ByteArrayOutputStream bout = new ByteArrayOutputStream();
-    ObjectOutputStream oout = new ObjectOutputStream(bout);
-    oout.writeObject(writer);
-    oout.close();
+    try (ObjectOutputStream oout = new ObjectOutputStream(bout)) {
+      oout.writeObject(writer);
+    }
     assertTrue(bout.size() < 1000 * 1000); // Should fit in datastore.
     ByteArrayInputStream bin = new ByteArrayInputStream(bout.toByteArray());
     ObjectInputStream oin = new ObjectInputStream(bin);
     return (OutputWriter<ByteBuffer>) oin.readObject();
   }
-
 }

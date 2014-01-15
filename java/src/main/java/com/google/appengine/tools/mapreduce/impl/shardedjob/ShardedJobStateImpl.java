@@ -150,7 +150,7 @@ class ShardedJobStateImpl<T extends IncrementalTask> implements ShardedJobState<
 
     static <T extends IncrementalTask> ShardedJobStateImpl<T> fromEntity(Entity in) {
       Preconditions.checkArgument(ENTITY_KIND.equals(in.getKind()), "Unexpected kind: %s", in);
-      return new ShardedJobStateImpl<T>(in.getKey().getName(),
+      return new ShardedJobStateImpl<>(in.getKey().getName(),
           SerializationUtil.<ShardedJobController<T>>deserializeFromDatastoreProperty(in,
               CONTROLLER_PROPERTY),
           SerializationUtil.<ShardedJobSettings>deserializeFromDatastoreProperty(in,

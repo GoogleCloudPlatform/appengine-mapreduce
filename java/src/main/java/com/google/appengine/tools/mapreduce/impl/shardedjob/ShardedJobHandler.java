@@ -15,13 +15,13 @@ public interface ShardedJobHandler {
 
   /**
    * Is invoked by the servlet that handles
-   * {@link ShardedJobSettings#setControllerPath} when a shard has completed.
+   * {@link ShardedJobSettings#getControllerPath} when a shard has completed.
    */
   void completeShard(final String jobId, final String taskId);
 
   /**
    * Is invoked by the servlet that handles
-   * {@link ShardedJobSettings#setWorkerPath} to run a task.
+   * {@link ShardedJobSettings#getWorkerPath} to run a task.
    */
   void runTask(final String jobId, final String taskId, final int sequenceNumber);
 }

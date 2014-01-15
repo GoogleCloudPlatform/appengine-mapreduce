@@ -25,16 +25,12 @@ import java.nio.ByteBuffer;
  */
 abstract class BlobstoreInputTestCase extends TestCase {
 
-  // ------------------------------ FIELDS ------------------------------
-
   BlobKey blobKey;
   long blobSize;
   private final LocalServiceTestHelper helper = new LocalServiceTestHelper(
       new LocalBlobstoreServiceTestConfig(),
       new LocalFileServiceTestConfig(),
       new LocalDatastoreServiceTestConfig());
-
-// ------------------------ OVERRIDING METHODS ------------------------
 
   @Override
   public void setUp() throws Exception {
@@ -60,5 +56,4 @@ abstract class BlobstoreInputTestCase extends TestCase {
     blobKey = fileService.getBlobKey(blobFile);
     blobSize = new BlobInfoFactory().loadBlobInfo(blobKey).getSize();
   }
-
 }
