@@ -1,15 +1,3 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <dispatch-entries>
-  <dispatch>
-    <url>*/kickoff</url>
-    <module>default</module>
-  </dispatch>
-  <dispatch>
-    <url>*/mapreduce/workerCallback/*</url>
-    <module>mapreduce</module>
-  </dispatch>
-  <dispatch>
-    <url>*/mapreduce/controllerCallback/*</url>
-    <module>mapreduce</module>
-  </dispatch>
 </dispatch-entries>

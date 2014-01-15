@@ -18,13 +18,13 @@
   </servlet-mapping>
 
   <servlet>
-    <servlet-name>mapreduce-ui</servlet-name>
+    <servlet-name>mapreduce</servlet-name>
     <servlet-class>
       com.google.appengine.tools.mapreduce.MapReduceServlet
     </servlet-class>
   </servlet>
   <servlet-mapping>
-    <servlet-name>mapreduce-ui</servlet-name>
+    <servlet-name>mapreduce</servlet-name>
     <url-pattern>/mapreduce/*</url-pattern>
   </servlet-mapping>
 

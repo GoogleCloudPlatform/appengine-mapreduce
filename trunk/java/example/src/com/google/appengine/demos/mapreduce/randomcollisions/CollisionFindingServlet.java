@@ -60,9 +60,8 @@ public class CollisionFindingServlet extends HttpServlet {
   }
 
   static MapReduceSettings getSettings() {
-    return new MapReduceSettings()
-        .setWorkerQueueName("mapreduce-workers")
-        .setBucketName(GCS_BUCKET_NAME);
+    return new MapReduceSettings().setWorkerQueueName("mapreduce-workers")
+        .setBucketName(GCS_BUCKET_NAME).setModule("mapreduce");
   }
 
   @Override
