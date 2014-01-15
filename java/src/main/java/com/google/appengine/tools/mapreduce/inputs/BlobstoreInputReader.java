@@ -95,7 +95,7 @@ class BlobstoreInputReader extends InputReader<byte[]> {
   }
 
   @Override
-  public long estimateMemoryRequirment() {
+  public long estimateMemoryRequirement() {
     return MapReduceConstants.DEFAULT_IO_BUFFER_SIZE;
   }
 }

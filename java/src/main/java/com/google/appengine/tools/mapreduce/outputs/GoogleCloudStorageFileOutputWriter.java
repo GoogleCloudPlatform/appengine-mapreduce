@@ -96,7 +96,7 @@ public class GoogleCloudStorageFileOutputWriter extends OutputWriter<ByteBuffer>
   }
 
   @Override
-  public long estimateMemoryRequirment() {
+  public long estimateMemoryRequirement() {
     return MapReduceConstants.DEFAULT_IO_BUFFER_SIZE * 2; // Double buffered
   }
 }

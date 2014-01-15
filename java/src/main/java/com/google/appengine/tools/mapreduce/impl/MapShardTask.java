@@ -67,7 +67,7 @@ public class MapShardTask<I, K, V> extends WorkerShardTask<I, KeyValue<K, V>, Ma
 
   @Override
   protected long estimateMemoryNeeded() {
-    return in.estimateMemoryRequirment() + getOutputWriter().estimateMemoryRequirment()
+    return in.estimateMemoryRequirement() + getOutputWriter().estimateMemoryRequirement()
         + ASSUMED_BASE_MEMORY_PER_REQUEST;
   }
 

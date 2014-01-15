@@ -37,7 +37,7 @@ public abstract class ForwardingOutputWriter<O> extends OutputWriter<O> {
   }
 
   @Override
-  public long estimateMemoryRequirment() {
-    return getDelegate().estimateMemoryRequirment();
+  public long estimateMemoryRequirement() {
+    return getDelegate().estimateMemoryRequirement();
   }
 }

@@ -88,7 +88,7 @@ class DatastoreInputReader extends InputReader<Entity> {
   }
 
   @Override
-  public long estimateMemoryRequirment() {
+  public long estimateMemoryRequirement() {
     return BATCH_SIZE * AVERAGE_ENTITY_SIZE;
   }
 }

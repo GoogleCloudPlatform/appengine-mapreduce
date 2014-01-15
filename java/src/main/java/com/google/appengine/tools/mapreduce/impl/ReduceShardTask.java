@@ -77,7 +77,7 @@ public class ReduceShardTask<K, V, O>
 
   @Override
   protected long estimateMemoryNeeded() {
-    return in.estimateMemoryRequirment() + getOutputWriter().estimateMemoryRequirment()
+    return in.estimateMemoryRequirement() + getOutputWriter().estimateMemoryRequirement()
         + ASSUMED_BASE_MEMORY_PER_REQUEST;
   }
 
