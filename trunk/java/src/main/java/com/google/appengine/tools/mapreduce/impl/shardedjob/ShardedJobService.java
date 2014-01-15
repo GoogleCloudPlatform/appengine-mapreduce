@@ -2,19 +2,11 @@
 
 package com.google.appengine.tools.mapreduce.impl.shardedjob;
 
-import java.io.Serializable;
+import java.util.Iterator;
 import java.util.List;
-
-import javax.servlet.http.HttpServletRequest;
 
 /**
  * Allows interaction with sharded jobs.
- *
- * As part of its operation, the {@code ShardedJobService} will enqueue task
- * queue tasks that send requests to the URLs specified in
- * {@link ShardedJobSettings}.  It is the user's responsibility to arrange
- * for these requests to be passed back into {@link #handleShardCompleteRequest}
- * and {@link #handleWorkerRequest}.
  *
  * @author ohler@google.com (Christian Ohler)
  */
@@ -30,19 +22,24 @@ public interface ShardedJobService {
    * The job won't start twice unless {@link #cleanupJob} is called in between.
    *
    * @param <T> type of tasks that the job consists of
-   * @param <R> type of intermediate and final results of the job
    */
-  <T extends IncrementalTask<T, R>, R extends Serializable> void startJob(
+  <T extends IncrementalTask> void startJob(
       String jobId,
       List<? extends T> initialTasks,
-      ShardedJobController<T, R> controller,
+      ShardedJobController<T> controller,
       ShardedJobSettings settings);
 
   /**
    * Returns the state of the job with the given ID.  Returns null if no such
    * job exists.
    */
-  <R extends Serializable> ShardedJobState<?, R> getJobState(String jobId);
+  <T extends IncrementalTask> ShardedJobState<T> getJobState(String jobId);
+
+  /**
+   * Returns the tasks associated with this ShardedJob.
+   */
+  <T extends IncrementalTask> Iterator<IncrementalTaskState<T>> lookupTasks(
+      ShardedJobState<T> state);
 
   /**
    * Aborts execution of the job with the given ID.  If the job has already
@@ -56,17 +53,4 @@ public interface ShardedJobService {
    * is a no-op.
    */
   void cleanupJob(String jobId);
-
-  /**
-   * Must be called from the servlet that handles
-   * {@link ShardedJobSettings#setControllerPath}.
-   */
-  void handleShardCompleteRequest(HttpServletRequest request);
-
-  /**
-   * Must be called from the servlet that handles
-   * {@link ShardedJobSettings#setWorkerPath}.
-   */
-  void handleWorkerRequest(HttpServletRequest request);
-
 }

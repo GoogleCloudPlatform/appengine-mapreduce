@@ -79,10 +79,9 @@ public class InMemoryOutput<O> extends Output<O, List<List<O>>> {
     }
     return out.build();
   }
-  
+
   @Override
   public int getNumShards() {
     return shardCount;
   }
-
 }

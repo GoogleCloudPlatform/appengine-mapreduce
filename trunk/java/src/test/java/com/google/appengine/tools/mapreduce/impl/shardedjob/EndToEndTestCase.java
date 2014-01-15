@@ -2,6 +2,7 @@
 
 package com.google.appengine.tools.mapreduce.impl.shardedjob;
 
+import static com.google.common.base.Preconditions.checkNotNull;
 import static org.easymock.EasyMock.createMock;
 import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.replay;
@@ -84,9 +85,14 @@ public abstract class EndToEndTestCase extends TestCase {
 
     if (taskStateInfo.getMethod().equals("POST")) {
       if (taskStateInfo.getUrl().contains(controllerPath)) {
-        service.handleShardCompleteRequest(request);
+        new ShardedJobRunner<>().completeShard(
+            checkNotNull(request.getParameter(ShardedJobHandler.JOB_ID_PARAM), "Null job id"),
+            checkNotNull(request.getParameter(ShardedJobHandler.TASK_ID_PARAM), "Null task id"));
       } else {
-        service.handleWorkerRequest(request);
+        new ShardedJobRunner<>().runTask(
+            checkNotNull(request.getParameter(ShardedJobHandler.JOB_ID_PARAM), "Null job id"),
+            checkNotNull(request.getParameter(ShardedJobHandler.TASK_ID_PARAM), "Null task id"),
+            Integer.parseInt(request.getParameter(ShardedJobHandler.SEQUENCE_NUMBER_PARAM)));
       }
     } else {
       throw new UnsupportedOperationException();

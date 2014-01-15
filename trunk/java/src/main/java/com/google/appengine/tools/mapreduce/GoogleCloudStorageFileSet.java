@@ -14,8 +14,8 @@ import java.util.List;
 public class GoogleCloudStorageFileSet implements Serializable {
 
   private static final long serialVersionUID = -3864142913836657244L;
-  private String bucketName;
-  private List<String> fileNames;
+  private final String bucketName;
+  private final List<String> fileNames;
 
   public GoogleCloudStorageFileSet(String bucketName, List<String> fileNames) {
     this.bucketName = Preconditions.checkNotNull(bucketName);
@@ -62,5 +62,4 @@ public class GoogleCloudStorageFileSet implements Serializable {
   public String toString() {
     return "GoogleCloudStorageFileSet [bucketName=" + bucketName + ", fileNames=" + fileNames + "]";
   }
-
 }

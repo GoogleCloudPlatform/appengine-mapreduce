@@ -46,5 +46,4 @@ public abstract class ForwardingInputReader<T> extends InputReader<T> {
   public void close() throws IOException {
     getDelegate().close();
   }
-
 }

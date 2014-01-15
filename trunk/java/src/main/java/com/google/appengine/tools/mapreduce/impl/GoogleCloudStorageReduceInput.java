@@ -33,9 +33,9 @@ import java.util.List;
 public class GoogleCloudStorageReduceInput<K, V> extends Input<KeyValue<K, Iterator<V>>> {
 
   private static final long serialVersionUID = 8877197357362096382L;
-  private Marshaller<K> keyMarshaller;
-  private Marshaller<V> valueMarshaller;
-  private List<GoogleCloudStorageFileSet> allReducerFileSets;
+  private final Marshaller<K> keyMarshaller;
+  private final Marshaller<V> valueMarshaller;
+  private final List<GoogleCloudStorageFileSet> allReducerFileSets;
 
   public GoogleCloudStorageReduceInput(List<GoogleCloudStorageFileSet> files,
       Marshaller<K> keyMarshaller, Marshaller<V> valueMarshaller) {
@@ -80,6 +80,4 @@ public class GoogleCloudStorageReduceInput<K, V> extends Input<KeyValue<K, Itera
     }
     return new MergingReader<K, V>(inputFiles, keyMarshaller);
   }
-
-
 }

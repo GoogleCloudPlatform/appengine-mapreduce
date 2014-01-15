@@ -33,5 +33,4 @@ public abstract class Marshaller<T> implements Serializable {
    * includes corrupted data as well as trailing bytes.
    */
   public abstract T fromBytes(ByteBuffer b);
-
 }

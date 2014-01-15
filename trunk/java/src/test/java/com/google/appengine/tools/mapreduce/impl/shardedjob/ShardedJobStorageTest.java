@@ -19,26 +19,25 @@ public class ShardedJobStorageTest extends EndToEndTestCase {
   private static final DatastoreService DATASTORE = DatastoreServiceFactory.getDatastoreService();
 
   public void testRoundTripJob() throws EntityNotFoundException {
-    ShardedJobStateImpl<TestTask, Integer> job = createGenericJobState();
+    ShardedJobStateImpl<TestTask> job = createGenericJobState();
     Entity entity = ShardedJobStateImpl.ShardedJobSerializer.toEntity(job);
     DATASTORE.put(entity);
     Entity readEntity = DATASTORE.get(entity.getKey());
     assertEquals(entity, readEntity);
-    ShardedJobStateImpl<TestTask, Integer> fromEntity =
+    ShardedJobStateImpl<TestTask> fromEntity =
         ShardedJobStateImpl.ShardedJobSerializer.fromEntity(readEntity);
     assertEquals(job.getJobId(), fromEntity.getJobId());
     assertEquals(job.getActiveTaskCount(), fromEntity.getActiveTaskCount());
     assertEquals(job.getMostRecentUpdateTimeMillis(), fromEntity.getMostRecentUpdateTimeMillis());
     assertEquals(job.getStartTimeMillis(), fromEntity.getStartTimeMillis());
     assertEquals(job.getTotalTaskCount(), fromEntity.getTotalTaskCount());
-    assertEquals(job.getAggregateResult(), fromEntity.getAggregateResult());
     assertEquals(job.getSettings().toString(), fromEntity.getSettings().toString());
     assertEquals(job.getStatus(), fromEntity.getStatus());
     assertEquals(job.getController(), fromEntity.getController());
   }
 
   public void testExpectedFields() {
-    ShardedJobStateImpl<TestTask, Integer> job = createGenericJobState();
+    ShardedJobStateImpl<TestTask> job = createGenericJobState();
     Entity entity = ShardedJobStateImpl.ShardedJobSerializer.toEntity(job);
     Map<String, Object> properties = entity.getProperties();
     assertEquals(10, properties.get("taskCount"));
@@ -51,15 +50,15 @@ public class ShardedJobStorageTest extends EndToEndTestCase {
 
 
   public void testFetchJobById() throws EntityNotFoundException {
-    ShardedJobStateImpl<TestTask, Integer> job = createGenericJobState();
+    ShardedJobStateImpl<TestTask> job = createGenericJobState();
     Entity entity = ShardedJobStateImpl.ShardedJobSerializer.toEntity(job);
     DATASTORE.put(entity);
     Entity readEntity = DATASTORE.get(ShardedJobStateImpl.ShardedJobSerializer.makeKey("jobId"));
     assertEquals(entity, readEntity);
   }
 
-  private ShardedJobStateImpl<TestTask, Integer> createGenericJobState() {
-    return new ShardedJobStateImpl<TestTask, Integer>("jobId",
+  private ShardedJobStateImpl<TestTask> createGenericJobState() {
+    return new ShardedJobStateImpl<TestTask>("jobId",
         new TestController(11),
         new ShardedJobSettings.Builder().build(),
         10,
@@ -72,7 +71,7 @@ public class ShardedJobStorageTest extends EndToEndTestCase {
     Iterator<Entity> iterable = DATASTORE.prepare(query).asIterable().iterator();
     assertEquals(false, iterable.hasNext());
 
-    ShardedJobStateImpl<TestTask, Integer> job = createGenericJobState();
+    ShardedJobStateImpl<TestTask> job = createGenericJobState();
     Entity entity = ShardedJobStateImpl.ShardedJobSerializer.toEntity(job);
     DATASTORE.put(entity);
 

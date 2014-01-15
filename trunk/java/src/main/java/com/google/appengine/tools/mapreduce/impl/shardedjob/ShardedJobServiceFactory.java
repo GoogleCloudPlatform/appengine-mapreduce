@@ -14,5 +14,4 @@ public class ShardedJobServiceFactory {
   public static ShardedJobService getShardedJobService() {
     return new ShardedJobServiceImpl();
   }
-
 }

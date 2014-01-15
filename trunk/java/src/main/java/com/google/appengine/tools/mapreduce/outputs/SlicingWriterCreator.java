@@ -6,7 +6,7 @@ import java.io.Serializable;
 
 /**
  * A factory to create new outputWriters as needed.
- * 
+ *
  * @param <O> type of values accepted by this output
  */
 public interface SlicingWriterCreator<O> extends Serializable {
@@ -14,5 +14,4 @@ public interface SlicingWriterCreator<O> extends Serializable {
    * Creates a new writer. Will be called at the start of each slice.
    */
   OutputWriter<O> createNextWriter();
-
 }

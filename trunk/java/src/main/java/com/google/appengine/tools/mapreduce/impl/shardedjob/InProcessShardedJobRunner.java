@@ -3,9 +3,8 @@
 package com.google.appengine.tools.mapreduce.impl.shardedjob;
 
 import com.google.common.base.Preconditions;
-import com.google.common.collect.ImmutableList;
 
-import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -22,20 +21,16 @@ public class InProcessShardedJobRunner {
   /**
    * Runs the given job and returns its result.
    */
-  public static <T extends IncrementalTask<T, R>, R extends Serializable> R runJob(
-      List<? extends T> initialTasks, ShardedJobController<T, R> controller) {
-    R partialResult = controller.combineResults(ImmutableList.<R>of());
+  public static <T extends IncrementalTask> void runJob(
+      List<T> initialTasks, ShardedJobController<T> controller) {
+    List<T> results = new ArrayList<T>();
     for (T task : initialTasks) {
       Preconditions.checkNotNull(task, "Null initial task: %s", initialTasks);
       do {
-        IncrementalTask.RunResult<T, R> runResult = task.run();
-        partialResult = controller.combineResults(
-            ImmutableList.of(partialResult, runResult.getPartialResult()));
-        task = runResult.getFollowupTask();
-      } while (task != null);
+        task.run();
+      } while (!task.isDone());
+      results.add(task);
     }
-    controller.completed(partialResult);
-    return partialResult;
+    controller.completed(results);
   }
-
 }

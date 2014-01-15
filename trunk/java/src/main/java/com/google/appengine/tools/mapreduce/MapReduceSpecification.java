@@ -167,5 +167,4 @@ public final class MapReduceSpecification<I, K, V, O, R> implements Serializable
         + output
         + ")";
   }
-
 }

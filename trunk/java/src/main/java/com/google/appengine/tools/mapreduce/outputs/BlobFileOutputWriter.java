@@ -97,5 +97,4 @@ public class BlobFileOutputWriter extends OutputWriter<ByteBuffer> {
     Preconditions.checkState(closed, "%s: still open", this);
     return file;
   }
-
 }

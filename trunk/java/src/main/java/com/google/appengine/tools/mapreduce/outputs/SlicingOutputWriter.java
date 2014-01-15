@@ -16,7 +16,7 @@ public class SlicingOutputWriter<O, CreatorT extends SlicingWriterCreator<O>> ex
     OutputWriter<O> {
 
   private static final long serialVersionUID = 7374361726571559544L;
-  private CreatorT creator;
+  private final CreatorT creator;
   private transient OutputWriter<O> writer;
 
   public SlicingOutputWriter(CreatorT creator) {
@@ -61,5 +61,4 @@ public class SlicingOutputWriter<O, CreatorT extends SlicingWriterCreator<O>> ex
   public CreatorT getCreator() {
     return creator;
   }
-
 }

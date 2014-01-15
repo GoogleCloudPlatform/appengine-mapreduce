@@ -2,7 +2,7 @@ package com.google.appengine.tools.mapreduce.impl.sort;
 
 import com.google.appengine.tools.mapreduce.KeyValue;
 import com.google.appengine.tools.mapreduce.OutputWriter;
-import com.google.appengine.tools.mapreduce.impl.CountersImpl;
+import com.google.appengine.tools.mapreduce.impl.IncrementalTaskContext;
 import com.google.common.base.Charsets;
 import com.google.common.collect.Iterators;
 
@@ -69,7 +69,8 @@ public class SortTest extends TestCase {
   private static final class MapSortContext extends SortContext {
 
     public MapSortContext() {
-      super("TestJob", 1, new OutputWriter<KeyValue<ByteBuffer, Iterator<ByteBuffer>>>() {
+      super(new IncrementalTaskContext("TestJob", 1, 1, "calls", "time"),
+        new OutputWriter<KeyValue<ByteBuffer, Iterator<ByteBuffer>>>() {
 
         @Override
         public void write(KeyValue<ByteBuffer, Iterator<ByteBuffer>> value) throws IOException {
@@ -80,7 +81,7 @@ public class SortTest extends TestCase {
         public void close() throws IOException {
           throw new UnsupportedOperationException();
         }
-      }, new CountersImpl());
+      });
     }
 
     LinkedHashMap<ByteBuffer, List<ByteBuffer>> map =
@@ -95,7 +96,7 @@ public class SortTest extends TestCase {
       } else {
         list.addAll(values);
         sameKeyCount++;
-      }      
+      }
     }
   }
 
@@ -134,7 +135,7 @@ public class SortTest extends TestCase {
       last = current;
     }
   }
-  
+
   public void testZeroByteKey() {
     final int numberToWrite = 40;
     SortWorker s = createWorker(numberToWrite);

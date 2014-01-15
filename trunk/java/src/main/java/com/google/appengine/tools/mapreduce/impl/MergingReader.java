@@ -27,7 +27,7 @@ import java.util.PriorityQueue;
  * In order to do this it operates on a peeking input reader that returns KeyValue pairs.
  * It uses the lexicographicalComparator to compare the serialized keys and returns the lowest one
  * first.
- * 
+ *
  * @param <K> The type of the key to be returned in the key Value pair.
  * @param <V> The type of the value
  */
@@ -35,8 +35,8 @@ final class MergingReader<K, V> extends InputReader<KeyValue<K, Iterator<V>>> {
 
   private static final long serialVersionUID = 4731927175388671578L;
   private static final LexicographicalComparator comparator = new LexicographicalComparator();
-  private List<PeekingInputReader<KeyValue<ByteBuffer, Iterator<V>>>> readers;
-  private Marshaller<K> keyMarshaller;
+  private final List<PeekingInputReader<KeyValue<ByteBuffer, Iterator<V>>>> readers;
+  private final Marshaller<K> keyMarshaller;
   private transient ByteBuffer lastKey;
   private transient PriorityQueue<PeekingInputReader<KeyValue<ByteBuffer, Iterator<V>>>>
       lowestReaderQueue;
@@ -46,7 +46,7 @@ final class MergingReader<K, V> extends InputReader<KeyValue<K, Iterator<V>>> {
     this.readers = Preconditions.checkNotNull(readers);
     this.keyMarshaller = Preconditions.checkNotNull(keyMarshaller);
   }
-  
+
   /**
    * Called by java serialization
    */
@@ -65,14 +65,14 @@ final class MergingReader<K, V> extends InputReader<KeyValue<K, Iterator<V>>> {
     SerializationUtil.writeObjectToOutputStreamUsingMarshaller(lastKey,
         Marshallers.getByteBufferMarshaller(), aOutputStream);
   }
-  
+
   @Override
   public void open() throws IOException {
     for (PeekingInputReader<KeyValue<ByteBuffer, Iterator<V>>> reader : readers) {
       reader.open();
     }
   }
-  
+
   @Override
   public void beginSlice() throws IOException {
     Comparator<PeekingInputReader<KeyValue<ByteBuffer, Iterator<V>>>> nextReaderComparator =
@@ -102,7 +102,7 @@ final class MergingReader<K, V> extends InputReader<KeyValue<K, Iterator<V>>> {
    * A reader that combines consecutive values with the same key into one ReducerInput.
    */
   private class CombiningReader extends ReducerInput<V> {
-    private ByteBuffer key;
+    private final ByteBuffer key;
     private Iterator<V> currentValues;
 
     CombiningReader(ByteBuffer key, Iterator<V> currentValues) {
@@ -123,7 +123,7 @@ final class MergingReader<K, V> extends InputReader<KeyValue<K, Iterator<V>>> {
       }
       return comparator.compare(lowestReaderQueue.peek().peek().getKey(), key) == 0;
     }
-    
+
     /**
      * @throws NoSuchElementException if there are no more values for this key.
      */
@@ -141,7 +141,7 @@ final class MergingReader<K, V> extends InputReader<KeyValue<K, Iterator<V>>> {
       currentValues = keyValue.getValue();
       return next();
     }
-    
+
     /**
      * Helper to consume the value that was just peeked.
      */
@@ -151,7 +151,7 @@ final class MergingReader<K, V> extends InputReader<KeyValue<K, Iterator<V>>> {
       addReaderToQueueIfNotEmpty(reader);
     }
   }
-  
+
   /**
    * @param peekedKeyValue The peeked value to be consumed
    * @param reader Where the value came from
@@ -162,7 +162,7 @@ final class MergingReader<K, V> extends InputReader<KeyValue<K, Iterator<V>>> {
       throw new ConcurrentModificationException("Reading from values is not threadsafe.");
     }
   }
-  
+
   /**
    * Returns the next KeyValues object for the reducer. This is the entry point.
    * @throws NoSuchElementException if there are no more keys in the input.
@@ -227,7 +227,7 @@ final class MergingReader<K, V> extends InputReader<KeyValue<K, Iterator<V>>> {
     }
     return total / readers.size();
   }
-  
+
   @Override
   public void close() throws IOException {
     for (PeekingInputReader<KeyValue<ByteBuffer, Iterator<V>>> reader : readers) {
@@ -243,5 +243,4 @@ final class MergingReader<K, V> extends InputReader<KeyValue<K, Iterator<V>>> {
     }
     return total;
   }
-
 }

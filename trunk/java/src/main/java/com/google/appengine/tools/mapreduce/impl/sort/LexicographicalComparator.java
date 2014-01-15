@@ -44,5 +44,4 @@ public final class LexicographicalComparator implements Comparator<ByteBuffer> {
     }
     return aLen - bLen;
   }
-
 }

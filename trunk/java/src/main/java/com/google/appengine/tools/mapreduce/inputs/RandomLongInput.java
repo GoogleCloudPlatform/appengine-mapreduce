@@ -24,8 +24,8 @@ public class RandomLongInput extends Input<Long> {
 
     private Random random;
     private long emitted = 0;
-    private long toEmit;
-    private long seed;
+    private final long toEmit;
+    private final long seed;
 
     private Reader(long seed, long toEmit) {
       this.seed = seed;
@@ -85,5 +85,4 @@ public class RandomLongInput extends Input<Long> {
     }
     return b.build();
   }
-
 }

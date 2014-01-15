@@ -12,7 +12,6 @@ import com.google.appengine.tools.mapreduce.impl.util.SerializationUtil;
 import com.google.common.base.Preconditions;
 import com.google.common.primitives.Ints;
 
-import java.io.Serializable;
 import java.util.BitSet;
 
 /**
@@ -20,24 +19,25 @@ import java.util.BitSet;
  *
  * @author ohler@google.com (Christian Ohler)
  *
- * @param <T> type of tasks that the job consists of
- * @param <R> type of intermediate and final results of the job
+ * @param <T> type of the IncrementalTask
  */
-class ShardedJobStateImpl<T extends IncrementalTask<T, R>, R extends Serializable>
-    implements ShardedJobState<T, R> {
+class ShardedJobStateImpl<T extends IncrementalTask> implements ShardedJobState<T> {
 
   private final String jobId;
-  private final ShardedJobController<T, R> controller;
+  private final ShardedJobController<T> controller;
   private final ShardedJobSettings settings;
   private final int totalTaskCount;
   private final long startTimeMillis;
   private long mostRecentUpdateTimeMillis;
   private BitSet shardsCompleted;
   private Status status;
-  private transient R aggregateResult;
 
-  public ShardedJobStateImpl(String jobId, ShardedJobController<T, R> controller,
-      ShardedJobSettings settings, int totalTaskCount, long startTimeMillis, Status status) {
+  public ShardedJobStateImpl(String jobId,
+      ShardedJobController<T> controller,
+      ShardedJobSettings settings,
+      int totalTaskCount,
+      long startTimeMillis,
+      Status status) {
     this.jobId = checkNotNull(jobId, "Null jobId");
     this.controller = checkNotNull(controller, "Null controller");
     this.settings = checkNotNull(settings, "Null settings");
@@ -54,7 +54,7 @@ class ShardedJobStateImpl<T extends IncrementalTask<T, R>, R extends Serializabl
   }
 
   @Override
-  public ShardedJobController<T, R> getController() {
+  public ShardedJobController<T> getController() {
     return controller;
   }
 
@@ -86,12 +86,12 @@ class ShardedJobStateImpl<T extends IncrementalTask<T, R>, R extends Serializabl
     shardsCompleted.set(shard);
   }
 
-  private ShardedJobStateImpl<T, R> setShardsCompleted(BitSet shardsCompleted) {
+  private ShardedJobStateImpl<T> setShardsCompleted(BitSet shardsCompleted) {
     this.shardsCompleted = shardsCompleted;
     return this;
   }
 
-  ShardedJobStateImpl<T, R> setMostRecentUpdateTimeMillis(long mostRecentUpdateTimeMillis) {
+  ShardedJobStateImpl<T> setMostRecentUpdateTimeMillis(long mostRecentUpdateTimeMillis) {
     this.mostRecentUpdateTimeMillis = mostRecentUpdateTimeMillis;
     return this;
   }
@@ -101,18 +101,8 @@ class ShardedJobStateImpl<T extends IncrementalTask<T, R>, R extends Serializabl
     return status;
   }
 
-  ShardedJobStateImpl<T, R> setStatus(Status status) {
+  ShardedJobStateImpl<T> setStatus(Status status) {
     this.status = checkNotNull(status, "Null status");
-    return this;
-  }
-
-  @Override
-  /*Nullable*/ public R getAggregateResult() {
-    return aggregateResult;
-  }
-
-  ShardedJobStateImpl<T, R> setAggregateResult(/*Nullable*/ R aggregateResult) {
-    this.aggregateResult = aggregateResult;
     return this;
   }
 
@@ -122,8 +112,7 @@ class ShardedJobStateImpl<T extends IncrementalTask<T, R>, R extends Serializabl
         + controller + ", "
         + status + ", "
         + shardsCompleted.cardinality() + "/" + totalTaskCount + ", "
-        + mostRecentUpdateTimeMillis + ", "
-        + aggregateResult
+        + mostRecentUpdateTimeMillis
         + ")";
   }
 
@@ -142,7 +131,7 @@ class ShardedJobStateImpl<T extends IncrementalTask<T, R>, R extends Serializabl
       return KeyFactory.createKey(ENTITY_KIND, jobId);
     }
 
-    static Entity toEntity(ShardedJobStateImpl<?, ?> in) {
+    static Entity toEntity(ShardedJobStateImpl<?> in) {
       Entity out = new Entity(makeKey(in.getJobId()));
       out.setUnindexedProperty(CONTROLLER_PROPERTY,
           new Blob(SerializationUtil.serializeToByteArray(in.getController())));
@@ -153,27 +142,25 @@ class ShardedJobStateImpl<T extends IncrementalTask<T, R>, R extends Serializabl
       out.setUnindexedProperty(MOST_RECENT_UPDATE_TIME_PROPERTY,
           in.getMostRecentUpdateTimeMillis());
       out.setUnindexedProperty(SHARDS_COMPLETED_PROPERTY,
-          new Blob(SerializationUtil.serializeToByteArray(in.shardsCompleted)));
+          SerializationUtil.serializeToDatastoreProperty(in.shardsCompleted));
       out.setUnindexedProperty(STATUS_PROPERTY,
-          new Blob(SerializationUtil.serializeToByteArray(in.getStatus())));
+         SerializationUtil.serializeToDatastoreProperty(in.getStatus()));
       return out;
     }
 
-    static <T extends IncrementalTask<T, R>,
-        R extends Serializable> ShardedJobStateImpl<T, R> fromEntity(Entity in) {
+    static <T extends IncrementalTask> ShardedJobStateImpl<T> fromEntity(Entity in) {
       Preconditions.checkArgument(ENTITY_KIND.equals(in.getKind()), "Unexpected kind: %s", in);
-      return new ShardedJobStateImpl<T, R>(
-          in.getKey().getName(),
-          SerializationUtil.<ShardedJobController<T, R>>deserializeFromDatastoreProperty(
-              in, CONTROLLER_PROPERTY),
-          SerializationUtil.<ShardedJobSettings>deserializeFromDatastoreProperty(
-              in, SETTINGS_PROPERTY),
+      return new ShardedJobStateImpl<T>(in.getKey().getName(),
+          SerializationUtil.<ShardedJobController<T>>deserializeFromDatastoreProperty(in,
+              CONTROLLER_PROPERTY),
+          SerializationUtil.<ShardedJobSettings>deserializeFromDatastoreProperty(in,
+              SETTINGS_PROPERTY),
           Ints.checkedCast((Long) in.getProperty(TOTAL_TASK_COUNT_PROPERTY)),
           (Long) in.getProperty(START_TIME_PROPERTY),
           SerializationUtil.<Status>deserializeFromDatastoreProperty(in, STATUS_PROPERTY))
           .setMostRecentUpdateTimeMillis((Long) in.getProperty(MOST_RECENT_UPDATE_TIME_PROPERTY))
-          .setShardsCompleted((BitSet)
-              SerializationUtil.deserializeFromDatastoreProperty(in, SHARDS_COMPLETED_PROPERTY));
+          .setShardsCompleted((BitSet) SerializationUtil.deserializeFromDatastoreProperty(in,
+              SHARDS_COMPLETED_PROPERTY));
     }
   }
 }

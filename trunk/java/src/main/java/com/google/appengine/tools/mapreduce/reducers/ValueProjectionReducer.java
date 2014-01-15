@@ -28,5 +28,4 @@ public class ValueProjectionReducer<K, V> extends Reducer<K, V, V> {
       getContext().emit(values.next());
     }
   }
-
 }

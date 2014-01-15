@@ -18,5 +18,4 @@ public class RejectRequestException extends RuntimeException {
   public RejectRequestException(String reason, Exception e) {
     super(reason, e);
   }
-
 }

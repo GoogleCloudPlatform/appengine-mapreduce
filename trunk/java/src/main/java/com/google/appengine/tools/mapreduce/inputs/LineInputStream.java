@@ -82,5 +82,4 @@ class LineInputStream {
   public void close() throws IOException {
     in.close();
   }
-
 }

@@ -15,10 +15,10 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 
 /**
- * An implementation of a LevelDb format writer. 
+ * An implementation of a LevelDb format writer.
  * Output of this class can be read by {@link LevelDbInputReader}.
- * 
- * If you want to read about the format spec it is here: 
+ *
+ * If you want to read about the format spec it is here:
  * {@linkplain "https://code.google.com/p/leveldb/"}
  */
 public class LevelDbOutputWriter extends ForwardingOutputWriter<ByteBuffer> {
@@ -46,7 +46,7 @@ public class LevelDbOutputWriter extends ForwardingOutputWriter<ByteBuffer> {
 
     /**
      * Returns the number of bytes that needs to be written.
-     * 
+     *
      * @return the number of bytes.
      */
     int getBytes() {
@@ -55,7 +55,7 @@ public class LevelDbOutputWriter extends ForwardingOutputWriter<ByteBuffer> {
 
     /**
      * Returns the type of record that needs to be written.
-     * 
+     *
      * @return the type.
      */
     RecordType getType() {
@@ -65,14 +65,14 @@ public class LevelDbOutputWriter extends ForwardingOutputWriter<ByteBuffer> {
   }
 
   private transient ByteBuffer writeBuffer;
-  private OutputWriter<ByteBuffer> delegate;
-  private int blockSize;
+  private final OutputWriter<ByteBuffer> delegate;
+  private final int blockSize;
   private int numBlocksWritten = 0;
 
   public LevelDbOutputWriter(OutputWriter<ByteBuffer> delegate) {
     this(delegate, LevelDbConstants.BLOCK_SIZE);
   }
-  
+
   @VisibleForTesting
   LevelDbOutputWriter(OutputWriter<ByteBuffer> delegate, int blockSize) {
     Preconditions.checkArgument(blockSize > 0);
@@ -93,7 +93,7 @@ public class LevelDbOutputWriter extends ForwardingOutputWriter<ByteBuffer> {
     padAndWriteBlock(false);
     super.endSlice();
   }
-  
+
 
   @Override
   public void write(ByteBuffer data) throws IOException {
@@ -137,7 +137,7 @@ public class LevelDbOutputWriter extends ForwardingOutputWriter<ByteBuffer> {
 
   /**
    * Fills a {@link Record} object with data about the physical record to write.
-   * 
+   *
    * @param data the users data.
    * @param bytesToBlockEnd remaining bytes in the current block.
    * @param lastRecord a {@link Record} representing the last physical record written.
@@ -170,7 +170,7 @@ public class LevelDbOutputWriter extends ForwardingOutputWriter<ByteBuffer> {
 
   /**
    * This method creates a record inside of a {@link ByteBuffer}
-   * 
+   *
    * @param data The data to output.
    * @param record A {@link Record} object that describes
    *        which data to write.
@@ -189,7 +189,7 @@ public class LevelDbOutputWriter extends ForwardingOutputWriter<ByteBuffer> {
 
   /**
    * Fills the {@link ByteBuffer} with 0x00;
-   * 
+   *
    * @param numBlanks the number of bytes to pad.
    */
   private void writeBlanksToBuffer(int numBlanks) {
@@ -200,7 +200,7 @@ public class LevelDbOutputWriter extends ForwardingOutputWriter<ByteBuffer> {
 
   /**
    * Generates a CRC32C checksum using {@link Crc32c} for a specific record.
-   * 
+   *
    * @param data The user data over which the checksum will be generated.
    * @param off The offset into the user data at which to begin the computation.
    * @param len The length of user data to use in the computation.
@@ -230,14 +230,13 @@ public class LevelDbOutputWriter extends ForwardingOutputWriter<ByteBuffer> {
       numBlocksWritten++;
     }
   }
-  
+
   @Override
   protected OutputWriter<ByteBuffer> getDelegate() {
     return delegate;
   }
-  
+
   protected int getNumBlocksWritten() {
     return numBlocksWritten;
   }
-
 }

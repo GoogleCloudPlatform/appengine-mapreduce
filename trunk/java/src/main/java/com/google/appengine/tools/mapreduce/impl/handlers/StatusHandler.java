@@ -4,12 +4,14 @@ package com.google.appengine.tools.mapreduce.impl.handlers;
 
 import com.google.appengine.tools.mapreduce.Counter;
 import com.google.appengine.tools.mapreduce.Counters;
-import com.google.appengine.tools.mapreduce.impl.WorkerResult;
-import com.google.appengine.tools.mapreduce.impl.WorkerShardState;
+import com.google.appengine.tools.mapreduce.impl.CountersImpl;
+import com.google.appengine.tools.mapreduce.impl.IncrementalTaskWithContext;
+import com.google.appengine.tools.mapreduce.impl.shardedjob.IncrementalTaskState;
+import com.google.appengine.tools.mapreduce.impl.shardedjob.ShardedJobService;
 import com.google.appengine.tools.mapreduce.impl.shardedjob.ShardedJobServiceFactory;
 import com.google.appengine.tools.mapreduce.impl.shardedjob.ShardedJobState;
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.collect.Lists;
+import com.google.common.primitives.Longs;
 
 import com.googlecode.charts4j.AxisLabelsFactory;
 import com.googlecode.charts4j.BarChart;
@@ -25,9 +27,8 @@ import org.json.JSONObject;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -124,25 +125,19 @@ final class StatusHandler {
     return Math.max(300, Math.min(700, 70 * (int) Math.sqrt(shardCount)));
   }
 
-  private static String getChartUrl(int shardCount,
-      Map<Integer, WorkerShardState> workerShardStates) {
-    List<Long> processedCounts = Lists.newArrayListWithCapacity(workerShardStates.size());
-    for (int i = 0; i < shardCount; i++) {
-      processedCounts.add(workerShardStates.get(i) == null ? 0
-          : workerShardStates.get(i).getWorkerCallCount());
-    }
+  private static String getChartUrl(long[] workerCallCounts) {
     // If max == 0, the numeric range will be from 0 to 0. This causes some
     // problems when scaling to the range, so add 1 to max, assuming that the
     // smallest value can be 0, and this ensures that the chart always shows,
     // at a minimum, a range from 0 to 1 - when all shards are just starting.
-    long maxPlusOne = processedCounts.isEmpty() ? 1 : Collections.max(processedCounts) + 1;
+    long maxPlusOne = workerCallCounts.length == 0 ? 1 : Longs.max(workerCallCounts) + 1;
 
     List<String> countLabels = new ArrayList<String>();
-    for (int i = 0; i < processedCounts.size(); i++) {
+    for (int i = 0; i < workerCallCounts.length; i++) {
       countLabels.add(String.valueOf(i));
     }
 
-    Data countData = DataUtil.scaleWithinRange(0, maxPlusOne, processedCounts);
+    Data countData = DataUtil.scaleWithinRange(0, maxPlusOne, Longs.asList(workerCallCounts));
 
     // TODO(user): Rather than returning charts from both servers, let's just
     // do it on the client's end.
@@ -150,7 +145,7 @@ final class StatusHandler {
     BarChart countChart = GCharts.newBarChart(countPlot);
     countChart.addYAxisLabels(AxisLabelsFactory.newNumericRangeAxisLabels(0, maxPlusOne));
     countChart.addXAxisLabels(AxisLabelsFactory.newAxisLabels(countLabels));
-    countChart.setSize(getChartWidth(shardCount), 200);
+    countChart.setSize(getChartWidth(workerCallCounts.length), 200);
     countChart.setBarWidth(BarChart.AUTO_RESIZE);
     countChart.setSpaceBetweenGroupsOfBars(1);
     return countChart.toURLString();
@@ -160,9 +155,9 @@ final class StatusHandler {
    * Handle the get_job_detail AJAX command.
    */
   @VisibleForTesting
-  static JSONObject handleGetJobDetail(String jobId) {
-    ShardedJobState<?, WorkerResult<?>> state =
-        ShardedJobServiceFactory.getShardedJobService().getJobState(jobId);
+  static <T extends IncrementalTaskWithContext> JSONObject handleGetJobDetail(String jobId) {
+    ShardedJobService shardedJobService = ShardedJobServiceFactory.getShardedJobService();
+    ShardedJobState<T> state = shardedJobService.getJobState(jobId);
     JSONObject jobObject = new JSONObject();
     try {
       jobObject.put("name", state.getController().getName());
@@ -179,55 +174,52 @@ final class StatusHandler {
       jobObject.put("shards", state.getTotalTaskCount());
       jobObject.put("active_shards", state.getActiveTaskCount());
 
-      if (true /* detailed */) {
-        WorkerResult<?> aggregateResult = state.getAggregateResult();
-        jobObject.put("counters", toJson(aggregateResult.getCounters()));
-        jobObject.put("chart_url",
-            getChartUrl(state.getTotalTaskCount(),
-                aggregateResult.getWorkerShardStates()));
-        jobObject.put("chart_width", getChartWidth(state.getTotalTaskCount()));
+      // HACK(ohler): We don't put the actual mapper parameters in here since
+      // the Pipeline UI already shows them (in the toString() of the
+      // MapReduceSpecification -- just need to make sure all Inputs and
+      // Outputs have useful toString()s).  Instead, we put some other useful
+      // info in here.
+      JSONObject mapperParams = new JSONObject();
+      mapperParams.put("Shards completed",
+          state.getTotalTaskCount() - state.getActiveTaskCount());
+      mapperParams.put("Shards active", state.getActiveTaskCount());
+      mapperParams.put("Shards total", state.getTotalTaskCount());
+      JSONObject mapperSpec = new JSONObject();
+      mapperSpec.put("mapper_params", mapperParams);
+      jobObject.put("mapper_spec", mapperSpec);
 
-        // HACK(ohler): We don't put the actual mapper parameters in here since
-        // the Pipeline UI already shows them (in the toString() of the
-        // MapReduceSpecification -- just need to make sure all Inputs and
-        // Outputs have useful toString()s).  Instead, we put some other useful
-        // info in here.
-        JSONObject mapperParams = new JSONObject();
-        mapperParams.put("Shards completed",
-            state.getTotalTaskCount() - state.getActiveTaskCount());
-        mapperParams.put("Shards active", state.getActiveTaskCount());
-        mapperParams.put("Shards total", state.getTotalTaskCount());
-        JSONObject mapperSpec = new JSONObject();
-        mapperSpec.put("mapper_params", mapperParams);
-        jobObject.put("mapper_spec", mapperSpec);
+      JSONArray shardArray = new JSONArray();
+      Counters totalCounters = new CountersImpl();
+      int i = 0;
+      long[] workerCallCounts = new long[state.getTotalTaskCount()];
+      for (Iterator<IncrementalTaskState<T>> iter = shardedJobService.lookupTasks(state);
+          iter.hasNext();) {
+        IncrementalTaskState<T> taskState = iter.next();
+        T task = taskState.getTask();
+        JSONObject shardObject = new JSONObject();
+        shardObject.put("shard_description", taskState.getTaskId());
 
-        JSONArray shardArray = new JSONArray();
-        // Iterate in ascending order rather than the map's entrySet() order.
-        for (int i = 0; i < state.getTotalTaskCount(); i++) {
-          WorkerShardState shard = aggregateResult.getWorkerShardStates().get(i);
-          JSONObject shardObject = new JSONObject();
-          shardObject.put("shard_number", i);
-          if (shard == null) {
-            shardObject.put("active", false);
-            shardObject.put("result_status", "initializing");
-            shardObject.put("shard_description", ""); // TODO
-          } else {
-            boolean done = aggregateResult.getClosedWriters().get(i) != null;
-            if (done) {
-              shardObject.put("active", false);
-              // result_status is only displayed if active is false.
-              shardObject.put("result_status", "done");
-            } else {
-              shardObject.put("active", true);
-            }
-            shardObject.put("shard_description", ""); // TODO
-            shardObject.put("updated_timestamp_ms", shard.getMostRecentUpdateTimeMillis());
-            shardObject.put("last_work_item", shard.getLastWorkItem());
-          }
-          shardArray.put(shardObject);
+        totalCounters.addAll(task.getContext().getCounters());
+        shardObject.put("shard_number", i);
+        workerCallCounts[i] = task.getContext().getWorkerCallCount();
+        if (task.isDone()) {
+          shardObject.put("active", false);
+          // result_status is only displayed if active is false.
+          shardObject.put("result_status", "done");
+        } else {
+          shardObject.put("active", true);
         }
-        jobObject.put("shards", shardArray);
+        shardObject.put("updated_timestamp_ms", taskState.getMostRecentUpdateMillis());
+        shardObject.put("last_work_item", task.getContext().getLastWorkItemString());
+
+        shardArray.put(shardObject);
+        i++;
       }
+      jobObject.put("counters", toJson(totalCounters));
+      jobObject.put("shards", shardArray);
+      jobObject.put("chart_width", getChartWidth(state.getTotalTaskCount()));
+      jobObject.put("chart_url", getChartUrl(workerCallCounts));
+
     } catch (JSONException e) {
       throw new RuntimeException("Hard coded string is null", e);
     }

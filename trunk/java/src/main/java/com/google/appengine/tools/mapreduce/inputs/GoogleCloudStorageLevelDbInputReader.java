@@ -66,5 +66,4 @@ public final class GoogleCloudStorageLevelDbInputReader extends LevelDbInputRead
   public long estimateMemoryRequirment() {
     return LevelDbConstants.BLOCK_SIZE + bufferSize * 2; // Double buffered
   }
-
 }

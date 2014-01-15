@@ -17,7 +17,7 @@ public class HashingSharder implements Sharder {
 
   private static final long serialVersionUID = 7967187256546710108L;
   private static final HashFunction HASH = Hashing.murmur3_32();
-  private int numShards;
+  private final int numShards;
 
   public HashingSharder(int numShards) {
     this.numShards = numShards;
@@ -37,5 +37,4 @@ public class HashingSharder implements Sharder {
     // re-hashed.
     return hash / (Integer.MAX_VALUE / numShards + 1);
   }
-
 }

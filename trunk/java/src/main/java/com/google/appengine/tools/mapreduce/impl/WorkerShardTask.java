@@ -2,17 +2,14 @@
 
 package com.google.appengine.tools.mapreduce.impl;
 
-import static com.google.common.base.Preconditions.checkNotNull;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 
-import com.google.appengine.tools.mapreduce.Counters;
 import com.google.appengine.tools.mapreduce.InputReader;
 import com.google.appengine.tools.mapreduce.LifecycleListener;
 import com.google.appengine.tools.mapreduce.OutputWriter;
 import com.google.appengine.tools.mapreduce.Worker;
 import com.google.appengine.tools.mapreduce.WorkerContext;
 import com.google.appengine.tools.mapreduce.impl.handlers.MemoryLimiter;
-import com.google.appengine.tools.mapreduce.impl.shardedjob.IncrementalTask;
 import com.google.appengine.tools.mapreduce.impl.shardedjob.RejectRequestException;
 import com.google.appengine.tools.mapreduce.impl.shardedjob.ShardFailureException;
 import com.google.common.base.Stopwatch;
@@ -30,48 +27,26 @@ import java.util.logging.Logger;
  * @param <O> type of output values produced by the worker
  * @param <C> type of context required by the worker
  */
-public abstract class WorkerShardTask<I, O, C extends WorkerContext>
-    implements IncrementalTask<WorkerShardTask<I, O, C>, WorkerResult<O>> {
+public abstract class WorkerShardTask<I, O, C extends WorkerContext> implements
+    IncrementalTaskWithContext {
 
   private static final Logger log = Logger.getLogger(WorkerShardTask.class.getName());
   private static final long serialVersionUID = 992552712402490981L;
   private static final MemoryLimiter LIMITER = new MemoryLimiter();
 
-  protected final String mrJobId;
-  protected final int shardNumber;
-  protected final int shardCount;
-  protected final InputReader<I> in;
-  private final Worker<C> worker;
-  protected final OutputWriter<O> out;
-  private final String workerCallsCounterName;
-  private final String workerMillisCounterName;
   private transient Stopwatch overallStopwatch;
   private transient Stopwatch inputStopwatch;
   private transient Stopwatch workerStopwatch;
 
+  boolean inputExhausted = false;
   private boolean isFirstSlice = true;
 
-  protected WorkerShardTask(String mrJobId, int shardNumber, int shardCount, InputReader<I> in,
-      Worker<C> worker, OutputWriter<O> out, String workerCallsCounterName,
-      String workerMillisCounterName) {
-    this.mrJobId = checkNotNull(mrJobId, "Null mrJobId");
-    this.shardNumber = shardNumber;
-    this.shardCount = shardCount;
-    this.in = checkNotNull(in, "Null in");
-    this.worker = checkNotNull(worker, "Null worker");
-    this.out = checkNotNull(out, "Null out");
-    this.workerCallsCounterName =
-        checkNotNull(workerCallsCounterName, "Null workerCallsCounterName");
-    this.workerMillisCounterName =
-        checkNotNull(workerMillisCounterName, "Null workerMillisCounterName");
+  @Override
+  public String toString() {
+    return getClass().getSimpleName() + "(" + getContext().getJobId() + ", " + getContext().getShardNumber()
+        + "/" + getContext().getShardCount() + ")";
   }
 
-  @Override public String toString() {
-    return getClass().getSimpleName() + "(" + mrJobId
-        + ", " + shardNumber + "/" + shardCount + ")";
-  }
-
-  protected abstract C getWorkerContext(Counters counters);
   protected abstract void callWorker(I input);
   protected abstract String formatLastWorkItem(I item);
 
@@ -82,20 +57,20 @@ public abstract class WorkerShardTask<I, O, C extends WorkerContext>
   protected abstract long estimateMemoryNeeded();
 
   @Override
-  public RunResult<WorkerShardTask<I, O, C>, WorkerResult<O>> run() {
+  public void run() {
     long claimedMemory = LIMITER.claim(estimateMemoryNeeded() / 1024 / 1024);
     try {
-      return doWork();
+      doWork();
     } catch (RecoverableException | ShardFailureException | RejectRequestException ex) {
       throw ex;
     } catch (RuntimeException ex) {
-      throw new ShardFailureException(shardNumber, ex);
+      throw new ShardFailureException(getContext().getShardNumber(), ex);
     } finally {
       LIMITER.release(claimedMemory);
     }
   }
 
-  public RunResult<WorkerShardTask<I, O, C>, WorkerResult<O>> doWork() {
+  public void doWork() {
     try {
       beginSlice();
     } catch (RecoverableException | ShardFailureException | RejectRequestException ex) {
@@ -109,13 +84,13 @@ public abstract class WorkerShardTask<I, O, C extends WorkerContext>
 
     int workerCalls = 0;
     int itemsRead = 0;
-    boolean inputExhausted = false;
+
     I next = null;
     try {
       do {
         inputStopwatch.start();
         try {
-          next = in.next();
+          next = getInputReader().next();
           itemsRead++;
         } catch (NoSuchElementException e) {
           inputExhausted = true;
@@ -153,64 +128,53 @@ public abstract class WorkerShardTask<I, O, C extends WorkerContext>
     log.info("Ending slice, inputExhausted=" + inputExhausted + ", overallStopwatch="
         + overallStopwatch + ", workerStopwatch=" + workerStopwatch + ", inputStopwatch="
         + inputStopwatch);
-    Counters counters = worker.getContext().getCounters();
-    counters.getCounter(workerCallsCounterName).increment(workerCalls);
-    counters.getCounter(workerMillisCounterName).increment(workerStopwatch.elapsed(MILLISECONDS));
+
+    getContext().incrementWorkerCalls(workerCalls);
+    getContext().incrementWorkerMillis(workerStopwatch.elapsed(MILLISECONDS));
 
     try {
       endSlice(inputExhausted);
     } catch (IOException | RuntimeException ex) {
       // TODO(user): similar to callWorker, if writer has a way to indicate that a slice-retry
       // is OK we should consider a broader catch and possibly throwing RecoverableException
-      throw new ShardFailureException(shardNumber, "Failed on endSlice/endShard", ex);
+      throw new ShardFailureException(getContext().getShardNumber(), "Failed on endSlice/endShard", ex);
     }
-
-    WorkerShardState workerShardState =
-        new WorkerShardState(workerCalls, System.currentTimeMillis(), formatLastWorkItem(next));
-    if (!inputExhausted) {
-      return RunResult.of(new WorkerResult<O>(shardNumber, workerShardState, counters), this);
-    } else {
-      return RunResult.<WorkerShardTask<I, O, C>, WorkerResult<O>>of(
-          new WorkerResult<O>(shardNumber, out, workerShardState, counters), null);
-    }
+    getContext().setLastWorkItemString(formatLastWorkItem(next));
   }
 
   private void beginSlice() throws IOException {
     if (isFirstSlice) {
-      out.open();
-      in.open();
+      getOutputWriter().open();
+      getInputReader().open();
     }
-    in.beginSlice();
-    out.beginSlice();
-    Counters counters = new CountersImpl();
-    C context = getWorkerContext(counters);
-    worker.setContext(context);
+    getInputReader().beginSlice();
+    setContextOnWorker();
+    getOutputWriter().beginSlice();
     if (isFirstSlice) {
-      worker.beginShard();
+      getWorker().beginShard();
     }
-    for (LifecycleListener listener : worker.getLifecycleListenerRegistry().getListeners()) {
+    for (LifecycleListener listener : getWorker().getLifecycleListenerRegistry().getListeners()) {
       listener.beginSlice();
     }
-    worker.beginSlice();
+    getWorker().beginSlice();
     isFirstSlice = false;
   }
 
   private void endSlice(boolean inputExhausted) throws IOException {
-    worker.endSlice();
+    getWorker().endSlice();
     if (inputExhausted) {
-      worker.endShard();
+      getWorker().endShard();
     }
     for (LifecycleListener listener :
-        Lists.reverse(worker.getLifecycleListenerRegistry().getListeners())) {
+        Lists.reverse(getWorker().getLifecycleListenerRegistry().getListeners())) {
       listener.endSlice();
     }
-    worker.setContext(null);
-    out.endSlice();
-    in.endSlice();
+    getOutputWriter().endSlice();
+    getInputReader().endSlice();
     if (inputExhausted) {
-      out.close();
+      getOutputWriter().close();
       try {
-        in.close();
+        getInputReader().close();
       } catch (IOException ex) {
         // Ignore - retrying a slice or shard will not fix that
       }
@@ -228,4 +192,18 @@ public abstract class WorkerShardTask<I, O, C extends WorkerContext>
       return s;
     }
   }
+
+  @Override
+  public boolean isDone() {
+    return inputExhausted;
+  }
+
+  protected abstract void setContextOnWorker();
+
+  protected abstract Worker<C> getWorker();
+
+  public abstract OutputWriter<O> getOutputWriter();
+
+  public abstract InputReader<I> getInputReader();
+
 }

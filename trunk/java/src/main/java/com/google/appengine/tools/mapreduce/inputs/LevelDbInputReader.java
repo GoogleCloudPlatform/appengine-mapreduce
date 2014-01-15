@@ -292,6 +292,4 @@ public abstract class LevelDbInputReader extends InputReader<ByteBuffer> {
     to.put(from);
     return to;
   }
-
-
 }

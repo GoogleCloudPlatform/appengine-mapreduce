@@ -100,5 +100,4 @@ public class PeekingInputReader<T> extends UnmarshallingInputReader<T> implement
   public void remove() {
     throw new UnsupportedOperationException();
   }
-
 }

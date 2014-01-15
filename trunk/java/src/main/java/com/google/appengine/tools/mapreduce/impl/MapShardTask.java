@@ -7,12 +7,12 @@ import static com.google.appengine.tools.mapreduce.CounterNames.MAPPER_WALLTIME_
 import static com.google.appengine.tools.mapreduce.impl.MapReduceConstants.ASSUMED_BASE_MEMORY_PER_REQUEST;
 import static com.google.common.base.Preconditions.checkNotNull;
 
-import com.google.appengine.tools.mapreduce.Counters;
 import com.google.appengine.tools.mapreduce.InputReader;
 import com.google.appengine.tools.mapreduce.KeyValue;
 import com.google.appengine.tools.mapreduce.Mapper;
 import com.google.appengine.tools.mapreduce.MapperContext;
 import com.google.appengine.tools.mapreduce.OutputWriter;
+import com.google.appengine.tools.mapreduce.Worker;
 import com.google.appengine.tools.mapreduce.impl.shardedjob.ShardFailureException;
 
 /**
@@ -27,17 +27,23 @@ public class MapShardTask<I, K, V> extends WorkerShardTask<I, KeyValue<K, V>, Ma
 
   private final Mapper<I, K, V> mapper;
   private final long millisPerSlice;
+  private final InputReader<I> in;
+  private final OutputWriter<KeyValue<K, V>> out;
+  private final IncrementalTaskContext context;
 
-  public MapShardTask(String mrJobId, int shardNumber, int shardCount, InputReader<I> in,
-      Mapper<I, K, V> mapper, OutputWriter<KeyValue<K, V>> out, long millisPerSlice) {
-    super(mrJobId, shardNumber, shardCount, in, mapper, out, MAPPER_CALLS, MAPPER_WALLTIME_MILLIS);
+  public MapShardTask(String mrJobId,
+      int shardNumber,
+      int shardCount,
+      InputReader<I> in,
+      Mapper<I, K, V> mapper,
+      OutputWriter<KeyValue<K, V>> out,
+      long millisPerSlice) {
+    this.in = checkNotNull(in, "Null in");
+    this.out = checkNotNull(out, "Null out");
     this.mapper = checkNotNull(mapper, "Null mapper");
     this.millisPerSlice = millisPerSlice;
-  }
-
-  @Override
-  protected MapperContext<K, V> getWorkerContext(Counters counters) {
-    return new MapperContextImpl<K, V>(mrJobId, out, shardNumber, counters);
+    this.context = new IncrementalTaskContext(mrJobId, shardNumber, shardCount, MAPPER_CALLS,
+        MAPPER_WALLTIME_MILLIS);
   }
 
   @Override
@@ -45,7 +51,7 @@ public class MapShardTask<I, K, V> extends WorkerShardTask<I, KeyValue<K, V>, Ma
     try {
       mapper.map(input);
     } catch (RuntimeException ex) {
-      throw new ShardFailureException(shardNumber, ex);
+      throw new ShardFailureException(context.getShardNumber(), ex);
     }
   }
 
@@ -61,7 +67,32 @@ public class MapShardTask<I, K, V> extends WorkerShardTask<I, KeyValue<K, V>, Ma
 
   @Override
   protected long estimateMemoryNeeded() {
-    return in.estimateMemoryRequirment() + out.estimateMemoryRequirment()
+    return in.estimateMemoryRequirment() + getOutputWriter().estimateMemoryRequirment()
         + ASSUMED_BASE_MEMORY_PER_REQUEST;
+  }
+
+  @Override
+  protected Worker<MapperContext<K, V>> getWorker() {
+    return mapper;
+  }
+
+  @Override
+  public OutputWriter<KeyValue<K, V>> getOutputWriter() {
+    return out;
+  }
+
+  @Override
+  public InputReader<I> getInputReader() {
+    return in;
+  }
+
+  @Override
+  protected void setContextOnWorker() {
+    mapper.setContext(new MapperContextImpl<K, V>(out, context));
+  }
+
+  @Override
+  public IncrementalTaskContext getContext() {
+    return context;
   }
 }

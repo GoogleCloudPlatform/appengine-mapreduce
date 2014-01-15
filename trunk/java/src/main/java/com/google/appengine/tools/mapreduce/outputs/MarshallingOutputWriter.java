@@ -35,5 +35,4 @@ public class MarshallingOutputWriter<O> extends ForwardingOutputWriter<O> {
     ByteBuffer bytes = marshaller.toBytes(value);
     writer.write(bytes);
   }
-
 }

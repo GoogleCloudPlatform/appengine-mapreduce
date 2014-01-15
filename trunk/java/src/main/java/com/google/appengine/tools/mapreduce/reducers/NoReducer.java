@@ -31,5 +31,4 @@ public class NoReducer<K, V, O> extends Reducer<K, V, O> {
     throw new RuntimeException(getClass().getSimpleName() + " received input: "
         + key + ", " + values);
   }
-
 }

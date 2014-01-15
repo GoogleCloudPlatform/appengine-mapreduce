@@ -18,5 +18,4 @@ public abstract class ReducerInput<V> implements Iterator<V> {
   @Override public void remove() {
     throw new UnsupportedOperationException("Can't remove() on ReducerInput: " + this);
   }
-
 }

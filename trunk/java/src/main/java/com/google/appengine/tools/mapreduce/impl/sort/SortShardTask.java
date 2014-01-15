@@ -5,11 +5,13 @@ import static com.google.appengine.tools.mapreduce.CounterNames.SORT_WALLTIME_MI
 import static com.google.appengine.tools.mapreduce.impl.MapReduceConstants.MAX_LAST_ITEM_STRING_SIZE;
 import static com.google.appengine.tools.mapreduce.impl.MapReduceConstants.MAX_SORT_READ_TIME_MILLIS;
 import static com.google.common.base.Charsets.UTF_8;
+import static com.google.common.base.Preconditions.checkNotNull;
 
-import com.google.appengine.tools.mapreduce.Counters;
 import com.google.appengine.tools.mapreduce.InputReader;
 import com.google.appengine.tools.mapreduce.KeyValue;
 import com.google.appengine.tools.mapreduce.OutputWriter;
+import com.google.appengine.tools.mapreduce.Worker;
+import com.google.appengine.tools.mapreduce.impl.IncrementalTaskContext;
 import com.google.appengine.tools.mapreduce.impl.RecoverableException;
 import com.google.appengine.tools.mapreduce.impl.WorkerShardTask;
 
@@ -28,18 +30,22 @@ public class SortShardTask extends WorkerShardTask<
   private static final long serialVersionUID = -8041992113450564646L;
   private static final long SORT_MEMORY_OVERHEAD = 8 * 1024 * 1024; // Estimate.
 
-  private SortWorker inMemSorter;
+  private final SortWorker inMemSorter;
+  private final InputReader<KeyValue<ByteBuffer, ByteBuffer>> in;
+  private final OutputWriter<KeyValue<ByteBuffer, Iterator<ByteBuffer>>> out;
+  private final IncrementalTaskContext context;
 
-  public SortShardTask(String mrJobId, int shardNumber, int shardCount,
-      InputReader<KeyValue<ByteBuffer, ByteBuffer>> in, SortWorker worker,
+  public SortShardTask(String mrJobId,
+      int shardNumber,
+      int shardCount,
+      InputReader<KeyValue<ByteBuffer, ByteBuffer>> in,
+      SortWorker worker,
       OutputWriter<KeyValue<ByteBuffer, Iterator<ByteBuffer>>> out) {
-    super(mrJobId, shardNumber, shardCount, in, worker, out, SORT_CALLS, SORT_WALLTIME_MILLIS);
-    inMemSorter = worker;
-  }
-
-  @Override
-  protected SortContext getWorkerContext(Counters counters) {
-    return new SortContext(mrJobId, shardNumber, out, counters);
+    this.in = checkNotNull(in, "Null in");
+    this.out = checkNotNull(out, "Null out");
+    this.inMemSorter = worker;
+    this.context = new IncrementalTaskContext(mrJobId, shardNumber, shardCount, SORT_CALLS,
+        SORT_WALLTIME_MILLIS);
   }
 
   @Override
@@ -71,5 +77,30 @@ public class SortShardTask extends WorkerShardTask<
   @Override
   protected long estimateMemoryNeeded() {
     return SortWorker.getMemoryForSort(0) + SORT_MEMORY_OVERHEAD;
+  }
+
+  @Override
+  protected Worker<SortContext> getWorker() {
+    return inMemSorter;
+  }
+
+  @Override
+  public OutputWriter<KeyValue<ByteBuffer, Iterator<ByteBuffer>>> getOutputWriter() {
+    return out;
+  }
+
+  @Override
+  protected void setContextOnWorker() {
+    inMemSorter.setContext(new SortContext(context,out));
+  }
+
+  @Override
+  public InputReader<KeyValue<ByteBuffer, ByteBuffer>> getInputReader() {
+    return in;
+  }
+
+  @Override
+  public IncrementalTaskContext getContext() {
+    return context;
   }
 }

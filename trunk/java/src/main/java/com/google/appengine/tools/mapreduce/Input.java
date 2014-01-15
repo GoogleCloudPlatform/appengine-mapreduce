@@ -26,5 +26,4 @@ public abstract class Input<I> implements Serializable {
    * The number of input readers returned determines the number of map shards.
    */
   public abstract List<? extends InputReader<I>> createReaders() throws IOException;
-
 }

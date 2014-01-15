@@ -119,5 +119,4 @@ class Shuffling {
     }
     return out.build();
   }
-
 }

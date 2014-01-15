@@ -26,10 +26,10 @@ final class ShardingWriter<K, V, R> extends
     OutputWriter<KeyValue<K, V>> {
 
   private static final long serialVersionUID = 4472397467516370717L;
-  private Sharder sharder;
-  private List<? extends OutputWriter<KeyValue<K, V>>> writers;
-  private Output<KeyValue<K, V>, R> output;
-  private Marshaller<K> keyMarshaller;
+  private final Sharder sharder;
+  private final List<? extends OutputWriter<KeyValue<K, V>>> writers;
+  private final Output<KeyValue<K, V>, R> output;
+  private final Marshaller<K> keyMarshaller;
 
   ShardingWriter(
       Marshaller<K> keyMarshaller, Sharder sharder,  Output<KeyValue<K, V>, R> output) {
@@ -38,7 +38,7 @@ final class ShardingWriter<K, V, R> extends
     this.output = Preconditions.checkNotNull(output);
     this.writers = output.createWriters();
   }
-  
+
   @Override
   public void open() throws IOException {
     for (OutputWriter<KeyValue<K, V>> writer : writers) {
@@ -78,11 +78,11 @@ final class ShardingWriter<K, V, R> extends
   List<? extends OutputWriter<KeyValue<K, V>>> getWriters() {
     return writers;
   }
-  
+
   Output<KeyValue<K, V>, R> getOutput() {
     return output;
   }
-  
+
   @Override
   public long estimateMemoryRequirment() {
     long total = 0;
@@ -91,5 +91,4 @@ final class ShardingWriter<K, V, R> extends
     }
     return total;
   }
-
 }

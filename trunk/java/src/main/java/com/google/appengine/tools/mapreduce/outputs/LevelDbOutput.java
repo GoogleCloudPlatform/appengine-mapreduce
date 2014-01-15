@@ -58,5 +58,4 @@ public class LevelDbOutput<R> extends Output<ByteBuffer, R> {
   public int getNumShards() {
     return sink.getNumShards();
   }
-
 }

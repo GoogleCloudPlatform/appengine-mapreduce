@@ -3,21 +3,19 @@
 package com.google.appengine.tools.mapreduce.impl.handlers;
 
 import com.google.appengine.tools.mapreduce.EndToEndTestCase;
-import com.google.appengine.tools.mapreduce.impl.AbstractWorkerController;
-import com.google.appengine.tools.mapreduce.impl.TestWorkerTask;
-import com.google.appengine.tools.mapreduce.impl.WorkerResult;
+import com.google.appengine.tools.mapreduce.impl.shardedjob.IncrementalTask;
 import com.google.appengine.tools.mapreduce.impl.shardedjob.ShardedJobController;
 import com.google.appengine.tools.mapreduce.impl.shardedjob.ShardedJobService;
 import com.google.appengine.tools.mapreduce.impl.shardedjob.ShardedJobServiceFactory;
 import com.google.appengine.tools.mapreduce.impl.shardedjob.ShardedJobSettings;
 import com.google.appengine.tools.mapreduce.impl.shardedjob.ShardedJobState;
 import com.google.appengine.tools.mapreduce.impl.shardedjob.Status;
+import com.google.appengine.tools.mapreduce.impl.shardedjob.TestTask;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Iterables;
 
 import org.json.JSONObject;
 
-import java.io.Serializable;
+import java.util.List;
 
 /**
  *
@@ -25,7 +23,7 @@ import java.io.Serializable;
 public class StatusHandlerTest extends EndToEndTestCase {
 
   private static final class DummyWorkerController
-      extends AbstractWorkerController<TestWorkerTask, Integer> {
+      extends ShardedJobController<TestTask> {
     private static final long serialVersionUID = 1L;
 
     private DummyWorkerController(String shardedJobName) {
@@ -33,20 +31,19 @@ public class StatusHandlerTest extends EndToEndTestCase {
     }
 
     @Override
-    public void completed(WorkerResult<Integer> finalCombinedResult) {}
+    public void failed(Status status) {}
 
     @Override
-    public void failed(Status status) {}
+    public void completed(List<? extends TestTask> results) {}
   }
 
   // Tests that an job that has just been initialized returns a reasonable job detail.
   public void testGetJobDetail_empty() throws Exception {
     ShardedJobService jobService = ShardedJobServiceFactory.getShardedJobService();
     ShardedJobSettings settings = new ShardedJobSettings.Builder().build();
-    ShardedJobController<TestWorkerTask, WorkerResult<Integer>>
-    controller = new DummyWorkerController("Namey");
-    jobService.startJob(
-        "testGetJobDetail_empty", ImmutableList.<TestWorkerTask>of(), controller, settings);
+    ShardedJobController<TestTask> controller = new DummyWorkerController("Namey");
+    jobService.startJob("testGetJobDetail_empty", ImmutableList.<TestTask>of(), controller,
+        settings);
 
     JSONObject result = StatusHandler.handleGetJobDetail("testGetJobDetail_empty");
     assertEquals("testGetJobDetail_empty", result.getString("mapreduce_id"));
@@ -60,17 +57,14 @@ public class StatusHandlerTest extends EndToEndTestCase {
   public void testGetJobDetail_populated() throws Exception {
     ShardedJobService jobService = ShardedJobServiceFactory.getShardedJobService();
     ShardedJobSettings settings = new ShardedJobSettings.Builder().build();
-    ShardedJobController<TestWorkerTask, WorkerResult<Integer>> controller =
-        new DummyWorkerController("Namey");
-    TestWorkerTask three = new TestWorkerTask(0, 3, null);
-    TestWorkerTask two = new TestWorkerTask(1, 2, null);
-    TestWorkerTask one = new TestWorkerTask(0, 1, three);
+    ShardedJobController<TestTask> controller = new DummyWorkerController("Namey");
+    TestTask s1 = new TestTask(0, 2, 2, 2);
+    TestTask s2 = new TestTask(1, 2, 2, 1);
     jobService.startJob(
-        "testGetJobDetail_populated", ImmutableList.of(one, two), controller, settings);
-    ShardedJobState<?, WorkerResult<? extends Serializable>> state =
+        "testGetJobDetail_populated", ImmutableList.of(s1, s2), controller, settings);
+    ShardedJobState<? extends IncrementalTask> state =
         jobService.getJobState("testGetJobDetail_populated");
     assertEquals(2, state.getActiveTaskCount());
-    assertTrue(Iterables.isEmpty(state.getAggregateResult().getCounters().getCounters()));
     assertEquals(2, state.getTotalTaskCount());
     assertEquals(new Status(Status.StatusCode.RUNNING), state.getStatus());
     JSONObject jobDetail = StatusHandler.handleGetJobDetail("testGetJobDetail_populated");
@@ -79,17 +73,17 @@ public class StatusHandlerTest extends EndToEndTestCase {
     assertEquals("Namey", jobDetail.getString("name"));
     assertEquals(true, jobDetail.getBoolean("active"));
     assertEquals(2, jobDetail.getInt("active_shards"));
-    assertTrue(
+    assertTrue(jobDetail.toString(),
         jobDetail.toString().matches(
             "\\{\"mapreduce_id\":\"testGetJobDetail_populated\"," +
                 "\"chart_width\":300," +
-                "\"shards\":\\[\\{\"shard_description\":\"\"," +
-                "\"active\":false," +
-                "\"result_status\":\"initializing\"," +
+                "\"shards\":\\[\\{\"shard_description\":\"[^\"]*\"," +
+                "\"active\":true," +
+                "\"updated_timestamp_ms\":[0-9]*," +
                 "\"shard_number\":0\\}," +
-                "\\{\"shard_description\":\"\"," +
-                "\"active\":false," +
-                "\"result_status\":\"initializing\"," +
+                "\\{\"shard_description\":\"[^\"]*\"," +
+                "\"active\":true," +
+                "\"updated_timestamp_ms\":[0-9]*," +
                 "\"shard_number\":1\\}\\]," +
                 "\"mapper_spec\":\\{\"mapper_params\":\\{\"Shards total\":2," +
                 "\"Shards active\":2," +
@@ -111,20 +105,20 @@ public class StatusHandlerTest extends EndToEndTestCase {
     assertEquals("Namey", jobDetail.getString("name"));
     assertEquals(false, jobDetail.getBoolean("active"));
     assertEquals(0, jobDetail.getInt("active_shards"));
-    assertTrue(
+    assertTrue(jobDetail.toString(),
         jobDetail.toString().matches(
             "\\{\"mapreduce_id\":\"testGetJobDetail_populated\"," +
                 "\"chart_width\":300," +
                 "\"shards\":\\[\\{" +
-                "\"last_work_item\":\"3\"," +
-                "\"shard_description\":\"\"," +
-                "\"active\":true," +
+                "\"shard_description\":\"[^\"]*\"," +
+                "\"active\":false," +
                 "\"updated_timestamp_ms\":[0-9]*," +
+                "\"result_status\":\"done\"," +
                 "\"shard_number\":0\\}," +
-                "\\{\"last_work_item\":\"2\"," +
-                "\"shard_description\":\"\"," +
-                "\"active\":true," +
+                "\\{\"shard_description\":\"[^\"]*\"," +
+                "\"active\":false," +
                 "\"updated_timestamp_ms\":[0-9]*," +
+                "\"result_status\":\"done\"," +
                 "\"shard_number\":1\\}\\]," +
                 "\"mapper_spec\":\\{\"mapper_params\":\\{\"Shards total\":2," +
                 "\"Shards active\":0," +
@@ -134,7 +128,7 @@ public class StatusHandlerTest extends EndToEndTestCase {
                 "\"active_shards\":0," +
                 "\"updated_timestamp_ms\":[0-9]*," +
                 "\"chart_url\":\"[^\"]*\"," +
-                "\"counters\":\\{\"TestWorkerTaskSum\":6\\}," +
+                "\"counters\":\\{\"TestTaskSum\":6\\}," +
                 "\"start_timestamp_ms\":[0-9]*\\," +
                 "\"result_status\":\"DONE\"}"));
   }

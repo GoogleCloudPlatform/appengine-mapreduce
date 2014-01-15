@@ -103,5 +103,4 @@ public class GoogleCloudStorageMapOutput<K, V> extends
   public int getNumShards() {
     return mapShardCount;
   }
-
 }

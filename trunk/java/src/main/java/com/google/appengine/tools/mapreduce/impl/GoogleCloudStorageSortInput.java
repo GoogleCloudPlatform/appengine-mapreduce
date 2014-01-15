@@ -12,8 +12,8 @@ import com.google.appengine.tools.mapreduce.KeyValue;
 import com.google.appengine.tools.mapreduce.Marshaller;
 import com.google.appengine.tools.mapreduce.Marshallers;
 import com.google.appengine.tools.mapreduce.inputs.ConcatenatingInputReader;
-import com.google.appengine.tools.mapreduce.inputs.GoogleCloudStorageLevelDbInputReader;
 import com.google.appengine.tools.mapreduce.inputs.ForwardingInputReader;
+import com.google.appengine.tools.mapreduce.inputs.GoogleCloudStorageLevelDbInputReader;
 import com.google.appengine.tools.mapreduce.inputs.UnmarshallingInputReader;
 import com.google.common.collect.ImmutableList;
 
@@ -32,7 +32,7 @@ public class GoogleCloudStorageSortInput extends Input<KeyValue<ByteBuffer, Byte
 
   private static final long serialVersionUID = -3995775161471778634L;
 
-  private List<GoogleCloudStorageFileSet> filenames;
+  private final List<GoogleCloudStorageFileSet> filenames;
 
   private static class ReaderImpl extends ForwardingInputReader<KeyValue<ByteBuffer, ByteBuffer>> {
 
@@ -78,5 +78,4 @@ public class GoogleCloudStorageSortInput extends Input<KeyValue<ByteBuffer, Byte
     }
     return out.build();
   }
-
 }

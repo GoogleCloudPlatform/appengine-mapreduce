@@ -87,5 +87,4 @@ public abstract class InputReader<I> implements Serializable {
   public long estimateMemoryRequirment() {
     return 0;
   }
-
 }
