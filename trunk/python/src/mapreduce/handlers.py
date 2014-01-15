@@ -851,7 +851,7 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
     headers[util._MR_SHARD_ID_TASK_HEADER] = tstate.shard_id
 
     worker_task = model.HugeTask(
-        url=base_path + "/worker_callback/" + tstate.shard_id,
+        url=base_path + "/worker_callback",
         params=tstate.to_dict(),
         name=task_name,
         eta=eta,
@@ -1211,8 +1211,7 @@ class ControllerCallbackHandler(base_handler.HugeTaskHandler):
       queue_name = os.environ.get("HTTP_X_APPENGINE_QUEUENAME", "default")
 
     controller_callback_task = model.HugeTask(
-        url=(mapreduce_spec.params["base_path"] + "/controller_callback/" +
-             mapreduce_spec.mapreduce_id),
+        url=(mapreduce_spec.params["base_path"] + "/controller_callback"),
         name=task_name, params=task_params,
         countdown=parameters.config._CONTROLLER_PERIOD_SEC,
         parent=mapreduce_state,
@@ -1639,7 +1638,7 @@ class StartJobHandler(base_handler.PostJsonHandler):
     params = {"mapreduce_id": mapreduce_spec.mapreduce_id}
     # Task is not named so that it can be added within a transaction.
     kickoff_task = taskqueue.Task(
-        url=base_path + "/kickoffjob_callback/" + mapreduce_spec.mapreduce_id,
+        url=base_path + "/kickoffjob_callback",
         headers=util._get_task_headers(mapreduce_spec),
         params=params,
         eta=eta,
@@ -1680,8 +1679,7 @@ class FinalizeJobHandler(base_handler.TaskQueueHandler):
     task_name = mapreduce_spec.mapreduce_id + "-finalize"
     finalize_task = taskqueue.Task(
         name=task_name,
-        url=(mapreduce_spec.params["base_path"] + "/finalizejob_callback/" +
-             mapreduce_spec.mapreduce_id),
+        url=(mapreduce_spec.params["base_path"] + "/finalizejob_callback"),
         params={"mapreduce_id": mapreduce_spec.mapreduce_id},
         headers=util._get_task_headers(mapreduce_spec))
     queue_name = util.get_queue_name(None)
