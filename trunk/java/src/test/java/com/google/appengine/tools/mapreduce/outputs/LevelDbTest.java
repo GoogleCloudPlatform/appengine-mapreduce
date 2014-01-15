@@ -30,6 +30,7 @@ public class LevelDbTest extends TestCase {
   private static final int MAX_SINGLE_BLOCK_RECORD_SIZE =
       LevelDbConstants.BLOCK_SIZE - LevelDbConstants.HEADER_LENGTH;
 
+  @SuppressWarnings("serial")
   private static class TestLevelDbInputReader extends LevelDbInputReader {
 
     private ReadableByteChannel channel;
@@ -236,7 +237,7 @@ public class LevelDbTest extends TestCase {
   static List<byte[]> writeRandomItems(Random r, LevelDbOutputWriter writer, int number, int size)
       throws IOException {
     writer.beginSlice();
-    List<byte[]> written = new ArrayList<byte[]>();
+    List<byte[]> written = new ArrayList<>();
     for (int i = 0; i < number; i++) {
       byte[] data = new byte[size];
       r.nextBytes(data);

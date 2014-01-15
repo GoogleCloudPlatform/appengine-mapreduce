@@ -8,7 +8,6 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 
-import java.io.IOException;
 import java.util.List;
 import java.util.NoSuchElementException;
 
@@ -17,11 +16,13 @@ import java.util.NoSuchElementException;
  *
  * @author ohler@google.com (Christian Ohler)
  */
-public class ConsecutiveLongInput extends Input<Long> {
+public final class ConsecutiveLongInput extends Input<Long> {
+
   private static final long serialVersionUID = 722495043491410651L;
 
   @VisibleForTesting
   static class Reader extends InputReader<Long> {
+
     private static final long serialVersionUID = 796981411158026526L;
 
     private final long start;
@@ -35,12 +36,13 @@ public class ConsecutiveLongInput extends Input<Long> {
       next = start;
     }
 
-    @Override public Double getProgress() {
-      return limit <= start ? 1
-          : (next - start) / (double) (limit - start);
+    @Override
+    public Double getProgress() {
+      return limit <= start ? 1 : (next - start) / (double) (limit - start);
     }
 
-    @Override public Long next() {
+    @Override
+    public Long next() {
       if (next >= limit) {
         throw new NoSuchElementException();
       }
@@ -48,7 +50,7 @@ public class ConsecutiveLongInput extends Input<Long> {
     }
 
     @Override
-    public void open() throws IOException {
+    public void open() {
       next = start;
     }
   }
@@ -71,11 +73,13 @@ public class ConsecutiveLongInput extends Input<Long> {
     this.limit = limit;
   }
 
-  @Override public String toString() {
+  @Override
+  public String toString() {
     return getClass().getSimpleName() + "(" + shardCount + ", " + start + ", " + limit + ")";
   }
 
-  @Override public List<? extends InputReader<Long>> createReaders() {
+  @Override
+  public List<? extends InputReader<Long>> createReaders() {
     ImmutableList.Builder<InputReader<Long>> b = ImmutableList.builder();
     long valuesTotal = Math.max(0, limit - start);
     double valuesPerShard = valuesTotal / (double) shardCount;

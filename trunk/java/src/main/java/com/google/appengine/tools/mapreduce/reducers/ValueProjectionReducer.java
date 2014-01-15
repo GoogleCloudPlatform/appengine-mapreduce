@@ -14,18 +14,20 @@ import com.google.appengine.tools.mapreduce.ReducerInput;
  * @param <V> type of values
  */
 public class ValueProjectionReducer<K, V> extends Reducer<K, V, V> {
+
   private static final long serialVersionUID = 990027274731447358L;
 
   public static <K, V> ValueProjectionReducer<K, V> create() {
-    return new ValueProjectionReducer<K, V>();
+    return new ValueProjectionReducer<>();
   }
 
   private ValueProjectionReducer() {
   }
 
-  @Override public void reduce(K key, ReducerInput<V> values) {
+  @Override
+  public void reduce(K key, ReducerInput<V> values) {
     while (values.hasNext()) {
-      getContext().emit(values.next());
+      emit(values.next());
     }
   }
 }

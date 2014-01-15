@@ -107,7 +107,6 @@ public class EndToEndTest extends EndToEndTestCase {
     assertFalse(jobId.isEmpty());
     executeTasksUntilEmpty("default");
     JobInfo info = pipelineService.getJobInfo(jobId);
-    @SuppressWarnings("unchecked")
     MapReduceResult<R> result = (MapReduceResult<R>) info.getOutput();
     assertEquals(JobInfo.State.COMPLETED_SUCCESSFULLY, info.getJobState());
     assertNotNull(result);
@@ -454,7 +453,6 @@ public class EndToEndTest extends EndToEndTestCase {
             new StringOutput<Long, List<AppEngineFile>>(
                 ",", new BlobFileOutput("Foo-%02d", "testType", 1))),
         new Verifier<List<AppEngineFile>>() {
-          @SuppressWarnings("resource")
           @Override
           public void verify(MapReduceResult<List<AppEngineFile>> result) throws Exception {
             assertEquals(1, result.getOutputResult().size());
@@ -492,7 +490,7 @@ public class EndToEndTest extends EndToEndTestCase {
           public void verify(MapReduceResult<GoogleCloudStorageFileSet> result) throws Exception {
             assertEquals(2, result.getOutputResult().getNumFiles());
             assertEquals(10, result.getCounters().getCounter(CounterNames.MAPPER_CALLS).getValue());
-            ArrayList<Long> results = new ArrayList<Long>();
+            ArrayList<Long> results = new ArrayList<>();
             GcsService gcsService = GcsServiceFactory.createGcsService();
             ByteBuffer holder = ByteBuffer.allocate(8);
             for (GcsFilename file : result.getOutputResult().getAllFiles()) {
@@ -603,7 +601,7 @@ public class EndToEndTest extends EndToEndTestCase {
                 Iterables.getOnlyElement(result.getOutputResult());
             assertEquals(2, output.size());
             assertEquals("even", output.get(0).getKey());
-            List<Long> evenValues = new ArrayList<Long>(output.get(0).getValue());
+            List<Long> evenValues = new ArrayList<>(output.get(0).getValue());
             Collections.sort(evenValues);
             assertEquals(ImmutableList.of(
                         2L, 4L, 6L, 8L,
@@ -618,7 +616,7 @@ public class EndToEndTest extends EndToEndTestCase {
                         90L, 92L, 94L, 96L, 98L,
                         100L), evenValues);
             assertEquals("multiple-of-ten", output.get(1).getKey());
-            List<Long> multiplesOfTen = new ArrayList<Long>(output.get(1).getValue());
+            List<Long> multiplesOfTen = new ArrayList<>(output.get(1).getValue());
             Collections.sort(multiplesOfTen);
             assertEquals(ImmutableList.of(10L, 20L, 30L, 40L, 50L, 60L, 70L, 80L, 90L, 100L),
                 multiplesOfTen);
@@ -658,8 +656,8 @@ public class EndToEndTest extends EndToEndTestCase {
 
     @Override
     public void map(Long input) {
-      String mod37 = "" + (Math.abs(input) % 37);
-      getContext().emit(mod37, input);
+      String mod37 = String.valueOf(Math.abs(input) % 37);
+      emit(mod37, input);
     }
   }
 
@@ -674,7 +672,7 @@ public class EndToEndTest extends EndToEndTestCase {
       ByteBuffer value = ByteBuffer.allocate(8);
       value.putLong(input);
       value.rewind();
-      getContext().emit(key, value);
+      emit(key, value);
     }
   }
 
@@ -703,14 +701,14 @@ public class EndToEndTest extends EndToEndTestCase {
             Marshaller<String> marshaller = Marshallers.getStringMarshaller();
             HashingSharder sharder = new HashingSharder(5);
             for (long l = -10000; l < 10000; l++) {
-              String mod37 = "" + (Math.abs(l) % 37);
+              String mod37 = String.valueOf(Math.abs(l) % 37);
               expectedOutput.get(sharder.getShardForKey(marshaller.toBytes(mod37)))
                   .put(mod37, l);
             }
             for (int i = 0; i < 5; i++) {
               assertEquals(expectedOutput.get(i).keySet().size(), actualOutput.get(i).size());
               for (KeyValue<String, List<Long>> actual : actualOutput.get(i)) {
-                List<Long> value = new ArrayList<Long>(actual.getValue());
+                List<Long> value = new ArrayList<>(actual.getValue());
                 Collections.sort(value);
                 assertEquals("shard " + i + ", key " + actual.getKey(),
                     expectedOutput.get(i).get(actual.getKey()), value);
@@ -742,13 +740,13 @@ public class EndToEndTest extends EndToEndTestCase {
 
             List<List<String>> actualOutput = result.getOutputResult();
             assertEquals(5, actualOutput.size());
-            List<String> allKeys = new ArrayList<String>();
+            List<String> allKeys = new ArrayList<>();
             for (int shard = 0; shard < 5; shard++) {
               allKeys.addAll(actualOutput.get(shard));
             }
             assertEquals(37, allKeys.size());
             for (int i = 0; i < 37; i++) {
-              assertTrue("" + i, allKeys.contains("" + i));
+              assertTrue(String.valueOf(i), allKeys.contains(String.valueOf(i)));
             }
           }
         });
@@ -782,7 +780,7 @@ public class EndToEndTest extends EndToEndTestCase {
       } catch (IOException e) {
         throw new RuntimeException(e);
       }
-      getContext().emit(sideOutput.getFile().getFullPath(), null);
+      emit(sideOutput.getFile().getFullPath(), null);
     }
   }
 
@@ -836,17 +834,14 @@ public class EndToEndTest extends EndToEndTestCase {
       } catch (InterruptedException e) {
         throw new RuntimeException(e);
       }
-
       long key = entity.getKey().getId();
       log.info("map(" + key + ")");
       if (key % 2 == 0) {
-        getContext().emit("even", key);
+        emit("even", key);
       }
       if (key % 10 == 0) {
-        getContext().emit("multiple-of-ten", key);
+        emit("multiple-of-ten", key);
       }
-
-
       entity.setProperty("mark", Boolean.TRUE);
       pool.put(entity);
     }
@@ -885,7 +880,7 @@ public class EndToEndTest extends EndToEndTestCase {
         out.add(value);
       }
       List<Long> values = out.build();
-      getContext().emit(KeyValue.of(property, values));
+      emit(KeyValue.of(property, values));
     }
   }
 }

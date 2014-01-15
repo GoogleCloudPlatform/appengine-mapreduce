@@ -15,17 +15,19 @@ import com.google.common.base.Preconditions;
  * @param <V> type of values (discarded)
  */
 public class KeyProjectionReducer<K, V> extends Reducer<K, V, K> {
+
   private static final long serialVersionUID = 466599637876532403L;
 
   public static <K, V> KeyProjectionReducer<K, V> create() {
-    return new KeyProjectionReducer<K, V>();
+    return new KeyProjectionReducer<>();
   }
 
   private KeyProjectionReducer() {
   }
 
-  @Override public void reduce(K key, ReducerInput<V> values) {
+  @Override
+  public void reduce(K key, ReducerInput<V> values) {
     Preconditions.checkState(values.hasNext(), "%s: No values: %s", this, key);
-    getContext().emit(key);
+    emit(key);
   }
 }

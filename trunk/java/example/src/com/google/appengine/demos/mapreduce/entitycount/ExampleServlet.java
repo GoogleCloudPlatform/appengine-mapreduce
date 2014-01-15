@@ -44,50 +44,49 @@ public class ExampleServlet extends HttpServlet {
   private final PipelineService pipelineService = PipelineServiceFactory.newPipelineService();
   private final SecureRandom random = new SecureRandom();
 
-  //private static final boolean USE_BACKENDS = true;
   private static final boolean USE_BACKENDS = false;
 
   private void writeResponse(HttpServletResponse resp) throws IOException {
-    String token = "" + (random.nextLong() & Long.MAX_VALUE);
+    String token = String.valueOf(random.nextLong() & Long.MAX_VALUE);
     memcache.put(userService.getCurrentUser().getUserId() + " " + token, true);
-    PrintWriter pw = new PrintWriter(resp.getOutputStream());
-    pw.println("<html><body>"
-        + "<br><form method='post'><input type='hidden' name='token' value='" + token + "'>"
-        + "<input type='hidden' name='action' value='create'>"
-        + "Run MapReduce that creates random MapReduceTest entities,"
-        + " <input name='shardCount' value='1'> shards,"
-        + " creating <input name='entitiesPerShard' value='1000'> entities per shard,"
-        + " <input name='payloadBytesPerEntity' value='1000'> payload bytes per entity:"
-        + " <input type='submit' value='Make data'></form>"
+    try (PrintWriter pw = new PrintWriter(resp.getOutputStream())) {
+      pw.println("<html><body>"
+          + "<br><form method='post'><input type='hidden' name='token' value='" + token + "'>"
+          + "<input type='hidden' name='action' value='create'>"
+          + "Run MapReduce that creates random MapReduceTest entities,"
+          + " <input name='shardCount' value='1'> shards,"
+          + " creating <input name='entitiesPerShard' value='1000'> entities per shard,"
+          + " <input name='payloadBytesPerEntity' value='1000'> payload bytes per entity:"
+          + " <input type='submit' value='Make data'></form>"
 
-        + "<form method='post'><input type='hidden' name='token' value='" + token + "'>"
-        + "<input type='hidden' name='action' value='run'>"
-        + "Run MapReduce over MapReduceTest entities"
-        + " with <input name='mapShardCount' value='10'> map shards"
-        + " and <input name='reduceShardCount' value='2'> reduce shards:"
-        + " <input type='submit' value='Run'></form>"
+          + "<form method='post'><input type='hidden' name='token' value='" + token + "'>"
+          + "<input type='hidden' name='action' value='run'>"
+          + "Run MapReduce over MapReduceTest entities"
+          + " with <input name='mapShardCount' value='10'> map shards"
+          + " and <input name='reduceShardCount' value='2'> reduce shards:"
+          + " <input type='submit' value='Run'></form>"
 
-        + "<br>"
-        + "<br>"
+          + "<br>"
+          + "<br>"
 
-        + "<form method='post'><input type='hidden' name='token' value='" + token + "'>"
-        + "<input type='hidden' name='action' value='viewJobResult'>"
-        + "View result of job <input name='jobId'>"
-        + " <input type='submit' value='View'></form>"
+          + "<form method='post'><input type='hidden' name='token' value='" + token + "'>"
+          + "<input type='hidden' name='action' value='viewJobResult'>"
+          + "View result of job <input name='jobId'>"
+          + " <input type='submit' value='View'></form>"
 
-        + "<form method='post'><input type='hidden' name='token' value='" + token + "'>"
-        + "<input type='hidden' name='action' value='getBlob'>"
-        + "Download blob with blob key or file path"
-        + " <input name='keyOrFilePath'>"
-        + " <input type='submit' value='Get blob'></form>"
+          + "<form method='post'><input type='hidden' name='token' value='" + token + "'>"
+          + "<input type='hidden' name='action' value='getBlob'>"
+          + "Download blob with blob key or file path"
+          + " <input name='keyOrFilePath'>"
+          + " <input type='submit' value='Get blob'></form>"
 
-        + "<form method='post'><input type='hidden' name='token' value='" + token + "'>"
-        + "<input type='hidden' name='action' value='deleteMapReduceBlobs'>"
-        + "Delete all blobs that look like intermediate MapReduce data (based on mime type)"
-        + " <input type='submit' value='Delete blobs (!)'>"
+          + "<form method='post'><input type='hidden' name='token' value='" + token + "'>"
+          + "<input type='hidden' name='action' value='deleteMapReduceBlobs'>"
+          + "Delete all blobs that look like intermediate MapReduce data (based on mime type)"
+          + " <input type='submit' value='Delete blobs (!)'>"
 
-        + "</body></html>");
-    pw.close();
+          + "</body></html>");
+    }
   }
 
   @Override
@@ -101,8 +100,7 @@ public class ExampleServlet extends HttpServlet {
 
   private MapReduceSettings getSettings() {
     MapReduceSettings settings = new MapReduceSettings()
-        .setWorkerQueueName("mapreduce-workers")
-        .setControllerQueueName("mapreduce-workers");
+        .setWorkerQueueName("mapreduce-workers");
     if (USE_BACKENDS) {
       settings.setBackend("worker");
     }
@@ -175,16 +173,13 @@ public class ExampleServlet extends HttpServlet {
               Integer.parseInt(req.getParameter("mapShardCount")),
               Integer.parseInt(req.getParameter("reduceShardCount"))));
     } else if ("viewJobResult".equals(action)) {
-      PrintWriter pw = new PrintWriter(resp.getOutputStream());
-      try {
-        pw.println("" + pipelineService.getJobInfo(req.getParameter("jobId")).getOutput());
+      try (PrintWriter pw = new PrintWriter(resp.getOutputStream())) {
+        pw.println(pipelineService.getJobInfo(req.getParameter("jobId")).getOutput());
       } catch (NoSuchObjectException e) {
         throw new RuntimeException(e);
       }
-      pw.close();
     } else {
       throw new RuntimeException("Bad action: " + action);
     }
   }
-
 }

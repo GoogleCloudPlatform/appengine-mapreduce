@@ -15,7 +15,8 @@ import java.util.Iterator;
 // slice while an iterator is active.
 public abstract class ReducerInput<V> implements Iterator<V> {
 
-  @Override public void remove() {
+  @Override
+  public void remove() {
     throw new UnsupportedOperationException("Can't remove() on ReducerInput: " + this);
   }
 }

@@ -15,7 +15,7 @@ import java.util.NoSuchElementException;
 public class ConcatenatingInputReaderTest extends TestCase {
 
   private List<InputReader<Long>> createReaders(int num) {
-    ArrayList<InputReader<Long>> result = new ArrayList<InputReader<Long>>(num);
+    ArrayList<InputReader<Long>> result = new ArrayList<>(num);
     for (int i = 0; i < num; i++) {
       result.add(new ConsecutiveLongInput.Reader(0, 10));
     }
@@ -24,8 +24,7 @@ public class ConcatenatingInputReaderTest extends TestCase {
 
   public void testConcatenates() throws NoSuchElementException, IOException {
     final int numReader = 10;
-    ConcatenatingInputReader<Long> cat =
-        new ConcatenatingInputReader<Long>(createReaders(numReader));
+    ConcatenatingInputReader<Long> cat = new ConcatenatingInputReader<>(createReaders(numReader));
     for (int i = 0; i < numReader; i++) {
       for (long j = 0; j < 10; j++) {
         assertEquals((Long) j, cat.next());
@@ -41,8 +40,7 @@ public class ConcatenatingInputReaderTest extends TestCase {
 
   public void testProgress() throws NoSuchElementException, IOException {
     final int numReader = 10;
-    ConcatenatingInputReader<Long> cat =
-        new ConcatenatingInputReader<Long>(createReaders(numReader));
+    ConcatenatingInputReader<Long> cat = new ConcatenatingInputReader<>(createReaders(numReader));
     Double progress = cat.getProgress();
     assertEquals(0.0, progress);
     for (int i = 0; i < 10 * numReader; i++) {

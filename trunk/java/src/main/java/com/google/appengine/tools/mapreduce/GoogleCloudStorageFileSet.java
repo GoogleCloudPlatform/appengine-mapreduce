@@ -19,7 +19,7 @@ public class GoogleCloudStorageFileSet implements Serializable {
 
   public GoogleCloudStorageFileSet(String bucketName, List<String> fileNames) {
     this.bucketName = Preconditions.checkNotNull(bucketName);
-    this.fileNames = new ArrayList<String>(fileNames);
+    this.fileNames = new ArrayList<>(fileNames);
   }
 
   public int getNumFiles() {
@@ -34,7 +34,7 @@ public class GoogleCloudStorageFileSet implements Serializable {
   }
 
   public List<GcsFilename> getAllFiles() {
-    List<GcsFilename> result = new ArrayList<GcsFilename>(fileNames.size());
+    List<GcsFilename> result = new ArrayList<>(fileNames.size());
     for (String name : fileNames) {
       result.add(new GcsFilename(bucketName, name));
     }
@@ -46,7 +46,7 @@ public class GoogleCloudStorageFileSet implements Serializable {
     if (o == this) {
       return true;
     }
-    if (o == null || !(o instanceof GoogleCloudStorageFileSet)) {
+    if (!(o instanceof GoogleCloudStorageFileSet)) {
       return false;
     }
     GoogleCloudStorageFileSet other = (GoogleCloudStorageFileSet) o;

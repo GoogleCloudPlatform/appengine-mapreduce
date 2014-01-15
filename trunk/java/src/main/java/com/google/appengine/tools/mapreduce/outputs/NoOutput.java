@@ -21,22 +21,26 @@ import java.util.List;
  *            (but it actually returns null)
  */
 public class NoOutput<O, R> extends Output<O, R> {
+
   private static final long serialVersionUID = 965415182637510898L;
 
   public static <O, R> NoOutput<O, R> create(int numShards) {
-    return new NoOutput<O, R>(numShards);
+    return new NoOutput<>(numShards);
   }
 
   private static class Writer<O> extends OutputWriter<O> {
+
     private static final long serialVersionUID = 524459343516880300L;
 
-    @Override public void write(O object) {
+    @Override
+    public void write(O object) {
       // TODO(ohler): Make this an exception that immediately aborts the entire
       // MR rather than causing a retry.
       throw new RuntimeException("Attempt to write to NoOutput: " + object);
     }
 
-    @Override public void close() {
+    @Override
+    public void close() {
       // nothing
     }
   }
@@ -47,7 +51,8 @@ public class NoOutput<O, R> extends Output<O, R> {
     this.numShards = numShards;
   }
 
-  @Override public List<? extends OutputWriter<O>> createWriters() {
+  @Override
+  public List<? extends OutputWriter<O>> createWriters() {
     ImmutableList.Builder<Writer<O>> out = ImmutableList.builder();
     for (int i = 0; i < numShards; i++) {
       out.add(new Writer<O>());
@@ -58,7 +63,8 @@ public class NoOutput<O, R> extends Output<O, R> {
   /**
    * Returns null.
    */
-  @Override public R finish(Collection<? extends OutputWriter<O>> writers) {
+  @Override
+  public R finish(Collection<? extends OutputWriter<O>> writers) {
     return null;
   }
 

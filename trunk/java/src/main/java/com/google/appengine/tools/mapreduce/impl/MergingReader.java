@@ -83,8 +83,7 @@ final class MergingReader<K, V> extends InputReader<KeyValue<K, Iterator<V>>> {
             return comparator.compare(r1.peek().getKey(), r2.peek().getKey());
           }
         };
-    lowestReaderQueue = new PriorityQueue<PeekingInputReader<KeyValue<ByteBuffer, Iterator<V>>>>(
-        Math.max(1, readers.size()), nextReaderComparator);
+    lowestReaderQueue = new PriorityQueue<>(Math.max(1, readers.size()), nextReaderComparator);
     for (PeekingInputReader<KeyValue<ByteBuffer, Iterator<V>>> reader : readers) {
       reader.beginSlice();
       addReaderToQueueIfNotEmpty(reader);
@@ -168,7 +167,7 @@ final class MergingReader<K, V> extends InputReader<KeyValue<K, Iterator<V>>> {
    * @throws NoSuchElementException if there are no more keys in the input.
    */
   @Override
-  public KeyValue<K, Iterator<V>> next() throws IOException, NoSuchElementException {
+  public KeyValue<K, Iterator<V>> next() throws NoSuchElementException {
     skipLeftoverItems();
     PeekingInputReader<KeyValue<ByteBuffer, Iterator<V>>> reader = lowestReaderQueue.remove();
     KeyValue<ByteBuffer, Iterator<V>> lowest = reader.next();

@@ -57,7 +57,7 @@ public class SortTest extends TestCase {
       key.rewind();
       ByteBuffer value = ByteBuffer.allocate(VALUE_SIZE);
       remaining--;
-      return new KeyValue<ByteBuffer, ByteBuffer>(key, value);
+      return new KeyValue<>(key, value);
     }
 
     @Override
@@ -68,6 +68,7 @@ public class SortTest extends TestCase {
 
   private static final class MapSortContext extends SortContext {
 
+    @SuppressWarnings("serial")
     public MapSortContext() {
       super(new IncrementalTaskContext("TestJob", 1, 1, "calls", "time"),
         new OutputWriter<KeyValue<ByteBuffer, Iterator<ByteBuffer>>>() {
@@ -84,15 +85,14 @@ public class SortTest extends TestCase {
       });
     }
 
-    LinkedHashMap<ByteBuffer, List<ByteBuffer>> map =
-        new LinkedHashMap<ByteBuffer, List<ByteBuffer>>();
+    LinkedHashMap<ByteBuffer, List<ByteBuffer>> map = new LinkedHashMap<>();
     int sameKeyCount = 0;
 
     @Override
     public void emit(ByteBuffer key, List<ByteBuffer> values) throws IOException {
       List<ByteBuffer> list = map.get(key);
       if (list == null) {
-        map.put(key, new ArrayList<ByteBuffer>(values));
+        map.put(key, new ArrayList<>(values));
       } else {
         list.addAll(values);
         sameKeyCount++;
@@ -113,7 +113,7 @@ public class SortTest extends TestCase {
     // Assumes no collisions.
     try {
       sortUntilFull(s, new StringStringGenerator(numberToWrite),
-          new KeyValue<ByteBuffer, ByteBuffer>(ByteBuffer.allocate(1), ByteBuffer.allocate(1)));
+          new KeyValue<>(ByteBuffer.allocate(1), ByteBuffer.allocate(1)));
       fail();
     } catch (IllegalArgumentException e) {
       // expected
@@ -141,7 +141,7 @@ public class SortTest extends TestCase {
     SortWorker s = createWorker(numberToWrite);
     // Assumes no collisions.
     Map<ByteBuffer, List<ByteBuffer>> map = sortUntilFull(s,
-        new StringStringGenerator(numberToWrite - 1), new KeyValue<ByteBuffer, ByteBuffer>(
+        new StringStringGenerator(numberToWrite - 1), new KeyValue<>(
             ByteBuffer.allocate(0),
             ByteBuffer.allocate(StringStringGenerator.VALUE_SIZE)));
     assertEquals(numberToWrite, map.size());
@@ -160,7 +160,7 @@ public class SortTest extends TestCase {
     SortWorker s = createWorker(numberToWrite);
     // Assumes no collisions.
     Map<ByteBuffer, List<ByteBuffer>> map = sortUntilFull(s,
-        new StringStringGenerator(numberToWrite - 1), new KeyValue<ByteBuffer, ByteBuffer>(
+        new StringStringGenerator(numberToWrite - 1), new KeyValue<>(
             ByteBuffer.wrap(StringStringGenerator.MIN_VALUE),
             ByteBuffer.allocate(StringStringGenerator.VALUE_SIZE)));
     assertTrue(s.isFull()); // Confirms the bufferCapacity setting above.
@@ -178,7 +178,7 @@ public class SortTest extends TestCase {
     SortWorker s = createWorker(numberToWrite);
     // Assumes no collisions.
     Map<ByteBuffer, List<ByteBuffer>> map = sortUntilFull(s,
-        new StringStringGenerator(numberToWrite - 1), new KeyValue<ByteBuffer, ByteBuffer>(
+        new StringStringGenerator(numberToWrite - 1), new KeyValue<>(
             ByteBuffer.wrap(StringStringGenerator.MAX_VALUE),
             ByteBuffer.allocate(StringStringGenerator.VALUE_SIZE)));
     assertTrue(s.isFull()); // Confirms the bufferCapacity setting above.
@@ -198,9 +198,8 @@ public class SortTest extends TestCase {
     LinkedHashMap<ByteBuffer, List<ByteBuffer>> map =
         sortUntilFull(s, new StringStringGenerator(numberToWrite - 1), null);
     ByteBuffer last = map.keySet().toArray(new ByteBuffer[] {})[numberToWrite - 2];
-    map = sortUntilFull(s, new StringStringGenerator(numberToWrite - 1), new KeyValue<
-        ByteBuffer, ByteBuffer>(
-        last.slice(), ByteBuffer.allocate(StringStringGenerator.VALUE_SIZE)));
+    map = sortUntilFull(s, new StringStringGenerator(numberToWrite - 1),
+        new KeyValue<>(last.slice(), ByteBuffer.allocate(StringStringGenerator.VALUE_SIZE)));
     assertTrue(s.isFull()); // Confirms the bufferCapacity setting above.
     assertEquals(numberToWrite - 1, map.size());
     String previous = "\0";
@@ -225,8 +224,7 @@ public class SortTest extends TestCase {
 
   public void testValuesSegmentation() {
     int uniqueItems = 10;
-    List<Iterator<KeyValue<ByteBuffer, ByteBuffer>>> iters =
-        new ArrayList<Iterator<KeyValue<ByteBuffer, ByteBuffer>>>();
+    List<Iterator<KeyValue<ByteBuffer, ByteBuffer>>> iters = new ArrayList<>();
     int numDups = 2 * (int) Math.ceil((double) SortWorker.BATCHED_ITEM_SIZE_PER_EMIT
         / (double) StringStringGenerator.VALUE_SIZE) + 1;
     for (int i = 0; i < numDups; i++) {
@@ -330,8 +328,7 @@ public class SortTest extends TestCase {
     SortWorker worker = new SortWorker();
     worker.beginSlice();
     StringStringGenerator gen = new StringStringGenerator(size);
-    List<KeyValue<ByteBuffer, ByteBuffer>> input =
-        new ArrayList<KeyValue<ByteBuffer, ByteBuffer>>(size);
+    List<KeyValue<ByteBuffer, ByteBuffer>> input = new ArrayList<>(size);
     for (int i = 0; i < 1000; i++) {
       KeyValue<ByteBuffer, ByteBuffer> next = gen.next();
       worker.addValue(next.getKey(), next.getValue());
@@ -385,5 +382,4 @@ public class SortTest extends TestCase {
     sorter.setContext(originalContext);
     return context.map;
   }
-
 }

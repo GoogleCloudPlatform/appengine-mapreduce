@@ -21,13 +21,15 @@ import java.util.List;
  * @param <O> type of values accepted by this output
  */
 public class InMemoryOutput<O> extends Output<O, List<List<O>>> {
+
   private static final long serialVersionUID = 184437617254585618L;
 
   public static <O> InMemoryOutput<O> create(int numShards) {
-    return new InMemoryOutput<O>(numShards);
+    return new InMemoryOutput<>(numShards);
   }
 
   private static class Writer<O> extends OutputWriter<O> {
+
     private static final long serialVersionUID = 528522943983621278L;
 
     private boolean closed = false;
@@ -58,7 +60,8 @@ public class InMemoryOutput<O> extends Output<O, List<List<O>>> {
     this.shardCount = shardCount;
   }
 
-  @Override public List<? extends OutputWriter<O>> createWriters() {
+  @Override
+  public List<? extends OutputWriter<O>> createWriters() {
     ImmutableList.Builder<Writer<O>> out = ImmutableList.builder();
     for (int i = 0; i < shardCount; i++) {
       out.add(new Writer<O>());
@@ -71,7 +74,8 @@ public class InMemoryOutput<O> extends Output<O, List<List<O>>> {
    * reduce shard, which is a list of the values emitted by that shard, in
    * order.
    */
-  @Override public List<List<O>> finish(Collection<? extends OutputWriter<O>> writers) {
+  @Override
+  public List<List<O>> finish(Collection<? extends OutputWriter<O>> writers) {
     ImmutableList.Builder<List<O>> out = ImmutableList.builder();
     for (OutputWriter<O> w : writers) {
       Writer<O> writer = (Writer<O>) w;

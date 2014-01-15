@@ -9,7 +9,7 @@ import java.util.List;
  * Unit test for {@link GoogleCloudStorageLineInput}.
  */
 public class GoogleCloudStorageLineInputTest extends GoogleCloudStorageLineInputTestCase {
-  
+
   private static final String FILENAME = "CloudStorageLineInputTestFile";
   private static final String BUCKET = "CloudStorageLineInputTestBucket";
   public static final String RECORD = "01234567890\n";
@@ -17,7 +17,7 @@ public class GoogleCloudStorageLineInputTest extends GoogleCloudStorageLineInput
 
   GcsFilename filename = new GcsFilename(BUCKET, FILENAME);
   long fileSize;
-  
+
   @Override
   public void setUp() throws Exception {
     super.setUp();
@@ -46,9 +46,6 @@ public class GoogleCloudStorageLineInputTest extends GoogleCloudStorageLineInput
     assertSplitRange(8571, 10285, readers.get(5));
     assertSplitRange(10285, 12000, readers.get(6));
   }
-
-  
-// -------------------------- STATIC METHODS --------------------------
 
   private static void assertSplitRange(int start, int end, InputReader<byte[]> reader) {
     GoogleCloudStorageLineInputReader r = (GoogleCloudStorageLineInputReader) reader;

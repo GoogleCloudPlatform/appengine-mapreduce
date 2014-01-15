@@ -18,11 +18,15 @@ public class UnmarshallingInputReader<T> extends InputReader<T> {
 
   private static final long serialVersionUID = -5155146191805613155L;
   private final InputReader<ByteBuffer> reader;
-  protected final Marshaller<T> marshaller;
+  private final Marshaller<T> marshaller;
 
-  public UnmarshallingInputReader(InputReader<ByteBuffer> reader, Marshaller<T> marshaller){
+  public UnmarshallingInputReader(InputReader<ByteBuffer> reader, Marshaller<T> marshaller) {
     this.reader = checkNotNull(reader);
     this.marshaller = checkNotNull(marshaller);
+  }
+
+  public Marshaller<T> getMarshaller() {
+    return marshaller;
   }
 
   @Override

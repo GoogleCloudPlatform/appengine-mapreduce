@@ -108,7 +108,7 @@ public class MarshallersTest extends TestCase {
     Random r = new Random(0);
     preformAllChecks(m, new BigInteger(8 * (1024 * 1024 + 10), r));
     // Testing a map
-    Map<String, String> map = new LinkedHashMap<String, String>();
+    Map<String, String> map = new LinkedHashMap<>();
     map.put("foo", "bar");
     map.put("baz", "bat");
     preformValidChecks(m, map);
@@ -178,7 +178,7 @@ public class MarshallersTest extends TestCase {
     Marshaller<KeyValue<Integer, Integer>> m =
         Marshallers.<Integer, Integer>getKeyValueMarshaller(intMarshaller, intMarshaller);
     for (int i = 0; i < 10000; i++) {
-      assertRoundTripEquality(m, new KeyValue<Integer, Integer>(i, -i));
+      assertRoundTripEquality(m, new KeyValue<>(i, -i));
     }
   }
 
@@ -186,15 +186,12 @@ public class MarshallersTest extends TestCase {
     Marshaller<Integer> intMarshaller = Marshallers.getIntegerMarshaller();
     Marshaller<String> stringMarshaller = Marshallers.getStringMarshaller();
     Marshaller<KeyValue<Integer, String>> nestedMarshaller =
-        Marshallers.<Integer, String>getKeyValueMarshaller(intMarshaller, stringMarshaller);
-    Marshaller<KeyValue<KeyValue<Integer, String>, KeyValue<Integer, String>>> m = Marshallers.<
-        KeyValue<Integer, String>, KeyValue<Integer, String>>getKeyValueMarshaller(nestedMarshaller,
-        nestedMarshaller);
+        Marshallers.getKeyValueMarshaller(intMarshaller, stringMarshaller);
+    Marshaller<KeyValue<KeyValue<Integer, String>, KeyValue<Integer, String>>> m =
+        Marshallers.getKeyValueMarshaller(nestedMarshaller, nestedMarshaller);
     for (int i = 0; i < 10000; i++) {
-      assertRoundTripEquality(m, new KeyValue<KeyValue<Integer, String>, KeyValue<Integer, String>>(
-          new KeyValue<Integer, String>(i, "Foo" + i),
-          new KeyValue<Integer, String>(-1, "Bar-" + i)));
+      assertRoundTripEquality(m,
+          new KeyValue<>(new KeyValue<>(i, "Foo" + i), new KeyValue<>(-1, "Bar-" + i)));
     }
   }
-
 }

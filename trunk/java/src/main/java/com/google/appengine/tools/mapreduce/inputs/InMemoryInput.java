@@ -7,7 +7,6 @@ import com.google.appengine.tools.mapreduce.InputReader;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableList.Builder;
 
-import java.io.IOException;
 import java.util.List;
 import java.util.NoSuchElementException;
 
@@ -16,22 +15,23 @@ import java.util.NoSuchElementException;
  *
  * @param <I> type of values returned by this input
  */
-public class InMemoryInput<I> extends Input<I> {
+public final class InMemoryInput<I> extends Input<I> {
 
   private static final long serialVersionUID = -7058791377469359722L;
   private final List<InMemoryInputReader<I>> readers;
 
   private static final class InMemoryInputReader<I> extends InputReader<I> {
+
     private static final long serialVersionUID = -7442905939930896134L;
     int pos = 0;
-    private List<I> results;
+    private final List<I> results;
 
     InMemoryInputReader(List<I> results) {
       this.results = ImmutableList.copyOf(results);
     }
 
     @Override
-    public I next() throws IOException, NoSuchElementException {
+    public I next() throws NoSuchElementException {
       if (pos >= results.size()) {
         throw new NoSuchElementException();
       }
@@ -47,7 +47,7 @@ public class InMemoryInput<I> extends Input<I> {
     }
 
     @Override
-    public void open() throws IOException {
+    public void open() {
       pos = 0;
     }
 
@@ -57,13 +57,13 @@ public class InMemoryInput<I> extends Input<I> {
     checkNotNull(input, "Null input");
     Builder<InMemoryInputReader<I>> builder = ImmutableList.builder();
     for (List<I> shard : input) {
-      builder.add(new InMemoryInputReader<I>(shard));
+      builder.add(new InMemoryInputReader<>(shard));
     }
     readers = builder.build();
   }
 
   @Override
-  public List<? extends InputReader<I>> createReaders() throws IOException {
+  public List<? extends InputReader<I>> createReaders() {
     return readers;
   }
 }

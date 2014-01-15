@@ -20,8 +20,8 @@ public class PeekingInputReader<T> extends UnmarshallingInputReader<T> implement
 
   private static final long serialVersionUID = -1740668578124485473L;
   // TODO(user): May be a problem if peeked values are large b/10294530
-  private transient T peekedItem = null;
-  private boolean peeked = false;
+  private transient T peekedItem; // assigned in readObject & peek
+  private boolean peeked; // assigned in readObject & peek
 
   public PeekingInputReader(InputReader<ByteBuffer> reader, Marshaller<T> marshaller){
     super(reader, marshaller);
@@ -36,7 +36,7 @@ public class PeekingInputReader<T> extends UnmarshallingInputReader<T> implement
       IOException {
     aInputStream.defaultReadObject();
     peekedItem =
-        SerializationUtil.readObjectFromObjectStreamUsingMarshaller(marshaller, aInputStream);
+        SerializationUtil.readObjectFromObjectStreamUsingMarshaller(getMarshaller(), aInputStream);
   }
 
   /**
@@ -45,7 +45,7 @@ public class PeekingInputReader<T> extends UnmarshallingInputReader<T> implement
    */
   private void writeObject(ObjectOutputStream aOutputStream) throws IOException {
     aOutputStream.defaultWriteObject();
-    SerializationUtil.writeObjectToOutputStreamUsingMarshaller(peekedItem, marshaller,
+    SerializationUtil.writeObjectToOutputStreamUsingMarshaller(peekedItem, getMarshaller(),
         aOutputStream);
   }
 

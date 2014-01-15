@@ -101,8 +101,7 @@ public class HashingSharderTest extends TestCase {
     int numItems = Math.min(10000, numInitialShards * numRehashedShards * 2);
     final Marshaller<Integer> marshaller = Marshallers.getIntegerMarshaller();
     HashingSharder sharder = new HashingSharder(numInitialShards);
-    ArrayList<ArrayList<Integer>> selectedShards =
-        new ArrayList<ArrayList<Integer>>(numInitialShards);
+    ArrayList<ArrayList<Integer>> selectedShards = new ArrayList<>(numInitialShards);
     for (int i = 0; i < numInitialShards; i++) {
       selectedShards.add(new ArrayList<Integer>());
     }
@@ -114,7 +113,7 @@ public class HashingSharderTest extends TestCase {
 
     sharder = new HashingSharder(numRehashedShards);
     for (ArrayList<Integer> initialShard : selectedShards) {
-      Map<Integer, Integer> rehashedShardCount = new HashMap<Integer, Integer>(numRehashedShards);
+      Map<Integer, Integer> rehashedShardCount = new HashMap<>(numRehashedShards);
       for (Integer item : initialShard) {
         int newShard = sharder.getShardForKey(marshaller.toBytes(item));
         Integer intsOnShard = rehashedShardCount.get(newShard);

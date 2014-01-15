@@ -1,6 +1,5 @@
 package com.google.appengine.tools.mapreduce.impl;
 
-import com.google.appengine.tools.mapreduce.Counters;
 import com.google.appengine.tools.mapreduce.impl.shardedjob.IncrementalTask;
 
 

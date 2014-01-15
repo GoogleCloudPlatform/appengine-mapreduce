@@ -26,6 +26,7 @@ import java.util.NoSuchElementException;
 public class MergingReaderTest extends TestCase {
 
   private static class StaticInputReader extends InputReader<ByteBuffer> {
+
     private static final long serialVersionUID = 1L;
     private ArrayList<String> keys;
     private ArrayList<List<Integer>> valueSets;
@@ -34,10 +35,10 @@ public class MergingReaderTest extends TestCase {
 
     public StaticInputReader(LinkedHashMap<String, List<Integer>> results) {
       super();
-      this.marshaller = new KeyValuesMarshaller<String, Integer>(Marshallers.getStringMarshaller(),
+      this.marshaller = new KeyValuesMarshaller<>(Marshallers.getStringMarshaller(),
           Marshallers.getIntegerMarshaller());
-      this.keys = new ArrayList<String>(results.keySet());
-      this.valueSets = new ArrayList<List<Integer>>(results.values());
+      this.keys = new ArrayList<>(results.keySet());
+      this.valueSets = new ArrayList<>(results.values());
   }
 
     @Override
@@ -45,8 +46,8 @@ public class MergingReaderTest extends TestCase {
       if (offset >= keys.size()) {
         throw new NoSuchElementException();
       }
-      ByteBuffer result = marshaller.toBytes(new KeyValue<String, Iterator<Integer>>(
-          keys.get(offset), valueSets.get(offset).iterator()));
+      ByteBuffer result = marshaller.toBytes(
+          new KeyValue<>(keys.get(offset), valueSets.get(offset).iterator()));
       offset++;
       return result;
     }
@@ -58,34 +59,31 @@ public class MergingReaderTest extends TestCase {
   }
 
   public void testNoReaders() throws IOException {
-    ArrayList<PeekingInputReader<KeyValue<ByteBuffer, Iterator<Long>>>> readers =
-        new ArrayList<PeekingInputReader<KeyValue<ByteBuffer, Iterator<Long>>>>();
+    List<PeekingInputReader<KeyValue<ByteBuffer, Iterator<Long>>>> readers = new ArrayList<>();
     MergingReader<String, Long> merging =
-        new MergingReader<String, Long>(readers, Marshallers.getStringMarshaller());
+        new MergingReader<>(readers, Marshallers.getStringMarshaller());
     merging.beginSlice();
     try {
       KeyValue<String, Iterator<Long>> next = merging.next();
-      fail("" + next);
+      fail(String.valueOf(next));
     } catch (NoSuchElementException e) {
       // expected
     }
   }
 
   public void testOneReader() throws IOException {
-    ArrayList<PeekingInputReader<KeyValue<ByteBuffer, Iterator<Integer>>>> readers =
-        new ArrayList<PeekingInputReader<KeyValue<ByteBuffer, Iterator<Integer>>>>();
-
+    List<PeekingInputReader<KeyValue<ByteBuffer, Iterator<Integer>>>> readers = new ArrayList<>();
     int numKeys = 10;
     int valuesPerKey = 10;
 
     readers.add(createReader(numKeys, valuesPerKey));
     MergingReader<String, Integer> merging =
-        new MergingReader<String, Integer>(readers, Marshallers.getStringMarshaller());
+        new MergingReader<>(readers, Marshallers.getStringMarshaller());
     merging.beginSlice();
     int valueCount = 0;
     for (int key = 0; key < numKeys; key++) {
       KeyValue<String, Iterator<Integer>> next = merging.next();
-      assertEquals("" + key, next.getKey());
+      assertEquals(String.valueOf(key), next.getKey());
       valueCount += Iterators.toArray(next.getValue(), Integer.class).length;
     }
     assertEquals(numKeys * valuesPerKey, valueCount);
@@ -98,9 +96,7 @@ public class MergingReaderTest extends TestCase {
   }
 
   public void testMultipleReaders() throws IOException {
-    ArrayList<PeekingInputReader<KeyValue<ByteBuffer, Iterator<Integer>>>> readers =
-        new ArrayList<PeekingInputReader<KeyValue<ByteBuffer, Iterator<Integer>>>>();
-
+    List<PeekingInputReader<KeyValue<ByteBuffer, Iterator<Integer>>>> readers = new ArrayList<>();
     int readerCount = 10;
     int numKeys = 10;
     int valuesPerKey = 10;
@@ -109,14 +105,12 @@ public class MergingReaderTest extends TestCase {
       readers.add(createReader(numKeys, valuesPerKey));
     }
     MergingReader<String, Integer> merging =
-        new MergingReader<String, Integer>(readers, Marshallers.getStringMarshaller());
+        new MergingReader<>(readers, Marshallers.getStringMarshaller());
     verifyExpectedOutput(readerCount, numKeys, valuesPerKey, merging);
   }
-  
-  public void testSerializingMultipleReaders() throws IOException, ClassNotFoundException {
-    ArrayList<PeekingInputReader<KeyValue<ByteBuffer, Iterator<Integer>>>> readers =
-        new ArrayList<PeekingInputReader<KeyValue<ByteBuffer, Iterator<Integer>>>>();
 
+  public void testSerializingMultipleReaders() throws IOException, ClassNotFoundException {
+    List<PeekingInputReader<KeyValue<ByteBuffer, Iterator<Integer>>>> readers = new ArrayList<>();
     int readerCount = 10;
     int numKeys = 10;
     int valuesPerKey = 10;
@@ -125,7 +119,7 @@ public class MergingReaderTest extends TestCase {
       readers.add(createReader(numKeys, valuesPerKey));
     }
     MergingReader<String, Integer> merging =
-        new MergingReader<String, Integer>(readers, Marshallers.getStringMarshaller());
+        new MergingReader<>(readers, Marshallers.getStringMarshaller());
     merging.beginSlice();
     int valueCount = 0;
     for (int key = 0; key < numKeys; key++) {
@@ -133,7 +127,7 @@ public class MergingReaderTest extends TestCase {
       merging = reconstruct(merging);
       merging.beginSlice();
       KeyValue<String, Iterator<Integer>> next = merging.next();
-      assertEquals("" + key, next.getKey());
+      assertEquals(String.valueOf(key), next.getKey());
       valueCount += Iterators.toArray(next.getValue(), Integer.class).length;
     }
     assertEquals(readerCount * numKeys * valuesPerKey, valueCount);
@@ -153,11 +147,9 @@ public class MergingReaderTest extends TestCase {
       // expected
     }
   }
-  
-  public void testSerializingIgnoringValues() throws IOException, ClassNotFoundException {
-    ArrayList<PeekingInputReader<KeyValue<ByteBuffer, Iterator<Integer>>>> readers =
-        new ArrayList<PeekingInputReader<KeyValue<ByteBuffer, Iterator<Integer>>>>();
 
+  public void testSerializingIgnoringValues() throws IOException, ClassNotFoundException {
+    List<PeekingInputReader<KeyValue<ByteBuffer, Iterator<Integer>>>> readers = new ArrayList<>();
     int readerCount = 10;
     int numKeys = 10;
     int valuesPerKey = 100;
@@ -166,14 +158,14 @@ public class MergingReaderTest extends TestCase {
       readers.add(createReader(numKeys, valuesPerKey));
     }
     MergingReader<String, Integer> merging =
-        new MergingReader<String, Integer>(readers, Marshallers.getStringMarshaller());
+        new MergingReader<>(readers, Marshallers.getStringMarshaller());
     merging.beginSlice();
     for (int key = 0; key < numKeys; key++) {
       merging.endSlice();
       merging = reconstruct(merging);
       merging.beginSlice();
       KeyValue<String, Iterator<Integer>> next = merging.next();
-      assertEquals("" + key, next.getKey());
+      assertEquals(String.valueOf(key), next.getKey());
     }
     try {
       merging.next();
@@ -191,16 +183,12 @@ public class MergingReaderTest extends TestCase {
       // expected
     }
   }
-  
-  @SuppressWarnings("unchecked")
+
   private MergingReader<String, Integer> reconstruct(
-      MergingReader<String, Integer> reader) throws IOException, ClassNotFoundException { 
+      MergingReader<String, Integer> reader) throws IOException, ClassNotFoundException {
     ByteArrayOutputStream bout = new ByteArrayOutputStream();
-    ObjectOutputStream oout = new ObjectOutputStream(bout);
-    try {
+    try (ObjectOutputStream oout = new ObjectOutputStream(bout)) {
       oout.writeObject(reader);
-    } finally {
-      oout.close();
     }
     ObjectInputStream in = new ObjectInputStream(new ByteArrayInputStream(bout.toByteArray()));
     return (MergingReader<String, Integer>) in.readObject();
@@ -212,7 +200,7 @@ public class MergingReaderTest extends TestCase {
     int valueCount = 0;
     for (int key = 0; key < numKeys; key++) {
       KeyValue<String, Iterator<Integer>> next = merging.next();
-      assertEquals("" + key, next.getKey());
+      assertEquals(String.valueOf(key), next.getKey());
       valueCount += Iterators.toArray(next.getValue(), Integer.class).length;
     }
     assertEquals(readerCount * numKeys * valuesPerKey, valueCount);
@@ -226,26 +214,24 @@ public class MergingReaderTest extends TestCase {
 
   private PeekingInputReader<KeyValue<ByteBuffer, Iterator<Integer>>> createReader(int keys,
       int valuesPerKey) {
-    KeyValuesMarshaller<ByteBuffer, Integer> inMarshaller = new KeyValuesMarshaller<ByteBuffer,
-        Integer>(Marshallers.getByteBufferMarshaller(), Marshallers.getIntegerMarshaller());
+    KeyValuesMarshaller<ByteBuffer, Integer> inMarshaller = new KeyValuesMarshaller<>(
+        Marshallers.getByteBufferMarshaller(), Marshallers.getIntegerMarshaller());
     StaticInputReader staticInputReader =
         new StaticInputReader(createSampleInput(keys, valuesPerKey));
-    PeekingInputReader<KeyValue<ByteBuffer, Iterator<Integer>>> reader = new PeekingInputReader<
-        KeyValue<ByteBuffer, Iterator<Integer>>>(staticInputReader, inMarshaller);
+    PeekingInputReader<KeyValue<ByteBuffer, Iterator<Integer>>> reader =
+        new PeekingInputReader<>(staticInputReader, inMarshaller);
     return reader;
   }
 
   private LinkedHashMap<String, List<Integer>> createSampleInput(int keys, int valuesPerKey) {
-    LinkedHashMap<String, List<Integer>> result = new LinkedHashMap<String, List<Integer>>();
+    LinkedHashMap<String, List<Integer>> result = new LinkedHashMap<>();
     for (int key = 0; key < keys; key++) {
-      List<Integer> values = new ArrayList<Integer>();
+      List<Integer> values = new ArrayList<>();
       for (int i = 0; i < valuesPerKey; i++) {
         values.add(i);
       }
-      result.put("" + key, values);
+      result.put(String.valueOf(key), values);
     }
     return result;
   }
-
-
 }

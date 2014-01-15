@@ -52,7 +52,7 @@ class ShardRetryState<T extends IncrementalTask> {
 
   static <T extends IncrementalTask> ShardRetryState<T> createFor(
       IncrementalTaskState<T> taskState) {
-    return new ShardRetryState<T>(taskState.getTaskId(), taskState.getTask(), 0);
+    return new ShardRetryState<>(taskState.getTaskId(), taskState.getTask(), 0);
   }
 
   // ShardRetryState should be using the same transactions as IncrementalTaskState
@@ -77,7 +77,7 @@ class ShardRetryState<T extends IncrementalTask> {
     static <T extends IncrementalTask> ShardRetryState<T> fromEntity(Entity in) {
       T initialTask = SerializationUtil.deserializeFromDatastoreProperty(in, INITIAL_TASK_PROPERTY);
       int retryCount = Ints.checkedCast((Long) in.getProperty(RETRY_COUNT_PROPERTY));
-      return new ShardRetryState<T>(in.getKey().getParent().getName(), initialTask, retryCount);
+      return new ShardRetryState<>(in.getKey().getParent().getName(), initialTask, retryCount);
     }
   }
 }

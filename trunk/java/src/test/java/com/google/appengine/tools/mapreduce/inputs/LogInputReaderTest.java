@@ -60,7 +60,7 @@ public class LogInputReaderTest extends TestCase {
     LogQuery logQuery = LogQuery.Builder.withDefaults();
     logQuery.startTimeUsec(startTimeUsec);
     logQuery.endTimeUsec(endTimeUsec);
-    ArrayList<String> versionList = new ArrayList<String>();
+    ArrayList<String> versionList = new ArrayList<>();
     versionList.add(VERSION_ID);
     logQuery.majorVersionIds(versionList);
     return new LogInputReader(logQuery);

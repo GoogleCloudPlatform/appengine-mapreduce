@@ -38,7 +38,7 @@ public class IncrementalTaskState<T extends IncrementalTask> {
    */
   static <T extends IncrementalTask> IncrementalTaskState<T> create(String taskId, String jobId,
       long createTime, T initialTask) {
-    return new IncrementalTaskState<T>(taskId, jobId, createTime, checkNotNull(initialTask),
+    return new IncrementalTaskState<>(taskId, jobId, createTime, checkNotNull(initialTask),
         new Status(StatusCode.RUNNING));
   }
 
@@ -129,7 +129,6 @@ public class IncrementalTaskState<T extends IncrementalTask> {
     private static final String NEXT_SEQUENCE_NUMBER_PROPERTY = "sequenceNumber";
     private static final String RETRY_COUNT_PROPERTY = "retryCount";
     private static final String NEXT_TASK_PROPERTY = "nextTask";
-    private static final String PARTIAL_RESULT_PROPERTY = "partialResult";
     private static final String STATUS_PROPERTY = "status";
 
     static Key makeKey(String taskId) {

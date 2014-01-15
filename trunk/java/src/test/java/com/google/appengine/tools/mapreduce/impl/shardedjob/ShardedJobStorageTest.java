@@ -58,7 +58,7 @@ public class ShardedJobStorageTest extends EndToEndTestCase {
   }
 
   private ShardedJobStateImpl<TestTask> createGenericJobState() {
-    return new ShardedJobStateImpl<TestTask>("jobId",
+    return new ShardedJobStateImpl<>("jobId",
         new TestController(11),
         new ShardedJobSettings.Builder().build(),
         10,
@@ -78,5 +78,4 @@ public class ShardedJobStorageTest extends EndToEndTestCase {
     Entity singleEntity = DATASTORE.prepare(query).asSingleEntity();
     assertEquals(entity, singleEntity);
   }
-
 }

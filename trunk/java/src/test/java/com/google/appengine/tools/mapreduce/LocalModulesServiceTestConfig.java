@@ -228,7 +228,7 @@ public class LocalModulesServiceTestConfig implements LocalServiceTestConfig {
       LocalServiceContext context = (LocalServiceContext) contextField.get(apiProxyLocal);
       Field serviceCacheField = apiProxyClass.getDeclaredField("serviceCache");
       serviceCacheField.setAccessible(true);
-      @SuppressWarnings("unchecked") Map<String, LocalRpcService> serviceCache =
+      Map<String, LocalRpcService> serviceCache =
           (Map<String, LocalRpcService>) serviceCacheField.get(apiProxyLocal);
       modulesService = serviceCache.put(DummyModulesService.PACKAGE, new DummyModulesService(
           context.getLocalServerEnvironment().getHostName(), defaultModule, modules));
@@ -243,7 +243,7 @@ public class LocalModulesServiceTestConfig implements LocalServiceTestConfig {
       ApiProxyLocal apiProxyLocal = LocalServiceTestHelper.getApiProxyLocal();
       Field serviceCacheField = apiProxyLocal.getClass().getDeclaredField("serviceCache");
       serviceCacheField.setAccessible(true);
-      @SuppressWarnings("unchecked") Map<String, LocalRpcService> serviceCache =
+      Map<String, LocalRpcService> serviceCache =
           (Map<String, LocalRpcService>) serviceCacheField.get(apiProxyLocal);
       if (modulesService != null) {
         modulesService = serviceCache.put(DummyModulesService.PACKAGE, modulesService);

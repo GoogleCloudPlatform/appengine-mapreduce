@@ -23,7 +23,7 @@ public class InProcessShardedJobRunner {
    */
   public static <T extends IncrementalTask> void runJob(
       List<T> initialTasks, ShardedJobController<T> controller) {
-    List<T> results = new ArrayList<T>();
+    List<T> results = new ArrayList<>();
     for (T task : initialTasks) {
       Preconditions.checkNotNull(task, "Null initial task: %s", initialTasks);
       do {

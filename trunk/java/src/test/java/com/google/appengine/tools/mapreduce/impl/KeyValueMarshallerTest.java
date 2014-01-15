@@ -29,7 +29,7 @@ public class KeyValueMarshallerTest extends TestCase {
   public void testThrowsCorruptDataException() {
     Marshaller<ByteBuffer> byteBufferMarshaller = Marshallers.getByteBufferMarshaller();
     KeyValueMarshaller<ByteBuffer, ByteBuffer> m =
-        new KeyValueMarshaller<ByteBuffer, ByteBuffer>(byteBufferMarshaller, byteBufferMarshaller);
+        new KeyValueMarshaller<>(byteBufferMarshaller, byteBufferMarshaller);
     Random r = new Random(0);
     ByteBuffer key = getRandomByteBuffer(r);
     try {
@@ -49,16 +49,14 @@ public class KeyValueMarshallerTest extends TestCase {
   public void testRandomData() {
     Marshaller<ByteBuffer> byteBufferMarshaller = Marshallers.getByteBufferMarshaller();
     KeyValueMarshaller<ByteBuffer, ByteBuffer> m =
-        new KeyValueMarshaller<ByteBuffer, ByteBuffer>(byteBufferMarshaller, byteBufferMarshaller);
+        new KeyValueMarshaller<>(byteBufferMarshaller, byteBufferMarshaller);
     Random r = new Random(0);
     for (int i = 0; i < 10000; i++) {
       ByteBuffer key = getRandomByteBuffer(r);
       ByteBuffer value = getRandomByteBuffer(r);
-      assertRoundTripEquality(m, new KeyValue<ByteBuffer, ByteBuffer>(key, value));
+      assertRoundTripEquality(m, new KeyValue<>(key, value));
     }
   }
-
-
 
   private ByteBuffer getRandomByteBuffer(Random r) {
     byte[] bytes = new byte[10];
@@ -66,5 +64,4 @@ public class KeyValueMarshallerTest extends TestCase {
     ByteBuffer b = ByteBuffer.wrap(bytes);
     return b;
   }
-
 }

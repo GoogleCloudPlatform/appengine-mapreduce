@@ -7,19 +7,21 @@ import com.google.appengine.tools.mapreduce.InputReader;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 
-import java.io.IOException;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Random;
 
 /**
+ * An input that produce random values.
  *
  * @author ohler@google.com (Christian Ohler)
  */
-public class RandomLongInput extends Input<Long> {
+public final class RandomLongInput extends Input<Long> {
+
   private static final long serialVersionUID = 524476737411668844L;
 
   private static class Reader extends InputReader<Long> {
+
     private static final long serialVersionUID = 764351972869495917L;
 
     private Random random;
@@ -33,11 +35,13 @@ public class RandomLongInput extends Input<Long> {
       random = new Random(seed);
     }
 
-    @Override public Double getProgress() {
+    @Override
+    public Double getProgress() {
       return toEmit <= 0 ? 1 : emitted / (double) toEmit;
     }
 
-    @Override public Long next() {
+    @Override
+    public Long next() {
       if (emitted >= toEmit) {
         throw new NoSuchElementException();
       }
@@ -46,7 +50,7 @@ public class RandomLongInput extends Input<Long> {
     }
 
     @Override
-    public void open() throws IOException {
+    public void open() {
       random = new Random(seed);
       emitted = 0;
     }

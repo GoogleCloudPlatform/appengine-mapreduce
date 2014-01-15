@@ -70,8 +70,7 @@ public class GoogleCloudStorageLineInput extends Input<byte[]> {
       shardCount = (int) (blobSize / MIN_SHARD_SIZE) + 1;
     }
 
-    List<GoogleCloudStorageLineInputReader> result =
-        new ArrayList<GoogleCloudStorageLineInputReader>();
+    List<GoogleCloudStorageLineInputReader> result = new ArrayList<>();
     long startOffset = 0L;
     for (int i = 1; i < shardCount; i++) {
       long endOffset = (i * blobSize) / shardCount;

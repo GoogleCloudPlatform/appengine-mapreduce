@@ -17,21 +17,25 @@ import java.util.NoSuchElementException;
  * @param <I> the type of input values formally (but not actually) produced by
  *            this input
  */
-public class NoInput<I> extends Input<I> {
+public final class NoInput<I> extends Input<I> {
+
   private static final long serialVersionUID = 214109122708935335L;
 
   public static <I> NoInput<I> create(int numShards) {
-    return new NoInput<I>(numShards);
+    return new NoInput<>(numShards);
   }
 
   private static class Reader<I> extends InputReader<I> {
+
     private static final long serialVersionUID = 171763263195134256L;
 
-    @Override public Double getProgress() {
+    @Override
+    public Double getProgress() {
       return 1.0;
     }
 
-    @Override public I next() {
+    @Override
+    public I next() {
       throw new NoSuchElementException();
     }
   }
@@ -42,7 +46,8 @@ public class NoInput<I> extends Input<I> {
     this.numShards = numShards;
   }
 
-  @Override public List<? extends InputReader<I>> createReaders() {
+  @Override
+  public List<? extends InputReader<I>> createReaders() {
     ImmutableList.Builder<Reader<I>> out = ImmutableList.builder();
     for (int i = 0; i < numShards; i++) {
       out.add(new Reader<I>());

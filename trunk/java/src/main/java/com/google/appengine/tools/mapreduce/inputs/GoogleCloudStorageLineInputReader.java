@@ -66,7 +66,7 @@ class GoogleCloudStorageLineInputReader extends InputReader<byte[]> {
   }
 
   @Override
-  public void beginSlice() throws IOException {
+  public void beginSlice() {
     Preconditions.checkState(in == null, "%s: Already initialized: %s", this, in);
     InputStream inputStream = Channels.newInputStream(
         GCS_SERVICE.openPrefetchingReadChannel(file, startOffset + offset, bufferSize));
@@ -96,7 +96,7 @@ class GoogleCloudStorageLineInputReader extends InputReader<byte[]> {
   }
 
   @Override
-  public byte[] next() throws IOException, NoSuchElementException {
+  public byte[] next() throws NoSuchElementException {
     return in.next();
   }
 

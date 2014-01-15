@@ -41,7 +41,7 @@ public class PeekingInputReaderTest extends TestCase {
 
   public void testPeeking() throws IOException {
     int numRecords = 10;
-    PeekingInputReader<Long> reader = new PeekingInputReader<Long>(new MarshallingInputReader<Long>(
+    PeekingInputReader<Long> reader = new PeekingInputReader<>(new MarshallingInputReader<>(
         new ConsecutiveLongInput.Reader(0L, numRecords), MARSHALLER), MARSHALLER);
     for (Long i = 0L; i < numRecords; i++) {
       assertEquals(i, reader.peek());
@@ -53,7 +53,7 @@ public class PeekingInputReaderTest extends TestCase {
 
   public void testPeekingTwice() throws IOException {
     int numRecords = 10;
-    PeekingInputReader<Long> reader = new PeekingInputReader<Long>(new MarshallingInputReader<Long>(
+    PeekingInputReader<Long> reader = new PeekingInputReader<>(new MarshallingInputReader<>(
         new ConsecutiveLongInput.Reader(0L, numRecords), MARSHALLER), MARSHALLER);
     for (Long i = 0L; i < numRecords; i++) {
       assertEquals(i, reader.peek());
@@ -66,7 +66,7 @@ public class PeekingInputReaderTest extends TestCase {
 
   public void testNotPeeking() throws IOException {
     int numRecords = 10;
-    PeekingInputReader<Long> reader = new PeekingInputReader<Long>(new MarshallingInputReader<Long>(
+    PeekingInputReader<Long> reader = new PeekingInputReader<>(new MarshallingInputReader<>(
         new ConsecutiveLongInput.Reader(0L, numRecords), MARSHALLER), MARSHALLER);
     for (Long i = 0L; i < numRecords; i++) {
       assertEquals(i, reader.next());
@@ -76,7 +76,7 @@ public class PeekingInputReaderTest extends TestCase {
 
   public void testSerializeWithoutPeeking() throws IOException {
     int numRecords = 10;
-    PeekingInputReader<Long> reader = new PeekingInputReader<Long>(new MarshallingInputReader<Long>(
+    PeekingInputReader<Long> reader = new PeekingInputReader<>(new MarshallingInputReader<>(
         new ConsecutiveLongInput.Reader(0L, numRecords), MARSHALLER), MARSHALLER);
     for (Long i = 0L; i <  numRecords; i++) {
       reader = reconstruct(reader);
@@ -87,11 +87,11 @@ public class PeekingInputReaderTest extends TestCase {
   }
 
   /**
-   * Tests Peeking after Reconstruct with nothing peeked. 
+   * Tests Peeking after Reconstruct with nothing peeked.
    */
   public void testPeekingAfterSerialization() throws IOException {
     int numRecords = 10;
-    PeekingInputReader<Long> reader = new PeekingInputReader<Long>(new MarshallingInputReader<Long>(
+    PeekingInputReader<Long> reader = new PeekingInputReader<>(new MarshallingInputReader<>(
         new ConsecutiveLongInput.Reader(0L, numRecords), MARSHALLER), MARSHALLER);
     for (Long i = 0L; i < numRecords; i++) {
       reader = reconstruct(reader);
@@ -102,13 +102,13 @@ public class PeekingInputReaderTest extends TestCase {
     assertNull(reader.peek());
     assertThrowsNoSuchElement(reader);
   }
-  
+
   /**
-   * Tests Next after Reconstruct with nothing peeked. 
+   * Tests Next after Reconstruct with nothing peeked.
    */
   public void testNextAfterSerialization() throws IOException {
     int numRecords = 10;
-    PeekingInputReader<Long> reader = new PeekingInputReader<Long>(new MarshallingInputReader<Long>(
+    PeekingInputReader<Long> reader = new PeekingInputReader<>(new MarshallingInputReader<>(
         new ConsecutiveLongInput.Reader(0L, numRecords), MARSHALLER), MARSHALLER);
     for (Long i = 0L; i < numRecords; i++) {
       reader = reconstruct(reader);
@@ -118,7 +118,7 @@ public class PeekingInputReaderTest extends TestCase {
     assertNull(reader.peek());
     assertThrowsNoSuchElement(reader);
   }
-  
+
   /**
    * Tests the following cases:
    * Peek after Reconstruct with something peeked.
@@ -126,7 +126,7 @@ public class PeekingInputReaderTest extends TestCase {
    */
   public void testPeekingWithSerialization() throws IOException {
     int numRecords = 10;
-    PeekingInputReader<Long> reader = new PeekingInputReader<Long>(new MarshallingInputReader<Long>(
+    PeekingInputReader<Long> reader = new PeekingInputReader<>(new MarshallingInputReader<>(
         new ConsecutiveLongInput.Reader(0L, numRecords), MARSHALLER), MARSHALLER);
     for (Long i = 0L; i < numRecords; i++) {
       assertEquals(i, reader.peek());
@@ -149,10 +149,8 @@ public class PeekingInputReaderTest extends TestCase {
     }
   }
 
-  @SuppressWarnings("unchecked")
   private PeekingInputReader<Long> reconstruct(PeekingInputReader<Long> in) {
     Marshaller<Serializable> marshaller = Marshallers.getSerializationMarshaller();
     return (PeekingInputReader<Long>) marshaller.fromBytes(marshaller.toBytes(in));
   }
-
 }

@@ -23,8 +23,8 @@ public class MarshallingOutputWriterUnmarshallingInputReaderTest extends TestCas
 
   public void testReaderWriter() throws IOException {
     Marshaller<String> stringMarshaller = Marshallers.getStringMarshaller();
-    MarshallingOutput<String, List<List<ByteBuffer>>> output = new MarshallingOutput<String,
-        List<List<ByteBuffer>>>(new InMemoryOutput<ByteBuffer>(1), stringMarshaller);
+    MarshallingOutput<String, List<List<ByteBuffer>>> output =
+        new MarshallingOutput<>(new InMemoryOutput<ByteBuffer>(1), stringMarshaller);
     Collection<MarshallingOutputWriter<String>> writers = output.createWriters();
     assertEquals(1, writers.size());
     MarshallingOutputWriter<String> writer = writers.iterator().next();
@@ -38,7 +38,7 @@ public class MarshallingOutputWriterUnmarshallingInputReaderTest extends TestCas
     writer.close();
     List<List<ByteBuffer>> data = output.finish(writers);
     UnmarshallingInput<String> input =
-        new UnmarshallingInput<String>(new InMemoryInput<ByteBuffer>(data), stringMarshaller);
+        new UnmarshallingInput<>(new InMemoryInput<>(data), stringMarshaller);
     List<InputReader<String>> readers = input.createReaders();
     assertEquals(1, readers.size());
     InputReader<String> reader = readers.get(0);
@@ -59,17 +59,15 @@ public class MarshallingOutputWriterUnmarshallingInputReaderTest extends TestCas
   public void testInputOutput() throws IOException {
     int numShards = 10;
     Marshaller<String> stringMarshaller = Marshallers.getStringMarshaller();
-    MarshallingOutput<String, List<List<ByteBuffer>>> output = new MarshallingOutput<String,
-        List<List<ByteBuffer>>>(new InMemoryOutput<ByteBuffer>(numShards), stringMarshaller);
+    MarshallingOutput<String, List<List<ByteBuffer>>> output =
+        new MarshallingOutput<>(new InMemoryOutput<ByteBuffer>(numShards), stringMarshaller);
     assertEquals(numShards, output.getNumShards());
     Collection<MarshallingOutputWriter<String>> writers = output.createWriters();
     assertEquals(numShards, writers.size());
     List<List<ByteBuffer>> data = output.finish(writers);
-
     UnmarshallingInput<String> input =
-        new UnmarshallingInput<String>(new InMemoryInput<ByteBuffer>(data), stringMarshaller);
+        new UnmarshallingInput<>(new InMemoryInput<>(data), stringMarshaller);
     List<InputReader<String>> readers = input.createReaders();
     assertEquals(numShards, readers.size());
   }
-
 }

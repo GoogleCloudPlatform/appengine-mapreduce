@@ -55,14 +55,10 @@ public class LineInputReaderTest extends TestCase {
     }
   }
 
-// ------------------------------ FIELDS ------------------------------
-
   InputStream input;
   private final List<String> content =
       ImmutableList.of("I", "am", "RecordReader", "Hello", "", "world", "!");
   private final List<Long> byteContentOffsets = Lists.newArrayListWithCapacity(content.size());
-
-// ------------------------ OVERRIDING METHODS ------------------------
 
   @Override
   protected void setUp() throws Exception {
@@ -75,8 +71,6 @@ public class LineInputReaderTest extends TestCase {
     }
     input = new BufferedInputStream(new NonResetableByteArrayInputStream(byteContent));
   }
-
-// -------------------------- TEST METHODS --------------------------
 
   /** Tests leading split the size of the record. Should return this and the next record. */
   public void testLeadingGreaterThanRecord() throws Exception {
@@ -146,25 +140,22 @@ public class LineInputReaderTest extends TestCase {
     // Create an input stream than has 2 records in the first 9 bytes and exception while the 3rd
     // record is read
     byte[] content = new byte[] {1, 2, 3, 4, 0, 6, 7, 8, 0, 10, 11, 12};
-    CountingInputStream countingInputStream =
+    try (CountingInputStream countingInputStream =
         new CountingInputStream(new ExceptionThrowingInputStream(
-            new BufferedInputStream(new NonResetableByteArrayInputStream(content)), 11));
-    LineInputStream iterator =
-        new TestLineInputReader(countingInputStream, content.length, false, (byte) 0);
-
-    byte[] next = iterator.next();
-    assertNotNull(next);
-    next = iterator.next();
-    assertNotNull(next);
-    try {
-      iterator.next();
-      fail("Exception was not passed through");
-    } catch (RuntimeException expected) {
+            new BufferedInputStream(new NonResetableByteArrayInputStream(content)), 11))) {
+      LineInputStream iterator =
+          new TestLineInputReader(countingInputStream, content.length, false, (byte) 0);
+      byte[] next = iterator.next();
+      assertNotNull(next);
+      next = iterator.next();
+      assertNotNull(next);
+      try {
+        iterator.next();
+        fail("Exception was not passed through");
+      } catch (RuntimeException expected) {
+      }
     }
-    countingInputStream.close();
   }
-
-// -------------------------- INSTANCE METHODS --------------------------
 
   private void test(long start, long end, boolean skipFirstTerminator, int expectedIndexStart,
       int expectedIndexEnd) throws IOException {
@@ -187,8 +178,6 @@ public class LineInputReaderTest extends TestCase {
     assertEquals("pairs between " + start + " and " + end, expectedIndexEnd - expectedIndexStart,
         totalCount);
   }
-
-// -------------------------- INNER CLASSES --------------------------
 
   /**
    * Wrapper class for {@code ByteArrayInputStream} to double check that an InputStreamIterator

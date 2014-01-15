@@ -32,8 +32,9 @@ import javax.servlet.http.HttpServletResponse;
  * The input source is a range of numbers to test, and any collisions are logged and written out to
  * a file in Google Cloud Storage.
  */
+@SuppressWarnings("serial")
 public class CollisionFindingServlet extends HttpServlet {
-  
+
   private static final String GCS_BUCKET_NAME = "mapreduce-example.appspot.com";
 
   static MapReduceSpecification<Long, Integer, Integer, ArrayList<Integer>,
@@ -59,8 +60,9 @@ public class CollisionFindingServlet extends HttpServlet {
   }
 
   static MapReduceSettings getSettings() {
-    return new MapReduceSettings().setWorkerQueueName("mapreduce-workers")
-        .setControllerQueueName("mapreduce-workers").setBucketName(GCS_BUCKET_NAME);
+    return new MapReduceSettings()
+        .setWorkerQueueName("mapreduce-workers")
+        .setBucketName(GCS_BUCKET_NAME);
   }
 
   @Override
@@ -68,5 +70,4 @@ public class CollisionFindingServlet extends HttpServlet {
     String id = MapReduceJob.start(createMapReduceSpec(), getSettings());
     resp.sendRedirect("/_ah/pipeline/status.html?root=" + id);
   }
-
 }

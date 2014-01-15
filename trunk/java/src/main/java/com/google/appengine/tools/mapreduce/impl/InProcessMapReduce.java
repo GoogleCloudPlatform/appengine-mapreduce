@@ -90,12 +90,8 @@ public class InProcessMapReduce<I, K, V, O, R> {
         ImmutableList.builder();
     List<? extends OutputWriter<KeyValue<K, V>>> writers = output.createWriters();
     for (int shard = 0; shard < inputs.size(); shard++) {
-      WorkerShardTask<I, KeyValue<K, V>, MapperContext<K, V>> task = new MapShardTask<I, K, V>(id,
-          shard,
-          inputs.size(),
-          inputs.get(shard),
-          mrSpec.getMapper(),
-          writers.get(shard),
+      WorkerShardTask<I, KeyValue<K, V>, MapperContext<K, V>> task = new MapShardTask<>(
+          id, shard, inputs.size(), inputs.get(shard), mrSpec.getMapper(), writers.get(shard),
           Long.MAX_VALUE);
       tasks.add(task);
     }
@@ -112,16 +108,16 @@ public class InProcessMapReduce<I, K, V, O, R> {
           }
 
           @Override
-          public void completed(List<
-              ? extends WorkerShardTask<I, KeyValue<K, V>, MapperContext<K, V>>> completedTasks) {
-            for (WorkerShardTask<I, KeyValue<K, V>, MapperContext<K, V>> task : completedTasks) {
+          public void completed(
+              List<? extends WorkerShardTask<I, KeyValue<K, V>, MapperContext<K, V>>> tasks) {
+            for (WorkerShardTask<I, KeyValue<K, V>, MapperContext<K, V>> task : tasks) {
               counters.addAll(task.getContext().getCounters());
             }
           }
         });
     log.info("Map phase completed");
     log.info("combined counters=" + counters);
-    return new MapReduceResultImpl<List<List<KeyValue<K,V>>>>(output.finish(writers), counters);
+    return new MapReduceResultImpl<>(output.finish(writers), counters);
   }
 
   List<List<KeyValue<K, List<V>>>> shuffle(
@@ -168,13 +164,8 @@ public class InProcessMapReduce<I, K, V, O, R> {
         ImmutableList.builder();
     for (int shard = 0; shard < outputs.size(); shard++) {
       WorkerShardTask<KeyValue<K, Iterator<V>>, O, ReducerContext<O>> task =
-          new ReduceShardTask<K, V, O>(id,
-              shard,
-              outputs.size(),
-              getReducerInputReader(inputs.get(shard)),
-              mrSpec.getReducer(),
-              outputs.get(shard),
-              Long.MAX_VALUE);
+          new ReduceShardTask<>(id, shard, outputs.size(), getReducerInputReader(inputs.get(shard)),
+              mrSpec.getReducer(), outputs.get(shard), Long.MAX_VALUE);
       tasks.add(task);
     }
     final Counters counters = new CountersImpl();
@@ -191,17 +182,16 @@ public class InProcessMapReduce<I, K, V, O, R> {
       }
 
       @Override
-      public void completed(List<? extends WorkerShardTask<KeyValue<K, Iterator<V>>, O,
-          ReducerContext<O>>> completedTasks) {
-        for (WorkerShardTask<KeyValue<K, Iterator<V>>, O, ReducerContext<O>> task :
-            completedTasks) {
+      public void completed(
+          List<? extends WorkerShardTask<KeyValue<K, Iterator<V>>, O, ReducerContext<O>>> tasks) {
+        for (WorkerShardTask<KeyValue<K, Iterator<V>>, O, ReducerContext<O>> task : tasks) {
           counters.addAll(task.getContext().getCounters());
         }
       }
     });
     log.info("Reduce phase completed, reduce counters=" + counters);
     log.info("combined counters=" + counters);
-    return new MapReduceResultImpl<R>(output.finish(outputs), counters);
+    return new MapReduceResultImpl<>(output.finish(outputs), counters);
   }
 
   private static final DateFormat DATE_FORMAT = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
@@ -210,15 +200,12 @@ public class InProcessMapReduce<I, K, V, O, R> {
       MapReduceSpecification<I, K, V, O, R> mrSpec) throws IOException {
     String mapReduceId =
         "in-process-mr-" + DATE_FORMAT.format(new Date()) + "-" + new Random().nextInt(1000000);
-    InProcessMapReduce<I, K, V, O, R> mapReduce =
-        new InProcessMapReduce<I, K, V, O, R>(mapReduceId, mrSpec);
+    InProcessMapReduce<I, K, V, O, R> mapReduce = new InProcessMapReduce<>(mapReduceId, mrSpec);
     log.info(mapReduce + " started");
 
     List<? extends InputReader<I>> mapInput = mrSpec.getInput().createReaders();
     InMemoryOutput<KeyValue<K, V>> mapOutput = InMemoryOutput.create(mapInput.size());
-
     MapReduceResult<List<List<KeyValue<K, V>>>> mapResult = mapReduce.map(mapInput, mapOutput);
-
     Output<O, R> reduceOutput = mrSpec.getOutput();
     List<List<KeyValue<K, List<V>>>> reducerInputs =
         mapReduce.shuffle(mapResult.getOutputResult(), reduceOutput.getNumShards());

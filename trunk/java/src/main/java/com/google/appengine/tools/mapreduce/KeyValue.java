@@ -14,6 +14,7 @@ import java.io.Serializable;
  * @param <V> value type
  */
 public class KeyValue<K, V> implements Serializable {
+
   private static final long serialVersionUID = -2687854533615172943L;
 
   private final K key;
@@ -32,23 +33,29 @@ public class KeyValue<K, V> implements Serializable {
     return value;
   }
 
-  @Override public String toString() {
+  @Override
+  public String toString() {
     return "KeyValue(" + key + ", " + value + ")";
   }
 
-  @Override public final boolean equals(Object o) {
-    if (o == this) { return true; }
-    if (!(o instanceof KeyValue)) { return false; }
+  @Override
+  public final boolean equals(Object o) {
+    if (o == this) {
+      return true;
+    }
+    if (!(o instanceof KeyValue)) {
+      return false;
+    }
     KeyValue<?, ?> other = (KeyValue<?, ?>) o;
-    return Objects.equal(key, other.key)
-        && Objects.equal(value, other.value);
+    return Objects.equal(key, other.key) && Objects.equal(value, other.value);
   }
 
-  @Override public final int hashCode() {
+  @Override
+  public final int hashCode() {
     return Objects.hashCode(key, value);
   }
 
   public static <K, V> KeyValue<K, V> of(K k, V v) {
-    return new KeyValue<K, V>(k, v);
+    return new KeyValue<>(k, v);
   }
 }

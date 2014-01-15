@@ -70,14 +70,12 @@ public class GoogleCloudStorageReduceInput<K, V> extends Input<KeyValue<K, Itera
   private MergingReader<K, V> createReaderForShard(
       Marshaller<KeyValue<ByteBuffer, Iterator<V>>> marshaller,
       GoogleCloudStorageFileSet reducerInputFileSet) {
-    ArrayList<PeekingInputReader<KeyValue<ByteBuffer, Iterator<V>>>> inputFiles =
-        new ArrayList<PeekingInputReader<KeyValue<ByteBuffer, Iterator<V>>>>();
-
+    ArrayList<PeekingInputReader<KeyValue<ByteBuffer, Iterator<V>>>> inputFiles = new ArrayList<>();
     GoogleCloudStorageLevelDbInput reducerInput = new GoogleCloudStorageLevelDbInput(
         reducerInputFileSet, MapReduceConstants.DEFAULT_IO_BUFFER_SIZE);
     for (InputReader<ByteBuffer> in : reducerInput.createReaders()) {
-      inputFiles.add(new PeekingInputReader<KeyValue<ByteBuffer, Iterator<V>>>(in, marshaller));
+      inputFiles.add(new PeekingInputReader<>(in, marshaller));
     }
-    return new MergingReader<K, V>(inputFiles, keyMarshaller);
+    return new MergingReader<>(inputFiles, keyMarshaller);
   }
 }

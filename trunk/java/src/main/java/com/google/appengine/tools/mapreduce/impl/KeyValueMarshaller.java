@@ -49,6 +49,6 @@ public class KeyValueMarshaller<K, V> extends Marshaller<KeyValue<K, V>> {
     }
     K key = keyMarshaller.fromBytes(proto.getKey().asReadOnlyByteBuffer());
     V value = valueMarshaller.fromBytes(proto.getValue(0).asReadOnlyByteBuffer());
-    return new KeyValue<K, V>(key, value);
+    return new KeyValue<>(key, value);
   }
 }

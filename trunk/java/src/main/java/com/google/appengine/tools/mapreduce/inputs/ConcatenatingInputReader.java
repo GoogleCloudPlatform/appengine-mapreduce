@@ -83,7 +83,7 @@ public final class ConcatenatingInputReader<I> extends InputReader<I> {
   }
 
   @Override
-  public void open() throws IOException {
+  public void open() {
     reader = null;
     index = 0;
   }

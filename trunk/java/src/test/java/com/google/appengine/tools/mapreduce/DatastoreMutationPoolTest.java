@@ -32,15 +32,12 @@ import junit.framework.TestCase;
  *
  */
 public class DatastoreMutationPoolTest extends TestCase {
-// ------------------------------ FIELDS ------------------------------
 
   private final LocalServiceTestHelper helper =
       new LocalServiceTestHelper(new LocalDatastoreServiceTestConfig());
 
   private DatastoreService ds;
   private Entity[] entities;
-
-// ------------------------ OVERRIDING METHODS ------------------------
 
   @Override
   public void setUp() throws Exception {
@@ -56,12 +53,9 @@ public class DatastoreMutationPoolTest extends TestCase {
     super.tearDown();
   }
 
-// -------------------------- TEST METHODS --------------------------
-
   public void testCountFlush() {
     DatastoreMutationPool pool = makeMutationPool(2, 1 << 18);
-    // Check last put so we can isolate problems with manual flush() from problems with
-    // put.
+    // Check last put so we can isolate problems with manual flush() from problems with put.
     checkFlushOnNthPutOutOfThree(pool, 1, 0);
     pool.flush();
     checkFlushOnNthDeleteOutOfThree(pool, 1, 0);
@@ -69,8 +63,7 @@ public class DatastoreMutationPoolTest extends TestCase {
 
   public void testCountFlush_allAutomatic() {
     DatastoreMutationPool pool = makeMutationPool(3, 1 << 18);
-    // Check last put so we can isolate problems with manual flush() from problems with
-    // put.
+    // Check last put so we can isolate problems with manual flush() from problems with put.
     checkFlushOnNthPutOutOfThree(pool, 2, 0);
     checkFlushOnNthDeleteOutOfThree(pool, 2, 0);
   }
@@ -104,8 +97,6 @@ public class DatastoreMutationPoolTest extends TestCase {
         KeyFactory.keyToString(entities[0].getKey()).length() + 1);
     checkFlushOnNthDeleteOutOfThree(deletePool, 1, -1);
   }
-
-// -------------------------- INSTANCE METHODS --------------------------
 
   private DatastoreMutationPool makeMutationPool(int countLimit, int bytesLimit) {
     return DatastoreMutationPool.forManualFlushing(ds, countLimit, bytesLimit);
@@ -161,8 +152,8 @@ public class DatastoreMutationPoolTest extends TestCase {
       // Note: either of the exceptions are fine: EntityNotFound is
       // self-explanatory. IllegalArgument is just complaining that the entity's
       // key isn't complete because no ID has been assigned it yet.
-      } catch (EntityNotFoundException expected) {
-      } catch (IllegalArgumentException expected) {
+      } catch (EntityNotFoundException | IllegalArgumentException ignore) {
+        // expected - do nothing
       }
     }
 
@@ -181,8 +172,8 @@ public class DatastoreMutationPoolTest extends TestCase {
         ds.get(entities[i].getKey());
         fail("Entity got flushed prematurely.");
       // See above for explanation
-      } catch (EntityNotFoundException expected) {
-      } catch (IllegalArgumentException expected) {
+      } catch (EntityNotFoundException | IllegalArgumentException ignore) {
+        // expected - do nothing
       }
     }
   }

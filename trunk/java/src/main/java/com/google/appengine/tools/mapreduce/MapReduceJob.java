@@ -84,8 +84,8 @@ import java.util.logging.Logger;
  */
 public class MapReduceJob<I, K, V, O, R>
     extends Job2<MapReduceResult<R>, MapReduceSpecification<I, K, V, O, R>, MapReduceSettings> {
-  private static final long serialVersionUID = 723635736794527552L;
 
+  private static final long serialVersionUID = 723635736794527552L;
   private static final Logger log = Logger.getLogger(MapReduceJob.class.getName());
 
   private static final ExceptionHandler QUEUE_EXCEPTION_HANDLER =

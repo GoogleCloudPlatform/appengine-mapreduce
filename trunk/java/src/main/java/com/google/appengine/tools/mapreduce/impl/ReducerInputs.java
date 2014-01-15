@@ -16,32 +16,37 @@ public class ReducerInputs {
   private ReducerInputs() {}
 
   private static class IteratorReducerInput<V> extends ReducerInput<V> {
+
     private final Iterator<V> i;
 
     public IteratorReducerInput(Iterator<V> i) {
       this.i = i;
     }
 
-    @Override public boolean hasNext() {
+    @Override
+    public boolean hasNext() {
       return i.hasNext();
     }
 
-    @Override public V next() {
+    @Override
+    public V next() {
       return i.next();
     }
 
-    @Override public String toString() {
+    @Override
+    public String toString() {
       return "ReducerInputs.fromIterator(" + i + ")";
     }
   }
 
   public static <V> ReducerInput<V> fromIterator(Iterator<V> i) {
-    return new IteratorReducerInput<V>(i);
+    return new IteratorReducerInput<>(i);
   }
 
   public static <V> ReducerInput<V> fromIterable(final Iterable<V> x) {
     return new IteratorReducerInput<V>(x.iterator()) {
-      @Override public String toString() {
+      @Override
+      public String toString() {
         return "ReducerInputs.fromIterable(" + x + ")";
       }
     };

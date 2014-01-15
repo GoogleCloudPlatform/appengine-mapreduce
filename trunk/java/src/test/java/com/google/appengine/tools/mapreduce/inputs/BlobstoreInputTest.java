@@ -24,7 +24,7 @@ import java.util.List;
  * Unit test for {@code BlobstoreInput}.
  */
 public class BlobstoreInputTest extends BlobstoreInputTestCase {
-  
+
   public static final String RECORD = "01234567890\n";
   public static final int RECORDS_COUNT = 1000;
 
@@ -33,8 +33,6 @@ public class BlobstoreInputTest extends BlobstoreInputTestCase {
     super.setUp();
     createFile(RECORD, RECORDS_COUNT);
   }
-
-// -------------------------- TEST METHODS --------------------------
 
   public void testSplit() throws Exception {
     BlobstoreInput input = new BlobstoreInput(blobKey.getKeyString(), (byte) '\n', 4);
@@ -45,8 +43,6 @@ public class BlobstoreInputTest extends BlobstoreInputTestCase {
     assertSplitRange(6000, 9000, readers.get(2));
     assertSplitRange(9000, 12000, readers.get(3));
   }
-
-// -------------------------- STATIC METHODS --------------------------
 
   private static void assertSplitRange(int start, int end, InputReader<byte[]> reader) {
     BlobstoreInputReader r = (BlobstoreInputReader) reader;

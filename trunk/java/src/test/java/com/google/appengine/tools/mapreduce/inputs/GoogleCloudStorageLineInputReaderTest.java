@@ -26,8 +26,7 @@ public class GoogleCloudStorageLineInputReaderTest extends GoogleCloudStorageLin
     fileSize = createFile(filename, RECORD, RECORDS_COUNT);
   }
   public void testSingleSplitPoint() throws Exception {
-    List<GoogleCloudStorageLineInputReader> readers =
-        new ArrayList<GoogleCloudStorageLineInputReader>();
+    List<GoogleCloudStorageLineInputReader> readers = new ArrayList<>();
     readers.add(new GoogleCloudStorageLineInputReader(filename, 0, RECORD.length(), (byte) '\n'));
     readers.add(
         new GoogleCloudStorageLineInputReader(filename, RECORD.length(), fileSize, (byte) '\n'));
@@ -35,8 +34,7 @@ public class GoogleCloudStorageLineInputReaderTest extends GoogleCloudStorageLin
   }
 
   public void testSingleSplitPointsWithSerialization() throws Exception {
-    List<GoogleCloudStorageLineInputReader> readers =
-        new ArrayList<GoogleCloudStorageLineInputReader>();
+    List<GoogleCloudStorageLineInputReader> readers = new ArrayList<>();
     readers.add(new GoogleCloudStorageLineInputReader(filename, 0, RECORD.length(), (byte) '\n'));
     readers.add(
         new GoogleCloudStorageLineInputReader(filename, RECORD.length(), fileSize, (byte) '\n'));
@@ -45,8 +43,7 @@ public class GoogleCloudStorageLineInputReaderTest extends GoogleCloudStorageLin
 
   public void testAllSplitPoints() throws Exception {
     for (int splitPoint = 1; splitPoint < fileSize - 1; splitPoint++) {
-      List<GoogleCloudStorageLineInputReader> readers =
-          new ArrayList<GoogleCloudStorageLineInputReader>();
+      List<GoogleCloudStorageLineInputReader> readers = new ArrayList<>();
       readers.add(new GoogleCloudStorageLineInputReader(filename, 0, splitPoint, (byte) '\n'));
       readers.add(
           new GoogleCloudStorageLineInputReader(filename, splitPoint, fileSize, (byte) '\n'));
@@ -56,8 +53,7 @@ public class GoogleCloudStorageLineInputReaderTest extends GoogleCloudStorageLin
 
   public void testAllSplitPointsWithSerialization() throws Exception {
     for (int splitPoint = 1; splitPoint < fileSize - 1; splitPoint++) {
-      List<GoogleCloudStorageLineInputReader> readers =
-          new ArrayList<GoogleCloudStorageLineInputReader>();
+      List<GoogleCloudStorageLineInputReader> readers = new ArrayList<>();
       readers.add(new GoogleCloudStorageLineInputReader(filename, 0, splitPoint, (byte) '\n'));
       readers.add(
           new GoogleCloudStorageLineInputReader(filename, splitPoint, fileSize, (byte) '\n'));

@@ -35,7 +35,7 @@ public class LevelDbOutput<R> extends Output<ByteBuffer, R> {
   @Override
   public List<LevelDbOutputWriter> createWriters() {
     List<? extends OutputWriter<ByteBuffer>> writers = sink.createWriters();
-    List<LevelDbOutputWriter> result = new ArrayList<LevelDbOutputWriter>(writers.size());
+    List<LevelDbOutputWriter> result = new ArrayList<>(writers.size());
     for (OutputWriter<ByteBuffer> writer : writers) {
       result.add(new LevelDbOutputWriter(writer));
     }
@@ -44,10 +44,8 @@ public class LevelDbOutput<R> extends Output<ByteBuffer, R> {
 
   @Override
   public R finish(Collection<? extends OutputWriter<ByteBuffer>> writers) throws IOException {
-    ArrayList<OutputWriter<ByteBuffer>> wrapped =
-        new ArrayList<OutputWriter<ByteBuffer>>(writers.size());
+    ArrayList<OutputWriter<ByteBuffer>> wrapped = new ArrayList<>(writers.size());
     for (OutputWriter<ByteBuffer> w : writers) {
-      @SuppressWarnings("unchecked")
       LevelDbOutputWriter writer = (LevelDbOutputWriter) w;
       wrapped.add(writer.getDelegate());
     }
