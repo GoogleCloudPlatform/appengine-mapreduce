@@ -2,7 +2,7 @@ package com.google.appengine.tools.mapreduce.impl.sort;
 
 import com.google.appengine.tools.mapreduce.KeyValue;
 import com.google.appengine.tools.mapreduce.Worker;
-import com.google.appengine.tools.mapreduce.impl.MapReduceConstants;
+import com.google.appengine.tools.mapreduce.impl.handlers.MemoryLimiter;
 import com.google.appengine.tools.mapreduce.impl.shardedjob.RejectRequestException;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Stopwatch;
@@ -45,7 +45,7 @@ public class SortWorker extends Worker<SortContext> {
    * Fraction of system ram sort will allocate. There are multiple values in case the largest
    * proportion is unavailable. If the smallest is unavailable sort will fail.
    */
-  private static final double[] TARGET_SORT_RAM_PROPORTIONS = {0.30, 0.25, 0.15};
+  private static final double[] TARGET_SORT_RAM_PROPORTIONS = {0.25, 0.15};
   private static final int MEMORY_ALLOCATION_ATTEMPTS = TARGET_SORT_RAM_PROPORTIONS.length;
 
   // Items are batched to save storage cost, but not too big to limit memory use.
@@ -392,8 +392,7 @@ public class SortWorker extends Worker<SortContext> {
   }
 
   public static int getMemoryForSort(int numRetries) {
-    long maxUsableMemory =
-        (Runtime.getRuntime().maxMemory() - MapReduceConstants.ASSUMED_JVM_RAM_OVERHEAD);
+    long maxUsableMemory = MemoryLimiter.TOTAL_CLAIMABLE_MEMORY_SIZE_MB * 1024 * 1024;
     int memIndex = Math.min(numRetries, MEMORY_ALLOCATION_ATTEMPTS - 1);
     return Ints.saturatedCast((long) (maxUsableMemory * TARGET_SORT_RAM_PROPORTIONS[memIndex]));
   }

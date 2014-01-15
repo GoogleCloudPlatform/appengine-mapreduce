@@ -19,15 +19,15 @@ import java.util.logging.Logger;
 public final class MemoryLimiter {
 
   private static final Logger log = Logger.getLogger(MemoryLimiter.class.getName());
-  private static final int INITIAL_SIZE_MB = Ints.saturatedCast(
+  public static final int TOTAL_CLAIMABLE_MEMORY_SIZE_MB = Ints.saturatedCast(
       (Runtime.getRuntime().maxMemory() - MapReduceConstants.ASSUMED_JVM_RAM_OVERHEAD) / 1024
       / 1024);
   private static final int TIME_TO_WAIT = 5000;
-  private final Semaphore amountRemaining = new Semaphore(INITIAL_SIZE_MB, true);
+  private final Semaphore amountRemaining = new Semaphore(TOTAL_CLAIMABLE_MEMORY_SIZE_MB, true);
 
 
   private int capRequestedSize(long requested) {
-    return (int) Math.min(INITIAL_SIZE_MB, requested);
+    return (int) Math.min(TOTAL_CLAIMABLE_MEMORY_SIZE_MB, requested);
   }
 
   /**
@@ -62,7 +62,7 @@ public final class MemoryLimiter {
     } else {
       throw new RejectRequestException("Not enough estimated memory for request: "
           + (neededForRequest) + "mb only have " + remaining + "mb remaining out of "
-          + INITIAL_SIZE_MB + "mb");
+          + TOTAL_CLAIMABLE_MEMORY_SIZE_MB + "mb");
     }
   }
 
