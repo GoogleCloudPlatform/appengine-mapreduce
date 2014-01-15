@@ -32,7 +32,7 @@ public class GoogleCloudStorageFileOutputWriter extends OutputWriter<ByteBuffer>
   private final GcsFilename file;
   private boolean closed = false;
   private GcsOutputChannel channel;
-  private String mimeType;
+  private final String mimeType;
 
 
   public GoogleCloudStorageFileOutputWriter(GcsFilename file, String mimeType) {
@@ -99,5 +99,4 @@ public class GoogleCloudStorageFileOutputWriter extends OutputWriter<ByteBuffer>
   public long estimateMemoryRequirment() {
     return MapReduceConstants.DEFAULT_IO_BUFFER_SIZE * 2; // Double buffered
   }
-
 }

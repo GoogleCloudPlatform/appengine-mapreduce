@@ -49,5 +49,4 @@ public class NoInput<I> extends Input<I> {
     }
     return out.build();
   }
-
 }

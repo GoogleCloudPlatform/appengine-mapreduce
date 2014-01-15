@@ -129,5 +129,4 @@ public class StringOutput<O, R> extends Output<O, R> {
   public int getNumShards() {
     return sink.getNumShards();
   }
-  
 }

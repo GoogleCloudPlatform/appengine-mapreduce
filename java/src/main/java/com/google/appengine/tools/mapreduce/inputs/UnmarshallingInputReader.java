@@ -60,5 +60,4 @@ public class UnmarshallingInputReader<T> extends InputReader<T> {
   public long estimateMemoryRequirment() {
     return reader.estimateMemoryRequirment();
   }
-
 }

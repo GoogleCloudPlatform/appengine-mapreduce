@@ -80,5 +80,4 @@ public abstract class OutputWriter<O> implements Serializable {
    * Called when no more output will be written to this writer.
    */
   public abstract void close() throws IOException;
-
 }

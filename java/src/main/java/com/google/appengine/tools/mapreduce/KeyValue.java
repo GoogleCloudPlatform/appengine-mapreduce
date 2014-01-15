@@ -51,5 +51,4 @@ public class KeyValue<K, V> implements Serializable {
   public static <K, V> KeyValue<K, V> of(K k, V v) {
     return new KeyValue<K, V>(k, v);
   }
-
 }

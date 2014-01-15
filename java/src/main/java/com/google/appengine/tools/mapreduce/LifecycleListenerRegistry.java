@@ -56,5 +56,4 @@ public class LifecycleListenerRegistry implements Serializable {
   public List<LifecycleListener> getListeners() {
     return ImmutableList.copyOf(listeners);
   }
-
 }

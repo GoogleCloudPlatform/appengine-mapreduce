@@ -28,5 +28,4 @@ public class KeyProjectionReducer<K, V> extends Reducer<K, V, K> {
     Preconditions.checkState(values.hasNext(), "%s: No values: %s", this, key);
     getContext().emit(key);
   }
-
 }

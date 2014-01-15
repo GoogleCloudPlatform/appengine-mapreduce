@@ -21,5 +21,4 @@ public interface Sharder extends Serializable {
    * @return a number between 0 and numShards-1 inclusive
    */
   public int getShardForKey(ByteBuffer key);
-
 }

@@ -103,5 +103,4 @@ public final class ConcatenatingInputReader<I> extends InputReader<I> {
     }
     return max;
   }
-
 }

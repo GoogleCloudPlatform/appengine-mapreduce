@@ -62,10 +62,9 @@ public class BlobFileOutput extends Output<ByteBuffer, List<AppEngineFile>> {
     }
     return out;
   }
-  
+
   @Override
   public int getNumShards() {
     return shardCount;
   }
-
 }

@@ -61,10 +61,9 @@ public class NoOutput<O, R> extends Output<O, R> {
   @Override public R finish(Collection<? extends OutputWriter<O>> writers) {
     return null;
   }
-  
+
   @Override
   public int getNumShards() {
     return numShards;
   }
-
 }

@@ -48,10 +48,10 @@ public class GoogleCloudStorageSortOutput extends
       KeyValue<ByteBuffer, Iterator<ByteBuffer>>> {
 
     private static final long serialVersionUID = -6765187605013451624L;
-    private String bucket;
-    private String fileNamePattern;
+    private final String bucket;
+    private final String fileNamePattern;
     private int sliceNumber;
-    private List<String> fileNames;
+    private final List<String> fileNames;
 
     /**
      * @param fileNamePattern a Java format string {@link java.util.Formatter} containing one int
@@ -125,5 +125,4 @@ public class GoogleCloudStorageSortOutput extends
   public int getNumShards() {
     return shardCount;
   }
-
 }

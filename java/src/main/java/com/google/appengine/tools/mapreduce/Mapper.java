@@ -31,5 +31,4 @@ public abstract class Mapper<I, K, V> extends Worker<MapperContext<K, V>> {
   protected void emit(K key, V value) {
     getContext().emit(key, value);
   }
-
 }

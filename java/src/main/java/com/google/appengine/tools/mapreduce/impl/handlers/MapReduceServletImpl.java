@@ -1,8 +1,11 @@
 // Copyright 2011 Google Inc. All Rights Reserved.
 package com.google.appengine.tools.mapreduce.impl.handlers;
 
+import static com.google.common.base.Preconditions.checkNotNull;
+
 import com.google.appengine.tools.mapreduce.MapReduceServlet;
-import com.google.appengine.tools.mapreduce.impl.shardedjob.ShardedJobServiceFactory;
+import com.google.appengine.tools.mapreduce.impl.shardedjob.ShardedJobHandler;
+import com.google.appengine.tools.mapreduce.impl.shardedjob.ShardedJobRunner;
 import com.google.appengine.tools.pipeline.NoSuchObjectException;
 import com.google.appengine.tools.pipeline.OrphanedObjectException;
 import com.google.appengine.tools.pipeline.PipelineServiceFactory;
@@ -67,12 +70,17 @@ public final class MapReduceServletImpl {
       if (!checkForTaskQueue(request, response)) {
         return;
       }
-      ShardedJobServiceFactory.getShardedJobService().handleShardCompleteRequest(request);
+      new ShardedJobRunner<>().completeShard(
+          checkNotNull(request.getParameter(ShardedJobHandler.JOB_ID_PARAM), "Null job id"),
+          checkNotNull(request.getParameter(ShardedJobHandler.TASK_ID_PARAM), "Null task id"));
     } else if (handler.startsWith(WORKER_PATH)) {
       if (!checkForTaskQueue(request, response)) {
         return;
       }
-      ShardedJobServiceFactory.getShardedJobService().handleWorkerRequest(request);
+      new ShardedJobRunner<>().runTask(
+          checkNotNull(request.getParameter(ShardedJobHandler.JOB_ID_PARAM), "Null job id"),
+          checkNotNull(request.getParameter(ShardedJobHandler.TASK_ID_PARAM), "Null task id"),
+          Integer.parseInt(request.getParameter(ShardedJobHandler.SEQUENCE_NUMBER_PARAM)));
     } else if (handler.startsWith(COMMAND_PATH)) {
       if (!checkForAjax(request, response)) {
         return;

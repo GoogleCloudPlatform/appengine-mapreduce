@@ -81,6 +81,4 @@ public class KeyValuesMarshaller<K, V> extends Marshaller<KeyValue<K, Iterator<V
     return new KeyValue<K, Iterator<V>>(
         key, new ByteStringTranslatingIterator(values.iterator()));
   }
-
-
 }

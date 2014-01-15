@@ -2,34 +2,34 @@ package com.google.appengine.tools.mapreduce.impl.shardedjob;
 
 import static junit.framework.Assert.assertEquals;
 import static junit.framework.Assert.fail;
+import static org.junit.Assert.assertFalse;
+
+import java.util.List;
 
 /**
  * A mock controller used for unit tests. It simply sums the inputs to combine the results.
  *
  */
-public class TestController implements ShardedJobController<TestTask, Integer> {
+public class TestController extends ShardedJobController<TestTask> {
 
   private static final long serialVersionUID = 1L;
   private final int expectedResult;
+  private boolean completed = false;
 
   public TestController(int expectedResult) {
+    super("TestController");
     this.expectedResult = expectedResult;
   }
 
   @Override
-  public Integer combineResults(Iterable<Integer> inputs) {
+  public void completed(List<? extends TestTask> results) {
     int sum = 0;
-    for (Integer x : inputs) {
-      sum += x;
+    for (TestTask r : results) {
+      sum += r.getResult();
     }
-    return sum;
-  }
-
-  // TODO(ohler): Assert that this actually gets called.  Seems likely that
-  // will be covered by higher-level end-to-end tests, though.
-  @Override
-  public void completed(Integer finalCombinedResult) {
-    assertEquals(Integer.valueOf(expectedResult), finalCombinedResult);
+    assertEquals(expectedResult, sum);
+    assertFalse(completed);
+    completed = true;
   }
 
   @Override
@@ -37,10 +37,20 @@ public class TestController implements ShardedJobController<TestTask, Integer> {
     fail("Should not have been called");
   }
 
+  public boolean isCompleted() {
+    return completed;
+  }
+
+  @Override
+  public String getName() {
+    return "Test controller expecting: " + expectedResult;
+  }
+
   @Override
   public int hashCode() {
     final int prime = 31;
     int result = 1;
+    result = prime * result + (completed ? 1231 : 1237);
     result = prime * result + expectedResult;
     return result;
   }
@@ -53,18 +63,17 @@ public class TestController implements ShardedJobController<TestTask, Integer> {
     if (obj == null) {
       return false;
     }
-    if (!(obj instanceof TestController)) {
+    if (getClass() != obj.getClass()) {
       return false;
     }
     TestController other = (TestController) obj;
+    if (completed != other.completed) {
+      return false;
+    }
     if (expectedResult != other.expectedResult) {
       return false;
     }
     return true;
   }
 
-  @Override
-  public String getName() {
-    return "Test controller expecting: " + expectedResult;
-  }
 }

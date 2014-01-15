@@ -61,5 +61,4 @@ public class GoogleCloudStorageLevelDbOutput extends Output<ByteBuffer, GoogleCl
   public int getNumShards() {
     return output.getNumShards();
   }
-
 }

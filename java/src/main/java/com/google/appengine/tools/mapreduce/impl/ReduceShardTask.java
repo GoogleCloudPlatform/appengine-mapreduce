@@ -7,13 +7,13 @@ import static com.google.appengine.tools.mapreduce.CounterNames.REDUCER_WALLTIME
 import static com.google.appengine.tools.mapreduce.impl.MapReduceConstants.ASSUMED_BASE_MEMORY_PER_REQUEST;
 import static com.google.common.base.Preconditions.checkNotNull;
 
-import com.google.appengine.tools.mapreduce.Counters;
 import com.google.appengine.tools.mapreduce.InputReader;
 import com.google.appengine.tools.mapreduce.KeyValue;
 import com.google.appengine.tools.mapreduce.OutputWriter;
 import com.google.appengine.tools.mapreduce.Reducer;
 import com.google.appengine.tools.mapreduce.ReducerContext;
 import com.google.appengine.tools.mapreduce.ReducerInput;
+import com.google.appengine.tools.mapreduce.Worker;
 import com.google.appengine.tools.mapreduce.impl.shardedjob.ShardFailureException;
 
 import java.util.Iterator;
@@ -33,19 +33,27 @@ public class ReduceShardTask<K, V, O>
 
   private final long millisPerSlice;
 
-  public ReduceShardTask(String mrJobId, int shardNumber, int shardCount,
-      InputReader<KeyValue<K, Iterator<V>>> in, Reducer<K, V, O> reducer, OutputWriter<O> out,
+  private final InputReader<KeyValue<K, Iterator<V>>> in;
+
+  private final OutputWriter<O> out;
+
+  private final IncrementalTaskContext context;
+
+  public ReduceShardTask(String mrJobId,
+      int shardNumber,
+      int shardCount,
+      InputReader<KeyValue<K, Iterator<V>>> in,
+      Reducer<K, V, O> reducer,
+      OutputWriter<O> out,
       long millisPerSlice) {
-    super(
-        mrJobId, shardNumber, shardCount, in, reducer, out, REDUCER_CALLS, REDUCER_WALLTIME_MILLIS);
+    this.in = checkNotNull(in, "Null in");
+    this.out = checkNotNull(out, "Null out");
     this.reducer = checkNotNull(reducer, "Null reducer");
     this.millisPerSlice = millisPerSlice;
+    this.context = new IncrementalTaskContext(mrJobId, shardNumber, shardCount, REDUCER_CALLS,
+        REDUCER_WALLTIME_MILLIS);
   }
 
-  @Override
-  protected ReducerContext<O> getWorkerContext(Counters counters) {
-    return new ReducerContextImpl<O>(mrJobId, shardNumber, out, counters);
-  }
 
   @Override
   protected void callWorker(KeyValue<K, Iterator<V>> input) {
@@ -53,7 +61,7 @@ public class ReduceShardTask<K, V, O>
     try {
       reducer.reduce(input.getKey(), value);
     } catch (RuntimeException ex) {
-      throw new ShardFailureException(shardNumber, ex);
+      throw new ShardFailureException(context.getShardNumber(), ex);
     }
   }
 
@@ -69,7 +77,32 @@ public class ReduceShardTask<K, V, O>
 
   @Override
   protected long estimateMemoryNeeded() {
-    return in.estimateMemoryRequirment() + out.estimateMemoryRequirment()
+    return in.estimateMemoryRequirment() + getOutputWriter().estimateMemoryRequirment()
         + ASSUMED_BASE_MEMORY_PER_REQUEST;
+  }
+
+  @Override
+  protected Worker<ReducerContext<O>> getWorker() {
+    return reducer;
+  }
+
+  @Override
+  protected void setContextOnWorker() {
+    reducer.setContext(new ReducerContextImpl<O>(context, out));
+  }
+
+  @Override
+  public OutputWriter<O> getOutputWriter() {
+    return out;
+  }
+
+  @Override
+  public InputReader<KeyValue<K, Iterator<V>>> getInputReader() {
+    return in;
+  }
+
+  @Override
+  public IncrementalTaskContext getContext() {
+    return context;
   }
 }

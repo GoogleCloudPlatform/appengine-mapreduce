@@ -40,24 +40,25 @@ public abstract class Output<O, R> implements Serializable {
   public abstract int getNumShards();
 
   /**
-   * Returns a result to be made available through
-   * {@link MapReduceResult#getOutputResult}.
+   * Returns a result to be made available through {@link MapReduceResult#getOutputResult}.
    *
-   * <p>This method allows the {@code Output} to inspect the final state of its
-   * {@link OutputWriter}s to produce a final result object.  For example, if
-   * the {@code OutputWriter}s produce blobs in blobstore, {@code finish} could
-   * collect and return a list of blob IDs.
+   * <p>
+   * This method allows the {@code Output} to inspect the final state of its {@link OutputWriter}s
+   * to produce a final result object. For example, if the {@code OutputWriter}s produce blobs in
+   * blobstore, {@code finish} could collect and return a list of blob IDs.
    *
-   * <p>Should return null if no such result makes sense for this kind of output.
+   * <p>
+   * Should return null if no such result makes sense for this kind of output.
    *
-   * <p>Called after all {@code OutputWriter}s have been closed (with
-   * {@link OutputWriter#close}). It is possible for this method to be called
-   * more than once with the same {@code writers} collection.
+   * <p>
+   * Called after all {@code OutputWriter}s have been closed (with {@link OutputWriter#close}). It
+   * is possible for this method to be called more than once with the same {@code writers}
+   * collection.
    *
-   * <p>The {@code writers} argument will contain the same writers that
-   * {@link #createWriters} returned (modulo serialization -- typically,
-   * {@code getWriter} will have been called in a different JVM).
+   * <p>
+   * The {@code writers} argument will contain the same writers that {@link #createWriters} returned
+   * in the same order. Writers may be serialized and deserialized multiple times. typically,
+   * {@code getWriter} will have been called in a different JVM.
    */
   public abstract R finish(Collection<? extends OutputWriter<O>> writers) throws IOException;
-
 }

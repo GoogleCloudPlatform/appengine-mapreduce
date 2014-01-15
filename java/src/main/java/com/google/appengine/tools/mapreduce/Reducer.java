@@ -35,5 +35,4 @@ public abstract class Reducer<K, V, O> extends Worker<ReducerContext<O>> {
   protected void emit(O value) {
     getContext().emit(value);
   }
-  
 }

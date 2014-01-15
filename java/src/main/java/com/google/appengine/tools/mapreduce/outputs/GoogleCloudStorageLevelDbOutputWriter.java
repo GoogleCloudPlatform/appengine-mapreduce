@@ -1,8 +1,9 @@
 package com.google.appengine.tools.mapreduce.outputs;
 
+import static com.google.appengine.tools.mapreduce.impl.MapReduceConstants.GCS_IO_BLOCK_SIZE;
+import static com.google.appengine.tools.mapreduce.impl.util.LevelDbConstants.BLOCK_SIZE;
+
 import com.google.appengine.tools.mapreduce.OutputWriter;
-import com.google.appengine.tools.mapreduce.impl.MapReduceConstants;
-import com.google.appengine.tools.mapreduce.impl.util.LevelDbConstants;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -24,12 +25,9 @@ public class GoogleCloudStorageLevelDbOutputWriter extends LevelDbOutputWriter {
   @Override
   public void endSlice() throws IOException {
     padAndWriteBlock(false);
-    while (
-        (getNumBlocksWritten() * LevelDbConstants.BLOCK_SIZE) % MapReduceConstants.GCS_IO_BLOCK_SIZE
-        != 0) {
+    while ((getNumBlocksWritten() * BLOCK_SIZE) % GCS_IO_BLOCK_SIZE != 0) {
       padAndWriteBlock(true);
     }
     getDelegate().endSlice();
   }
-
 }

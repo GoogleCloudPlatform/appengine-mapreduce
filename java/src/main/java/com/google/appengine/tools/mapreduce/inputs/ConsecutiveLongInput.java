@@ -88,5 +88,4 @@ public class ConsecutiveLongInput extends Input<Long> {
     assert shardStart == limit;
     return b.build();
   }
-
 }

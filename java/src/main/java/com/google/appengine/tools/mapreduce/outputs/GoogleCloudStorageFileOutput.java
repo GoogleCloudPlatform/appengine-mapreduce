@@ -73,5 +73,4 @@ public class GoogleCloudStorageFileOutput extends Output<ByteBuffer, GoogleCloud
   public int getNumShards() {
     return shardCount;
   }
-
 }

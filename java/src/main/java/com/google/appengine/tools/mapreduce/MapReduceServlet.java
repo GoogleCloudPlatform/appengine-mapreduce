@@ -79,6 +79,4 @@ public class MapReduceServlet extends HttpServlet {
     resp.setStatus(REJECT_REQUEST_STATUSCODE);
     log.log(Level.INFO, "Rejecting request: " + e.getLocalizedMessage());
   }
-
-
 }

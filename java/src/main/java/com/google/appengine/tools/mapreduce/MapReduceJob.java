@@ -24,7 +24,6 @@ import com.google.appengine.tools.cloudstorage.RetriesExhaustedException;
 import com.google.appengine.tools.cloudstorage.RetryHelper;
 import com.google.appengine.tools.cloudstorage.RetryHelperException;
 import com.google.appengine.tools.cloudstorage.RetryParams;
-import com.google.appengine.tools.mapreduce.impl.AbstractWorkerController;
 import com.google.appengine.tools.mapreduce.impl.CountersImpl;
 import com.google.appengine.tools.mapreduce.impl.GoogleCloudStorageMapOutput;
 import com.google.appengine.tools.mapreduce.impl.GoogleCloudStorageReduceInput;
@@ -35,9 +34,9 @@ import com.google.appengine.tools.mapreduce.impl.MapReduceConstants;
 import com.google.appengine.tools.mapreduce.impl.MapReduceResultImpl;
 import com.google.appengine.tools.mapreduce.impl.MapShardTask;
 import com.google.appengine.tools.mapreduce.impl.ReduceShardTask;
-import com.google.appengine.tools.mapreduce.impl.WorkerResult;
 import com.google.appengine.tools.mapreduce.impl.WorkerShardTask;
 import com.google.appengine.tools.mapreduce.impl.shardedjob.ShardedJob;
+import com.google.appengine.tools.mapreduce.impl.shardedjob.ShardedJobController;
 import com.google.appengine.tools.mapreduce.impl.shardedjob.ShardedJobSettings;
 import com.google.appengine.tools.mapreduce.impl.shardedjob.Status;
 import com.google.appengine.tools.mapreduce.impl.sort.SortContext;
@@ -221,37 +220,39 @@ public class MapReduceJob<I, K, V, O, R>
     }
   }
 
-  private static class WorkerController<I, O, R, C extends WorkerContext>
-      extends AbstractWorkerController<WorkerShardTask<I, O, C>, O> {
+  private static class WorkerController<I, O, R, C extends WorkerContext> extends
+      ShardedJobController<WorkerShardTask<I, O, C>> {
 
     private static final long serialVersionUID = 931651840864967980L;
 
-    private final Counters initialCounters;
+    private final Counters counters;
     private final Output<O, R> output;
     private final String resultPromiseHandle;
 
     WorkerController(String shardedJobName, Counters initialCounters, Output<O, R> output,
         String resultPromiseHandle) {
       super(shardedJobName);
-      this.initialCounters = checkNotNull(initialCounters, "Null initialCounters");
+      this.counters = checkNotNull(initialCounters, "Null counters");
       this.output = checkNotNull(output, "Null output");
       this.resultPromiseHandle = checkNotNull(resultPromiseHandle, "Null resultPromiseHandle");
     }
 
     @Override
-    public void completed(WorkerResult<O> finalCombinedResult) {
-      R outputResult = null;
-      Counters totalCounters = new CountersImpl();
-      totalCounters.addAll(initialCounters);
+    public void completed(List<? extends WorkerShardTask<I, O, C>> workers) {
+      ImmutableList.Builder<OutputWriter<O>> outputWriters = ImmutableList.builder();
+      for (WorkerShardTask<I, O, C> worker : workers) {
+        outputWriters.add(worker.getOutputWriter());
+        counters.addAll(worker.getContext().getCounters());
+      }
+      R outputResult;
       try {
-        outputResult = output.finish(finalCombinedResult.getClosedWriters().values());
-        totalCounters.addAll(finalCombinedResult.getCounters());
+        outputResult = output.finish(outputWriters.build());
       } catch (IOException e) {
         throw new RuntimeException(output + ".finish() threw IOException");
       }
       Status status = new Status(Status.StatusCode.DONE);
       ResultAndStatus<R> resultAndStatus = new ResultAndStatus<>(
-          new MapReduceResultImpl<>(outputResult, totalCounters), status);
+          new MapReduceResultImpl<>(outputResult, counters), status);
       submitPromisedJob(resultAndStatus);
     }
 
@@ -342,7 +343,7 @@ public class MapReduceJob<I, K, V, O, R>
       WorkerController<I, KeyValue<K, V>, List<GoogleCloudStorageFileSet>, MapperContext<K, V>>
           workerController = new WorkerController<>(
               shardedJobName, new CountersImpl(), output, resultAndStatus.getHandle());
-      ShardedJob<?, ?> shardedJob =
+      ShardedJob<?> shardedJob =
           new ShardedJob<>(shardedJobId, mapTasks.build(), workerController, shardedJobSettings);
       futureCall(shardedJob, makeJobSettings(settings, statusConsoleUrl(statusConsoleUrl)));
       return futureCall(
@@ -435,7 +436,7 @@ public class MapReduceJob<I, K, V, O, R>
       WorkerController<KeyValue<ByteBuffer, ByteBuffer>, KeyValue<ByteBuffer, Iterator<ByteBuffer>>,
           List<GoogleCloudStorageFileSet>, SortContext> workerController = new WorkerController<>(
               shardedJobName, new CountersImpl(), output, resultAndStatus.getHandle());
-      ShardedJob<?, ?> shardedJob =
+      ShardedJob<?> shardedJob =
           new ShardedJob<>(shardedJobId, sortTasks.build(), workerController, shardedJobSettings);
       futureCall(shardedJob, makeJobSettings(settings, statusConsoleUrl(statusConsoleUrl)));
       return futureCall(
@@ -504,7 +505,7 @@ public class MapReduceJob<I, K, V, O, R>
       WorkerController<KeyValue<K, Iterator<V>>, O, R, ReducerContext<O>> workerController =
           new WorkerController<>(shardedJobName, mapResult.getCounters(), output,
               resultAndStatus.getHandle());
-      ShardedJob<?, ?> shardedJob =
+      ShardedJob<?> shardedJob =
           new ShardedJob<>(shardedJobId, reduceTasks.build(), workerController, shardedJobSettings);
       futureCall(shardedJob, makeJobSettings(settings, statusConsoleUrl(statusConsoleUrl)));
       return futureCall(new ExamineStatusAndReturnResult<R>(shardedJobId), resultAndStatus,

@@ -14,6 +14,7 @@ import com.google.appengine.tools.mapreduce.Output;
 import com.google.appengine.tools.mapreduce.OutputWriter;
 import com.google.appengine.tools.mapreduce.ReducerContext;
 import com.google.appengine.tools.mapreduce.impl.shardedjob.InProcessShardedJobRunner;
+import com.google.appengine.tools.mapreduce.impl.shardedjob.ShardedJobController;
 import com.google.appengine.tools.mapreduce.impl.shardedjob.Status;
 import com.google.appengine.tools.mapreduce.outputs.InMemoryOutput;
 import com.google.common.base.Preconditions;
@@ -81,37 +82,46 @@ public class InProcessMapReduce<I, K, V, O, R> {
     return "InProcessMapReduce.Impl(" + id + ")";
   }
 
-  WorkerResult<KeyValue<K, V>> map(
-      List<? extends InputReader<I>> inputs, List<? extends OutputWriter<KeyValue<K, V>>> outputs) {
+  MapReduceResultImpl<List<List<KeyValue<K,V>>>> map(
+      List<? extends InputReader<I>> inputs, InMemoryOutput<KeyValue<K,V>> output) {
     log.info("Map phase started");
 
     ImmutableList.Builder<WorkerShardTask<I, KeyValue<K, V>, MapperContext<K, V>>> tasks =
         ImmutableList.builder();
+    List<? extends OutputWriter<KeyValue<K, V>>> writers = output.createWriters();
     for (int shard = 0; shard < inputs.size(); shard++) {
       WorkerShardTask<I, KeyValue<K, V>, MapperContext<K, V>> task = new MapShardTask<I, K, V>(id,
           shard,
           inputs.size(),
           inputs.get(shard),
           mrSpec.getMapper(),
-          outputs.get(shard),
+          writers.get(shard),
           Long.MAX_VALUE);
       tasks.add(task);
     }
-    WorkerResult<KeyValue<K, V>> result = InProcessShardedJobRunner.runJob(
-        tasks.build(), new AbstractWorkerController<
-            WorkerShardTask<I, KeyValue<K, V>, MapperContext<K, V>>, KeyValue<K, V>>(
+    final Counters counters = new CountersImpl();
+    InProcessShardedJobRunner.runJob(tasks.build(), new ShardedJobController<
+        WorkerShardTask<I, KeyValue<K, V>, MapperContext<K, V>>>(
             mrSpec.getJobName() + "-map") {
           // Not really meant to be serialized, but avoid warning.
           private static final long serialVersionUID = 661198005749484951L;
 
           @Override
-          public void completed(WorkerResult<KeyValue<K, V>> finalCombinedResult) {}
+          public void failed(Status status) {
+            throw new UnsupportedOperationException();
+          }
 
           @Override
-          public void failed(Status status) {}
+          public void completed(List<
+              ? extends WorkerShardTask<I, KeyValue<K, V>, MapperContext<K, V>>> completedTasks) {
+            for (WorkerShardTask<I, KeyValue<K, V>, MapperContext<K, V>> task : completedTasks) {
+              counters.addAll(task.getContext().getCounters());
+            }
+          }
         });
     log.info("Map phase completed");
-    return result;
+    log.info("combined counters=" + counters);
+    return new MapReduceResultImpl<List<List<KeyValue<K,V>>>>(output.finish(writers), counters);
   }
 
   List<List<KeyValue<K, List<V>>>> shuffle(
@@ -149,40 +159,49 @@ public class InProcessMapReduce<I, K, V, O, R> {
   }
 
   MapReduceResult<R> reduce(List<List<KeyValue<K, List<V>>>> inputs, Output<O, R> output,
-      List<? extends OutputWriter<O>> outputs, Counters mapCounters) throws IOException {
+      Counters mapCounters) throws IOException {
+    List<? extends OutputWriter<O>> outputs = output.createWriters();
     Preconditions.checkArgument(inputs.size() == outputs.size(), "%s reduce inputs, %s outputs",
         inputs.size(), outputs.size());
     log.info("Reduce phase started");
-    ImmutableList.Builder<ReduceShardTask<K, V, O>> tasks = ImmutableList.builder();
+    ImmutableList.Builder<WorkerShardTask<KeyValue<K, Iterator<V>>, O, ReducerContext<O>>> tasks =
+        ImmutableList.builder();
     for (int shard = 0; shard < outputs.size(); shard++) {
-      tasks.add(new ReduceShardTask<K, V, O>(id,
-          shard,
-          outputs.size(),
-          getReducerInputReader(inputs.get(shard)),
-          mrSpec.getReducer(),
-          outputs.get(shard),
-          Long.MAX_VALUE));
+      WorkerShardTask<KeyValue<K, Iterator<V>>, O, ReducerContext<O>> task =
+          new ReduceShardTask<K, V, O>(id,
+              shard,
+              outputs.size(),
+              getReducerInputReader(inputs.get(shard)),
+              mrSpec.getReducer(),
+              outputs.get(shard),
+              Long.MAX_VALUE);
+      tasks.add(task);
     }
-    final Counters[] counters = new Counters[1];
-    InProcessShardedJobRunner.runJob(
-        tasks.build(), new AbstractWorkerController<
-            WorkerShardTask<KeyValue<K, Iterator<V>>, O, ReducerContext<O>>, O>(
-            mrSpec.getJobName() + "-reduce") {
-          // Not really meant to be serialized, but avoid warning.
-          private static final long serialVersionUID = 575338448598450119L;
+    final Counters counters = new CountersImpl();
+    counters.addAll(mapCounters);
+    InProcessShardedJobRunner.runJob(tasks.build(), new ShardedJobController<
+        WorkerShardTask<KeyValue<K, Iterator<V>>, O, ReducerContext<O>>>(mrSpec.getJobName()
+        + "-reduce") {
+      // Not really meant to be serialized, but avoid warning.
+      private static final long serialVersionUID = 575338448598450119L;
 
-          @Override
-          public void completed(WorkerResult<O> result) {
-            counters[0] = result.getCounters();
-          }
+      @Override
+      public void failed(Status status) {
+        throw new UnsupportedOperationException();
+      }
 
-          @Override
-          public void failed(Status status) {}
-        });
-    log.info("Reduce phase completed, reduce counters=" + counters[0]);
-    counters[0].addAll(mapCounters);
-    log.info("combined counters=" + counters[0]);
-    return new MapReduceResultImpl<R>(output.finish(outputs), counters[0]);
+      @Override
+      public void completed(List<? extends WorkerShardTask<KeyValue<K, Iterator<V>>, O,
+          ReducerContext<O>>> completedTasks) {
+        for (WorkerShardTask<KeyValue<K, Iterator<V>>, O, ReducerContext<O>> task :
+            completedTasks) {
+          counters.addAll(task.getContext().getCounters());
+        }
+      }
+    });
+    log.info("Reduce phase completed, reduce counters=" + counters);
+    log.info("combined counters=" + counters);
+    return new MapReduceResultImpl<R>(output.finish(outputs), counters);
   }
 
   private static final DateFormat DATE_FORMAT = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
@@ -195,21 +214,18 @@ public class InProcessMapReduce<I, K, V, O, R> {
         new InProcessMapReduce<I, K, V, O, R>(mapReduceId, mrSpec);
     log.info(mapReduce + " started");
 
-    List<? extends InputReader<I>> inputs = mrSpec.getInput().createReaders();
-    InMemoryOutput<KeyValue<K, V>> mapOutput = InMemoryOutput.create(inputs.size());
-    List<? extends OutputWriter<KeyValue<K, V>>> mapOutputs = mapOutput.createWriters();
-    WorkerResult<KeyValue<K, V>> workerResult = mapReduce.map(inputs, mapOutputs);
-    List<List<KeyValue<K, V>>> pairs = mapOutput.finish(mapOutputs);
-    MapResult<K, V> mapResult = new MapResult<K, V>(pairs, workerResult.getCounters());
+    List<? extends InputReader<I>> mapInput = mrSpec.getInput().createReaders();
+    InMemoryOutput<KeyValue<K, V>> mapOutput = InMemoryOutput.create(mapInput.size());
 
-    List<? extends OutputWriter<O>> outputs = mrSpec.getOutput().createWriters();
+    MapReduceResult<List<List<KeyValue<K, V>>>> mapResult = mapReduce.map(mapInput, mapOutput);
+
+    Output<O, R> reduceOutput = mrSpec.getOutput();
     List<List<KeyValue<K, List<V>>>> reducerInputs =
-        mapReduce.shuffle(mapResult.getMapShardOutputs(), outputs.size());
+        mapReduce.shuffle(mapResult.getOutputResult(), reduceOutput.getNumShards());
     MapReduceResult<R> result =
-        mapReduce.reduce(reducerInputs, mrSpec.getOutput(), outputs, mapResult.getCounters());
+        mapReduce.reduce(reducerInputs, reduceOutput, mapResult.getCounters());
 
     log.info(mapReduce + " finished");
     return result;
   }
-
 }

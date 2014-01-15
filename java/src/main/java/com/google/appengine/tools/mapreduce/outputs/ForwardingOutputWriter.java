@@ -20,7 +20,7 @@ public abstract class ForwardingOutputWriter<O> extends OutputWriter<O> {
   public void open() throws IOException {
     getDelegate().open();
   }
-  
+
   @Override
   public void beginSlice() throws IOException {
     getDelegate().beginSlice();
@@ -35,10 +35,9 @@ public abstract class ForwardingOutputWriter<O> extends OutputWriter<O> {
   public void close() throws IOException {
     getDelegate().close();
   }
-  
+
   @Override
   public long estimateMemoryRequirment() {
     return getDelegate().estimateMemoryRequirment();
   }
-  
 }

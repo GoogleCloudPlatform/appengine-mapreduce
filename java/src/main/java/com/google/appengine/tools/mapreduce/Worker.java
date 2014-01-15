@@ -56,8 +56,7 @@ public abstract class Worker<C extends WorkerContext> implements Serializable {
   private transient C context;
 
   /**
-   * Sets the context to be used for the processing that follows.  Called after
-   * deserialization before {@link #beginShard} or {@link #beginSlice}.
+   * Used internally to sets the context to be used for the processing that follows.
    */
   public void setContext(C context) {
     this.context = context;
@@ -105,5 +104,4 @@ public abstract class Worker<C extends WorkerContext> implements Serializable {
    * <p>This does not send the event to the lifecycle listeners.
    */
   public void endSlice() {}
-
 }

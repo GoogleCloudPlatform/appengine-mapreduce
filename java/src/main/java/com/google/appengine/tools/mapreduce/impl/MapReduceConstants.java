@@ -61,5 +61,4 @@ public class MapReduceConstants {
       .totalRetryPeriodMillis(120000)
       .initialRetryDelayMillis(250)
       .build();
-
 }

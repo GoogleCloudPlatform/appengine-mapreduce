@@ -42,5 +42,4 @@ public abstract class LifecycleListener implements Serializable {
    * slice, and prepares it for possible serialization.
    */
   public void endSlice() {}
-
 }

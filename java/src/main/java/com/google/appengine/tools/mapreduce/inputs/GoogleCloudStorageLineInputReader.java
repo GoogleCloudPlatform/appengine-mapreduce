@@ -28,7 +28,7 @@ class GoogleCloudStorageLineInputReader extends InputReader<byte[]> {
 
   @VisibleForTesting final long startOffset;
   @VisibleForTesting final long endOffset;
-  private GcsFilename file;
+  private final GcsFilename file;
   private long offset;
   private final int bufferSize;
   private transient LineInputStream in;
@@ -104,5 +104,4 @@ class GoogleCloudStorageLineInputReader extends InputReader<byte[]> {
   public long estimateMemoryRequirment() {
     return bufferSize * 2; // Double buffered
   }
-
 }

@@ -2,7 +2,7 @@
 
 package com.google.appengine.tools.mapreduce.impl.shardedjob;
 
-import java.io.Serializable;
+
 
 /**
  * Information about execution and progress of a sharded job.
@@ -12,10 +12,9 @@ import java.io.Serializable;
  *
  * @author ohler@google.com (Christian Ohler)
  *
- * @param <T> type of tasks that the job consists of
- * @param <R> type of intermediate and final results of the job
+ * @param <T> type of the IncrementalTask
  */
-public interface ShardedJobState<T extends IncrementalTask<T, R>, R extends Serializable> {
+public interface ShardedJobState<T extends IncrementalTask> {
 
   /**
    * Returns the ID of this job.
@@ -25,7 +24,7 @@ public interface ShardedJobState<T extends IncrementalTask<T, R>, R extends Seri
   /**
    * Returns the controller for this job.
    */
-  ShardedJobController<T, R> getController();
+  ShardedJobController<T> getController();
 
   /**
    * Returns the execution settings of this job.
@@ -57,15 +56,4 @@ public interface ShardedJobState<T extends IncrementalTask<T, R>, R extends Seri
    * Returns whether this job is running, finished, etc.
    */
   Status getStatus();
-
-  /**
-   * Returns the aggregate result as computed by
-   * {@link ShardedJobController#combineResults}.
-   *
-   * As long as the job is still active ({@link #getStatus} returns
-   * {@link Status.StatusCode#INITIALIZING} or {@link Status.StatusCode#RUNNING}), the aggregate
-   * result only reflects the progress so far; when {@link #getStatus} returns
-   * one of the final states, the aggregate result is the final result.
-   */
-  /*Nullable*/ R getAggregateResult();
 }
