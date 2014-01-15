@@ -6,15 +6,18 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import static org.easymock.EasyMock.createMock;
 import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.replay;
+import static org.junit.Assert.assertFalse;
 
 import com.google.appengine.api.taskqueue.dev.LocalTaskQueue;
 import com.google.appengine.api.taskqueue.dev.QueueStateInfo;
+import com.google.appengine.api.taskqueue.dev.QueueStateInfo.TaskStateInfo;
 import com.google.appengine.tools.development.testing.LocalDatastoreServiceTestConfig;
 import com.google.appengine.tools.development.testing.LocalServiceTestHelper;
 import com.google.appengine.tools.development.testing.LocalTaskQueueTestConfig;
 import com.google.appengine.tools.mapreduce.LocalModulesServiceTestConfig;
 
-import junit.framework.TestCase;
+import org.junit.After;
+import org.junit.Before;
 
 import java.io.UnsupportedEncodingException;
 import java.net.URLDecoder;
@@ -27,7 +30,7 @@ import javax.servlet.http.HttpServletRequest;
 
 /**
  */
-public abstract class EndToEndTestCase extends TestCase {
+public abstract class EndToEndTestCase {
 
   private static final Logger logger = Logger.getLogger(EndToEndTestCase.class.getName());
 
@@ -36,7 +39,7 @@ public abstract class EndToEndTestCase extends TestCase {
           new LocalDatastoreServiceTestConfig(),
           new LocalTaskQueueTestConfig().setDisableAutoTaskExecution(true),
           new LocalModulesServiceTestConfig());
-  private LocalTaskQueue taskQueue;
+  protected LocalTaskQueue taskQueue;
 
   protected final ShardedJobService service = ShardedJobServiceFactory.getShardedJobService();
 
@@ -44,9 +47,8 @@ public abstract class EndToEndTestCase extends TestCase {
   protected final String workerPath = "worker";
   protected ShardedJobSettings settings;
 
-  @Override
-  protected void setUp() throws Exception {
-    super.setUp();
+  @Before
+  public void setUp() throws Exception {
     helper.setUp();
     taskQueue = LocalTaskQueueTestConfig.getLocalTaskQueue();
     settings = new ShardedJobSettings.Builder()
@@ -55,13 +57,12 @@ public abstract class EndToEndTestCase extends TestCase {
         .build();
   }
 
-  @Override
-  protected void tearDown() throws Exception {
+  @After
+  public void tearDown() throws Exception {
     helper.tearDown();
-    super.tearDown();
   }
 
-  private void executeTask(String queueName, QueueStateInfo.TaskStateInfo taskStateInfo)
+  protected void executeTask(String queueName, QueueStateInfo.TaskStateInfo taskStateInfo)
       throws Exception {
     logger.info("Executing " + taskStateInfo.getTaskName());
 
@@ -74,7 +75,7 @@ public abstract class EndToEndTestCase extends TestCase {
         .andReturn(queueName)
         .anyTimes();
 
-    Map<String, String> parameters = decodeParameters(taskStateInfo.getBody());
+    Map<String, String> parameters = decodeParameters(taskStateInfo);
     for (String name : parameters.keySet()) {
       expect(request.getParameter(name))
           .andReturn(parameters.get(name))
@@ -124,22 +125,34 @@ public abstract class EndToEndTestCase extends TestCase {
     }
   }
 
+  protected String getTaskId(TaskStateInfo taskStateInfo) throws UnsupportedEncodingException {
+    return decodeParameters(taskStateInfo).get(ShardedJobRunner.TASK_ID_PARAM);
+  }
+
   // Sadly there's no way to parse query string with JDK. This is a good enough approximation.
-  private static Map<String, String> decodeParameters(String requestBody)
+  private static Map<String, String> decodeParameters(TaskStateInfo taskStateInfo)
       throws UnsupportedEncodingException {
     Map<String, String> result = new HashMap<>();
 
-    String[] params = requestBody.split("&");
+    String[] params = taskStateInfo.getBody().split("&");
     for (String param : params) {
       String[] pair = param.split("=");
       String name = pair[0];
       String value = URLDecoder.decode(pair[1], "UTF-8");
       if (result.containsKey(name)) {
-        throw new IllegalArgumentException("Duplicate parameter: " + requestBody);
+        throw new IllegalArgumentException("Duplicate parameter: " + taskStateInfo.getBody());
       }
       result.put(name, value);
     }
 
     return result;
+  }
+
+  protected TaskStateInfo grabNextTaskFromQueue(String queueName) {
+    List<TaskStateInfo> taskInfo = getTasks(queueName);
+    assertFalse(taskInfo.isEmpty());
+    TaskStateInfo taskStateInfo = taskInfo.get(0);
+    taskQueue.deleteTask(queueName, taskStateInfo.getTaskName());
+    return taskStateInfo;
   }
 }

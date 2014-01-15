@@ -19,6 +19,8 @@ public final class ShardedJobSettings implements Serializable {
 
   private static final long serialVersionUID = 286995366653078363L;
 
+  public static final int DEFAULT_SLICE_TIMEOUT_MILLIS = 11 * 60000;
+
   // TODO(user): remove fields and readObject once we no longer care about outstanding jobs
   // before the rename/removal and make all other fields final.
   private String controllerBackend;
@@ -37,6 +39,7 @@ public final class ShardedJobSettings implements Serializable {
   private String queueName;
   private final int maxShardRetries;
   private final int maxSliceRetries;
+  private final int sliceTimeoutMillis;
 
   /**
    * ShardedJobSettings builder.
@@ -52,6 +55,7 @@ public final class ShardedJobSettings implements Serializable {
     private String queueName = "default";
     private int maxShardRetries = 4;
     private int maxSliceRetries = 20;
+    private int sliceTimeoutMillis = DEFAULT_SLICE_TIMEOUT_MILLIS;
 
     public Builder setPipelineStatusUrl(String pipelineStatusUrl) {
       this.pipelineStatusUrl = pipelineStatusUrl;
@@ -98,15 +102,20 @@ public final class ShardedJobSettings implements Serializable {
       return this;
     }
 
+    public Builder setSliceTimeoutMillis(int sliceTimeoutMillis) {
+     this.sliceTimeoutMillis = sliceTimeoutMillis;
+      return this;
+    }
+
     public ShardedJobSettings build() {
       return new ShardedJobSettings(controllerPath, workerPath, pipelineStatusUrl, backend, module,
-          version, queueName, maxShardRetries, maxSliceRetries);
+          version, queueName, maxShardRetries, maxSliceRetries, sliceTimeoutMillis);
     }
   }
 
   private ShardedJobSettings(String controllerPath, String workerPath, String pipelineStatusUrl,
       String backend, String module, String version, String queueName, int maxShardRetries,
-      int maxSliceRetries) {
+      int maxSliceRetries, int sliceTimeoutMillis) {
     this.controllerPath = controllerPath;
     this.workerPath = workerPath;
     this.pipelineStatusUrl = pipelineStatusUrl;
@@ -116,6 +125,7 @@ public final class ShardedJobSettings implements Serializable {
     this.queueName = queueName;
     this.maxShardRetries = maxShardRetries;
     this.maxSliceRetries = maxSliceRetries;
+    this.sliceTimeoutMillis = sliceTimeoutMillis;
     target = resolveTaskQueueTarget();
   }
 
@@ -188,6 +198,10 @@ public final class ShardedJobSettings implements Serializable {
     return maxSliceRetries;
   }
 
+  public int getSliceTimeoutMillis() {
+    return sliceTimeoutMillis;
+  }
+
   @Override
   public String toString() {
     return getClass().getSimpleName() + "("
@@ -200,6 +214,7 @@ public final class ShardedJobSettings implements Serializable {
         + maxSliceRetries + ", "
         + module + ", "
         + version + ", "
-        + target + ")";
+        + target + ", "
+        + sliceTimeoutMillis + ")";
   }
 }

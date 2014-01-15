@@ -10,7 +10,6 @@ import com.google.appengine.tools.mapreduce.OutputWriter;
 import com.google.appengine.tools.mapreduce.Worker;
 import com.google.appengine.tools.mapreduce.WorkerContext;
 import com.google.appengine.tools.mapreduce.impl.handlers.MemoryLimiter;
-import com.google.appengine.tools.mapreduce.impl.shardedjob.RejectRequestException;
 import com.google.appengine.tools.mapreduce.impl.shardedjob.ShardFailureException;
 import com.google.common.base.Stopwatch;
 import com.google.common.collect.Lists;
@@ -32,19 +31,20 @@ public abstract class WorkerShardTask<I, O, C extends WorkerContext> implements
 
   private static final Logger log = Logger.getLogger(WorkerShardTask.class.getName());
   private static final long serialVersionUID = 992552712402490981L;
-  private static final MemoryLimiter LIMITER = new MemoryLimiter();
+  protected static final MemoryLimiter LIMITER = new MemoryLimiter();
 
   private transient Stopwatch overallStopwatch;
   private transient Stopwatch inputStopwatch;
   private transient Stopwatch workerStopwatch;
+  protected transient Long claimedMemory; // Assigned in prepare
 
   boolean inputExhausted = false;
   private boolean isFirstSlice = true;
 
   @Override
   public String toString() {
-    return getClass().getSimpleName() + "(" + getContext().getJobId() + ", " + getContext().getShardNumber()
-        + "/" + getContext().getShardCount() + ")";
+    return getClass().getSimpleName() + "(" + getContext().getJobId() + ", "
+        + getContext().getShardNumber() + "/" + getContext().getShardCount() + ")";
   }
 
   protected abstract void callWorker(I input);
@@ -58,22 +58,31 @@ public abstract class WorkerShardTask<I, O, C extends WorkerContext> implements
 
   @Override
   public void run() {
-    long claimedMemory = LIMITER.claim(estimateMemoryNeeded() / 1024 / 1024);
     try {
       doWork();
-    } catch (RecoverableException | ShardFailureException | RejectRequestException ex) {
+    } catch (RecoverableException | ShardFailureException ex) {
       throw ex;
     } catch (RuntimeException ex) {
       throw new ShardFailureException(getContext().getShardNumber(), ex);
-    } finally {
+    }
+  }
+
+  @Override
+  public void release() {
+    if (claimedMemory != null) {
       LIMITER.release(claimedMemory);
     }
+  }
+
+  @Override
+  public void prepare() {
+    claimedMemory = LIMITER.claim(estimateMemoryNeeded() / 1024 / 1024);
   }
 
   public void doWork() {
     try {
       beginSlice();
-    } catch (RecoverableException | ShardFailureException | RejectRequestException ex) {
+    } catch (RecoverableException | ShardFailureException ex) {
       throw ex;
     } catch (IOException | RuntimeException ex) {
       throw new RecoverableException("Failed on beginSlice/beginShard", ex);

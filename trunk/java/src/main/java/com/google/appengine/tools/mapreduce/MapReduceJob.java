@@ -158,6 +158,8 @@ public class MapReduceJob<I, K, V, O, R>
         .setQueueName(mrSettings.getWorkerQueueName())
         .setMaxShardRetries(mrSettings.getMaxShardRetries())
         .setMaxSliceRetries(mrSettings.getMaxSliceRetries())
+        .setSliceTimeoutMillis(Math.max(ShardedJobSettings.DEFAULT_SLICE_TIMEOUT_MILLIS,
+            (int) (mrSettings.getMillisPerSlice() * 1.1)))
         .build();
   }
 
