@@ -310,7 +310,7 @@ public class MapReduceJob<I, K, V, O, R>
      */
     @Override
     public Value<MapReduceResult<List<GoogleCloudStorageFileSet>>> run() {
-      @SuppressWarnings({"unchecked", "rawtypes"})
+      // TODO(user): update to use newPromise() once pipeline 0.2.3 is pushed
       PromisedValue<ResultAndStatus<List<GoogleCloudStorageFileSet>>> resultAndStatus =
           (PromisedValue) newPromise(ResultAndStatus.class);
       String shardedJobId = "map-" + mrJobId;
@@ -403,7 +403,6 @@ public class MapReduceJob<I, K, V, O, R>
     @Override
     public Value<MapReduceResult<List<GoogleCloudStorageFileSet>>> run(
         MapReduceResult<List<GoogleCloudStorageFileSet>> mapResult) {
-      @SuppressWarnings({"unchecked", "rawtypes"})
       PromisedValue<ResultAndStatus<List<GoogleCloudStorageFileSet>>> resultAndStatus =
           (PromisedValue) newPromise(ResultAndStatus.class);
       String shardedJobId = "sort-" + mrJobId;
@@ -478,7 +477,6 @@ public class MapReduceJob<I, K, V, O, R>
     @Override
     public Value<MapReduceResult<R>> run(MapReduceResult<List<GoogleCloudStorageFileSet>> mapResult,
         MapReduceResult<List<GoogleCloudStorageFileSet>> sortResult) {
-      @SuppressWarnings({"unchecked", "rawtypes"})
       PromisedValue<ResultAndStatus<R>> resultAndStatus =
           (PromisedValue) newPromise(ResultAndStatus.class);
       List<? extends InputReader<KeyValue<K, Iterator<V>>>> readers =
