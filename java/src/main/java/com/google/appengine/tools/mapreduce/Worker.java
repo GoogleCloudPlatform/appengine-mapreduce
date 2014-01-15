@@ -47,7 +47,7 @@ import java.io.Serializable;
  *
  * @param <C> type of context required by this worker
  */
-public abstract class Worker<C extends WorkerContext> implements Serializable {
+public abstract class Worker<C extends WorkerContext<?>> implements Serializable {
   private static final long serialVersionUID = 261775900734965853L;
 
   private final LifecycleListenerRegistry lifecycleListenerRegistry =

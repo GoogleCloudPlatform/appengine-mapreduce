@@ -6,8 +6,10 @@ import com.google.appengine.tools.mapreduce.WorkerContext;
 
 /**
  * Base class for all context implementations.
+ *
+ * @param <O> type of output values produced by the worker
  */
-public class AbstractWorkerContext implements WorkerContext {
+public abstract class AbstractWorkerContext<O> implements WorkerContext<O> {
 
   private final IncrementalTaskContext taskContext;
 
