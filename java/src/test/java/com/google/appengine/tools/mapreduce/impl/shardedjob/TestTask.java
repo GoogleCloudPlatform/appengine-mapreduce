@@ -26,10 +26,18 @@ public class TestTask implements IncrementalTaskWithContext {
   }
 
   @Override
+  public void prepare() {
+  }
+
+  @Override
   public void run() {
     assertTrue(slicesRemaining-- > 0);
     total += valueToYield;
     context.getCounters().getCounter("TestTaskSum").increment(valueToYield);
+  }
+
+  @Override
+  public void release() {
   }
 
   @Override

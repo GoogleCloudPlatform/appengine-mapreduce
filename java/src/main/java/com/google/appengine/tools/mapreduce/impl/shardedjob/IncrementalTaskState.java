@@ -2,7 +2,6 @@
 
 package com.google.appengine.tools.mapreduce.impl.shardedjob;
 
-import static com.google.appengine.tools.mapreduce.impl.util.SerializationUtil.deserializeFromDatastoreProperty;
 import static com.google.appengine.tools.mapreduce.impl.util.SerializationUtil.serializeToDatastoreProperty;
 import static com.google.common.base.Preconditions.checkNotNull;
 
@@ -27,10 +26,12 @@ public class IncrementalTaskState<T extends IncrementalTask> {
   private final String taskId;
   private final String jobId;
   private long mostRecentUpdateMillis;
-  private int nextSequenceNumber;
+  private int sequenceNumber;
   private int retryCount;
   private T task;
   private Status status;
+  //Null when the slice (sequence) has not started yet.
+  /*Nullable*/ private Long sliceStartTime;
 
 
   /**
@@ -38,16 +39,17 @@ public class IncrementalTaskState<T extends IncrementalTask> {
    */
   static <T extends IncrementalTask> IncrementalTaskState<T> create(String taskId, String jobId,
       long createTime, T initialTask) {
-    return new IncrementalTaskState<>(taskId, jobId, createTime, checkNotNull(initialTask),
+    return new IncrementalTaskState<>(taskId, jobId, createTime, null, checkNotNull(initialTask),
         new Status(StatusCode.RUNNING));
   }
 
   private IncrementalTaskState(String taskId, String jobId, long mostRecentUpdateMillis,
-      T nextTask, Status status) {
+      Long sliceStartTime, T task, Status status) {
     this.taskId = checkNotNull(taskId, "Null taskId");
     this.jobId = checkNotNull(jobId, "Null jobId");
     this.mostRecentUpdateMillis = mostRecentUpdateMillis;
-    this.task = nextTask;
+    this.sliceStartTime = sliceStartTime;
+    this.task = task;
     this.status = status;
   }
 
@@ -68,12 +70,12 @@ public class IncrementalTaskState<T extends IncrementalTask> {
     return this;
   }
 
-  public int getNextSequenceNumber() {
-    return nextSequenceNumber;
+  public int getSequenceNumber() {
+    return sequenceNumber;
   }
 
-  IncrementalTaskState<T> setNextSequenceNumber(int nextSequenceNumber) {
-    this.nextSequenceNumber = nextSequenceNumber;
+  IncrementalTaskState<T> setSequenceNumber(int nextSequenceNumber) {
+    this.sequenceNumber = nextSequenceNumber;
     return this;
   }
 
@@ -89,7 +91,16 @@ public class IncrementalTaskState<T extends IncrementalTask> {
     retryCount = 0;
   }
 
-  public T getTask() {
+  /*Nullable*/ public Long getSliceStartTime() {
+    return sliceStartTime;
+  }
+
+  public IncrementalTaskState<T> setSliceStartTime(Long sliceStartTime) {
+    this.sliceStartTime = sliceStartTime;
+    return this;
+  }
+
+  /*Nullable*/ public T getTask() {
     return task;
   }
 
@@ -113,7 +124,7 @@ public class IncrementalTaskState<T extends IncrementalTask> {
         + taskId + ", "
         + jobId + ", "
         + mostRecentUpdateMillis + ", "
-        + nextSequenceNumber + ", "
+        + sequenceNumber + ", "
         + retryCount + ", "
         + task + ", "
         + status + ", "
@@ -126,8 +137,9 @@ public class IncrementalTaskState<T extends IncrementalTask> {
 
     private static final String JOB_ID_PROPERTY = "jobId";
     private static final String MOST_RECENT_UPDATE_MILLIS_PROPERTY = "mostRecentUpdateMillis";
-    private static final String NEXT_SEQUENCE_NUMBER_PROPERTY = "sequenceNumber";
+    private static final String SEQUENCE_NUMBER_PROPERTY = "sequenceNumber";
     private static final String RETRY_COUNT_PROPERTY = "retryCount";
+    private static final String SLICE_START_TIME = "sliceStartTime";
     private static final String NEXT_TASK_PROPERTY = "nextTask";
     private static final String STATUS_PROPERTY = "status";
 
@@ -140,7 +152,10 @@ public class IncrementalTaskState<T extends IncrementalTask> {
       taskState.setProperty(JOB_ID_PROPERTY, in.getJobId());
       taskState.setUnindexedProperty(MOST_RECENT_UPDATE_MILLIS_PROPERTY,
           in.getMostRecentUpdateMillis());
-      taskState.setProperty(NEXT_SEQUENCE_NUMBER_PROPERTY, in.getNextSequenceNumber());
+      if (in.getSliceStartTime() != null) {
+        taskState.setUnindexedProperty(SLICE_START_TIME, in.getSliceStartTime());
+      }
+      taskState.setProperty(SEQUENCE_NUMBER_PROPERTY, in.getSequenceNumber());
       taskState.setProperty(RETRY_COUNT_PROPERTY, in.getRetryCount());
       taskState.setUnindexedProperty(NEXT_TASK_PROPERTY,
           serializeToDatastoreProperty(in.getTask(), CompressionType.GZIP));
@@ -155,10 +170,13 @@ public class IncrementalTaskState<T extends IncrementalTask> {
       IncrementalTaskState state = new IncrementalTaskState(in.getKey().getName(),
           (String) in.getProperty(JOB_ID_PROPERTY),
           (Long) in.getProperty(MOST_RECENT_UPDATE_MILLIS_PROPERTY),
-          (IncrementalTask) deserializeFromDatastoreProperty(in, NEXT_TASK_PROPERTY),
+          (Long) in.getProperty(SLICE_START_TIME),
+          in.hasProperty(NEXT_TASK_PROPERTY) ? SerializationUtil
+              .<IncrementalTask>deserializeFromDatastoreProperty(in, NEXT_TASK_PROPERTY)
+              : null,
           SerializationUtil.<Status>deserializeFromDatastoreProperty(in, STATUS_PROPERTY));
-      state.setNextSequenceNumber(
-          Ints.checkedCast((Long) in.getProperty(NEXT_SEQUENCE_NUMBER_PROPERTY)));
+      state.setSequenceNumber(
+          Ints.checkedCast((Long) in.getProperty(SEQUENCE_NUMBER_PROPERTY)));
       if (in.hasProperty(RETRY_COUNT_PROPERTY)) {
         state.retryCount = Ints.checkedCast((Long) in.getProperty(RETRY_COUNT_PROPERTY));
       }

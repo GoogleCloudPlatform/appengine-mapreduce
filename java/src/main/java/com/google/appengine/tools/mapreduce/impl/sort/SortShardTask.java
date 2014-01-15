@@ -49,6 +49,26 @@ public class SortShardTask extends WorkerShardTask<
   }
 
   @Override
+  public void prepare() {
+    super.prepare();
+    boolean success = false;
+    try {
+      inMemSorter.prepare();
+      success = true;
+    } finally {
+      if (!success) {
+        super.release();
+      }
+    }
+  }
+
+  @Override
+  public void release() {
+    super.release();
+    inMemSorter.release();
+  }
+
+  @Override
   protected void callWorker(KeyValue<ByteBuffer, ByteBuffer> input) {
     try {
       inMemSorter.addValue(input.getKey(), input.getValue());

@@ -88,10 +88,18 @@ public class SortWorker extends Worker<SortContext> {
     }
   }
 
+  void prepare() {
+    memoryBuffer = allocateMemory();
+  }
+
+  void release() {
+    memoryBuffer = null;
+  }
+
   @Override
   public void beginSlice() {
     comparator = new LexicographicalComparator();
-    memoryBuffer = allocateMemory();
+    assert memoryBuffer != null;
     valuesHeld = 0;
     leftover = null;
     isFull = false;

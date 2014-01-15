@@ -4,16 +4,24 @@ package com.google.appengine.tools.mapreduce.impl.shardedjob;
 
 import static com.google.appengine.tools.mapreduce.impl.shardedjob.Status.StatusCode.DONE;
 import static com.google.appengine.tools.mapreduce.impl.shardedjob.Status.StatusCode.RUNNING;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 
 import com.google.common.collect.ImmutableList;
+
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.BlockJUnit4ClassRunner;
 
 import java.util.List;
 
 /**
  * @author ohler@google.com (Christian Ohler)
  */
+@RunWith(BlockJUnit4ClassRunner.class)
 public class EndToEndTest extends EndToEndTestCase {
 
+  @Test
   public void testSimpleJob() throws Exception {
     List<TestTask> tasks = ImmutableList.of(
         new TestTask(0, 5, 1, 3),
@@ -53,6 +61,7 @@ public class EndToEndTest extends EndToEndTestCase {
 
   // TODO(ohler): Test idempotence of startJob() in more depth, especially in
   // the case of errors (incomplete initializations).
+  @Test
   public void testNoTasks() throws Exception {
     String jobId = "job1";
     assertNull(service.getJobState(jobId));
