@@ -15,7 +15,7 @@ import java.util.List;
  * Provides a context for the in memory sort.
  *
  */
-public class SortContext extends AbstractWorkerContext {
+public class SortContext extends AbstractWorkerContext<KeyValue<ByteBuffer, Iterator<ByteBuffer>>> {
 
   private final OutputWriter<KeyValue<ByteBuffer, Iterator<ByteBuffer>>> output;
 
@@ -29,6 +29,11 @@ public class SortContext extends AbstractWorkerContext {
    * Emits a list of values for a given key
    */
   public void emit(ByteBuffer key, List<ByteBuffer> values) throws IOException {
-    output.write(new KeyValue<>(key, values.iterator()));
+    emit(new KeyValue<>(key, values.iterator()));
+  }
+
+  @Override
+  public void emit(KeyValue<ByteBuffer, Iterator<ByteBuffer>> value) throws IOException {
+    output.write(value);
   }
 }

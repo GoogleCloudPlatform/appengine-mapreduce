@@ -218,7 +218,7 @@ public class MapReduceJob<I, K, V, O, R>
     }
   }
 
-  private static class WorkerController<I, O, R, C extends WorkerContext> extends
+  private static class WorkerController<I, O, R, C extends WorkerContext<O>> extends
       ShardedJobController<WorkerShardTask<I, O, C>> {
 
     private static final long serialVersionUID = 931651840864967980L;

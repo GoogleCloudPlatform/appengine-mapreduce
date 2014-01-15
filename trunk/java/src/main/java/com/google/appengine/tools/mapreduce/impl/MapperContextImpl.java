@@ -13,7 +13,8 @@ import java.io.IOException;
 /**
  * @author ohler@google.com (Christian Ohler)
  */
-class MapperContextImpl<K, V> extends AbstractWorkerContext implements MapperContext<K, V> {
+class MapperContextImpl<K, V> extends AbstractWorkerContext<KeyValue<K, V>> implements
+    MapperContext<K, V> {
 
   private final OutputWriter<KeyValue<K, V>> output;
 
@@ -24,11 +25,16 @@ class MapperContextImpl<K, V> extends AbstractWorkerContext implements MapperCon
 
   @Override
   public void emit(K key, V value) {
+    emit(KeyValue.of(key, value));
+  }
+
+  @Override
+  public void emit(KeyValue<K, V> value) {
     try {
-      output.write(KeyValue.of(key, value));
+      output.write(value);
     } catch (IOException e) {
       throw new RuntimeException(
-          output + ".write(" + key + ", " + value + ") threw IOException", e);
+          output + ".write(" + value + ") threw IOException", e);
     }
   }
 }

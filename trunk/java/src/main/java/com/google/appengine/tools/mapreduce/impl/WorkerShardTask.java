@@ -26,7 +26,7 @@ import java.util.logging.Logger;
  * @param <O> type of output values produced by the worker
  * @param <C> type of context required by the worker
  */
-public abstract class WorkerShardTask<I, O, C extends WorkerContext> implements
+public abstract class WorkerShardTask<I, O, C extends WorkerContext<O>> implements
     IncrementalTaskWithContext {
 
   private static final Logger log = Logger.getLogger(WorkerShardTask.class.getName());

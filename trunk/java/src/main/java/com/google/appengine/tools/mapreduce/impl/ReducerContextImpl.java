@@ -14,7 +14,7 @@ import java.io.IOException;
  *
  * @param <O> type of output values produced by the reducer
  */
-class ReducerContextImpl<O> extends AbstractWorkerContext implements ReducerContext<O> {
+class ReducerContextImpl<O> extends AbstractWorkerContext<O> implements ReducerContext<O> {
 
   private final OutputWriter<O> output;
 

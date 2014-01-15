@@ -2,12 +2,24 @@
 
 package com.google.appengine.tools.mapreduce;
 
+import java.io.IOException;
+
 
 /**
  * Context for each worker (mapper or reducer) shard.
+ *
+ * @param <O> type of output values produced by the worker
  */
-public interface WorkerContext {
+public interface WorkerContext<O> {
 
+  /**
+   * Emits a value to the output.
+   */
+  void emit(O value) throws IOException;
+
+  /**
+   * Returns the Id for the job.
+   */
   String getJobId();
 
   /**
