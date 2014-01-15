@@ -44,7 +44,6 @@ import com.google.appengine.tools.mapreduce.impl.sort.SortContext;
 import com.google.appengine.tools.mapreduce.impl.sort.SortShardTask;
 import com.google.appengine.tools.mapreduce.impl.sort.SortWorker;
 import com.google.appengine.tools.pipeline.FutureValue;
-import com.google.appengine.tools.pipeline.Job;
 import com.google.appengine.tools.pipeline.Job0;
 import com.google.appengine.tools.pipeline.Job1;
 import com.google.appengine.tools.pipeline.Job2;
@@ -101,12 +100,7 @@ public class MapReduceJob<I, K, V, O, R>
     checkQueueSettings(settings.getWorkerQueueName());
     PipelineService pipelineService = PipelineServiceFactory.newPipelineService();
     return pipelineService.startNewPipeline(new MapReduceJob<I, K, V, O, R>(), specification,
-        settings, mrSettingToPipelineSetting(settings));
-  }
-
-  private static JobSetting[] mrSettingToPipelineSetting(MapReduceSettings settings) {
-    return new JobSetting[] {Job.onBackend(settings.getBackend()),
-        Job.onModule(settings.getModule()), Job.onQueue(settings.getWorkerQueueName())};
+        settings, makeJobSettings(settings));
   }
 
   private static void checkQueueSettings(String queueName) {
