@@ -37,6 +37,7 @@ import com.google.appengine.tools.mapreduce.impl.ReduceShardTask;
 import com.google.appengine.tools.mapreduce.impl.WorkerShardTask;
 import com.google.appengine.tools.mapreduce.impl.shardedjob.ShardedJob;
 import com.google.appengine.tools.mapreduce.impl.shardedjob.ShardedJobController;
+import com.google.appengine.tools.mapreduce.impl.shardedjob.ShardedJobServiceFactory;
 import com.google.appengine.tools.mapreduce.impl.shardedjob.ShardedJobSettings;
 import com.google.appengine.tools.mapreduce.impl.shardedjob.Status;
 import com.google.appengine.tools.mapreduce.impl.sort.SortContext;
@@ -67,6 +68,7 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.Callable;
+import java.util.concurrent.CancellationException;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -286,12 +288,14 @@ public class MapReduceJob<I, K, V, O, R>
     private final String mrJobId;
     private final MapReduceSpecification<I, K, V, ?, ?> mrSpec;
     private final MapReduceSettings settings;
+    private final String shardedJobId;
 
     private MapJob(
         String mrJobId, MapReduceSpecification<I, K, V, ?, ?> mrSpec, MapReduceSettings settings) {
       this.mrJobId = checkNotNull(mrJobId, "Null mrJobId");
       this.mrSpec = checkNotNull(mrSpec, "Null mrSpec");
       this.settings = checkNotNull(settings, "Null settings");
+      shardedJobId = "map-" + mrJobId;
     }
 
     @Override
@@ -313,7 +317,6 @@ public class MapReduceJob<I, K, V, O, R>
       // TODO(user): update to use newPromise() once pipeline 0.2.3 is pushed
       PromisedValue<ResultAndStatus<List<GoogleCloudStorageFileSet>>> resultAndStatus =
           (PromisedValue) newPromise(ResultAndStatus.class);
-      String shardedJobId = "map-" + mrJobId;
       String statusConsoleUrl = settings.getBaseUrl() + "detail?mapreduce_id=" + shardedJobId;
       setStatusConsoleUrl(statusConsoleUrl);
       List<? extends InputReader<I>> readers;
@@ -350,6 +353,13 @@ public class MapReduceJob<I, K, V, O, R>
           new ExamineStatusAndReturnResult<List<GoogleCloudStorageFileSet>>(shardedJobId),
           resultAndStatus, makeJobSettings(settings));
     }
+
+    @SuppressWarnings("unused")
+    public Value<MapReduceResult<List<GoogleCloudStorageFileSet>>> handleException(
+        CancellationException ex) {
+      ShardedJobServiceFactory.getShardedJobService().abortJob(shardedJobId);
+      return null;
+    }
   }
 
   /**
@@ -364,12 +374,14 @@ public class MapReduceJob<I, K, V, O, R>
     private final String mrJobId;
     private final MapReduceSpecification<?, ?, ?, ?, ?> mrSpec;
     private final MapReduceSettings settings;
+    private final String shardedJobId;
 
     private SortJob(
         String mrJobId, MapReduceSpecification<?, ?, ?, ?, ?> mrSpec, MapReduceSettings settings) {
       this.mrJobId = checkNotNull(mrJobId, "Null mrJobId");
       this.mrSpec = checkNotNull(mrSpec, "Null mrSpec");
       this.settings = checkNotNull(settings, "Null settings");
+      shardedJobId = "sort-" + mrJobId;
     }
 
     @Override
@@ -405,7 +417,6 @@ public class MapReduceJob<I, K, V, O, R>
         MapReduceResult<List<GoogleCloudStorageFileSet>> mapResult) {
       PromisedValue<ResultAndStatus<List<GoogleCloudStorageFileSet>>> resultAndStatus =
           (PromisedValue) newPromise(ResultAndStatus.class);
-      String shardedJobId = "sort-" + mrJobId;
       String statusConsoleUrl = settings.getBaseUrl() + "detail?mapreduce_id=" + shardedJobId;
       setStatusConsoleUrl(statusConsoleUrl);
       int reduceShards = mrSpec.getOutput().getNumShards();
@@ -442,6 +453,12 @@ public class MapReduceJob<I, K, V, O, R>
           new ExamineStatusAndReturnResult<List<GoogleCloudStorageFileSet>>(shardedJobId),
           resultAndStatus, makeJobSettings(settings));
     }
+
+    @SuppressWarnings("unused")
+    public Value<List<GoogleCloudStorageFileSet>> handleException(CancellationException ex) {
+      ShardedJobServiceFactory.getShardedJobService().abortJob(shardedJobId);
+      return null;
+    }
   }
 
   /**
@@ -456,12 +473,14 @@ public class MapReduceJob<I, K, V, O, R>
     private final String mrJobId;
     private final MapReduceSpecification<?, K, V, O, R> mrSpec;
     private final MapReduceSettings settings;
+    private final String shardedJobId;
 
     private ReduceJob(
         String mrJobId, MapReduceSpecification<?, K, V, O, R> mrSpec, MapReduceSettings settings) {
       this.mrJobId = checkNotNull(mrJobId, "Null mrJobId");
       this.mrSpec = checkNotNull(mrSpec, "Null mrSpec");
       this.settings = checkNotNull(settings, "Null settings");
+      shardedJobId = "reduce-" + mrJobId;
     }
 
     @Override
@@ -483,7 +502,6 @@ public class MapReduceJob<I, K, V, O, R>
           new GoogleCloudStorageReduceInput<>(sortResult.getOutputResult(),
               mrSpec.getIntermediateKeyMarshaller(), mrSpec.getIntermediateValueMarshaller())
               .createReaders();
-      String shardedJobId = "reduce-" + mrJobId;
       String statusConsoleUrl = settings.getBaseUrl() + "detail?mapreduce_id=" + shardedJobId;
       setStatusConsoleUrl(statusConsoleUrl);
       String shardedJobName = mrSpec.getJobName() + " (reduce phase)";
@@ -508,6 +526,12 @@ public class MapReduceJob<I, K, V, O, R>
       futureCall(shardedJob, makeJobSettings(settings, statusConsoleUrl(statusConsoleUrl)));
       return futureCall(new ExamineStatusAndReturnResult<R>(shardedJobId), resultAndStatus,
           makeJobSettings(settings));
+    }
+
+    @SuppressWarnings("unused")
+    public Value<MapReduceResult<R>> handleException(CancellationException ex) {
+      ShardedJobServiceFactory.getShardedJobService().abortJob(shardedJobId);
+      return null;
     }
   }
 
