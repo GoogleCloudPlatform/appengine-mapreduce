@@ -392,7 +392,7 @@ public class SortWorker extends Worker<SortContext> {
   }
 
   public static int getMemoryForSort(int numRetries) {
-    long maxUsableMemory = MemoryLimiter.TOTAL_CLAIMABLE_MEMORY_SIZE_MB * 1024 * 1024;
+    long maxUsableMemory = MemoryLimiter.TOTAL_CLAIMABLE_MEMORY_SIZE_MB * 1024L * 1024L;
     int memIndex = Math.min(numRetries, MEMORY_ALLOCATION_ATTEMPTS - 1);
     return Ints.saturatedCast((long) (maxUsableMemory * TARGET_SORT_RAM_PROPORTIONS[memIndex]));
   }
