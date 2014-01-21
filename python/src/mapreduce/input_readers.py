@@ -709,9 +709,9 @@ class DatastoreInputReader(AbstractDatastoreInputReader):
     # Day property and the data points tend to be clumped on certain days (say,
     # Monday and Wednesday), instead of assigning each shard a single day of
     # the week, we will split each day into "oversplit_factor" pieces, and
-    # assign each shard 7 pieces with "1 / oversplit_factor" the work, so that
-    # the data from Monday and Wednesday is more evenly spread across all
-    # shards.
+    # assign each shard "oversplit_factor" pieces with "1 / oversplit_factor"
+    # the work, so that the data from Monday and Wednesday is more evenly
+    # spread across all shards.
     oversplit_factor = query_spec.oversplit_factor
     oversplit_shard_count = oversplit_factor * shard_count
     p_range = property_range.PropertyRange(query_spec.filters,

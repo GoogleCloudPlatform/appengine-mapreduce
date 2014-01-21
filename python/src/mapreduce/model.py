@@ -1208,6 +1208,7 @@ class QuerySpec(object):
             "keys_only": self.keys_only,
             "filters": self.filters,
             "batch_size": self.batch_size,
+            "oversplit_factor": self.oversplit_factor,
             "model_class_path": self.model_class_path,
             "app": self.app,
             "ns": self.ns}
@@ -1218,6 +1219,7 @@ class QuerySpec(object):
                json["keys_only"],
                json["filters"],
                json["batch_size"],
+               json["oversplit_factor"],
                json["model_class_path"],
                json["app"],
                json["ns"])

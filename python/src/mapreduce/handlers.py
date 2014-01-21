@@ -29,6 +29,7 @@ import random
 import sys
 import time
 import traceback
+import zlib
 
 try:
   import json
@@ -1442,7 +1443,8 @@ class KickOffJobHandler(base_handler.TaskQueueHandler):
       readers = input_reader_class.split_input(split_param)
     else:
       readers = [input_reader_class.from_json_str(_json) for _json in
-                 json.loads(serialized_input_readers.payload)]
+                 json.loads(zlib.decompress(
+                 serialized_input_readers.payload))]
 
     if not readers:
       return None, None
@@ -1457,7 +1459,8 @@ class KickOffJobHandler(base_handler.TaskQueueHandler):
       serialized_input_readers = model._HugeTaskPayload(
           key_name=serialized_input_readers_key, parent=state)
       readers_json_str = [i.to_json_str() for i in readers]
-      serialized_input_readers.payload = json.dumps(readers_json_str)
+      serialized_input_readers.payload = zlib.compress(json.dumps(
+                                                       readers_json_str))
     return readers, serialized_input_readers
 
   def _setup_output_writer(self, state):
