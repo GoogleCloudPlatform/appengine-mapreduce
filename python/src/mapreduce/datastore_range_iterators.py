@@ -5,6 +5,8 @@
 
 # pylint: disable=g-bad-name
 
+import itertools
+
 from google.appengine.datastore import datastore_query
 from google.appengine.datastore import datastore_rpc
 from google.appengine.ext import db
@@ -51,6 +53,19 @@ class RangeIteratorFactory(object):
     return _PropertyRangeModelIterator(p_range,
                                        ns_range,
                                        query_spec)
+
+  @classmethod
+  def create_multi_property_range_iterator(cls,
+                                           p_range_iters):
+    """Create a RangeIterator.
+
+    Args:
+      p_range_iters: a list of RangeIterator objects to chain together.
+
+    Returns:
+      a RangeIterator.
+    """
+    return _MultiPropertyRangeModelIterator(p_range_iters)
 
   @classmethod
   def create_key_ranges_iterator(cls,
@@ -209,6 +224,69 @@ class _PropertyRangeModelIterator(RangeIterator):
     return obj
 
 
+class _MultiPropertyRangeModelIterator(RangeIterator):
+  """Yields db/ndb model entities within a list of disjoint property ranges."""
+
+  def __init__(self, p_range_iters):
+    """Init.
+
+    Args:
+      p_range_iters: a list of _PropertyRangeModelIterator objects to chain
+      together.
+    """
+    self._iters = p_range_iters
+
+  def __repr__(self):
+    return "MultiPropertyRangeIterator combining %s" % str(
+      [str(it) for it in self._iters])
+
+  def __iter__(self):
+    """Iterate over entities.
+
+    Yields:
+      db model entities or ndb model entities if the model is defined with ndb.
+    """
+    for model_instance in itertools.chain.from_iterable(self._iters):
+      yield model_instance
+
+  def to_json(self):
+    """Inherit doc."""
+    json = {"name": self.__class__.__name__,
+            "num_ranges": len(self._iters)}
+
+    for i in xrange(len(self._iters)):
+      json_item = self._iters[i].to_json()
+      query_spec = json_item["query_spec"]
+      item_name = json_item["name"]
+      # Delete and move one level up
+      del json_item["query_spec"]
+      del json_item["name"]
+      json[str(i)] = json_item
+    # Store once to save space
+    json["query_spec"] = query_spec
+    json["item_name"] = item_name
+
+    return json
+
+  @classmethod
+  def from_json(cls, json):
+    """Inherit doc."""
+    num_ranges = int(json["num_ranges"])
+    query_spec = json["query_spec"]
+    item_name = json["item_name"]
+
+    p_range_iters = []
+    for i in xrange(num_ranges):
+      json_item = json[str(i)]
+      # Place query_spec, name back into each iterator
+      json_item["query_spec"] = query_spec
+      json_item["name"] = item_name
+      p_range_iters.append(_PropertyRangeModelIterator.from_json(json_item))
+
+    obj = cls(p_range_iters)
+    return obj
+
+
 class _KeyRangesIterator(RangeIterator):
   """Create an iterator over a key_ranges.KeyRanges object."""
 
@@ -279,6 +357,7 @@ class _KeyRangesIterator(RangeIterator):
 # A map from class name to class of all RangeIterators.
 _RANGE_ITERATORS = {
     _PropertyRangeModelIterator.__name__: _PropertyRangeModelIterator,
+    _MultiPropertyRangeModelIterator.__name__: _MultiPropertyRangeModelIterator,
     _KeyRangesIterator.__name__: _KeyRangesIterator
     }
 
