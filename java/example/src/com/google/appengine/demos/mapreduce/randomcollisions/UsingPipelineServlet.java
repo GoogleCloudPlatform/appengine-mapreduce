@@ -1,5 +1,10 @@
 package com.google.appengine.demos.mapreduce.randomcollisions;
 
+import static com.google.appengine.demos.mapreduce.randomcollisions.CollisionFindingServlet.createMapReduceSpec;
+import static com.google.appengine.demos.mapreduce.randomcollisions.CollisionFindingServlet.getBucketParam;
+import static com.google.appengine.demos.mapreduce.randomcollisions.CollisionFindingServlet.getLongParam;
+import static com.google.appengine.demos.mapreduce.randomcollisions.CollisionFindingServlet.getSettings;
+
 import com.google.appengine.tools.cloudstorage.GcsFilename;
 import com.google.appengine.tools.mapreduce.GoogleCloudStorageFileSet;
 import com.google.appengine.tools.mapreduce.MapReduceJob;
@@ -12,6 +17,7 @@ import com.google.appengine.tools.pipeline.Job1;
 import com.google.appengine.tools.pipeline.PipelineService;
 import com.google.appengine.tools.pipeline.PipelineServiceFactory;
 import com.google.appengine.tools.pipeline.Value;
+import com.google.common.primitives.Ints;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -39,14 +45,25 @@ public class UsingPipelineServlet extends HttpServlet {
   private static class MyPipelineJob extends Job0<Void> {
     private static final long serialVersionUID = 1954542676168374323L;
 
+    private final String bucket;
+    private final long start;
+    private final long limit;
+    private final int shards;
+
+    MyPipelineJob(String bucket, long start, long limit, int shards) {
+      this.bucket = bucket;
+      this.start = start;
+      this.limit = limit;
+      this.shards = shards;
+    }
+
     @Override
     public Value<Void> run() throws Exception {
       MapReduceJob<Long, Integer, Integer, ArrayList<Integer>, GoogleCloudStorageFileSet>
           mapReduceJob = new MapReduceJob<>();
       MapReduceSpecification<Long, Integer, Integer, ArrayList<Integer>, GoogleCloudStorageFileSet>
-          spec = CollisionFindingServlet.createMapReduceSpec();
-      MapReduceSettings settings = CollisionFindingServlet.getSettings();
-
+          spec = createMapReduceSpec(bucket, start, limit, shards);
+      MapReduceSettings settings = getSettings(bucket);
       FutureValue<MapReduceResult<GoogleCloudStorageFileSet>> mapReduceResult =
           futureCall(mapReduceJob, immediate(spec), immediate(settings));
       return futureCall(new LogFileNamesJob(), mapReduceResult);
@@ -68,9 +85,12 @@ public class UsingPipelineServlet extends HttpServlet {
 
   @Override
   public void doGet(HttpServletRequest req, HttpServletResponse resp) throws IOException {
+    String bucket = getBucketParam(req);
+    long start = getLongParam(req, "start", 0);
+    long limit = getLongParam(req, "limit", 100 * 1000 * 1000);
+    int shards = Math.max(1, Math.min(100, Ints.saturatedCast(getLongParam(req, "shards", 30))));
     PipelineService service = PipelineServiceFactory.newPipelineService();
-    String pipelineId = service.startNewPipeline(new MyPipelineJob());
+    String pipelineId = service.startNewPipeline(new MyPipelineJob(bucket, start, limit, shards));
     resp.sendRedirect("/_ah/pipeline/status.html?root=" + pipelineId);
   }
-
 }

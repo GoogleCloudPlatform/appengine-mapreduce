@@ -1,5 +1,8 @@
 package com.google.appengine.demos.mapreduce.entitycount;
 
+import static java.lang.Integer.parseInt;
+
+import com.google.appengine.api.appidentity.AppIdentityServiceFactory;
 import com.google.appengine.api.memcache.MemcacheService;
 import com.google.appengine.api.memcache.MemcacheServiceFactory;
 import com.google.appengine.api.users.UserService;
@@ -17,6 +20,7 @@ import com.google.appengine.tools.mapreduce.reducers.NoReducer;
 import com.google.appengine.tools.pipeline.NoSuchObjectException;
 import com.google.appengine.tools.pipeline.PipelineService;
 import com.google.appengine.tools.pipeline.PipelineServiceFactory;
+import com.google.common.base.Strings;
 
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -39,8 +43,6 @@ public class ExampleServlet extends HttpServlet {
 
   private static final Logger log = Logger.getLogger(ExampleServlet.class.getName());
 
-  private static final String GCS_BUCKET_NAME = "mapreduce-example.appspot.com";
-
   private final MemcacheService memcache = MemcacheServiceFactory.getMemcacheService();
   private final UserService userService = UserServiceFactory.getUserService();
   private final PipelineService pipelineService = PipelineServiceFactory.newPipelineService();
@@ -49,6 +51,7 @@ public class ExampleServlet extends HttpServlet {
   private void writeResponse(HttpServletResponse resp) throws IOException {
     String token = String.valueOf(random.nextLong() & Long.MAX_VALUE);
     memcache.put(userService.getCurrentUser().getUserId() + " " + token, true);
+    String bucket = AppIdentityServiceFactory.getAppIdentityService().getDefaultGcsBucketName();
     try (PrintWriter pw = new PrintWriter(resp.getOutputStream())) {
       pw.println("<html><body>"
           + "<br><form method='post'><input type='hidden' name='token' value='" + token + "'>"
@@ -56,14 +59,16 @@ public class ExampleServlet extends HttpServlet {
           + "Run MapReduce that creates random MapReduceTest entities,"
           + " <input name='shardCount' value='1'> shards,"
           + " creating <input name='entitiesPerShard' value='1000'> entities per shard,"
-          + " <input name='payloadBytesPerEntity' value='1000'> payload bytes per entity:"
+          + " <input name='payloadBytesPerEntity' value='1000'> payload bytes per entity,"
+          + " <input name='gcs_bucket' value='" + bucket + "'> GCS bucket:"
           + " <input type='submit' value='Make data'></form>"
 
           + "<form method='post'><input type='hidden' name='token' value='" + token + "'>"
           + "<input type='hidden' name='action' value='run'>"
           + "Run MapReduce over MapReduceTest entities"
           + " with <input name='mapShardCount' value='10'> map shards"
-          + " and <input name='reduceShardCount' value='2'> reduce shards:"
+          + " and <input name='reduceShardCount' value='2'> reduce shards,"
+          + " <input name='gcs_bucket' value='" + bucket + "'> GCS bucket:"
           + " <input type='submit' value='Run'></form>"
 
           + "<br>"
@@ -98,12 +103,13 @@ public class ExampleServlet extends HttpServlet {
     writeResponse(resp);
   }
 
-  private MapReduceSettings getSettings() {
+  private MapReduceSettings getSettings(String bucket) {
     return new MapReduceSettings().setWorkerQueueName("mapreduce-workers")
-        .setBucketName(GCS_BUCKET_NAME).setModule("mapreduce");
+        .setBucketName(bucket).setModule("mapreduce");
   }
 
-  private String startCreationJob(int bytesPerEntity, int entitiesPerShard, int shardCount) {
+  private String startCreationJob(String bucket, int bytesPerEntity, int entitiesPerShard,
+      int shardCount) {
     return MapReduceJob.start(
         MapReduceSpecification.of(
             "Create MapReduce entities",
@@ -113,10 +119,10 @@ public class ExampleServlet extends HttpServlet {
             Marshallers.getVoidMarshaller(),
             NoReducer.<Void, Void, Void>create(),
             NoOutput.<Void, Void>create(1)),
-        getSettings());
+        getSettings(bucket));
   }
 
-  private String startStatsJob(int mapShardCount, int reduceShardCount) {
+  private String startStatsJob(String bucket, int mapShardCount, int reduceShardCount) {
     return MapReduceJob.start(
         MapReduceSpecification.of(
             "MapReduceTest stats",
@@ -126,7 +132,7 @@ public class ExampleServlet extends HttpServlet {
             Marshallers.getLongMarshaller(),
             new CountReducer(),
             new InMemoryOutput<KeyValue<String, Long>>(reduceShardCount)),
-        getSettings());
+        getSettings(bucket));
   }
 
   private String getUrlBase(HttpServletRequest req) throws MalformedURLException {
@@ -156,18 +162,22 @@ public class ExampleServlet extends HttpServlet {
     if (memcache.get(userService.getCurrentUser().getUserId() + " " + token) == null) {
       throw new RuntimeException("Bad token, try again: " + token);
     }
+    String bucket = req.getParameter("gcs_bucket");
+    if (Strings.isNullOrEmpty(bucket)) {
+      bucket = AppIdentityServiceFactory.getAppIdentityService().getDefaultGcsBucketName();
+    }
     String action = req.getParameter("action");
     if ("create".equals(action)) {
       redirectToPipelineStatus(req, resp,
-          startCreationJob(
-              Integer.parseInt(req.getParameter("payloadBytesPerEntity")),
-              Integer.parseInt(req.getParameter("entitiesPerShard")),
-              Integer.parseInt(req.getParameter("shardCount"))));
+          startCreationJob(bucket,
+              parseInt(req.getParameter("payloadBytesPerEntity")),
+              parseInt(req.getParameter("entitiesPerShard")),
+              parseInt(req.getParameter("shardCount"))));
     } else if ("run".equals(action)) {
       redirectToPipelineStatus(req, resp,
-          startStatsJob(
-              Integer.parseInt(req.getParameter("mapShardCount")),
-              Integer.parseInt(req.getParameter("reduceShardCount"))));
+          startStatsJob(bucket,
+              parseInt(req.getParameter("mapShardCount")),
+              parseInt(req.getParameter("reduceShardCount"))));
     } else if ("viewJobResult".equals(action)) {
       try (PrintWriter pw = new PrintWriter(resp.getOutputStream())) {
         pw.println(pipelineService.getJobInfo(req.getParameter("jobId")).getOutput());

@@ -6,6 +6,8 @@ import static com.google.appengine.tools.mapreduce.impl.handlers.MapReduceServle
 import static com.google.appengine.tools.mapreduce.impl.handlers.MapReduceServletImpl.WORKER_PATH;
 import static com.google.common.base.Preconditions.checkNotNull;
 
+import com.google.appengine.api.appidentity.AppIdentityServiceFactory;
+import com.google.appengine.api.appidentity.AppIdentityServiceFailureException;
 import com.google.appengine.api.datastore.Key;
 import com.google.appengine.api.labs.modules.ModulesService;
 import com.google.appengine.api.labs.modules.ModulesServiceFactory;
@@ -17,7 +19,9 @@ import com.google.appengine.api.taskqueue.RetryOptions;
 import com.google.appengine.api.taskqueue.TaskOptions;
 import com.google.appengine.api.taskqueue.TransientFailureException;
 import com.google.appengine.tools.cloudstorage.ExceptionHandler;
+import com.google.appengine.tools.cloudstorage.GcsFileOptions;
 import com.google.appengine.tools.cloudstorage.GcsFilename;
+import com.google.appengine.tools.cloudstorage.GcsOutputChannel;
 import com.google.appengine.tools.cloudstorage.GcsService;
 import com.google.appengine.tools.cloudstorage.GcsServiceFactory;
 import com.google.appengine.tools.cloudstorage.RetriesExhaustedException;
@@ -56,6 +60,7 @@ import com.google.appengine.tools.pipeline.PromisedValue;
 import com.google.appengine.tools.pipeline.Value;
 import com.google.appengine.tools.pipeline.impl.servlets.PipelineServlet;
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Charsets;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
@@ -66,6 +71,7 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CancellationException;
 import java.util.logging.Level;
@@ -99,6 +105,8 @@ public class MapReduceJob<I, K, V, O, R>
       MapReduceSpecification<I, K, V, O, R> specification, MapReduceSettings settings) {
     checkQueueSettings(settings.getWorkerQueueName());
     validateSpec(specification);
+    settings = settings.clone();
+    verifyAndSetBucketName(settings);
     PipelineService pipelineService = PipelineServiceFactory.newPipelineService();
     return pipelineService.startNewPipeline(new MapReduceJob<I, K, V, O, R>(), specification,
         settings, makeJobSettings(settings));
@@ -323,12 +331,11 @@ public class MapReduceJob<I, K, V, O, R>
       }
       int reduceShardCount = mrSpec.getOutput().getNumShards();
       Output<KeyValue<K, V>, List<GoogleCloudStorageFileSet>> output =
-          new GoogleCloudStorageMapOutput<>(getAndSaveBucketName(settings), mrJobId,
+          new GoogleCloudStorageMapOutput<>(settings.getBucketName(), mrJobId,
               readers.size(), mrSpec.getIntermediateKeyMarshaller(),
               mrSpec.getIntermediateValueMarshaller(), new HashingSharder(reduceShardCount));
       String shardedJobName = mrSpec.getJobName() + " (map phase)";
       List<? extends OutputWriter<KeyValue<K, V>>> writers = output.createWriters();
-
       Preconditions.checkState(readers.size() == writers.size(), "%s: %s readers, %s writers",
           shardedJobName, readers.size(), writers.size());
       ImmutableList.Builder<WorkerShardTask<I, KeyValue<K, V>, MapperContext<K, V>>> mapTasks =
@@ -416,13 +423,12 @@ public class MapReduceJob<I, K, V, O, R>
       String statusConsoleUrl = settings.getBaseUrl() + "detail?mapreduce_id=" + shardedJobId;
       setStatusConsoleUrl(statusConsoleUrl);
       int reduceShards = mrSpec.getOutput().getNumShards();
-      String bucket = getAndSaveBucketName(settings);
       List<GoogleCloudStorageFileSet> mapOutput =
-          transposeReaders(mapResult.getOutputResult(), bucket, reduceShards);
+          transposeReaders(mapResult.getOutputResult(), settings.getBucketName(), reduceShards);
       List<? extends InputReader<KeyValue<ByteBuffer, ByteBuffer>>> readers =
           new GoogleCloudStorageSortInput(mapOutput).createReaders();
       Output<KeyValue<ByteBuffer, Iterator<ByteBuffer>>, List<GoogleCloudStorageFileSet>> output =
-          new GoogleCloudStorageSortOutput(bucket, mrJobId, reduceShards);
+          new GoogleCloudStorageSortOutput(settings.getBucketName(), mrJobId, reduceShards);
       String shardedJobName = mrSpec.getJobName() + " (sort phase)";
       List<? extends OutputWriter<KeyValue<ByteBuffer, Iterator<ByteBuffer>>>> writers =
           output.createWriters();
@@ -678,7 +684,7 @@ public class MapReduceJob<I, K, V, O, R>
   public Value<MapReduceResult<R>> run(
       MapReduceSpecification<I, K, V, O, R> mrSpec, MapReduceSettings settings) {
     validateSpec(mrSpec);
-    getAndSaveBucketName(settings);
+    verifyAndSetBucketName(settings);
     String mrJobId = getJobKey().getName();
     FutureValue<MapReduceResult<List<GoogleCloudStorageFileSet>>> mapResult = futureCall(
         new MapJob<>(mrJobId, mrSpec, settings), makeJobSettings(settings, maxAttempts(1)));
@@ -714,26 +720,43 @@ public class MapReduceJob<I, K, V, O, R>
   }
 
   // TODO(user): Perhaps we should have some sort of generalized settings processing.
-  @SuppressWarnings("deprecation")
-  private static String getAndSaveBucketName(MapReduceSettings settings) {
+  private static void verifyAndSetBucketName(MapReduceSettings settings) {
     String bucket = settings.getBucketName();
     if (Strings.isNullOrEmpty(bucket)) {
-      try { // TODO(user): Update this once b/6009907 is released.
-        bucket = com.google.appengine.api.files.FileServiceFactory.getFileService()
-            .getDefaultGsBucketName();
+      try {
+        bucket = AppIdentityServiceFactory.getAppIdentityService().getDefaultGcsBucketName();
         if (Strings.isNullOrEmpty(bucket)) {
           String message = "The BucketName property was not set in the MapReduceSettings object, "
               + "and this application does not have a default bucket configured to fall back on.";
           log.log(Level.SEVERE, message);
           throw new IllegalArgumentException(message);
         }
-      } catch (IOException e) {
+      } catch (AppIdentityServiceFailureException e) {
         throw new RuntimeException(
             "The BucketName property was not set in the MapReduceSettings object, "
             + "and could not get the default bucket.", e);
       }
       settings.setBucketName(bucket);
     }
-    return bucket;
+    try {
+      verifyBucketIsWritable(bucket);
+    } catch (Exception e) {
+      throw new RuntimeException("Writeable Bucket '" + bucket + "' test failed.", e);
+    }
+  }
+
+  private static void verifyBucketIsWritable(String bucket) throws IOException {
+    GcsService gcsService = GcsServiceFactory.createGcsService();
+    GcsFilename filename = new GcsFilename(bucket, UUID.randomUUID().toString() + ".tmp");
+    if (gcsService.getMetadata(filename) != null) {
+      log.warning("File '" + filename.getObjectName() + "' exists. Skipping bucket write test.");
+      return;
+    }
+    try (GcsOutputChannel channel =
+        gcsService.createOrReplace(filename, GcsFileOptions.getDefaultInstance())) {
+      channel.write(ByteBuffer.wrap("Delete me!".getBytes(Charsets.UTF_8)));
+    } finally {
+      gcsService.delete(filename);
+    }
   }
 }
