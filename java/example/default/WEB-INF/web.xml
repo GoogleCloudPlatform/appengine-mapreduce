@@ -29,24 +29,24 @@
   </servlet-mapping>
 
   <servlet>
-    <servlet-name>kickoff</servlet-name>
+    <servlet-name>randomcollisions</servlet-name>
     <servlet-class>
       com.google.appengine.demos.mapreduce.randomcollisions.CollisionFindingServlet
     </servlet-class>
   </servlet>
   <servlet-mapping>
-    <servlet-name>kickoff</servlet-name>
-    <url-pattern>/kickoff</url-pattern>
+    <servlet-name>randomcollisions</servlet-name>
+    <url-pattern>/randomcollisions</url-pattern>
   </servlet-mapping>
 
   <servlet>
-    <servlet-name>demo</servlet-name>
+    <servlet-name>entitycount</servlet-name>
     <servlet-class>
       com.google.appengine.demos.mapreduce.entitycount.ExampleServlet
     </servlet-class>
   </servlet>
   <servlet-mapping>
-    <servlet-name>demo</servlet-name>
+    <servlet-name>entitycount</servlet-name>
     <url-pattern>/entitycount</url-pattern>
   </servlet-mapping>
 
