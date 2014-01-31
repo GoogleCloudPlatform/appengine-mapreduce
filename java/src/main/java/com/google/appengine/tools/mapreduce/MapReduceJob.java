@@ -217,13 +217,13 @@ public class MapReduceJob<I, K, V, O, R>
 
     @Override
     public Value<MapReduceResult<R>> run(ResultAndStatus<R> resultAndStatus) {
-      if (resultAndStatus.getStatus().getStatusCode() == Status.StatusCode.DONE) {
+      Status status = resultAndStatus.getStatus();
+      if (status.getStatusCode() == Status.StatusCode.DONE) {
         return immediate(resultAndStatus.getResult());
       }
-
       throw new RuntimeException("Stage " + stage + " was not completed successfuly (status="
-          + resultAndStatus.getStatus().getStatusCode() + ")",
-          resultAndStatus.getStatus().getException());
+          + status.getStatusCode() + ", message=" + status.getException().getMessage() + ")",
+          status.getException());
     }
   }
 
@@ -741,7 +741,9 @@ public class MapReduceJob<I, K, V, O, R>
     try {
       verifyBucketIsWritable(bucket);
     } catch (Exception e) {
-      throw new RuntimeException("Writeable Bucket '" + bucket + "' test failed.", e);
+      throw new RuntimeException("Writeable Bucket '" + bucket + "' test failed. See "
+          + "http://developers.google.com/appengine/docs/java/googlecloudstorageclient/activate"
+          + " for more information on how to setup Google Cloude storage.", e);
     }
   }
 
