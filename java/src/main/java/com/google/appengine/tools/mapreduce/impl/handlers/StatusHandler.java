@@ -160,14 +160,15 @@ final class StatusHandler {
     try {
       jobObject.put("name", state.getController().getName());
       jobObject.put("mapreduce_id", jobId);
-      jobObject.put("updated_timestamp_ms", state.getMostRecentUpdateTimeMillis());
       jobObject.put("start_timestamp_ms", state.getStartTimeMillis());
 
       if (state.getStatus().isActive()) {
         jobObject.put("active", true);
+        jobObject.put("updated_timestamp_ms", System.currentTimeMillis());
       } else {
         jobObject.put("active", false);
         jobObject.put("result_status", String.valueOf(state.getStatus().getStatusCode()));
+        jobObject.put("updated_timestamp_ms", state.getMostRecentUpdateTimeMillis());
       }
       jobObject.put("shards", state.getTotalTaskCount());
       jobObject.put("active_shards", state.getActiveTaskCount());
