@@ -255,7 +255,7 @@ class MapreduceStateTest(unittest.TestCase):
   def testSetProcessedCounts(self):
     """Test set_processed_counts method."""
     mapreduce_state = model.MapreduceState.create_new()
-    mapreduce_state.set_processed_counts([1, 2])
+    mapreduce_state.set_processed_counts([1, 2], ['running', 'running'])
     self.assertTrue(mapreduce_state.chart_url.startswith(
         "http://chart.apis.google.com/chart?"))
     self.assertEquals(

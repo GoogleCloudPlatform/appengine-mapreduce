@@ -634,14 +634,33 @@ class MapreduceState(db.Model):
     """
     return db.get(cls.get_key_by_job_id(mapreduce_id))
 
-  def set_processed_counts(self, shards_processed):
+  def set_processed_counts(self, shards_processed, shards_status):
     """Updates a chart url to display processed count for each shard.
 
     Args:
       shards_processed: list of integers with number of processed entities in
         each shard
     """
-    chart = google_chart_api.BarChart(shards_processed)
+    chart = google_chart_api.BarChart()
+
+    def filter_status(status_to_filter):
+        return [count if status == status_to_filter else 0
+                for count, status in zip(shards_processed, shards_status)]
+
+    if shards_status:
+        # Each index will have only one non-zero count, so stack them to color-
+        # code the bars by status
+        # These status values are computed in _update_state_from_shard_states,
+        # in mapreduce/handlers.py.
+        chart.stacked = True
+        chart.AddBars(filter_status("unknown"), color="404040")
+        chart.AddBars(filter_status("success"), color="00ac42")
+        chart.AddBars(filter_status("running"), color="3636a9")
+        chart.AddBars(filter_status("aborted"), color="e29e24")
+        chart.AddBars(filter_status("failed"), color="f6350f")
+    else:
+        chart.AddBars(shards_processed)
+
     shard_count = len(shards_processed)
 
     if shards_processed:
@@ -683,7 +702,7 @@ class MapreduceState(db.Model):
       mapreduce_id = MapreduceState.new_mapreduce_id()
     state = MapreduceState(key_name=mapreduce_id,
                            last_poll_time=gettime())
-    state.set_processed_counts([])
+    state.set_processed_counts([], [])
     return state
 
   @staticmethod

@@ -1127,23 +1127,31 @@ class ControllerCallbackHandler(base_handler.HugeTaskHandler):
     state.active_shards, state.aborted_shards, state.failed_shards = 0, 0, 0
     total_shards = 0
     processed_counts = []
+    processed_status = []
     state.counters_map.clear()
 
     # Tally across shard states once.
     for s in shard_states:
       total_shards += 1
+      status = 'unknown'
       if s.active:
         state.active_shards += 1
-      if s.result_status == model.ShardState.RESULT_ABORTED:
+        status = 'running'
+      if s.result_status == model.ShardState.RESULT_SUCCESS:
+        status = 'success'
+      elif s.result_status == model.ShardState.RESULT_ABORTED:
         state.aborted_shards += 1
+        status = 'aborted'
       elif s.result_status == model.ShardState.RESULT_FAILED:
         state.failed_shards += 1
+        status = 'failed'
 
       # Update stats in mapreduce state by aggregating stats from shard states.
       state.counters_map.add_map(s.counters_map)
       processed_counts.append(s.counters_map.get(context.COUNTER_MAPPER_CALLS))
+      processed_status.append(status)
 
-    state.set_processed_counts(processed_counts)
+    state.set_processed_counts(processed_counts, processed_status)
     state.last_poll_time = datetime.datetime.utcfromtimestamp(self._time())
 
     spec = state.mapreduce_spec
