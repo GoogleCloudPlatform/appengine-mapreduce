@@ -52,6 +52,9 @@ def start_map(name,
 
   Deprecated! Use map_job.start instead.
 
+  If a value can be specified both from an explicit argument and from
+  a dictionary, the value from the explicit argument wins.
+
   Args:
     name: mapreduce name. Used only for display purposes.
     handler_spec: fully qualified name of mapper handler function/class to call.
@@ -91,16 +94,12 @@ def start_map(name,
   # Make sure this old API fill all parameters with default values.
   mr_params = map_job.MapJobConfig._get_default_mr_params()
   if mapreduce_parameters:
-    if base_path and "base_path" in mapreduce_parameters:
-      logging.warning("Parameter base_path is duplicated.")
-    if queue_name and "queue_name" in mapreduce_parameters:
-      logging.warning("Parameter queue_name is duplicated.")
     mr_params.update(mapreduce_parameters)
 
+  # Override default values if user specified them as arguments.
   if base_path:
     mr_params["base_path"] = base_path
-  if queue_name:
-    mr_params["queue_name"] = queue_name
+  mr_params["queue_name"] = util.get_queue_name(queue_name)
 
   mapper_spec = model.MapperSpec(handler_spec,
                                  reader_spec,
@@ -118,7 +117,7 @@ def start_map(name,
       mr_params,
       # TODO(user): Now that "queue_name" is part of mr_params.
       # Remove all the other ways to get queue_name after one release.
-      queue_name=util.get_queue_name(mr_params["queue_name"]),
+      queue_name=mr_params["queue_name"],
       eta=eta,
       countdown=countdown,
       hooks_class_name=hooks_class_name,
