@@ -33,6 +33,7 @@ public final class ShardedJobSettings implements Serializable {
   /*Nullable*/ private final String version;
   // TODO(ohler): Integrate with pipeline and put this under /_ah/pipeline.
   /*Nullable*/ private final String pipelineStatusUrl;
+  /*Nullable*/ private final String mrStatusUrl;
   private final String controllerPath;
   private final String workerPath;
   private String target;
@@ -50,6 +51,7 @@ public final class ShardedJobSettings implements Serializable {
     private String module;
     private String version;
     private String pipelineStatusUrl;
+    private String mrStatusUrl;
     private String controllerPath = "/mapreduce/controllerCallback";
     private String workerPath = "/mapreduce/workerCallback";
     private String queueName = "default";
@@ -103,21 +105,28 @@ public final class ShardedJobSettings implements Serializable {
     }
 
     public Builder setSliceTimeoutMillis(int sliceTimeoutMillis) {
-     this.sliceTimeoutMillis = sliceTimeoutMillis;
+      this.sliceTimeoutMillis = sliceTimeoutMillis;
+      return this;
+    }
+
+    public Builder setMapReduceStatusUrl(String mrStatusUrl) {
+      this.mrStatusUrl = mrStatusUrl;
       return this;
     }
 
     public ShardedJobSettings build() {
-      return new ShardedJobSettings(controllerPath, workerPath, pipelineStatusUrl, backend, module,
-          version, queueName, maxShardRetries, maxSliceRetries, sliceTimeoutMillis);
+      return new ShardedJobSettings(controllerPath, workerPath, mrStatusUrl, pipelineStatusUrl,
+          backend, module, version, queueName, maxShardRetries, maxSliceRetries,
+          sliceTimeoutMillis);
     }
   }
 
-  private ShardedJobSettings(String controllerPath, String workerPath, String pipelineStatusUrl,
-      String backend, String module, String version, String queueName, int maxShardRetries,
-      int maxSliceRetries, int sliceTimeoutMillis) {
+  private ShardedJobSettings(String controllerPath, String workerPath, String mrStatusUrl,
+      String pipelineStatusUrl, String backend, String module, String version, String queueName,
+      int maxShardRetries, int maxSliceRetries, int sliceTimeoutMillis) {
     this.controllerPath = controllerPath;
     this.workerPath = workerPath;
+    this.mrStatusUrl = mrStatusUrl;
     this.pipelineStatusUrl = pipelineStatusUrl;
     this.backend = backend;
     this.module = module;
@@ -160,6 +169,10 @@ public final class ShardedJobSettings implements Serializable {
 
   public String getTaskQueueTarget() {
     return target;
+  }
+
+  /*Nullable*/ public String getMapReduceStatusUrl() {
+    return mrStatusUrl;
   }
 
   /*Nullable*/ public String getPipelineStatusUrl() {
@@ -206,6 +219,7 @@ public final class ShardedJobSettings implements Serializable {
   public String toString() {
     return getClass().getSimpleName() + "("
         + backend + ", "
+        + mrStatusUrl + ", "
         + pipelineStatusUrl + ", "
         + controllerPath + ", "
         + workerPath + ", "

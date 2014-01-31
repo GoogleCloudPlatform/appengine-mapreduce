@@ -34,6 +34,7 @@ public class ShardedJob<T extends IncrementalTask> extends Job0<Void> {
   public Value<Void> run() {
     ShardedJobServiceFactory.getShardedJobService().startJob(shardedJobId, workers, controller,
         shardedJobSettings);
+    setStatusConsoleUrl(shardedJobSettings.getMapReduceStatusUrl());
     return null;
   }
 }

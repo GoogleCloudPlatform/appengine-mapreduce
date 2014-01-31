@@ -160,6 +160,7 @@ public class MapReduceJob<I, K, V, O, R>
     return new ShardedJobSettings.Builder()
         .setControllerPath(mrSettings.getBaseUrl() + CONTROLLER_PATH + "/" + shardedJobId)
         .setWorkerPath(mrSettings.getBaseUrl() + WORKER_PATH + "/" + shardedJobId)
+        .setMapReduceStatusUrl(mrSettings.getBaseUrl() + "detail?mapreduce_id=" + shardedJobId)
         .setPipelineStatusUrl(PipelineServlet.makeViewerUrl(pipelineKey, pipelineKey))
         .setBackend(backend)
         .setModule(module)
@@ -319,8 +320,6 @@ public class MapReduceJob<I, K, V, O, R>
     public Value<MapReduceResult<List<GoogleCloudStorageFileSet>>> run() {
       PromisedValue<ResultAndStatus<List<GoogleCloudStorageFileSet>>> resultAndStatus =
           newPromise();
-      String statusConsoleUrl = settings.getBaseUrl() + "detail?mapreduce_id=" + shardedJobId;
-      setStatusConsoleUrl(statusConsoleUrl);
       List<? extends InputReader<I>> readers;
       try {
         readers = mrSpec.getInput().createReaders();
@@ -349,10 +348,11 @@ public class MapReduceJob<I, K, V, O, R>
               shardedJobName, new CountersImpl(), output, resultAndStatus.getHandle());
       ShardedJob<?> shardedJob =
           new ShardedJob<>(shardedJobId, mapTasks.build(), workerController, shardedJobSettings);
-      futureCall(shardedJob, makeJobSettings(settings, statusConsoleUrl(statusConsoleUrl)));
+      FutureValue<Void> shardedJobResult = futureCall(shardedJob, makeJobSettings(settings));
       return futureCall(
           new ExamineStatusAndReturnResult<List<GoogleCloudStorageFileSet>>(shardedJobId),
-          resultAndStatus, makeJobSettings(settings));
+          resultAndStatus, makeJobSettings(settings, waitFor(shardedJobResult),
+              statusConsoleUrl(shardedJobSettings.getMapReduceStatusUrl())));
     }
 
     @SuppressWarnings("unused")
@@ -418,8 +418,6 @@ public class MapReduceJob<I, K, V, O, R>
         MapReduceResult<List<GoogleCloudStorageFileSet>> mapResult) {
       PromisedValue<ResultAndStatus<List<GoogleCloudStorageFileSet>>> resultAndStatus =
           newPromise();
-      String statusConsoleUrl = settings.getBaseUrl() + "detail?mapreduce_id=" + shardedJobId;
-      setStatusConsoleUrl(statusConsoleUrl);
       int reduceShards = mrSpec.getOutput().getNumShards();
       List<GoogleCloudStorageFileSet> mapOutput =
           transposeReaders(mapResult.getOutputResult(), settings.getBucketName(), reduceShards);
@@ -448,10 +446,11 @@ public class MapReduceJob<I, K, V, O, R>
               shardedJobName, new CountersImpl(), output, resultAndStatus.getHandle());
       ShardedJob<?> shardedJob =
           new ShardedJob<>(shardedJobId, sortTasks.build(), workerController, shardedJobSettings);
-      futureCall(shardedJob, makeJobSettings(settings, statusConsoleUrl(statusConsoleUrl)));
+      FutureValue<Void> shardedJobResult = futureCall(shardedJob, makeJobSettings(settings));
       return futureCall(
           new ExamineStatusAndReturnResult<List<GoogleCloudStorageFileSet>>(shardedJobId),
-          resultAndStatus, makeJobSettings(settings));
+          resultAndStatus, makeJobSettings(settings, waitFor(shardedJobResult),
+              statusConsoleUrl(shardedJobSettings.getMapReduceStatusUrl())));
     }
 
     @SuppressWarnings("unused")
@@ -501,8 +500,6 @@ public class MapReduceJob<I, K, V, O, R>
           new GoogleCloudStorageReduceInput<>(sortResult.getOutputResult(),
               mrSpec.getIntermediateKeyMarshaller(), mrSpec.getIntermediateValueMarshaller())
               .createReaders();
-      String statusConsoleUrl = settings.getBaseUrl() + "detail?mapreduce_id=" + shardedJobId;
-      setStatusConsoleUrl(statusConsoleUrl);
       String shardedJobName = mrSpec.getJobName() + " (reduce phase)";
       Output<O, R> output = mrSpec.getOutput();
       List<? extends OutputWriter<O>> writers = output.createWriters();
@@ -522,9 +519,10 @@ public class MapReduceJob<I, K, V, O, R>
               resultAndStatus.getHandle());
       ShardedJob<?> shardedJob =
           new ShardedJob<>(shardedJobId, reduceTasks.build(), workerController, shardedJobSettings);
-      futureCall(shardedJob, makeJobSettings(settings, statusConsoleUrl(statusConsoleUrl)));
+      FutureValue<Void> shardedJobResult = futureCall(shardedJob, makeJobSettings(settings));
       return futureCall(new ExamineStatusAndReturnResult<R>(shardedJobId), resultAndStatus,
-          makeJobSettings(settings));
+          makeJobSettings(settings, waitFor(shardedJobResult),
+              statusConsoleUrl(shardedJobSettings.getMapReduceStatusUrl())));
     }
 
     @SuppressWarnings("unused")
