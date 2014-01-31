@@ -18,7 +18,6 @@
 
 
 import datetime
-import os
 import random
 import string
 import time
@@ -27,6 +26,7 @@ import unittest
 from google.appengine.ext import db
 from mapreduce import control
 from mapreduce import hooks
+from mapreduce import map_job
 from mapreduce import model
 from mapreduce import test_support
 from testlib import testutil
@@ -85,10 +85,11 @@ class ControlTest(testutil.HandlerTestBase):
     handler = test_support.execute_task(task)
     self.assertEqual(mapreduce_id, handler.request.get("mapreduce_id"))
     state = model.MapreduceState.get_by_job_id(mapreduce_id)
-    self.assertEqual(state.mapreduce_spec.params,
-                     {"foo": "bar",
-                      "base_path": "/mapreduce_base_path"})
-
+    params = map_job.MapJobConfig._get_default_mr_params()
+    params.update({"foo": "bar",
+                   "base_path": "/mapreduce_base_path",
+                   "queue_name": queue_name})
+    self.assertEqual(state.mapreduce_spec.params, params)
     return task["eta"]
 
   def testStartMap(self):
@@ -111,28 +112,6 @@ class ControlTest(testutil.HandlerTestBase):
         mapreduce_parameters={"foo": "bar"},
         base_path="/mapreduce_base_path",
         queue_name=self.QUEUE_NAME)
-
-    self.validate_map_started(mapreduce_id)
-
-  def testStartMap_QueueEnvironment(self):
-    """Test that the start_map inherits its queue from the enviornment."""
-    TestEntity().put()
-
-    shard_count = 4
-    os.environ["HTTP_X_APPENGINE_QUEUENAME"] = self.QUEUE_NAME
-    try:
-      mapreduce_id = control.start_map(
-          "test_map",
-          __name__ + ".test_handler",
-          "mapreduce.input_readers.DatastoreInputReader",
-          {
-              "entity_kind": __name__ + "." + TestEntity.__name__,
-          },
-          shard_count,
-          mapreduce_parameters={"foo": "bar"},
-          base_path="/mapreduce_base_path")
-    finally:
-      del os.environ["HTTP_X_APPENGINE_QUEUENAME"]
 
     self.validate_map_started(mapreduce_id)
 

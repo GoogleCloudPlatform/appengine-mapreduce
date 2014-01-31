@@ -37,6 +37,7 @@ __all__ = [
 import inspect
 import os
 import pickle
+import sys
 import types
 
 from google.appengine.ext import ndb
@@ -349,3 +350,29 @@ def _set_ndb_cache_policy():
   ndb_ctx = ndb.get_context()
   ndb_ctx.set_cache_policy(lambda key: False)
   ndb_ctx.set_memcache_policy(lambda key: False)
+
+
+def _obj_to_path(obj):
+  """Returns the fully qualified path to the object.
+
+  Args:
+    obj: obj must be a new style top level class, or a top level function.
+      No inner function or static method.
+
+  Returns:
+    Fully qualified path to the object.
+
+  Raises:
+    TypeError: when argument obj has unsupported type.
+    ValueError: when obj can't be discovered on the top level.
+  """
+  if obj is None:
+    return obj
+
+  if inspect.isclass(obj) or inspect.isfunction(obj):
+    fetched = getattr(sys.modules[obj.__module__], obj.__name__, None)
+    if fetched is None:
+      raise ValueError(
+          "Object %r must be defined on the top level of a module." % obj)
+    return "%s.%s" % (obj.__module__, obj.__name__)
+  raise TypeError("Unexpected type %s." % type(obj))

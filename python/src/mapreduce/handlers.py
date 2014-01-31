@@ -43,6 +43,7 @@ from mapreduce import base_handler
 from mapreduce import context
 from mapreduce import errors
 from mapreduce import input_readers
+from mapreduce import map_job
 from mapreduce import model
 from mapreduce import operation
 from mapreduce import parameters
@@ -1469,14 +1470,16 @@ class StartJobHandler(base_handler.PostJsonHandler):
         "mapper_params_validator", "mapper_params.")
     params = self._get_params(
         "params_validator", "params.")
-    if "base_path" not in params:
-      params["base_path"] = parameters.config.BASE_PATH
+
+    # Default values.
+    mr_params = map_job.MapJobConfig._get_default_mr_params()
+    mr_params.update(params)
+    if "queue_name" in mapper_params:
+      mr_params["queue_name"] = mapper_params["queue_name"]
 
     # Set some mapper param defaults if not present.
     mapper_params["processing_rate"] = int(mapper_params.get(
         "processing_rate") or parameters.config.PROCESSING_RATE_PER_SEC)
-    queue_name = mapper_params["queue_name"] = util.get_queue_name(
-        mapper_params.get("queue_name", None))
 
     # Validate the Mapper spec, handler, and input reader.
     mapper_spec = model.MapperSpec(
@@ -1486,11 +1489,11 @@ class StartJobHandler(base_handler.PostJsonHandler):
         int(mapper_params.get("shard_count", parameters.config.SHARD_COUNT)),
         output_writer_spec=mapper_output_writer_spec)
 
-    mapreduce_id = type(self)._start_map(
+    mapreduce_id = self._start_map(
         mapreduce_name,
         mapper_spec,
-        params,
-        queue_name=queue_name,
+        mr_params,
+        queue_name=mr_params["queue_name"],
         _app=mapper_params.get("_app"))
     self.json_response["mapreduce_id"] = mapreduce_id
 

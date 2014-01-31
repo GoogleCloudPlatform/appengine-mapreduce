@@ -2,8 +2,11 @@
 """Per job config for map jobs."""
 from mapreduce import hooks
 from mapreduce import input_readers
+from mapreduce import model
 from mapreduce import output_writers
 from mapreduce import parameters
+from mapreduce import util
+
 
 # pylint: disable=protected-access
 # pylint: disable=invalid-name
@@ -45,8 +48,7 @@ class MapJobConfig(parameters._Config):
   # Number of map shards.
   shard_count = _Option(int, default=parameters.config.SHARD_COUNT)
 
-  # Additional parameters that can be access via context.Context.
-  context = _Option(dict, default={})
+  # TODO(user): Implement context to allow user to supply arbitrary k,v.
 
   # The queue where all map tasks should run on.
   queue_name = _Option(str, default=parameters.config.QUEUE_NAME)
@@ -55,8 +57,12 @@ class MapJobConfig(parameters._Config):
   shard_max_attempts = _Option(int,
                                default=parameters.config.SHARD_MAX_ATTEMPTS)
 
+  # The URL to GET after the job finish, regardless of success.
+  # The map_job_id will be provided as a query string key.
+  done_callback_url = _Option(str, can_be_none=True)
+
   # Force datastore writes.
-  _force_write = _Option(bool, default=False)
+  _force_writes = _Option(bool, default=False)
 
   _base_path = _Option(str, default=parameters.config.BASE_PATH)
 
@@ -69,3 +75,40 @@ class MapJobConfig(parameters._Config):
 
   _app = _Option(str, can_be_none=True)
 
+  # The following methods are to convert Config to supply for older APIs.
+
+  def _get_mapper_params(self):
+    """Converts self to model.MapperSpec.params."""
+    return {"input_reader": self.input_reader_params,
+            "output_writer": self.output_writer_params}
+
+  def _get_mapper_spec(self):
+    """Converts self to model.MapperSpec."""
+    return model.MapperSpec(
+        handler_spec=util._obj_to_path(self.mapper),
+        input_reader_spec=util._obj_to_path(self.input_reader_cls),
+        params=self._get_mapper_params(),
+        shard_count=self.shard_count,
+        output_writer_spec=util._obj_to_path(self.output_writer_cls))
+
+  def _get_mr_params(self):
+    """Converts self to model.MapreduceSpec.params."""
+    return {"force_writes": self._force_writes,
+            "done_callback": self.done_callback_url,
+            "shard_max_attempts": self.shard_max_attempts,
+            "task_max_attempts": self._task_max_attempts,
+            "task_max_data_processing_attempts":
+                self._task_max_data_processing_attempts,
+            "queue_name": self.queue_name,
+            "base_path": self._base_path}
+
+  # TODO(user): Ideally we should replace all the *_spec and *_params
+  # in model.py with MapJobConfig. This not only cleans up codebase, but may
+  # also be necessary for launching input_reader/output_writer API. We don't
+  # want to surface the numerous *_spec and *_params objects in our public API.
+  # The cleanup has to be done over several releases to not to break runtime.
+  @classmethod
+  def _get_default_mr_params(cls):
+    """Gets default values for old API."""
+    cfg = cls(_lenient=True)
+    return cfg._get_mr_params()
