@@ -6,6 +6,7 @@ from mapreduce import model
 from mapreduce import output_writers
 from mapreduce import parameters
 from mapreduce import util
+from mapreduce.map_job import mapper as mapper_module
 
 
 # pylint: disable=protected-access
@@ -29,8 +30,7 @@ class MapJobConfig(parameters._Config):
   job_name = _Option(str, required=True)
 
   # Reference to your mapper.
-  # TODO(user): Create a super class for mapper.
-  mapper = _Option(object, required=True)
+  mapper = _Option(mapper_module.Mapper, required=True)
 
   # The class of input reader to use.
   input_reader_cls = _Option(input_readers.InputReader, required=True)
