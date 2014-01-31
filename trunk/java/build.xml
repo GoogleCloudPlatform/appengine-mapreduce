@@ -97,6 +97,13 @@
   <target name="dist" depends="compile">
     <mkdir dir="${dist}"/>
     <jar jarfile="${dist}/appengine-mapreduce.jar" basedir="${build}">
+      <manifest>
+        <section name="com/google/appengine/tools/mapreduce">
+          <attribute name="Specification-Vendor" value="Google" />
+          <attribute name="Implementation-Vendor" value="Google" />
+          <attribute name="Implementation-Vendor-Id" value="com.google" />
+        </section>
+      </manifest>
       <zipfileset dir="${src}"/>
       <zipfileset dir="${ui}" prefix="com/google/appengine/tools/mapreduce"/>
     </jar>
