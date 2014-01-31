@@ -2,10 +2,11 @@
 
 package com.google.appengine.tools.mapreduce;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
+
 import com.google.appengine.tools.mapreduce.impl.KeyValueMarshaller;
 import com.google.appengine.tools.mapreduce.impl.KeyValuesMarshaller;
 import com.google.appengine.tools.mapreduce.impl.util.SerializationUtil;
-import com.google.common.base.Charsets;
 
 import java.io.Serializable;
 import java.nio.ByteBuffer;
@@ -58,13 +59,13 @@ public class Marshallers {
 
     @Override
     public ByteBuffer toBytes(String object) {
-      return Charsets.UTF_8.encode(object);
+      return UTF_8.encode(object);
     }
 
     @Override
     public String fromBytes(ByteBuffer b) {
       try {
-        return Charsets.UTF_8.newDecoder().decode(b).toString();
+        return UTF_8.newDecoder().decode(b).toString();
       } catch (CharacterCodingException e) {
         throw new CorruptDataException("Could not decode string ", e);
       }

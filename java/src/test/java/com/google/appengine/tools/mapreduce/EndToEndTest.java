@@ -1,6 +1,7 @@
 // Copyright 2011 Google Inc. All Rights Reserved.
 package com.google.appengine.tools.mapreduce;
 
+import static java.nio.charset.StandardCharsets.US_ASCII;
 import static org.easymock.EasyMock.createStrictMock;
 import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.isA;
@@ -37,7 +38,6 @@ import com.google.appengine.tools.mapreduce.reducers.ValueProjectionReducer;
 import com.google.appengine.tools.pipeline.JobInfo;
 import com.google.appengine.tools.pipeline.PipelineService;
 import com.google.appengine.tools.pipeline.PipelineServiceFactory;
-import com.google.common.base.Charsets;
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
@@ -460,7 +460,7 @@ public class EndToEndTest extends EndToEndTestCase {
             AppEngineFile file = result.getOutputResult().get(0);
             FileReadChannel ch = FileServiceFactory.getFileService().openReadChannel(file, false);
             BufferedReader reader =
-                new BufferedReader(Channels.newReader(ch, Charsets.US_ASCII.newDecoder(), -1));
+                new BufferedReader(Channels.newReader(ch, US_ASCII.newDecoder(), -1));
             String line = reader.readLine();
             List<String> strings = Arrays.asList(line.split(","));
             assertEquals(10, strings.size());
