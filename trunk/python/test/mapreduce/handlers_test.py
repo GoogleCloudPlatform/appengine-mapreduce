@@ -43,12 +43,7 @@ from mapreduce.lib import simplejson
 from google.appengine.api import apiproxy_stub_map
 from google.appengine.api import datastore
 from google.appengine.api import datastore_errors
-from google.appengine.api import datastore_file_stub
-from google.appengine.api import logservice
-from google.appengine.api import memcache
 from google.appengine.api import taskqueue
-from google.appengine.api.memcache import memcache_stub
-from google.appengine.api.taskqueue import taskqueue_stub
 from google.appengine.ext import db
 from google.appengine.ext import key_range
 from mapreduce import context
@@ -59,13 +54,13 @@ from mapreduce import handlers
 from mapreduce import hooks
 from mapreduce import input_readers
 from mapreduce import key_ranges
-from mapreduce import map_job
 from mapreduce import model
 from mapreduce import operation
 from mapreduce import output_writers
 from mapreduce import parameters
 from mapreduce import test_support
 from mapreduce import util
+from mapreduce.api import map_job
 from google.appengine.ext.webapp import mock_webapp
 
 
@@ -557,7 +552,7 @@ class MapreduceHandlerTestBase(testutil.HandlerTestBase):
         output_writer_spec=output_writer_spec)
     mapreduce_spec = model.MapreduceSpec(
         "my job", mapreduce_id, mapper_spec.to_json(),
-        params=map_job.MapJobConfig._get_default_mr_params(),
+        params=map_job.JobConfig._get_default_mr_params(),
         hooks_class_name=hooks_class_name)
 
     self.verify_mapreduce_spec(mapreduce_spec,
@@ -814,7 +809,7 @@ class StartJobHandlerFunctionalTest(testutil.HandlerTestBase):
   OUTPUT_WRITER_SPEC = __name__ + ".TestOutputWriter"
   SHARD_COUNT = "9"
   QUEUE = "crazy-queue"
-  MAPREDUCE_SPEC_PARAMS = map_job.MapJobConfig._get_default_mr_params()
+  MAPREDUCE_SPEC_PARAMS = map_job.JobConfig._get_default_mr_params()
   MAPREDUCE_SPEC_PARAMS.update({"foo": "bar",
                                 "base_path": "/foo",
                                 "queue_name": QUEUE})
@@ -950,7 +945,7 @@ class KickOffJobHandlerTest(testutil.HandlerTestBase):
   OUTPUT_WRITER_SPEC = __name__ + ".TestOutputWriter"
   SHARD_COUNT = "9"
   QUEUE = "crazy-queue"
-  MAPREDUCE_SPEC_PARAMS = map_job.MapJobConfig._get_default_mr_params()
+  MAPREDUCE_SPEC_PARAMS = map_job.JobConfig._get_default_mr_params()
   MAPREDUCE_SPEC_PARAMS.update({"foo": "bar",
                                 "base_path": parameters.config.BASE_PATH,
                                 "queue_name": QUEUE})
@@ -1184,7 +1179,7 @@ class MapperWorkerCallbackHandlerLeaseTest(testutil.HandlerTestBase):
         name="mapreduce_name",
         mapreduce_id="mapreduce_id",
         mapper_spec=mapper_spec.to_json(),
-        params=map_job.MapJobConfig._get_default_mr_params())
+        params=map_job.JobConfig._get_default_mr_params())
 
   def _init_shard(self):
     """Init shard state."""

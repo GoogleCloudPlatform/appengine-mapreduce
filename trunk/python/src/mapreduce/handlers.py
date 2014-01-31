@@ -43,11 +43,11 @@ from mapreduce import base_handler
 from mapreduce import context
 from mapreduce import errors
 from mapreduce import input_readers
-from mapreduce import map_job
 from mapreduce import model
 from mapreduce import operation
 from mapreduce import parameters
 from mapreduce import util
+from mapreduce.api import map_job
 from google.appengine.runtime import apiproxy_errors
 
 # pylint: disable=g-import-not-at-top
@@ -1484,7 +1484,7 @@ class StartJobHandler(base_handler.PostJsonHandler):
         "params_validator", "params.")
 
     # Default values.
-    mr_params = map_job.MapJobConfig._get_default_mr_params()
+    mr_params = map_job.JobConfig._get_default_mr_params()
     mr_params.update(params)
     if "queue_name" in mapper_params:
       mr_params["queue_name"] = mapper_params["queue_name"]
