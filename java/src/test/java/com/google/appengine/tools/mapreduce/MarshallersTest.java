@@ -2,6 +2,7 @@
 
 package com.google.appengine.tools.mapreduce;
 
+import com.google.common.collect.ImmutableBiMap;
 import com.google.common.collect.ImmutableList;
 
 import junit.framework.TestCase;
@@ -9,8 +10,6 @@ import junit.framework.TestCase;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
-import java.util.LinkedHashMap;
-import java.util.Map;
 import java.util.Random;
 
 /**
@@ -108,9 +107,7 @@ public class MarshallersTest extends TestCase {
     Random r = new Random(0);
     preformAllChecks(m, new BigInteger(8 * (1024 * 1024 + 10), r));
     // Testing a map
-    Map<String, String> map = new LinkedHashMap<>();
-    map.put("foo", "bar");
-    map.put("baz", "bat");
+    ImmutableBiMap<String, String> map = ImmutableBiMap.of("foo", "bar", "baz", "bat");
     preformValidChecks(m, map);
     // Testing a nested object
     preformValidChecks(m, KeyValue.of(42L, KeyValue.of(42L, KeyValue.of(42L, "foo"))));
