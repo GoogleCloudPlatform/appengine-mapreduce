@@ -369,6 +369,7 @@ class _Counters(Pool):
     pass
 
 
+# TODO(user): Define what fields should be public.
 class Context(object):
   """MapReduce execution context.
 
@@ -405,6 +406,8 @@ class Context(object):
     """
     self._shard_state = shard_state
     self.mapreduce_spec = mapreduce_spec
+    # TODO(user): Create a hierarchy of Context classes. Certain fields
+    # like task_retry_count only makes sense in TaskAttemptContext.
     self.task_retry_count = task_retry_count
 
     if self.mapreduce_spec:

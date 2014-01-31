@@ -412,6 +412,11 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
               urlfetch_timeout=parameters._GCS_URLFETCH_TIMEOUT_SEC))
 
     try:
+      if isinstance(tstate.handler, map_job.Mapper):
+        if tstate.slice_id == 0:
+          tstate.handler.begin_shard(ctx)
+        tstate.handler.begin_slice(ctx)
+
       if is_this_a_retry:
         task_directive = self._attempt_slice_recovery(shard_state, tstate)
 
@@ -513,6 +518,11 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
     operation.counters.Increment(
         context.COUNTER_MAPPER_WALLTIME_MS,
         int((self._time() - self._start_time)*1000))(ctx)
+
+    if isinstance(tstate.handler, map_job.Mapper):
+      tstate.handler.end_slice(ctx)
+      if finished_shard:
+        tstate.handler.end_shard(ctx)
     ctx.flush()
 
     return finished_shard
@@ -536,7 +546,9 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
 
       handler = transient_shard_state.handler
 
-      if input_reader.expand_parameters:
+      if isinstance(handler, map_job.Mapper):
+        result = handler(ctx, data)
+      elif input_reader.expand_parameters:
         result = handler(*data)
       else:
         result = handler(data)
