@@ -212,6 +212,11 @@ function getJobDetail(jobId, resultFunc) {
     url: 'command/get_job_detail',
     dataType: 'text',
     data: {'mapreduce_id': jobId},
+    statusCode: {
+      404: function() {
+        setButter('job ' + jobId + ' was not found.', true);
+      }
+    },
     error: function(request, textStatus) {
       getResponseDataJson(textStatus);
     },
