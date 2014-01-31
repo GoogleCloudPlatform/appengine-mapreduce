@@ -3,6 +3,7 @@ package com.google.appengine.demos.mapreduce.entitycount;
 import static java.lang.Integer.parseInt;
 
 import com.google.appengine.api.appidentity.AppIdentityServiceFactory;
+import com.google.appengine.api.appidentity.AppIdentityServiceFailureException;
 import com.google.appengine.api.memcache.MemcacheService;
 import com.google.appengine.api.memcache.MemcacheServiceFactory;
 import com.google.appengine.api.users.UserService;
@@ -88,7 +89,11 @@ public class ExampleServlet extends HttpServlet {
     }
     String bucket = req.getParameter("gcs_bucket");
     if (Strings.isNullOrEmpty(bucket)) {
-      bucket = AppIdentityServiceFactory.getAppIdentityService().getDefaultGcsBucketName();
+      try {
+        bucket = AppIdentityServiceFactory.getAppIdentityService().getDefaultGcsBucketName();
+      } catch (AppIdentityServiceFailureException ex) {
+        // ignore
+      }
     }
 
     int entities = parseInt(req.getParameter("entities"));
