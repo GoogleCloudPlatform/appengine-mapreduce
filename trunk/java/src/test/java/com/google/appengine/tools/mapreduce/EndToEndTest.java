@@ -413,7 +413,7 @@ public class EndToEndTest extends EndToEndTestCase {
       assertNull(info.getOutput());
       assertEquals(JobInfo.State.STOPPED_BY_ERROR, info.getJobState());
       assertTrue(info.getException().getMessage().matches(
-          "Stage map-.* was not completed successfuly \\(status=ERROR\\)"));
+          "Stage map-.* was not completed successfuly \\(status=ERROR, message=.*\\)"));
     }
   }
 
@@ -434,7 +434,7 @@ public class EndToEndTest extends EndToEndTestCase {
     assertNull(info.getOutput());
     assertEquals(JobInfo.State.STOPPED_BY_ERROR, info.getJobState());
     assertTrue(info.getException().getMessage().matches(
-        "Stage map-.* was not completed successfuly \\(status=ERROR\\)"));
+        "Stage map-.* was not completed successfuly \\(status=ERROR, message=.*\\)"));
     assertEquals("Shard 0 failed.", info.getException().getCause().getMessage());
     assertEquals("Bad state", info.getException().getCause().getCause().getMessage());
   }
