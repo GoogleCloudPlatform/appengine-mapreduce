@@ -39,6 +39,10 @@ public class MapReduceSettings implements Serializable, Cloneable {
     return baseUrl;
   }
 
+  /**
+   * Sets the base URL that will be used for all requests related to the MapReduce.
+   * Defaults to '/mapreduce/'
+   */
   public MapReduceSettings setBaseUrl(String baseUrl) {
     this.baseUrl = checkNotNull(baseUrl, "Null baseUrl");
     return this;
@@ -48,6 +52,10 @@ public class MapReduceSettings implements Serializable, Cloneable {
     return module;
   }
 
+  /**
+   * Specifies the Module that the MapReduce will run on.
+   * If this is not set, it will run on the current module.
+   */
   public MapReduceSettings setModule(/*Nullable*/ String module) {
     Preconditions.checkArgument(
         module == null || backend == null, "Module and Backend cannot be combined");
@@ -55,10 +63,18 @@ public class MapReduceSettings implements Serializable, Cloneable {
     return this;
   }
 
+  /**
+   * @deprecated Use modules instead.
+   */
+  @Deprecated
   /*Nullable*/ public String getBackend() {
     return backend;
   }
 
+  /**
+   * @deprecated Use modules instead.
+   */
+  @Deprecated
   public MapReduceSettings setBackend(/*Nullable*/ String backend) {
     Preconditions.checkArgument(
         module == null || backend == null, "Module and Backend cannot be combined");
@@ -87,6 +103,9 @@ public class MapReduceSettings implements Serializable, Cloneable {
     return workerQueueName;
   }
 
+  /**
+   * Sets the TaskQueue that will be used to queue MapReduce jobs.
+   */
   public MapReduceSettings setWorkerQueueName(String workerQueueName) {
     this.workerQueueName = checkNotNull(workerQueueName, "Null workerQueueName");
     return this;
@@ -96,6 +115,10 @@ public class MapReduceSettings implements Serializable, Cloneable {
     return bucketName;
   }
 
+  /**
+   * Sets the GCS bucket that will be used for temporary files.
+   * If this is not set the app's default bucket will be used.
+   */
   public MapReduceSettings setBucketName(/*Nullable*/ String bucketName) {
     this.bucketName = bucketName;
     return this;
@@ -105,6 +128,10 @@ public class MapReduceSettings implements Serializable, Cloneable {
     return millisPerSlice;
   }
 
+  /**
+   * Sets how long a worker will process items before endSlice is called and progress is
+   * checkpointed to datastore.
+   */
   public MapReduceSettings setMillisPerSlice(int millisPerSlice) {
     Preconditions.checkArgument(millisPerSlice >= 0);
     this.millisPerSlice = millisPerSlice;
@@ -115,6 +142,9 @@ public class MapReduceSettings implements Serializable, Cloneable {
     return maxShardRetries;
   }
 
+  /**
+   * The number of times a Shard can fail before it gives up and fails the whole MapReduce.
+   */
   public MapReduceSettings setMaxShardRetries(int maxShardRetries) {
     Preconditions.checkArgument(maxShardRetries >= 0);
     this.maxShardRetries = maxShardRetries;
@@ -125,8 +155,11 @@ public class MapReduceSettings implements Serializable, Cloneable {
     return maxSliceRetries;
   }
 
+  /**
+   * The number of times a Slice can fail before triggering a shard retry.
+   */
   public MapReduceSettings setMaxSliceRetries(int maxSliceRetries) {
-    Preconditions.checkArgument(maxShardRetries >= 0);
+    Preconditions.checkArgument(maxSliceRetries >= 0);
     this.maxSliceRetries = maxSliceRetries;
     return this;
   }
