@@ -16,7 +16,7 @@ import java.io.Serializable;
  *
  * @author ohler@google.com (Christian Ohler)
  */
-public class MapReduceSettings implements Serializable {
+public class MapReduceSettings implements Serializable, Cloneable {
 
   private static final long serialVersionUID = 610088354289299175L;
 
@@ -129,6 +129,15 @@ public class MapReduceSettings implements Serializable {
     Preconditions.checkArgument(maxShardRetries >= 0);
     this.maxSliceRetries = maxSliceRetries;
     return this;
+  }
+
+  @Override
+  public MapReduceSettings clone() {
+    try {
+      return (MapReduceSettings) super.clone();
+    } catch (CloneNotSupportedException e) {
+      throw new RuntimeException("Unexpected CloneNotSupportedException", e);
+    }
   }
 
   @Override

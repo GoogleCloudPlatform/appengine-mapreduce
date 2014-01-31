@@ -1,5 +1,6 @@
 package com.google.appengine.demos.mapreduce.randomcollisions;
 
+import com.google.appengine.api.appidentity.AppIdentityServiceFactory;
 import com.google.appengine.tools.mapreduce.GoogleCloudStorageFileSet;
 import com.google.appengine.tools.mapreduce.MapReduceJob;
 import com.google.appengine.tools.mapreduce.MapReduceSettings;
@@ -12,6 +13,8 @@ import com.google.appengine.tools.mapreduce.Reducer;
 import com.google.appengine.tools.mapreduce.inputs.ConsecutiveLongInput;
 import com.google.appengine.tools.mapreduce.outputs.GoogleCloudStorageFileOutput;
 import com.google.appengine.tools.mapreduce.outputs.MarshallingOutput;
+import com.google.common.base.Strings;
+import com.google.common.primitives.Ints;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -35,38 +38,52 @@ import javax.servlet.http.HttpServletResponse;
 @SuppressWarnings("serial")
 public class CollisionFindingServlet extends HttpServlet {
 
-  private static final String GCS_BUCKET_NAME = "mapreduce-example.appspot.com";
-
-  static MapReduceSpecification<Long, Integer, Integer, ArrayList<Integer>,
-      GoogleCloudStorageFileSet> createMapReduceSpec() {
-    ConsecutiveLongInput input = new ConsecutiveLongInput(0, 100 * 1000 * 1000, 30);
+  static MapReduceSpecification<
+      Long, Integer, Integer, ArrayList<Integer>, GoogleCloudStorageFileSet> createMapReduceSpec(
+          String bucket, long start, long limit, int shards) {
+    ConsecutiveLongInput input = new ConsecutiveLongInput(start, limit, shards);
     Mapper<Long, Integer, Integer> mapper = new SeedToRandomMapper();
     Marshaller<Integer> intermediateKeyMarshaller = Marshallers.getIntegerMarshaller();
     Marshaller<Integer> intermediateValueMarshaller = Marshallers.getIntegerMarshaller();
     Reducer<Integer, Integer, ArrayList<Integer>> reducer = new CollisionFindingReducer();
     Marshaller<ArrayList<Integer>> outputMarshaller = Marshallers.getSerializationMarshaller();
 
-    Output<ArrayList<Integer>, GoogleCloudStorageFileSet> output =
-        new MarshallingOutput<>(new GoogleCloudStorageFileOutput(
-            GCS_BUCKET_NAME, "CollidingSeeds-%04d", "integers",
-            30), outputMarshaller);
-    return MapReduceSpecification.of("DemoMapreduce",
-        input,
-        mapper,
-        intermediateKeyMarshaller,
-        intermediateValueMarshaller,
-        reducer,
-        output);
+    Output<ArrayList<Integer>, GoogleCloudStorageFileSet> output = new MarshallingOutput<>(
+        new GoogleCloudStorageFileOutput(bucket, "CollidingSeeds-%04d", "integers", shards),
+        outputMarshaller);
+    return MapReduceSpecification.of("DemoMapreduce", input, mapper, intermediateKeyMarshaller,
+        intermediateValueMarshaller, reducer, output);
   }
 
-  static MapReduceSettings getSettings() {
+  static MapReduceSettings getSettings(String bucket) {
     return new MapReduceSettings().setWorkerQueueName("mapreduce-workers")
-        .setBucketName(GCS_BUCKET_NAME).setModule("mapreduce");
+        .setBucketName(bucket).setModule("mapreduce");
   }
 
   @Override
   public void doGet(HttpServletRequest req, HttpServletResponse resp) throws IOException {
-    String id = MapReduceJob.start(createMapReduceSpec(), getSettings());
+    String bucket = getBucketParam(req);
+    long start = getLongParam(req, "start", 0);
+    long limit = getLongParam(req, "limit", 100 * 1000 * 1000);
+    int shards = Math.max(1, Math.min(100, Ints.saturatedCast(getLongParam(req, "shards", 30))));
+    String id = MapReduceJob.start(
+        createMapReduceSpec(bucket, start, limit, shards), getSettings(bucket));
     resp.sendRedirect("/_ah/pipeline/status.html?root=" + id);
+  }
+
+  static String getBucketParam(HttpServletRequest req) {
+    String bucket = req.getParameter("gcs_bucket");
+    if (Strings.isNullOrEmpty(bucket)) {
+      bucket = AppIdentityServiceFactory.getAppIdentityService().getDefaultGcsBucketName();
+    }
+    return bucket;
+  }
+
+  static long getLongParam(HttpServletRequest req, String param, long defaultValue) {
+    String value = req.getParameter(param);
+    if (value == null || value.isEmpty()) {
+      return defaultValue;
+    }
+    return Long.parseLong(value);
   }
 }
