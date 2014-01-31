@@ -4,11 +4,150 @@
 __all__ = ["CONFIG_NAMESPACE",
            "config"]
 
+import pickle
+
+
+# To break circular dependency and more.
+# pylint: disable=g-import-not-at-top
+
+
+# For the mapreduce in python 25 runtime, this import will fail.
+# TODO(user): Remove all pipeline import protections after 25 mr defunct.
+try:
+  from mapreduce.lib.pipeline import util as pipeline_util
+except ImportError:
+  pipeline_util = None
+
 from google.appengine.api import lib_config
 
 CONFIG_NAMESPACE = "mapreduce"
 
 
+# pylint: disable=protected-access
+# pylint: disable=invalid-name
+
+
+class _JobConfigMeta(type):
+  """Metaclass that controls class creation."""
+
+  _OPTIONS = "_options"
+  _REQUIRED = "_required"
+
+  def __new__(mcs, classname, bases, class_dict):
+    """Creates a _Config class and modifies its class dict.
+
+    Args:
+      classname: name of the class.
+      bases: a list of base classes.
+      class_dict: original class dict.
+
+    Returns:
+      A new _Config class. The modified class will have two fields.
+      _options field is a dict from option name to _Option objects.
+      _required field is a set of required option names.
+    """
+    options = {}
+    required = set()
+    for name, option in class_dict.iteritems():
+      if isinstance(option, _Option):
+        options[name] = option
+        if option.required:
+          required.add(name)
+
+    for name in options:
+      class_dict.pop(name)
+    class_dict[mcs._OPTIONS] = options
+    class_dict[mcs._REQUIRED] = required
+    cls = type.__new__(mcs, classname, bases, class_dict)
+
+    # Handle inheritance of _Config.
+    if object not in bases:
+      parent_options = {}
+      # Update options from the root down.
+      for c in reversed(cls.__mro__):
+        if mcs._OPTIONS in c.__dict__:
+          # Children override parent.
+          parent_options.update(c.__dict__[mcs._OPTIONS])
+        if mcs._REQUIRED in c.__dict__:
+          required.update(c.__dict__[mcs._REQUIRED])
+      for k, v in parent_options.iteritems():
+        if k not in options:
+          options[k] = v
+    return cls
+
+
+class _Option(object):
+  """An option for _Config."""
+
+  def __init__(self, kind, required=False, default=None, can_be_none=False):
+    """Init.
+
+    Args:
+      kind: type of the option.
+      required: whether user is required to supply a value.
+      default: default value if user didn't provide one.
+      can_be_none: whether value can be None.
+
+    Raises:
+      ValueError: if arguments aren't compatible.
+    """
+    if required and default is not None:
+      raise ValueError("No default value when option is required.")
+    self.kind = kind
+    self.required = required
+    self.default = default
+    self.can_be_none = can_be_none
+
+
+class _Config(object):
+  """Root class for all per job configuration."""
+
+  __metaclass__ = _JobConfigMeta
+
+  def __init__(self, _test=False, **kwds):
+    self._verify_keys(kwds, _test)
+    self._set_values(kwds, _test)
+
+  def _verify_keys(self, kwds, _test):
+    keys = set()
+    for k in kwds:
+      if k not in self._options:
+        raise ValueError("Option %s is not supported." % (k))
+      keys.add(k)
+    if not _test:
+      missing = self._required - keys
+      if missing:
+        raise ValueError("Options %s are required." % tuple(missing))
+
+  def _set_values(self, kwds, _test):
+    for k, option in self._options.iteritems():
+      v = kwds.get(k, option.default)
+      setattr(self, k, v)
+      if _test:
+        continue
+      if v is None and option.can_be_none:
+        continue
+      if issubclass(type(v), type) and not issubclass(v, option.kind):
+        raise TypeError(
+            "Expect subclass of %r for option %s" % (option.kind, k))
+      if not issubclass(type(v), type) and not isinstance(v, option.kind):
+        raise TypeError("Expect type %r for option %s" % (
+            option.kind, k))
+
+  def __eq__(self, other):
+    if not isinstance(other, self.__class__):
+      return False
+    return other.__dict__ == self.__dict__
+
+  def _to_json(self):
+    return {"config": pickle.dumps(self)}
+
+  @classmethod
+  def _from_json(cls, json):
+    return pickle.loads(json["config"])
+
+
+# TODO(user): Make more of these private.
 class _ConfigDefaults(object):
   """Default configs.
 
@@ -71,6 +210,7 @@ class _ConfigDefaults(object):
   _CONTROLLER_PERIOD_SEC = 2
 
 
+# TODO(user): changes this name to app_config
 config = lib_config.register(CONFIG_NAMESPACE, _ConfigDefaults.__dict__)
 
 
