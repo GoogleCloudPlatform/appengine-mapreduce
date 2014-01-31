@@ -3,6 +3,7 @@ package com.google.appengine.demos.mapreduce.entitycount;
 import com.google.appengine.api.datastore.Entity;
 import com.google.appengine.tools.mapreduce.KeyValue;
 import com.google.appengine.tools.mapreduce.MapReduceJob;
+import com.google.appengine.tools.mapreduce.MapReduceJobException;
 import com.google.appengine.tools.mapreduce.MapReduceResult;
 import com.google.appengine.tools.mapreduce.MapReduceSettings;
 import com.google.appengine.tools.mapreduce.MapReduceSpecification;
@@ -16,6 +17,7 @@ import com.google.appengine.tools.pipeline.FutureValue;
 import com.google.appengine.tools.pipeline.Job0;
 
 import java.util.List;
+import java.util.logging.Logger;
 
 // [START chain_job_example]
 /**
@@ -25,6 +27,9 @@ import java.util.List;
  * The third deletes all entities of the {@link #datastoreType}
  */
 public class ChainedMapReduceJob extends Job0<MapReduceResult<List<List<KeyValue<String, Long>>>>> {
+
+  private static final long serialVersionUID = 6725038763886885189L;
+  private static final Logger log = Logger.getLogger(ChainedMapReduceJob.class.getName());
 
   private final String bucket;
   private final String datastoreType;
@@ -62,6 +67,15 @@ public class ChainedMapReduceJob extends Job0<MapReduceResult<List<List<KeyValue
 
     return countFuture;
   }
+
+  public FutureValue<MapReduceResult<List<List<KeyValue<String, Long>>>>> handleException(
+      MapReduceJobException exception) throws Throwable {
+    // one of the child MapReduceJob has failed
+    log.severe("MapReduce job failed because of: " + exception.getMessage());
+    // ... Send an email, try again, ... or fail
+    throw exception;
+  }
+
   //...
   // [END chain_job_example]
 

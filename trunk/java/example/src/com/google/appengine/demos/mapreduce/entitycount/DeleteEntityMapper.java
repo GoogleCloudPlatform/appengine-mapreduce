@@ -12,6 +12,8 @@ import com.google.common.base.Predicates;
  */
 public class DeleteEntityMapper extends Mapper<Entity, Void, Void> {
 
+  private static final long serialVersionUID = -6485226450501339416L;
+
   private final Predicate<Entity> shouldDelete;
   private transient DatastoreMutationPool batcher;
 

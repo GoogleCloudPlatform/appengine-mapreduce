@@ -221,9 +221,7 @@ public class MapReduceJob<I, K, V, O, R>
       if (status.getStatusCode() == Status.StatusCode.DONE) {
         return immediate(resultAndStatus.getResult());
       }
-      throw new RuntimeException("Stage " + stage + " was not completed successfuly (status="
-          + status.getStatusCode() + ", message=" + status.getException().getMessage() + ")",
-          status.getException());
+      throw new MapReduceJobException(stage, status);
     }
   }
 
