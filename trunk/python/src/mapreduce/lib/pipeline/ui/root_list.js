@@ -72,7 +72,7 @@ function initRootListDone(response) {
           .append(
             $('<a>')
                 .attr('href', 'status?root=' + infoMap.pipelineId)
-                .text('Detail'))
+                .text(infoMap.pipelineId))
           .appendTo(row);
       $('#root-list>tbody').append(row);
     });
