@@ -1,6 +1,10 @@
 package com.google.appengine.demos.mapreduce.randomcollisions;
 
 import com.google.appengine.api.appidentity.AppIdentityServiceFactory;
+import com.google.appengine.api.memcache.MemcacheService;
+import com.google.appengine.api.memcache.MemcacheServiceFactory;
+import com.google.appengine.api.users.UserService;
+import com.google.appengine.api.users.UserServiceFactory;
 import com.google.appengine.tools.mapreduce.GoogleCloudStorageFileSet;
 import com.google.appengine.tools.mapreduce.MapReduceJob;
 import com.google.appengine.tools.mapreduce.MapReduceSettings;
@@ -17,7 +21,10 @@ import com.google.common.base.Strings;
 import com.google.common.primitives.Ints;
 
 import java.io.IOException;
+import java.io.PrintWriter;
+import java.security.SecureRandom;
 import java.util.ArrayList;
+import java.util.logging.Logger;
 
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
@@ -38,9 +45,73 @@ import javax.servlet.http.HttpServletResponse;
 @SuppressWarnings("serial")
 public class CollisionFindingServlet extends HttpServlet {
 
+  private static final Logger log = Logger.getLogger(CollisionFindingServlet.class.getName());
+
+  private final MemcacheService memcache = MemcacheServiceFactory.getMemcacheService();
+  private final UserService userService = UserServiceFactory.getUserService();
+  private final SecureRandom random = new SecureRandom();
+
+  private void writeResponse(HttpServletResponse resp) throws IOException {
+    String token = String.valueOf(random.nextLong() & Long.MAX_VALUE);
+    memcache.put(userService.getCurrentUser().getUserId() + " " + token, true);
+    try (PrintWriter pw = new PrintWriter(resp.getOutputStream())) {
+      pw.println("<html><body>" + "<form method='post' > <input type='hidden' name='token' value='"
+          + token + "'> Run a MapReduce that looks for seeds to java's Random that result in the "
+          + "same initial number being created.  <div> <br />  GCS Bucket to store data:"
+          + "<input name='gcs_bucket' /> (Leave empty to use the app's default bucket) <br />"
+          + "Starting integer to test: <input value='0' name='start' /> <br />"
+          + "Final integer to test: <input value='3000000' name='limit' />"
+          + "(Must be greater than starting integer and less than 2^31-1) <br />"
+          + "Number of shards <input value='10' name='shards' />"
+          + "(Must be between 1 and 100) <br /> <input type='submit' value='Start MapReduce' />"
+          + "</div> </form> </body></html>");
+    }
+  }
+
+  @Override
+  public void doGet(HttpServletRequest req, HttpServletResponse resp) throws IOException {
+    if (userService.getCurrentUser() == null) {
+      log.info("no user");
+      return;
+    }
+    writeResponse(resp);
+  }
+
+  @Override
+  public void doPost(HttpServletRequest req, HttpServletResponse resp) throws IOException {
+    if (userService.getCurrentUser() == null) {
+      log.info("no user");
+      return;
+    }
+    String token = req.getParameter("token");
+    if (!memcache.delete(userService.getCurrentUser().getUserId() + " " + token)) {
+      throw new RuntimeException("Bad token, try again: " + token);
+    }
+
+    String bucket = getBucketParam(req);
+    long start = getLongParam(req, "start", 0);
+    long limit = getLongParam(req, "limit", 3 * 1000 * 1000);
+    int shards = Math.max(1, Math.min(100, Ints.saturatedCast(getLongParam(req, "shards", 10))));
+    MapReduceSpecification<Long, Integer, Integer, ArrayList<Integer>, GoogleCloudStorageFileSet>
+        mapReduceSpec = createMapReduceSpec(bucket, start, limit, shards);
+    MapReduceSettings settings = getSettings(bucket);
+    // [START start_mapreduce]
+    String id = MapReduceJob.start(mapReduceSpec, settings);
+    // [END start_mapreduce]
+    resp.sendRedirect("/_ah/pipeline/status.html?root=" + id);
+  }
+
+  static String getBucketParam(HttpServletRequest req) {
+    String bucket = req.getParameter("gcs_bucket");
+    if (Strings.isNullOrEmpty(bucket)) {
+      bucket = AppIdentityServiceFactory.getAppIdentityService().getDefaultGcsBucketName();
+    }
+    return bucket;
+  }
+
   static MapReduceSpecification<
-      Long, Integer, Integer, ArrayList<Integer>, GoogleCloudStorageFileSet> createMapReduceSpec(
-          String bucket, long start, long limit, int shards) {
+  Long, Integer, Integer, ArrayList<Integer>, GoogleCloudStorageFileSet> createMapReduceSpec(
+      String bucket, long start, long limit, int shards) {
     ConsecutiveLongInput input = new ConsecutiveLongInput(start, limit, shards);
     Mapper<Long, Integer, Integer> mapper = new SeedToRandomMapper();
     Marshaller<Integer> intermediateKeyMarshaller = Marshallers.getIntegerMarshaller();
@@ -58,25 +129,6 @@ public class CollisionFindingServlet extends HttpServlet {
   static MapReduceSettings getSettings(String bucket) {
     return new MapReduceSettings().setWorkerQueueName("mapreduce-workers")
         .setBucketName(bucket).setModule("mapreduce");
-  }
-
-  @Override
-  public void doGet(HttpServletRequest req, HttpServletResponse resp) throws IOException {
-    String bucket = getBucketParam(req);
-    long start = getLongParam(req, "start", 0);
-    long limit = getLongParam(req, "limit", 3 * 1000 * 1000);
-    int shards = Math.max(1, Math.min(100, Ints.saturatedCast(getLongParam(req, "shards", 10))));
-    String id = MapReduceJob.start(
-        createMapReduceSpec(bucket, start, limit, shards), getSettings(bucket));
-    resp.sendRedirect("/_ah/pipeline/status.html?root=" + id);
-  }
-
-  static String getBucketParam(HttpServletRequest req) {
-    String bucket = req.getParameter("gcs_bucket");
-    if (Strings.isNullOrEmpty(bucket)) {
-      bucket = AppIdentityServiceFactory.getAppIdentityService().getDefaultGcsBucketName();
-    }
-    return bucket;
   }
 
   static long getLongParam(HttpServletRequest req, String param, long defaultValue) {

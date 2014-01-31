@@ -59,13 +59,15 @@ public class UsingPipelineServlet extends HttpServlet {
 
     @Override
     public Value<Void> run() throws Exception {
+      MapReduceSpecification<Long, Integer, Integer, ArrayList<Integer>, GoogleCloudStorageFileSet>
+      spec = createMapReduceSpec(bucket, start, limit, shards);
+      MapReduceSettings settings = getSettings(bucket);
+      // [START start_as_pipeline]
       MapReduceJob<Long, Integer, Integer, ArrayList<Integer>, GoogleCloudStorageFileSet>
           mapReduceJob = new MapReduceJob<>();
-      MapReduceSpecification<Long, Integer, Integer, ArrayList<Integer>, GoogleCloudStorageFileSet>
-          spec = createMapReduceSpec(bucket, start, limit, shards);
-      MapReduceSettings settings = getSettings(bucket);
       FutureValue<MapReduceResult<GoogleCloudStorageFileSet>> mapReduceResult =
           futureCall(mapReduceJob, immediate(spec), immediate(settings));
+      // [END start_as_pipeline]
       return futureCall(new LogFileNamesJob(), mapReduceResult);
     }
   }
@@ -84,7 +86,7 @@ public class UsingPipelineServlet extends HttpServlet {
   }
 
   @Override
-  public void doGet(HttpServletRequest req, HttpServletResponse resp) throws IOException {
+  public void doPost(HttpServletRequest req, HttpServletResponse resp) throws IOException {
     String bucket = getBucketParam(req);
     long start = getLongParam(req, "start", 0);
     long limit = getLongParam(req, "limit", 100 * 1000 * 1000);
