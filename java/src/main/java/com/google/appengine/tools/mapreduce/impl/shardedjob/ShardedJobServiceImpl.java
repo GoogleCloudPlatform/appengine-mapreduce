@@ -38,7 +38,7 @@ class ShardedJobServiceImpl implements ShardedJobService {
   }
 
   @Override
-  public void cleanupJob(String jobId) {
-    throw new RuntimeException("Not implemented");
+  public boolean cleanupJob(String jobId) {
+    return new ShardedJobRunner<>().cleanupJob(jobId);
   }
 }

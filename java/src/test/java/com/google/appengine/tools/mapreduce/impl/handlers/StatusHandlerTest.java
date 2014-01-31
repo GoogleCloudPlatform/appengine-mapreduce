@@ -2,6 +2,10 @@
 
 package com.google.appengine.tools.mapreduce.impl.handlers;
 
+import com.google.appengine.api.datastore.DatastoreService;
+import com.google.appengine.api.datastore.DatastoreServiceFactory;
+import com.google.appengine.api.datastore.FetchOptions;
+import com.google.appengine.api.datastore.Query;
 import com.google.appengine.tools.mapreduce.EndToEndTestCase;
 import com.google.appengine.tools.mapreduce.impl.shardedjob.IncrementalTask;
 import com.google.appengine.tools.mapreduce.impl.shardedjob.ShardedJobController;
@@ -35,6 +39,22 @@ public class StatusHandlerTest extends EndToEndTestCase {
 
     @Override
     public void completed(List<? extends TestTask> results) {}
+  }
+
+  public void testCleanupJob() throws Exception {
+    ShardedJobService jobService = ShardedJobServiceFactory.getShardedJobService();
+    assertTrue(jobService.cleanupJob("testCleanupJob")); // No such job yet
+    ShardedJobSettings settings = new ShardedJobSettings.Builder().build();
+    ShardedJobController<TestTask> controller = new DummyWorkerController("testCleanupJob");
+    TestTask s1 = new TestTask(0, 2, 2, 2);
+    TestTask s2 = new TestTask(1, 2, 2, 1);
+    jobService.startJob("testCleanupJob", ImmutableList.of(s1, s2), controller, settings);
+    assertFalse(jobService.cleanupJob("testCleanupJob"));
+    executeTasksUntilEmpty();
+    DatastoreService ds = DatastoreServiceFactory.getDatastoreService();
+    assertEquals(5, ds.prepare(new Query()).countEntities(FetchOptions.Builder.withDefaults()));
+    assertTrue(jobService.cleanupJob("testCleanupJob"));
+    assertEquals(0, ds.prepare(new Query()).countEntities(FetchOptions.Builder.withDefaults()));
   }
 
   // Tests that an job that has just been initialized returns a reasonable job detail.

@@ -35,6 +35,7 @@ import com.google.common.collect.Iterators;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.ConcurrentModificationException;
 import java.util.Iterator;
 import java.util.List;
@@ -219,6 +220,9 @@ public class ShardedJobRunner<T extends IncrementalTask> implements ShardedJobHa
         Transaction tx = DATASTORE.beginTransaction();
         try {
           ShardedJobStateImpl<T> jobState = lookupJobState(tx, jobId);
+          if (jobState == null) {
+            return null;
+          }
           jobState.setMostRecentUpdateTimeMillis(
               Math.max(System.currentTimeMillis(), jobState.getMostRecentUpdateTimeMillis()));
           jobState.markShardCompleted(shardNumber);
@@ -234,6 +238,12 @@ public class ShardedJobRunner<T extends IncrementalTask> implements ShardedJobHa
         }
       }
     }, DATASTORE_RETRY_PARAMS, EXCEPTION_HANDLER);
+
+    if (jobState == null) {
+      log.info(taskId + ": Job is gone, ignoring completeShard call.");
+      return;
+    }
+
     if (jobState.getActiveTaskCount() == 0) {
       if (jobState.getStatus().getStatusCode() == DONE) {
         log.info("Calling completed for " + jobId);
@@ -318,7 +328,7 @@ public class ShardedJobRunner<T extends IncrementalTask> implements ShardedJobHa
   public void runTask(final String jobId, final String taskId, final int sequenceNumber) {
     final ShardedJobState<T> jobState = lookupJobState(null, jobId);
     if (jobState == null) {
-      log.info(taskId + ": Job gone");
+      log.info(taskId + ": Job is gone, ignoring runTask call.");
       return;
     }
     Transaction tx = DATASTORE.beginTransaction();
@@ -566,5 +576,29 @@ public class ShardedJobRunner<T extends IncrementalTask> implements ShardedJobHa
 
   void abortJob(String jobId) {
     changeJobStatus(jobId, new Status(ABORTED));
+  }
+
+  boolean cleanupJob(String jobId) {
+    ShardedJobStateImpl<T> jobState = lookupJobState(null, jobId);
+    if (jobState == null) {
+      return true;
+    } else if (jobState.getStatus().isActive()) {
+      return false;
+    }
+    int taskCount = jobState.getTotalTaskCount();
+    final Collection<Key> toDelete = new ArrayList<>(1 + 2 * taskCount);
+    toDelete.add(ShardedJobStateImpl.ShardedJobSerializer.makeKey(jobId));
+    for (int i = 0; i < taskCount; i++) {
+      String taskId = getTaskId(jobId, i);
+      toDelete.add(IncrementalTaskState.Serializer.makeKey(taskId));
+      toDelete.add(ShardRetryState.Serializer.makeKey(taskId));
+    }
+    RetryHelper.runWithRetries(callable(new Runnable() {
+      @Override
+      public void run() {
+        DATASTORE.delete(toDelete);
+      }
+    }), DATASTORE_RETRY_FOREVER_PARAMS, EXCEPTION_HANDLER);
+    return true;
   }
 }

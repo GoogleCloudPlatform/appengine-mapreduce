@@ -56,8 +56,11 @@ final class StatusHandler {
 
   private static JSONObject handleCleanupJob(String jobId) throws JSONException {
     JSONObject retValue = new JSONObject();
-    ShardedJobServiceFactory.getShardedJobService().cleanupJob(jobId);
-    retValue.put("status", "Successfully deleted requested job.");
+    if (ShardedJobServiceFactory.getShardedJobService().cleanupJob(jobId)) {
+      retValue.put("status", "Successfully deleted requested job.");
+    } else {
+      retValue.put("status", "Can't delete an active job");
+    }
     return retValue;
   }
 
@@ -246,6 +249,6 @@ final class StatusHandler {
    */
   @SuppressWarnings("unused")
   private static JSONObject handleListJobs(String cursor, int count) {
-    throw new RuntimeException("Not implemented");
+    throw new RuntimeException("Job listing is not implemented yet.");
   }
 }

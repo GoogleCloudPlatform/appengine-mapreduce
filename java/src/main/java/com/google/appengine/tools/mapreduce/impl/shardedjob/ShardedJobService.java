@@ -48,9 +48,8 @@ public interface ShardedJobService {
   void abortJob(String jobId);
 
   /**
-   * Deletes all data about the job with the given ID.  If the job is still
-   * running, this will additionally abort it.  If the job does not exist, this
-   * is a no-op.
+   * Deletes all data of a completed job with the given ID.
+   * Returns true if data is gone.
    */
-  void cleanupJob(String jobId);
+  boolean cleanupJob(String jobId);
 }
