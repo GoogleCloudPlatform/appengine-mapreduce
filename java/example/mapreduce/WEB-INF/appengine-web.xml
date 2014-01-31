@@ -3,17 +3,16 @@
   <application>mapreduce-example</application>
   <module>mapreduce</module>
   <version>one</version>
-
   <threadsafe>true</threadsafe>
-
-  <system-properties>
-    <property name="java.util.logging.config.file" value="WEB-INF/logging.properties"/>
-  </system-properties>
 
   <!-- Larger / higher memory instances are useful for their improved sorting performance -->
   <instance-class>F4</instance-class>
   <automatic-scaling>
     <max-pending-latency>1000ms</max-pending-latency>
   </automatic-scaling>
+
+  <system-properties>
+    <property name="java.util.logging.config.file" value="WEB-INF/logging.properties"/>
+  </system-properties>
 
 </appengine-web-app>

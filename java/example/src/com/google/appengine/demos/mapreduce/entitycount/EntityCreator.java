@@ -23,7 +23,9 @@ class EntityCreator extends Mapper<Long, Void, Void> {
   private final String kind;
   private final int payloadBytesPerEntity;
   private final Random random = new Random();
+  // [START datastoreMutationPool]
   private transient DatastoreMutationPool pool;
+  // [END datastoreMutationPool]
 
   public EntityCreator(String kind, int payloadBytesPerEntity) {
     this.kind = checkNotNull(kind, "Null kind");
@@ -38,6 +40,7 @@ class EntityCreator extends Mapper<Long, Void, Void> {
     return out.toString();
   }
 
+  // [START begin_and_endSlice]
   @Override
   public void beginSlice() {
     pool = DatastoreMutationPool.create();
@@ -47,6 +50,7 @@ class EntityCreator extends Mapper<Long, Void, Void> {
   public void endSlice() {
     pool.flush();
   }
+  // [END begin_and_endSlice]
 
   @Override
   public void map(Long ignored) {

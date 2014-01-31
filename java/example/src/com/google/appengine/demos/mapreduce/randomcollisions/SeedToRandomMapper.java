@@ -11,10 +11,11 @@ import java.util.Random;
 final class SeedToRandomMapper extends Mapper<Long, Integer, Integer> {
 
   private static final long serialVersionUID = -3070710020513042698L;
-
+  // [START map_example]
   @Override
   public void map(Long sequence) {
     Random r = new Random(sequence);
     emit(r.nextInt(), Ints.checkedCast(sequence));
   }
+  // [END map_example]
 }

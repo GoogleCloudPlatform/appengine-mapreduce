@@ -15,7 +15,7 @@ final class CollisionFindingReducer extends Reducer<Integer, Integer, ArrayList<
 
   private static final long serialVersionUID = 188147370819557065L;
   private static final Logger LOG = Logger.getLogger(CollisionFindingReducer.class.getName());
-
+  // [START reduce_example]
   @Override
   public void reduce(Integer valueGenerated, ReducerInput<Integer> seeds) {
     ArrayList<Integer> collidingSeeds = Lists.newArrayList(seeds);
@@ -25,4 +25,5 @@ final class CollisionFindingReducer extends Reducer<Integer, Integer, ArrayList<
       emit(collidingSeeds);
     }
   }
+  // [END reduce_example]
 }
