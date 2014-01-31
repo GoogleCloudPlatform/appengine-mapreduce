@@ -6,7 +6,7 @@ from mapreduce import model
 from mapreduce import output_writers
 from mapreduce import parameters
 from mapreduce import util
-from mapreduce.map_job import mapper as mapper_module
+from mapreduce.api.map_job import mapper as mapper_module
 
 
 # pylint: disable=protected-access
@@ -15,7 +15,7 @@ from mapreduce.map_job import mapper as mapper_module
 _Option = parameters._Option
 
 
-class MapJobConfig(parameters._Config):
+class JobConfig(parameters._Config):
   """Configurations for a map job.
 
   Names started with _ are reserved for internal use.
@@ -103,7 +103,7 @@ class MapJobConfig(parameters._Config):
             "base_path": self._base_path}
 
   # TODO(user): Ideally we should replace all the *_spec and *_params
-  # in model.py with MapJobConfig. This not only cleans up codebase, but may
+  # in model.py with JobConfig. This not only cleans up codebase, but may
   # also be necessary for launching input_reader/output_writer API. We don't
   # want to surface the numerous *_spec and *_params objects in our public API.
   # The cleanup has to be done over several releases to not to break runtime.

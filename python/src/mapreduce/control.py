@@ -28,10 +28,10 @@ import logging
 
 from google.appengine.ext import db
 from mapreduce import handlers
-from mapreduce import map_job
 from mapreduce import model
 from mapreduce import parameters
 from mapreduce import util
+from mapreduce.api import map_job
 
 
 def start_map(name,
@@ -92,7 +92,7 @@ def start_map(name,
     mapper_parameters = dict(mapper_parameters)
 
   # Make sure this old API fill all parameters with default values.
-  mr_params = map_job.MapJobConfig._get_default_mr_params()
+  mr_params = map_job.JobConfig._get_default_mr_params()
   if mapreduce_parameters:
     mr_params.update(mapreduce_parameters)
 

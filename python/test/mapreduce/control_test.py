@@ -27,10 +27,10 @@ import unittest
 from google.appengine.ext import db
 from mapreduce import control
 from mapreduce import hooks
-from mapreduce import map_job
 from mapreduce import model
 from mapreduce import test_support
 from testlib import testutil
+from mapreduce.api import map_job
 
 
 def random_string(length):
@@ -86,7 +86,7 @@ class ControlTest(testutil.HandlerTestBase):
     handler = test_support.execute_task(task)
     self.assertEqual(mapreduce_id, handler.request.get("mapreduce_id"))
     state = model.MapreduceState.get_by_job_id(mapreduce_id)
-    params = map_job.MapJobConfig._get_default_mr_params()
+    params = map_job.JobConfig._get_default_mr_params()
     params.update({"foo": "bar",
                    "base_path": "/mapreduce_base_path",
                    "queue_name": queue_name})
