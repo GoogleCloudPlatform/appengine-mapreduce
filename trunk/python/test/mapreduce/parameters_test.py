@@ -64,7 +64,7 @@ class JobConfigTest(unittest.TestCase):
     self.assertEqual(Bar, config.d)
 
   def testTestMode(self):
-    TestConfig(_test=True)
+    TestConfig(_lenient=True)
 
   def testToFromJson(self):
     config = TestConfig(a='foo', b=True, c=Foo, d=Bar)

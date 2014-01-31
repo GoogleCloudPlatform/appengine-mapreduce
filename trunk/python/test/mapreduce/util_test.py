@@ -21,6 +21,7 @@
 
 import datetime
 import os
+import sys
 import unittest
 
 from google.appengine.api import taskqueue
@@ -288,6 +289,43 @@ class CreateConfigTest(unittest.TestCase):
     config = util.create_datastore_write_config(self.spec)
     self.assertTrue(config)
     self.assertTrue(config.force_writes)
+
+
+class FooClass(object):
+  pass
+
+
+class ObjToPathTest(unittest.TestCase):
+
+  def setUp(self):
+    super(ObjToPathTest, self).setUp()
+    self.sys_modules = sys.modules
+
+  def tearDown(self):
+    super(ObjToPathTest, self).tearDown()
+    sys.modules = self.sys_modules
+
+  def testBasic(self):
+    self.assertEqual(None, util._obj_to_path(None))
+    self.assertEqual("__main__.FooClass", util._obj_to_path(FooClass))
+    self.assertEqual("__main__.test_handler_function",
+                     util._obj_to_path(test_handler_function))
+
+  @staticmethod
+  def foo():
+    pass
+
+  class FooClass2(object):
+    pass
+
+  def testNotTopLevel(self):
+    self.assertRaises(ValueError, util._obj_to_path, self.FooClass2)
+
+  def testNotTopLevel2(self):
+    self.assertRaises(ValueError, util._obj_to_path, self.foo)
+
+  def testUnexpectedType(self):
+    self.assertRaises(TypeError, util._obj_to_path, self.testUnexpectedType)
 
 
 if __name__ == "__main__":

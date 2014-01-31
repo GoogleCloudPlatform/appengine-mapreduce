@@ -18,25 +18,27 @@
 
 
 # pylint: disable=g-bad-name
+# pylint: disable=unused-argument
+
 
 # os_compat must be first to ensure timezones are UTC.
-# Disable "unused import" and "invalid import order"
 # pylint: disable=unused-import
+# pylint: disable=g-bad-import-order
 from google.appengine.tools import os_compat
 # testutil must be imported before mock.
+# pylint: disable=g-bad-import-order
 from testlib import testutil
-# pylint: enable=unused-import
-# pylint: disable=unused-argument
 
 import base64
 import datetime
 import httplib
-import mock
-from testlib import mox
 import os
-from mapreduce.lib import simplejson
 import time
 import unittest
+
+import mock
+from testlib import mox
+from mapreduce.lib import simplejson
 
 from google.appengine.api import apiproxy_stub_map
 from google.appengine.api import datastore
@@ -57,6 +59,7 @@ from mapreduce import handlers
 from mapreduce import hooks
 from mapreduce import input_readers
 from mapreduce import key_ranges
+from mapreduce import map_job
 from mapreduce import model
 from mapreduce import operation
 from mapreduce import output_writers
@@ -552,10 +555,10 @@ class MapreduceHandlerTestBase(testutil.HandlerTestBase):
         params,
         shard_count,
         output_writer_spec=output_writer_spec)
-    mapreduce_spec = model.MapreduceSpec("my job",
-                                         mapreduce_id,
-                                         mapper_spec.to_json(),
-                                         hooks_class_name=hooks_class_name)
+    mapreduce_spec = model.MapreduceSpec(
+        "my job", mapreduce_id, mapper_spec.to_json(),
+        params=map_job.MapJobConfig._get_default_mr_params(),
+        hooks_class_name=hooks_class_name)
 
     self.verify_mapreduce_spec(mapreduce_spec,
                                shard_count=shard_count,
@@ -695,7 +698,7 @@ class StartJobHandlerTest(testutil.HandlerTestBase):
     self.assertEqual(int(self.PROCESSING_RATE),
                      state.mapreduce_spec.mapper.params["processing_rate"])
     self.assertEqual(self.QUEUE,
-                     state.mapreduce_spec.mapper.params["queue_name"])
+                     state.mapreduce_spec.params["queue_name"])
 
   def testOtherApp(self):
     """Verifies main execution path of starting scan over several entities."""
@@ -811,7 +814,10 @@ class StartJobHandlerFunctionalTest(testutil.HandlerTestBase):
   OUTPUT_WRITER_SPEC = __name__ + ".TestOutputWriter"
   SHARD_COUNT = "9"
   QUEUE = "crazy-queue"
-  MAPREDUCE_SPEC_PARAMS = {"foo": "bar", "base_path": "/foo"}
+  MAPREDUCE_SPEC_PARAMS = map_job.MapJobConfig._get_default_mr_params()
+  MAPREDUCE_SPEC_PARAMS.update({"foo": "bar",
+                                "base_path": "/foo",
+                                "queue_name": QUEUE})
   HOOKS = __name__ + ".TestHooks"
 
   def setUp(self):
@@ -819,7 +825,7 @@ class StartJobHandlerFunctionalTest(testutil.HandlerTestBase):
     self.mapper_spec = model.MapperSpec(
         handler_spec=self.HANLDER_SPEC,
         input_reader_spec=self.INPUT_READER_SPEC,
-        params={"entity_kind": self.ENTITY_KIND},
+        params={"input_reader": {"entity_kind": self.ENTITY_KIND}},
         shard_count=self.SHARD_COUNT,
         output_writer_spec=self.OUTPUT_WRITER_SPEC)
     TestHooks.reset()
@@ -916,21 +922,21 @@ class StartJobHandlerFunctionalTest(testutil.HandlerTestBase):
     """Tests when the handler function cannot be found."""
     self.mapper_spec.handler_spec = "does_not_exists"
     self.assertRaises(ImportError, handlers.StartJobHandler._start_map,
-                      self.NAME, self.mapper_spec, {},
+                      self.NAME, self.mapper_spec, self.MAPREDUCE_SPEC_PARAMS,
                       queue_name=self.QUEUE)
 
   def testInputReaderUnknown(self):
     """Tests when the input reader function cannot be found."""
     self.mapper_spec.input_reader_spec = "does_not_exists"
     self.assertRaises(ImportError, handlers.StartJobHandler._start_map,
-                      self.NAME, self.mapper_spec, {},
+                      self.NAME, self.mapper_spec, self.MAPREDUCE_SPEC_PARAMS,
                       queue_name=self.QUEUE)
 
   def testInvalidOutputWriter(self):
     """Tests setting output writer parameter."""
     self.mapper_spec.output_writer_spec = "does_not_exists"
     self.assertRaises(ImportError, handlers.StartJobHandler._start_map,
-                      self.NAME, self.mapper_spec, {},
+                      self.NAME, self.mapper_spec, self.MAPREDUCE_SPEC_PARAMS,
                       queue_name=self.QUEUE)
 
 
@@ -944,8 +950,10 @@ class KickOffJobHandlerTest(testutil.HandlerTestBase):
   OUTPUT_WRITER_SPEC = __name__ + ".TestOutputWriter"
   SHARD_COUNT = "9"
   QUEUE = "crazy-queue"
-  MAPREDUCE_SPEC_PARAMS = {"foo": "bar",
-                           "base_path": parameters.config.BASE_PATH}
+  MAPREDUCE_SPEC_PARAMS = map_job.MapJobConfig._get_default_mr_params()
+  MAPREDUCE_SPEC_PARAMS.update({"foo": "bar",
+                                "base_path": parameters.config.BASE_PATH,
+                                "queue_name": QUEUE})
   HOOKS = __name__ + ".TestHooks"
 
   def setUp(self):
@@ -1170,12 +1178,13 @@ class MapperWorkerCallbackHandlerLeaseTest(testutil.HandlerTestBase):
     mapper_spec = model.MapperSpec(
         handler_spec=handler_spec,
         input_reader_spec=__name__ + "." + InputReader.__name__,
-        params={"entity_kind": ENTITY_KIND},
+        params={"input_reader": {"entity_kind": ENTITY_KIND}},
         shard_count=self.SHARD_NUMBER)
     self.mr_spec = model.MapreduceSpec(
         name="mapreduce_name",
         mapreduce_id="mapreduce_id",
-        mapper_spec=mapper_spec.to_json())
+        mapper_spec=mapper_spec.to_json(),
+        params=map_job.MapJobConfig._get_default_mr_params())
 
   def _init_shard(self):
     """Init shard state."""
@@ -1460,6 +1469,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
            hooks_class_name=None,
            output_writer_spec=None,
            shard_count=8,
+           mr_params=None,
            shard_retries=0):
     """Init everything needed for testing worker callbacks.
 
@@ -1478,7 +1488,8 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
         hooks_class_name=hooks_class_name,
         output_writer_spec=output_writer_spec,
         mapper_parameters=mapper_parameters)
-    self.mapreduce_spec.params["base_path"] = parameters.config.BASE_PATH
+    if mr_params:
+      self.mapreduce_spec.params.update(mr_params)
 
     self.shard_number = 1
     self.slice_id = 0
@@ -1664,7 +1675,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
     tasks = self.taskqueue.GetTasks("default")
     self.assertEquals(1, len(tasks))
     self.verify_shard_task(tasks[0], self.shard_id, self.slice_id + 1)
-    self.assertEquals(tasks[0]['eta_delta'], '0:00:00 ago')
+    self.assertEquals(tasks[0]["eta_delta"], "0:00:00 ago")
 
   def testLimitingRate(self):
     """Test not enough quota to process everything in this slice."""
@@ -1694,7 +1705,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
 
     tasks = self.taskqueue.GetTasks("default")
     self.assertEquals(1, len(tasks))
-    self.assertEquals(tasks[0]['eta_delta'], '0:00:02 from now')
+    self.assertEquals(tasks[0]["eta_delta"], "0:00:02 from now")
 
   def testLongProcessDataWithAllowCheckpoint(self):
     """Tests that process_datum works with input_readers.ALLOW_CHECKPOINT."""

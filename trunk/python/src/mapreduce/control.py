@@ -21,11 +21,14 @@
 __all__ = ["start_map"]
 
 # pylint: disable=g-bad-name
+# pylint: disable=protected-access
+
 
 import logging
 
 from google.appengine.ext import db
 from mapreduce import handlers
+from mapreduce import map_job
 from mapreduce import model
 from mapreduce import parameters
 from mapreduce import util
@@ -47,12 +50,16 @@ def start_map(name,
               in_xg_transaction=False):
   """Start a new, mapper-only mapreduce.
 
+  Deprecated! Use map_job.start instead.
+
   Args:
     name: mapreduce name. Used only for display purposes.
     handler_spec: fully qualified name of mapper handler function/class to call.
     reader_spec: fully qualified name of mapper reader to use
     mapper_parameters: dictionary of parameters to pass to mapper. These are
-      mapper-specific and also used for reader initialization.
+      mapper-specific and also used for reader/writer initialization.
+      Should have format {"input_reader": {}, "output_writer":{}}. Old
+      deprecated style does not have sub dictionaries.
     shard_count: number of shards to create.
     mapreduce_parameters: dictionary of mapreduce parameters relevant to the
       whole job.
@@ -77,17 +84,23 @@ def start_map(name,
   """
   if shard_count is None:
     shard_count = parameters.config.SHARD_COUNT
-  if base_path is None:
-    base_path = parameters.config.BASE_PATH
 
   if mapper_parameters:
     mapper_parameters = dict(mapper_parameters)
+
+  # Make sure this old API fill all parameters with default values.
+  mr_params = map_job.MapJobConfig._get_default_mr_params()
   if mapreduce_parameters:
-    mapreduce_parameters = dict(mapreduce_parameters)
-    if "base_path" not in mapreduce_parameters:
-      mapreduce_parameters["base_path"] = base_path
-  else:
-    mapreduce_parameters = {"base_path": base_path}
+    if base_path and "base_path" in mapreduce_parameters:
+      logging.warning("Parameter base_path is duplicated.")
+    if queue_name and "queue_name" in mapreduce_parameters:
+      logging.warning("Parameter queue_name is duplicated.")
+    mr_params.update(mapreduce_parameters)
+
+  if base_path:
+    mr_params["base_path"] = base_path
+  if queue_name:
+    mr_params["queue_name"] = queue_name
 
   mapper_spec = model.MapperSpec(handler_spec,
                                  reader_spec,
@@ -102,8 +115,10 @@ def start_map(name,
   return handlers.StartJobHandler._start_map(
       name,
       mapper_spec,
-      mapreduce_parameters,
-      queue_name=util.get_queue_name(queue_name),
+      mr_params,
+      # TODO(user): Now that "queue_name" is part of mr_params.
+      # Remove all the other ways to get queue_name after one release.
+      queue_name=util.get_queue_name(mr_params["queue_name"]),
       eta=eta,
       countdown=countdown,
       hooks_class_name=hooks_class_name,

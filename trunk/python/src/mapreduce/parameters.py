@@ -104,26 +104,32 @@ class _Config(object):
 
   __metaclass__ = _JobConfigMeta
 
-  def __init__(self, _test=False, **kwds):
-    self._verify_keys(kwds, _test)
-    self._set_values(kwds, _test)
+  def __init__(self, _lenient=False, **kwds):
+    """Init.
 
-  def _verify_keys(self, kwds, _test):
+    Args:
+      _lenient: When true, no option is required.
+      **kwds: keyword arguments for options and their values.
+    """
+    self._verify_keys(kwds, _lenient)
+    self._set_values(kwds, _lenient)
+
+  def _verify_keys(self, kwds, _lenient):
     keys = set()
     for k in kwds:
       if k not in self._options:
         raise ValueError("Option %s is not supported." % (k))
       keys.add(k)
-    if not _test:
+    if not _lenient:
       missing = self._required - keys
       if missing:
         raise ValueError("Options %s are required." % tuple(missing))
 
-  def _set_values(self, kwds, _test):
+  def _set_values(self, kwds, _lenient):
     for k, option in self._options.iteritems():
       v = kwds.get(k, option.default)
       setattr(self, k, v)
-      if _test:
+      if _lenient:
         continue
       if v is None and option.can_be_none:
         continue
