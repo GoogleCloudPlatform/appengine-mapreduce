@@ -75,7 +75,7 @@ final class StatusHandler {
       String command, HttpServletRequest request, HttpServletResponse response) {
     response.setContentType("application/json");
     boolean isPost = "POST".equals(request.getMethod());
-    JSONObject retValue;
+    JSONObject retValue = null;
     try {
       if (command.equals(LIST_JOBS_PATH) && !isPost) {
         retValue = handleListJobs(request);
@@ -85,9 +85,6 @@ final class StatusHandler {
         retValue = handleAbortJob(request.getParameter("mapreduce_id"));
       } else if (command.equals(GET_JOB_DETAIL_PATH) && !isPost) {
         retValue = handleGetJobDetail(request.getParameter("mapreduce_id"));
-      } else {
-        response.sendError(HttpServletResponse.SC_NOT_FOUND);
-        return;
       }
     } catch (Exception t) {
       log.log(Level.SEVERE, "Got exception while running command", t);
@@ -102,8 +99,12 @@ final class StatusHandler {
       }
     }
     try {
-      retValue.write(response.getWriter());
-      response.getWriter().flush();
+      if (retValue == null) {
+        response.sendError(HttpServletResponse.SC_NOT_FOUND);
+      } else {
+        retValue.write(response.getWriter());
+        response.getWriter().flush();
+      }
     } catch (JSONException e) {
       throw new RuntimeException("Couldn't write command response", e);
     } catch (IOException e) {
@@ -156,6 +157,9 @@ final class StatusHandler {
   static <T extends IncrementalTaskWithContext> JSONObject handleGetJobDetail(String jobId) {
     ShardedJobService shardedJobService = ShardedJobServiceFactory.getShardedJobService();
     ShardedJobState<T> state = shardedJobService.getJobState(jobId);
+    if (state == null) {
+      return null;
+    }
     JSONObject jobObject = new JSONObject();
     try {
       jobObject.put("name", state.getController().getName());
