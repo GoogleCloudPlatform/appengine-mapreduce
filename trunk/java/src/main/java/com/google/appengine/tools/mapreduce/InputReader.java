@@ -103,7 +103,7 @@ public abstract class InputReader<I> implements Serializable {
   }
 
   /**
-   * @return The estimated minimum memory that will be used by this reader.
+   * Returns the estimated memory that will be used by this reader in bytes.
    * (This is normally just set to the size of the buffers used by the implementation)
    */
   public long estimateMemoryRequirement() {

@@ -4,7 +4,6 @@ package com.google.appengine.tools.mapreduce.impl;
 
 import static com.google.appengine.tools.mapreduce.CounterNames.REDUCER_CALLS;
 import static com.google.appengine.tools.mapreduce.CounterNames.REDUCER_WALLTIME_MILLIS;
-import static com.google.appengine.tools.mapreduce.impl.MapReduceConstants.ASSUMED_BASE_MEMORY_PER_REQUEST;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.appengine.tools.mapreduce.InputReader;
@@ -69,9 +68,9 @@ public class ReduceShardTask<K, V, O>
   }
 
   @Override
-  protected long estimateMemoryNeeded() {
+  protected long estimateMemoryRequirement() {
     return in.estimateMemoryRequirement() + getOutputWriter().estimateMemoryRequirement()
-        + ASSUMED_BASE_MEMORY_PER_REQUEST;
+        + reducer.estimateMemoryRequirement();
   }
 
   @Override

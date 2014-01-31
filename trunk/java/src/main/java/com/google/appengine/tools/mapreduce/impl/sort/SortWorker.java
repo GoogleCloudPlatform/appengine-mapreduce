@@ -41,6 +41,8 @@ public class SortWorker extends Worker<SortContext> {
   private static final long serialVersionUID = 5872735741738296902L;
   private static final Logger log = Logger.getLogger(SortWorker.class.getName());
 
+  private static final long SORT_MEMORY_OVERHEAD = 8 * 1024 * 1024; // Estimate.
+
   /**
    * Fraction of system ram sort will allocate. There are multiple values in case the largest
    * proportion is unavailable. If the smallest is unavailable sort will fail.
@@ -391,10 +393,15 @@ public class SortWorker extends Worker<SortContext> {
         + MEMORY_ALLOCATION_ATTEMPTS + " attempts. Giving up.");
   }
 
-  public static int getMemoryForSort(int numRetries) {
+  private static int getMemoryForSort(int numRetries) {
     long maxUsableMemory = MemoryLimiter.TOTAL_CLAIMABLE_MEMORY_SIZE_MB * 1024L * 1024L;
     int memIndex = Math.min(numRetries, MEMORY_ALLOCATION_ATTEMPTS - 1);
     return Ints.saturatedCast((long) (maxUsableMemory * TARGET_SORT_RAM_PROPORTIONS[memIndex]));
+  }
+
+  @Override
+  public long estimateMemoryRequirement() {
+    return getMemoryForSort(0) + SORT_MEMORY_OVERHEAD;
   }
 
   public int getValuesHeld() {

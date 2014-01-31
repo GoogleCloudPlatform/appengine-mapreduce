@@ -54,7 +54,7 @@ public abstract class WorkerShardTask<I, O, C extends WorkerContext<O>> implemen
    * @return true iff a checkpoint should be performed.
    */
   protected abstract boolean shouldCheckpoint(long timeElapsed);
-  protected abstract long estimateMemoryNeeded();
+  protected abstract long estimateMemoryRequirement();
 
   @Override
   public void run() {
@@ -76,7 +76,7 @@ public abstract class WorkerShardTask<I, O, C extends WorkerContext<O>> implemen
 
   @Override
   public void prepare() {
-    claimedMemory = LIMITER.claim(estimateMemoryNeeded() / 1024 / 1024);
+    claimedMemory = LIMITER.claim(estimateMemoryRequirement() / 1024 / 1024);
   }
 
   public void doWork() {

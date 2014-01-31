@@ -28,7 +28,6 @@ public class SortShardTask extends WorkerShardTask<
     KeyValue<ByteBuffer, ByteBuffer>, KeyValue<ByteBuffer, Iterator<ByteBuffer>>, SortContext> {
 
   private static final long serialVersionUID = -8041992113450564646L;
-  private static final long SORT_MEMORY_OVERHEAD = 8 * 1024 * 1024; // Estimate.
 
   private final SortWorker inMemSorter;
   private final InputReader<KeyValue<ByteBuffer, ByteBuffer>> in;
@@ -95,8 +94,9 @@ public class SortShardTask extends WorkerShardTask<
   }
 
   @Override
-  protected long estimateMemoryNeeded() {
-    return SortWorker.getMemoryForSort(0) + SORT_MEMORY_OVERHEAD;
+  protected long estimateMemoryRequirement() {
+    return in.estimateMemoryRequirement() + out.estimateMemoryRequirement() +
+        inMemSorter.estimateMemoryRequirement();
   }
 
   @Override

@@ -4,7 +4,6 @@ package com.google.appengine.tools.mapreduce.impl;
 
 import static com.google.appengine.tools.mapreduce.CounterNames.MAPPER_CALLS;
 import static com.google.appengine.tools.mapreduce.CounterNames.MAPPER_WALLTIME_MILLIS;
-import static com.google.appengine.tools.mapreduce.impl.MapReduceConstants.ASSUMED_BASE_MEMORY_PER_REQUEST;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.appengine.tools.mapreduce.InputReader;
@@ -62,9 +61,9 @@ public class MapShardTask<I, K, V> extends WorkerShardTask<I, KeyValue<K, V>, Ma
   }
 
   @Override
-  protected long estimateMemoryNeeded() {
+  protected long estimateMemoryRequirement() {
     return in.estimateMemoryRequirement() + getOutputWriter().estimateMemoryRequirement()
-        + ASSUMED_BASE_MEMORY_PER_REQUEST;
+        + mapper.estimateMemoryRequirement();
   }
 
   @Override

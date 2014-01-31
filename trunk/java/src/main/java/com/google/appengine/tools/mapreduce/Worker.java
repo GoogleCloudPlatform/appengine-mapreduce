@@ -2,6 +2,8 @@
 
 package com.google.appengine.tools.mapreduce;
 
+import com.google.appengine.tools.mapreduce.impl.MapReduceConstants;
+
 import java.io.Serializable;
 
 /**
@@ -103,4 +105,11 @@ public abstract class Worker<C extends WorkerContext<?>> implements Serializable
    * <p>This does not send the event to the lifecycle listeners.
    */
   public void endSlice() {}
+
+  /**
+   * Returns an estimate of the amount of memory needed for this worker in bytes.
+   */
+  public long estimateMemoryRequirement() {
+    return MapReduceConstants.ASSUMED_BASE_MEMORY_PER_REQUEST;
+  }
 }
