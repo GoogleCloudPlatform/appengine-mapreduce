@@ -74,7 +74,7 @@ public abstract class OutputWriter<O> implements Serializable {
   }
 
   /**
-   * Returns the estimated minimum memory that will be used by this writer.
+   * Returns the estimated memory that will be used by this writer in bytes.
    * (This is normally just set to the size of the buffers used by the implementation)
    */
   public long estimateMemoryRequirement() {
