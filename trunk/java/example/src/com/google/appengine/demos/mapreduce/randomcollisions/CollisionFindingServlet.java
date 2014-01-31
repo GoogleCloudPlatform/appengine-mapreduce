@@ -53,11 +53,12 @@ public class CollisionFindingServlet extends HttpServlet {
   private final SecureRandom random = new SecureRandom();
 
   private void writeResponse(HttpServletResponse resp) throws IOException {
-    String token = String.valueOf(random.nextLong() & Long.MAX_VALUE);
-    memcache.put(userService.getCurrentUser().getUserId() + " " + token, true);
+    String xsrfToken = String.valueOf(random.nextLong() & Long.MAX_VALUE);
+    memcache.put(userService.getCurrentUser().getUserId() + " " + xsrfToken, true);
     try (PrintWriter pw = new PrintWriter(resp.getOutputStream())) {
       pw.println("<html><body>" + "<form method='post' > <input type='hidden' name='token' value='"
-          + token + "'> Run a MapReduce that looks for seeds to java's Random that result in the "
+          + xsrfToken
+          + "'> Run a MapReduce that looks for seeds to java's Random that result in the "
           + "same initial number being created.  <div> <br />  GCS Bucket to store data:"
           + "<input name='gcs_bucket' /> (Leave empty to use the app's default bucket) <br />"
           + "Starting integer to test: <input value='0' name='start' /> <br />"
@@ -84,19 +85,21 @@ public class CollisionFindingServlet extends HttpServlet {
       log.info("no user");
       return;
     }
-    String token = req.getParameter("token");
-    if (!memcache.delete(userService.getCurrentUser().getUserId() + " " + token)) {
-      throw new RuntimeException("Bad token, try again: " + token);
+    String xsrfToken = req.getParameter("token");
+    if (!memcache.delete(userService.getCurrentUser().getUserId() + " " + xsrfToken)) {
+      throw new RuntimeException(
+          "Bad XSRF token, (It probably just expired) go back, refresh the page and try again: "
+          + xsrfToken);
     }
 
     String bucket = getBucketParam(req);
     long start = getLongParam(req, "start", 0);
     long limit = getLongParam(req, "limit", 3 * 1000 * 1000);
     int shards = Math.max(1, Math.min(100, Ints.saturatedCast(getLongParam(req, "shards", 10))));
+    // [START start_mapreduce]
     MapReduceSpecification<Long, Integer, Integer, ArrayList<Integer>, GoogleCloudStorageFileSet>
         mapReduceSpec = createMapReduceSpec(bucket, start, limit, shards);
     MapReduceSettings settings = getSettings(bucket);
-    // [START start_mapreduce]
     String id = MapReduceJob.start(mapReduceSpec, settings);
     // [END start_mapreduce]
     resp.sendRedirect("/_ah/pipeline/status.html?root=" + id);
@@ -114,9 +117,10 @@ public class CollisionFindingServlet extends HttpServlet {
     return bucket;
   }
 
-  static MapReduceSpecification<
-  Long, Integer, Integer, ArrayList<Integer>, GoogleCloudStorageFileSet> createMapReduceSpec(
-      String bucket, long start, long limit, int shards) {
+  static MapReduceSpecification<Long, Integer, Integer, ArrayList<Integer>,
+      GoogleCloudStorageFileSet> createMapReduceSpec(String bucket, long start, long limit,
+      int shards) {
+    // [START createMapReduceSpec]
     ConsecutiveLongInput input = new ConsecutiveLongInput(start, limit, shards);
     Mapper<Long, Integer, Integer> mapper = new SeedToRandomMapper();
     Marshaller<Integer> intermediateKeyMarshaller = Marshallers.getIntegerMarshaller();
@@ -127,14 +131,22 @@ public class CollisionFindingServlet extends HttpServlet {
     Output<ArrayList<Integer>, GoogleCloudStorageFileSet> output = new MarshallingOutput<>(
         new GoogleCloudStorageFileOutput(bucket, "CollidingSeeds-%04d", "integers", shards),
         outputMarshaller);
-    return MapReduceSpecification.of("DemoMapreduce", input, mapper, intermediateKeyMarshaller,
-        intermediateValueMarshaller, reducer, output);
+    return MapReduceSpecification.of("DemoMapreduce",
+        input,
+        mapper,
+        intermediateKeyMarshaller,
+        intermediateValueMarshaller,
+        reducer,
+        output);
+    // [END createMapReduceSpec]
   }
 
+  // [START getSettings]
   static MapReduceSettings getSettings(String bucket) {
-    return new MapReduceSettings().setWorkerQueueName("mapreduce-workers")
-        .setBucketName(bucket).setModule("mapreduce");
+    return new MapReduceSettings().setWorkerQueueName("mapreduce-workers").setBucketName(bucket)
+        .setModule("mapreduce");
   }
+  // [END getSettings]
 
   static long getLongParam(HttpServletRequest req, String param, long defaultValue) {
     String value = req.getParameter(param);

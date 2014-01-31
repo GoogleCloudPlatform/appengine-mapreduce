@@ -53,7 +53,7 @@ public abstract class Output<O, R> implements Serializable {
    * <p>
    * Called after all {@code OutputWriter}s have been closed (with {@link OutputWriter#close}). It
    * is possible for this method to be called more than once with the same {@code writers}
-   * collection.
+   * collection. It is also possible for the job to fail after this is invoked.
    *
    * <p>
    * The {@code writers} argument will contain the same writers that {@link #createWriters} returned
