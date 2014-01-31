@@ -64,8 +64,8 @@ public class CollisionFindingServlet extends HttpServlet {
   public void doGet(HttpServletRequest req, HttpServletResponse resp) throws IOException {
     String bucket = getBucketParam(req);
     long start = getLongParam(req, "start", 0);
-    long limit = getLongParam(req, "limit", 100 * 1000 * 1000);
-    int shards = Math.max(1, Math.min(100, Ints.saturatedCast(getLongParam(req, "shards", 30))));
+    long limit = getLongParam(req, "limit", 3 * 1000 * 1000);
+    int shards = Math.max(1, Math.min(100, Ints.saturatedCast(getLongParam(req, "shards", 10))));
     String id = MapReduceJob.start(
         createMapReduceSpec(bucket, start, limit, shards), getSettings(bucket));
     resp.sendRedirect("/_ah/pipeline/status.html?root=" + id);
