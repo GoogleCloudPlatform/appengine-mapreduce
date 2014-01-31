@@ -80,7 +80,7 @@ class ControlTest(testutil.HandlerTestBase):
     self.assertEquals(1, len(tasks))
     # Checks that tasks are scheduled into the future.
     task = tasks[0]
-    self.assertEqual("/mapreduce_base_path/kickoffjob_callback",
+    self.assertEqual("/mapreduce_base_path/kickoffjob_callback/" + mapreduce_id,
                      task["url"])
     handler = test_support.execute_task(task)
     self.assertEqual(mapreduce_id, handler.request.get("mapreduce_id"))
@@ -217,7 +217,7 @@ class ControlTest(testutil.HandlerTestBase):
 
     self.assertTrue(mapreduce_id)
     task, queue_name = TestHooks.enqueue_kickoff_task_calls[0]
-    self.assertEqual("/mapreduce_base_path/kickoffjob_callback",
+    self.assertEqual("/mapreduce_base_path/kickoffjob_callback/" + mapreduce_id,
                      task.url)
     self.assertEqual("crazy-queue", queue_name)
 
