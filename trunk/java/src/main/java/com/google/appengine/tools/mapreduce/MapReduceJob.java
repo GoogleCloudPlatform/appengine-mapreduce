@@ -311,9 +311,8 @@ public class MapReduceJob<I, K, V, O, R>
      */
     @Override
     public Value<MapReduceResult<List<GoogleCloudStorageFileSet>>> run() {
-      // TODO(user): update to use newPromise() once pipeline 0.2.3 is pushed
       PromisedValue<ResultAndStatus<List<GoogleCloudStorageFileSet>>> resultAndStatus =
-          (PromisedValue) newPromise(ResultAndStatus.class);
+          newPromise();
       String statusConsoleUrl = settings.getBaseUrl() + "detail?mapreduce_id=" + shardedJobId;
       setStatusConsoleUrl(statusConsoleUrl);
       List<? extends InputReader<I>> readers;
@@ -413,7 +412,7 @@ public class MapReduceJob<I, K, V, O, R>
     public Value<MapReduceResult<List<GoogleCloudStorageFileSet>>> run(
         MapReduceResult<List<GoogleCloudStorageFileSet>> mapResult) {
       PromisedValue<ResultAndStatus<List<GoogleCloudStorageFileSet>>> resultAndStatus =
-          (PromisedValue) newPromise(ResultAndStatus.class);
+          newPromise();
       String statusConsoleUrl = settings.getBaseUrl() + "detail?mapreduce_id=" + shardedJobId;
       setStatusConsoleUrl(statusConsoleUrl);
       int reduceShards = mrSpec.getOutput().getNumShards();
@@ -493,8 +492,7 @@ public class MapReduceJob<I, K, V, O, R>
     @Override
     public Value<MapReduceResult<R>> run(MapReduceResult<List<GoogleCloudStorageFileSet>> mapResult,
         MapReduceResult<List<GoogleCloudStorageFileSet>> sortResult) {
-      PromisedValue<ResultAndStatus<R>> resultAndStatus =
-          (PromisedValue) newPromise(ResultAndStatus.class);
+      PromisedValue<ResultAndStatus<R>> resultAndStatus = newPromise();
       List<? extends InputReader<KeyValue<K, Iterator<V>>>> readers =
           new GoogleCloudStorageReduceInput<>(sortResult.getOutputResult(),
               mrSpec.getIntermediateKeyMarshaller(), mrSpec.getIntermediateValueMarshaller())
