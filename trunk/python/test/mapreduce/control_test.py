@@ -18,6 +18,7 @@
 
 
 import datetime
+import os
 import random
 import string
 import time
@@ -171,6 +172,28 @@ class ControlTest(testutil.HandlerTestBase):
 
     task_eta = self.validate_map_started(mapreduce_id)
     self.assertEquals(eta.strftime("%Y/%m/%d %H:%M:%S"), task_eta)
+
+  def testStartMap_QueueEnvironment(self):
+    """Test that the start_map inherits its queue from the enviornment."""
+    TestEntity().put()
+
+    shard_count = 4
+    os.environ["HTTP_X_APPENGINE_QUEUENAME"] = self.QUEUE_NAME
+    try:
+      mapreduce_id = control.start_map(
+          "test_map",
+          __name__ + ".test_handler",
+          "mapreduce.input_readers.DatastoreInputReader",
+          {
+              "entity_kind": __name__ + "." + TestEntity.__name__,
+          },
+          shard_count,
+          mapreduce_parameters={"foo": "bar"},
+          base_path="/mapreduce_base_path")
+    finally:
+      del os.environ["HTTP_X_APPENGINE_QUEUENAME"]
+
+    self.validate_map_started(mapreduce_id)
 
   def testStartMap_Hooks(self):
     """Tests that MR can be scheduled with a hook class installed.
