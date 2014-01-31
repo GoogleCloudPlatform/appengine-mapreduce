@@ -1,6 +1,7 @@
 package com.google.appengine.demos.mapreduce.randomcollisions;
 
 import com.google.appengine.api.appidentity.AppIdentityServiceFactory;
+import com.google.appengine.api.appidentity.AppIdentityServiceFailureException;
 import com.google.appengine.api.memcache.MemcacheService;
 import com.google.appengine.api.memcache.MemcacheServiceFactory;
 import com.google.appengine.api.users.UserService;
@@ -104,7 +105,11 @@ public class CollisionFindingServlet extends HttpServlet {
   static String getBucketParam(HttpServletRequest req) {
     String bucket = req.getParameter("gcs_bucket");
     if (Strings.isNullOrEmpty(bucket)) {
-      bucket = AppIdentityServiceFactory.getAppIdentityService().getDefaultGcsBucketName();
+      try {
+        bucket = AppIdentityServiceFactory.getAppIdentityService().getDefaultGcsBucketName();
+      } catch (AppIdentityServiceFailureException ex) {
+        // ignore
+      }
     }
     return bucket;
   }

@@ -352,7 +352,7 @@ public class MapReduceJob<I, K, V, O, R>
       return futureCall(
           new ExamineStatusAndReturnResult<List<GoogleCloudStorageFileSet>>(shardedJobId),
           resultAndStatus, makeJobSettings(settings, waitFor(shardedJobResult),
-              statusConsoleUrl(shardedJobSettings.getMapReduceStatusUrl())));
+              statusConsoleUrl(shardedJobSettings.getMapReduceStatusUrl()), maxAttempts(1)));
     }
 
     @SuppressWarnings("unused")
@@ -450,7 +450,7 @@ public class MapReduceJob<I, K, V, O, R>
       return futureCall(
           new ExamineStatusAndReturnResult<List<GoogleCloudStorageFileSet>>(shardedJobId),
           resultAndStatus, makeJobSettings(settings, waitFor(shardedJobResult),
-              statusConsoleUrl(shardedJobSettings.getMapReduceStatusUrl())));
+              statusConsoleUrl(shardedJobSettings.getMapReduceStatusUrl()), maxAttempts(1)));
     }
 
     @SuppressWarnings("unused")
@@ -521,7 +521,7 @@ public class MapReduceJob<I, K, V, O, R>
           new ShardedJob<>(shardedJobId, reduceTasks.build(), workerController, shardedJobSettings);
       FutureValue<Void> shardedJobResult = futureCall(shardedJob, makeJobSettings(settings));
       return futureCall(new ExamineStatusAndReturnResult<R>(shardedJobId), resultAndStatus,
-          makeJobSettings(settings, waitFor(shardedJobResult),
+          makeJobSettings(settings, waitFor(shardedJobResult), maxAttempts(1),
               statusConsoleUrl(shardedJobSettings.getMapReduceStatusUrl())));
     }
 
