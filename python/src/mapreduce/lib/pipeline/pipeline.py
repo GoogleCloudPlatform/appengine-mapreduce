@@ -1001,11 +1001,14 @@ The Pipeline API
 
   # Internal methods.
   @classmethod
-  def _set_class_path(cls):
+  def _set_class_path(cls, module_dict=sys.modules):
     """Sets the absolute path to this class as a string.
 
     Used by the Pipeline API to reconstruct the Pipeline sub-class object
     at execution time instead of passing around a serialized function.
+
+    Args:
+      module_dict: Used for testing.
     """
     # Do not traverse the class hierarchy fetching the class path attribute.
     found = cls.__dict__.get('_class_path')
@@ -1019,7 +1022,19 @@ The Pipeline API
     if cls is Pipeline:
       return
 
-    cls._class_path = '%s.%s' % (cls.__module__, cls.__name__)
+    class_path = '%s.%s' % (cls.__module__, cls.__name__)
+    # When a WSGI handler is invoked as an entry point, any Pipeline class
+    # defined in the same file as the handler will get __module__ set to
+    # __main__. Thus we need to find out its real fully qualified path.
+    if cls.__module__ == '__main__':
+      for name, module in module_dict.items():
+        if name == '__main__':
+          continue
+        found = getattr(module, cls.__name__, None)
+        if found is cls:
+          class_path = '%s.%s' % (name, cls.__name__)
+          break
+    cls._class_path = class_path
 
   def _set_values_internal(self,
                            context,
