@@ -29,6 +29,29 @@ import java.util.ConcurrentModificationException;
  * mutations, until they reach a size limit on the byte count of unflushed
  * mutations, or until a manual flush is requested.
  *
+ * A typical use would be: <pre>   {@code
+ *   class Example extends Mapper<...> {
+ *     ...
+ *     private transient DatastoreMutationPool pool;
+ *     ...
+ *
+ *     public void beginSlice() {
+ *       pool = DatastoreMutationPool.create();
+ *     }
+ *
+ *     public void endSlice() {
+ *       pool.flush();
+ *     }
+ *
+ *     public void map(... value) {
+ *       ...
+ *       Entity entity = ...
+ *       pool.put(entity);
+ *       ...
+ *     }
+ *   }
+ * }</pre>
+ *
  */
 public class DatastoreMutationPool {
 
@@ -111,20 +134,20 @@ public class DatastoreMutationPool {
     this.params = params;
   }
 
-  public static DatastoreMutationPool forManualFlushing(DatastoreService ds, Params params) {
+  public static DatastoreMutationPool create(DatastoreService ds, Params params) {
     return new DatastoreMutationPool(ds, params);
   }
 
-  public static DatastoreMutationPool forManualFlushing(
+  public static DatastoreMutationPool create(
       DatastoreService ds, int countLimit, int bytesLimit) {
     Params.Builder paramBuilder = new Params.Builder();
     paramBuilder.countLimit(countLimit);
     paramBuilder.bytesLimit(bytesLimit);
-    return forManualFlushing(ds, paramBuilder.build());
+    return create(ds, paramBuilder.build());
   }
 
-  public static DatastoreMutationPool forManualFlushing() {
-    return forManualFlushing(
+  public static DatastoreMutationPool create() {
+    return create(
         DatastoreServiceFactory.getDatastoreService(), DEFAULT_COUNT_LIMIT, DEFAULT_BYTES_LIMIT);
   }
 

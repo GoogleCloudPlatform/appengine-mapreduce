@@ -40,7 +40,7 @@ class EntityCreator extends Mapper<Long, Void, Void> {
 
   @Override
   public void beginSlice() {
-    pool = DatastoreMutationPool.forManualFlushing();
+    pool = DatastoreMutationPool.create();
   }
 
   @Override
