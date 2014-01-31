@@ -13,6 +13,80 @@ sys.path.insert(0, _TEST_DATA_PATH)
 from mapreduce import parameters
 
 
+class Foo(object):
+  pass
+
+
+class Bar(Foo):
+  pass
+
+
+class TestConfig(parameters._Config):
+  a = parameters._Option(str, required=True)
+  b = parameters._Option(bool, default=True)
+  c = parameters._Option(Foo, can_be_none=True)
+  d = parameters._Option(Foo)
+
+
+class TestConfig2(parameters._Config):
+  b = parameters._Option(str, required=True)
+  z = parameters._Option(int, required=True)
+
+
+class TestConfig3(TestConfig2, TestConfig):
+  pass
+
+
+class JobConfigTest(unittest.TestCase):
+
+  def testRequiredField(self):
+    self.assertRaises(ValueError, TestConfig)
+
+  def testSmoke(self):
+    config = TestConfig(a='foo', d=Bar)
+    self.assertEqual('foo', config.a)
+    self.assertEqual(True, config.b)
+    self.assertEqual(None, config.c)
+    self.assertEqual(Bar, config.d)
+
+  def testInstanceTypeCheck(self):
+    self.assertRaises(TypeError, TestConfig, a='foo', d=Bar,
+                      # b has wrong type.
+                      b='bar')
+
+  def testSubclassTypeCheckFails(self):
+    self.assertRaises(TypeError, TestConfig, a='foo',
+                      # d has wrong type.
+                      d=object)
+
+  def testSubclassTypeCheckPasses(self):
+    config = TestConfig(a='foo', d=Bar)
+    self.assertEqual(Bar, config.d)
+
+  def testTestMode(self):
+    TestConfig(_test=True)
+
+  def testToFromJson(self):
+    config = TestConfig(a='foo', b=True, c=Foo, d=Bar)
+    config2 = TestConfig._from_json(config._to_json())
+    self.assertTrue(config == config2)
+
+  def testConfigInheritance(self):
+    # Should inherit b from TestConfig2 instead of TestConfig
+    config = TestConfig3(a='foo', b='bar', d=Bar, z=2)
+    self.assertEqual('foo', config.a)
+    self.assertEqual('bar', config.b)
+    self.assertEqual(2, config.z)
+
+
+class OptionTest(unittest.TestCase):
+
+  def testDefault(self):
+    self.assertRaises(ValueError,
+                      parameters._Option,
+                      str, required=True, default=1)
+
+
 class UserParametersTest(unittest.TestCase):
 
   def testUserCanSetParameters(self):
