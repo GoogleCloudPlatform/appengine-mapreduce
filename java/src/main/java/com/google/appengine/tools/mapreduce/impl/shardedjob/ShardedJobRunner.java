@@ -296,6 +296,24 @@ public class ShardedJobRunner<T extends IncrementalTask> implements ShardedJobHa
     }
   }
 
+  private boolean lockShard(Transaction tx, ShardedJobState<T> jobState,
+      IncrementalTaskState<T> taskState) {
+    boolean locked = false;
+    taskState.setSliceStartTime(System.currentTimeMillis());
+    Entity entity = IncrementalTaskState.Serializer.toEntity(taskState);
+    try {
+      DATASTORE.put(tx, entity);
+      tx.commit();
+      locked = true;
+    } catch (ConcurrentModificationException ex) {
+      // TODO(user): would be nice to have a test for it. b/12822091 can help with that.
+      log.warning("Failed to aquire the lock, Will reschedule task.");
+      long eta = System.currentTimeMillis() + 1000;
+      scheduleWorkerTask(null, jobState.getSettings(), taskState, eta);
+    }
+    return locked;
+  }
+
   @Override
   public void runTask(final String jobId, final String taskId, final int sequenceNumber) {
     final ShardedJobState<T> jobState = lookupJobState(null, jobId);
@@ -313,11 +331,9 @@ public class ShardedJobRunner<T extends IncrementalTask> implements ShardedJobHa
       T task = taskState.getTask();
       task.prepare();
       try {
-        taskState.setSliceStartTime(System.currentTimeMillis()); // Lock shard
-        DATASTORE.put(tx, IncrementalTaskState.Serializer.toEntity(taskState));
-        tx.commit();
-
-        runAndUpdateTask(jobId, taskId, sequenceNumber, jobState, taskState);
+        if (lockShard(tx, jobState, taskState)) {
+          runAndUpdateTask(jobId, taskId, sequenceNumber, jobState, taskState);
+        }
       } finally {
         task.release();
       }
@@ -344,7 +360,7 @@ public class ShardedJobRunner<T extends IncrementalTask> implements ShardedJobHa
       retryState = handleShardFailure(jobState, taskState, ex);
     } catch (RuntimeException ex) {
       retryState = handleSliceFailure(jobState, taskState, ex);
-    } catch (Error ex) {
+    } catch (Throwable ex) {
       log.log(Level.WARNING, "Slice encountered an Error.");
       retryState = handleShardFailure(jobState, taskState, new RuntimeException("Error", ex));
     }
