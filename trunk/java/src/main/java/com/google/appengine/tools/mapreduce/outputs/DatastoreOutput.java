@@ -38,7 +38,7 @@ public class DatastoreOutput extends Output<Entity, Void> {
     public void beginSlice() throws IOException {
       super.beginSlice();
       DatastoreService ds = DatastoreServiceFactory.getDatastoreService();
-      pool = DatastoreMutationPool.forManualFlushing(ds, poolParams);
+      pool = DatastoreMutationPool.create(ds, poolParams);
     }
 
     @Override

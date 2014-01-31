@@ -858,7 +858,7 @@ public class EndToEndTest extends EndToEndTestCase {
 
     @Override
     public void beginSlice() {
-      pool = DatastoreMutationPool.forManualFlushing();
+      pool = DatastoreMutationPool.create();
       getContext().incrementCounter("beginSlice");
     }
 
