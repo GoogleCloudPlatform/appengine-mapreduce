@@ -527,21 +527,21 @@ public class EndToEndTest extends EndToEndTestCase {
     List readers = ImmutableList.of(inputReader);
     expect(mockInput.createReaders()).andReturn(readers);
     expect(inputReader.estimateMemoryRequirement()).andReturn(0L).anyTimes();
-    inputReader.open();
+    inputReader.beginShard();
     inputReader.beginSlice();
     expect(inputReader.next()).andThrow(new NoSuchElementException());
     inputReader.endSlice();
-    inputReader.close();
+    inputReader.endShard();
 
     expect(mockOutput.getNumShards()).andReturn(1).times(0, Integer.MAX_VALUE);
     @SuppressWarnings("rawtypes")
     List writers = ImmutableList.of(outputWriter);
     expect(mockOutput.createWriters()).andReturn(writers);
     expect(outputWriter.estimateMemoryRequirement()).andReturn(0L).anyTimes();
-    outputWriter.open();
+    outputWriter.beginShard();
     outputWriter.beginSlice();
     outputWriter.endSlice();
-    outputWriter.close();
+    outputWriter.endShard();
     expect(mockOutput.finish(isA(Collection.class))).andReturn(null);
     replay(mockInput, inputReader, mockOutput, outputWriter);
     runWithPipeline(new Preparer(),
@@ -776,7 +776,7 @@ public class EndToEndTest extends EndToEndTestCase {
     public void endSlice() {
       log.info("endShard() in shard " + getContext().getShardNumber());
       try {
-        sideOutput.close();
+        sideOutput.endShard();
       } catch (IOException e) {
         throw new RuntimeException(e);
       }

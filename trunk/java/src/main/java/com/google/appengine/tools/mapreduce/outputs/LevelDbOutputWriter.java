@@ -6,7 +6,6 @@ import com.google.appengine.tools.mapreduce.OutputWriter;
 import com.google.appengine.tools.mapreduce.impl.util.Crc32c;
 import com.google.appengine.tools.mapreduce.impl.util.LevelDbConstants;
 import com.google.appengine.tools.mapreduce.impl.util.LevelDbConstants.RecordType;
-import com.google.appengine.tools.mapreduce.inputs.LevelDbInputReader;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 
@@ -16,7 +15,8 @@ import java.nio.ByteOrder;
 
 /**
  * An implementation of a LevelDb format writer.
- * Output of this class can be read by {@link LevelDbInputReader}.
+ * Output of this class can be read by
+ * {@link com.google.appengine.tools.mapreduce.inputs.LevelDbInputReader}.
  *
  * If you want to read about the format spec it is here:
  * {@linkplain "https://code.google.com/p/leveldb/"}
@@ -128,11 +128,11 @@ public class LevelDbOutputWriter extends ForwardingOutputWriter<ByteBuffer> {
    * Closes the OutputChannel.
    */
   @Override
-  public void close() throws IOException {
+  public void endShard() throws IOException {
     if (writeBuffer != null) {
       writeBuffer.clear();
     }
-    super.close();
+    super.endShard();
   }
 
   /**

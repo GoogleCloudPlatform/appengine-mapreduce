@@ -40,9 +40,9 @@ final class ShardingWriter<K, V, R> extends
   }
 
   @Override
-  public void open() throws IOException {
+  public void beginShard() throws IOException {
     for (OutputWriter<KeyValue<K, V>> writer : writers) {
-      writer.open();
+      writer.beginShard();
     }
   }
 
@@ -69,9 +69,9 @@ final class ShardingWriter<K, V, R> extends
   }
 
   @Override
-  public void close() throws IOException {
+  public void endShard() throws IOException {
     for (OutputWriter<KeyValue<K, V>> writer : writers) {
-      writer.close();
+      writer.endShard();
     }
   }
 

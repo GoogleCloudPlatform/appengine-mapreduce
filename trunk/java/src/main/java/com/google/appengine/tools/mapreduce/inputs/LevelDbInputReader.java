@@ -80,7 +80,7 @@ public abstract class LevelDbInputReader extends InputReader<ByteBuffer> {
   }
 
   @Override
-  public void open() {
+  public void beginShard() {
     offset = 0;
     bytesRead = 0;
     in = createReadableByteChannel();
@@ -90,7 +90,7 @@ public abstract class LevelDbInputReader extends InputReader<ByteBuffer> {
    * Calls close on the underlying stream.
    */
   @Override
-  public void close() throws IOException {
+  public void endShard() throws IOException {
     in.close();
   }
 

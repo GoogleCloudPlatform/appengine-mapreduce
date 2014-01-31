@@ -13,8 +13,8 @@ import java.io.Serializable;
  * number of slices, where the slicing is up to the caller.
  *
  * <p>
- * {@link #open} is called before any calls to {@link #beginSlice} or {@link #write} to setup the
- * writer.
+ * {@link #beginShard} is called before any calls to {@link #beginSlice} or {@link #write}
+ * to setup the writer.
  *
  * <p>
  * Each slice is written by calling {@link #beginSlice}, then {@link #write} any number of times,
@@ -22,16 +22,12 @@ import java.io.Serializable;
  * the {@code OutputWriter} may go through serialization and deserialization.
  *
  * <p>
- * At the end of the final slice, {@link #close()} will be called after {@link #endSlice()}.
+ * At the end of the final slice, {@link #endShard()} will be called after {@link #endSlice()}.
  *
  * <p>
  * If a slice is aborted, there is no guarantee whether {@link #endSlice} will be called; however,
  * if it is not called, the {@code OutputWriter} will not be serialized. If the slice is retried
  * later, the {@code OutputWriter} serialized after the previous slice will be deserialized again.
- *
- * <p>
- * This class is really an interface that might be evolving. In order to avoid breaking users when
- * we change the interface, we made it an abstract class.
  *
  * @author ohler@google.com (Christian Ohler)
  *
@@ -61,12 +57,21 @@ public abstract class OutputWriter<O> implements Serializable {
   public void endSlice() throws IOException {}
 
   /**
+   * @deprecated Override beginShard instead.
+   * @throws IOException in the event of failure
+   */
+  @Deprecated
+  public void open() throws IOException {}
+
+  /**
    * Will be called once before any calls to write. Prepares the writer for processing, after
    * possibly having gone through serialization and deserialization.
    *
    * @throws IOException in the event of failure
    */
-  public void open() throws IOException {}
+  public void beginShard() throws IOException {
+    open();
+  }
 
   /**
    * Returns the estimated minimum memory that will be used by this writer.
@@ -77,7 +82,16 @@ public abstract class OutputWriter<O> implements Serializable {
   }
 
   /**
+   * @deprecated Override endShard instead.
+   * @throws IOException in the event of failure
+   */
+  @Deprecated
+  public void close() throws IOException {}
+
+  /**
    * Called when no more output will be written to this writer.
    */
-  public abstract void close() throws IOException;
+  public void endShard() throws IOException {
+    close();
+  }
 }

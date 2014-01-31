@@ -80,7 +80,7 @@ public class SortTest extends TestCase {
         }
 
         @Override
-        public void close() throws IOException {
+        public void endShard() throws IOException {
           throw new UnsupportedOperationException();
         }
       });

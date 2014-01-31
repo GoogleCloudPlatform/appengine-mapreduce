@@ -65,7 +65,7 @@ public class LevelDbTest extends TestCase {
     }
 
     @Override
-    public void close() throws IOException {
+    public void endShard() throws IOException {
       bout.close();
     }
 
@@ -154,7 +154,7 @@ public class LevelDbTest extends TestCase {
 
   static void testSlicing(LevelDbOutputWriter writer, ByteArrayOutputWriter arrayOutputWriter)
       throws IOException {
-    writer.open();
+    writer.beginShard();
     Random r = new Random(0);
     List<byte[]> written = writeRandomItems(r, writer, 10, 100);
     writer.endSlice();
@@ -219,7 +219,7 @@ public class LevelDbTest extends TestCase {
 
   static void verifyWrittenData(List<byte[]> written, LevelDbInputReader reader)
       throws IOException {
-    reader.open();
+    reader.beginShard();
     reader.beginSlice();
     for (int i = 0; i < written.size(); i++) {
       ByteBuffer read = reader.next();
@@ -245,7 +245,7 @@ public class LevelDbTest extends TestCase {
       writer.write(ByteBuffer.wrap(data));
     }
     writer.endSlice();
-    writer.close();
+    writer.endShard();
     return written;
   }
 

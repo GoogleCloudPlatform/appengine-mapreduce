@@ -72,7 +72,7 @@ public class GoogleCloudStorageLineInputReaderTest extends GoogleCloudStorageLin
       if (performSerialization) {
         reader = recreate(reader);
       }
-      reader.open();
+      reader.beginShard();
       if (performSerialization) {
         reader = recreate(reader);
       }
@@ -92,7 +92,7 @@ public class GoogleCloudStorageLineInputReaderTest extends GoogleCloudStorageLin
           reader = recreate(reader);
         }
       }
-      reader.close();
+      reader.endShard();
     }
 
     assertEquals("Number of records read", RECORDS_COUNT, recordsRead);

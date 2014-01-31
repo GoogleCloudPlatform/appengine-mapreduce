@@ -30,7 +30,7 @@ public class InMemoryInputOutputTest extends TestCase {
     OutputWriter<Object> writer = writers.iterator().next();
     String one = "one";
     String two = "two";
-    writer.open();
+    writer.beginShard();
     writer.beginSlice();
     writer.write(one);
     writer.endSlice();
@@ -38,7 +38,7 @@ public class InMemoryInputOutputTest extends TestCase {
     writer.beginSlice();
     writer.write(two);
     writer.endSlice();
-    writer.close();
+    writer.endShard();
     List<List<Object>> data = output.finish(ImmutableList.of(writer));
     InMemoryInput<Object> input = new InMemoryInput<>(data);
     List<? extends InputReader<Object>> readers = input.createReaders();

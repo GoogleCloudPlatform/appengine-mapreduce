@@ -146,15 +146,16 @@ public abstract class WorkerShardTask<I, O, C extends WorkerContext<O>> implemen
     } catch (IOException | RuntimeException ex) {
       // TODO(user): similar to callWorker, if writer has a way to indicate that a slice-retry
       // is OK we should consider a broader catch and possibly throwing RecoverableException
-      throw new ShardFailureException(getContext().getShardNumber(), "Failed on endSlice/endShard", ex);
+      throw new ShardFailureException(
+          getContext().getShardNumber(), "Failed on endSlice/endShard", ex);
     }
     getContext().setLastWorkItemString(formatLastWorkItem(next));
   }
 
   private void beginSlice() throws IOException {
     if (isFirstSlice) {
-      getOutputWriter().open();
-      getInputReader().open();
+      getOutputWriter().beginShard();
+      getInputReader().beginShard();
     }
     getInputReader().beginSlice();
     setContextOnWorker();
@@ -181,9 +182,9 @@ public abstract class WorkerShardTask<I, O, C extends WorkerContext<O>> implemen
     getOutputWriter().endSlice();
     getInputReader().endSlice();
     if (inputExhausted) {
-      getOutputWriter().close();
+      getOutputWriter().endShard();
       try {
-        getInputReader().close();
+        getInputReader().endShard();
       } catch (IOException ex) {
         // Ignore - retrying a slice or shard will not fix that
       }

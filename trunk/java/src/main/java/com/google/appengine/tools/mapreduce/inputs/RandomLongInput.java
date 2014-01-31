@@ -50,7 +50,7 @@ public final class RandomLongInput extends Input<Long> {
     }
 
     @Override
-    public void open() {
+    public void beginShard() {
       random = new Random(seed);
       emitted = 0;
     }

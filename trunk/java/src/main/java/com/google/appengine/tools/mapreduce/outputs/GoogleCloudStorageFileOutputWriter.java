@@ -65,7 +65,7 @@ public class GoogleCloudStorageFileOutputWriter extends OutputWriter<ByteBuffer>
   }
 
   @Override
-  public void open() throws IOException {
+  public void beginShard() throws IOException {
     channel =
         GCS_SERVICE.createOrReplace(file, new GcsFileOptions.Builder().mimeType(mimeType).build());
   }
@@ -76,7 +76,7 @@ public class GoogleCloudStorageFileOutputWriter extends OutputWriter<ByteBuffer>
   }
 
   @Override
-  public void close() throws IOException {
+  public void endShard() throws IOException {
     if (closed) {
       return;
     }

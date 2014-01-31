@@ -8,7 +8,6 @@ import com.google.appengine.tools.pipeline.JobInfo;
 import com.google.appengine.tools.pipeline.PipelineService;
 import com.google.appengine.tools.pipeline.PipelineServiceFactory;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Iterator;
@@ -36,12 +35,12 @@ public class CustomOutputTest extends EndToEndTestCase {
     }
 
     @Override
-    public void write(Long value) throws IOException {
+    public void write(Long value) {
       //Do nothing
     }
 
     @Override
-    public void close() throws IOException {
+    public void endShard() {
       //Do nothing
     }
   }
@@ -52,7 +51,7 @@ public class CustomOutputTest extends EndToEndTestCase {
     @Override
     public List<? extends OutputWriter<Long>> createWriters() {
       List<CustomWriter> result = new ArrayList<>(getNumShards());
-      for (int i=0;i<getNumShards();i++) {
+      for (int i = 0; i < getNumShards(); i++) {
         result.add(new CustomWriter(i));
       }
       return result;
@@ -64,9 +63,9 @@ public class CustomOutputTest extends EndToEndTestCase {
     }
 
     @Override
-    public Boolean finish(Collection<? extends OutputWriter<Long>> writers) throws IOException {
+    public Boolean finish(Collection<? extends OutputWriter<Long>> writers) {
       Iterator<? extends OutputWriter<Long>> iter = writers.iterator();
-      for (int i=0;i<getNumShards();i++) {
+      for (int i = 0; i < getNumShards(); i++) {
         CustomWriter writer = (CustomWriter) iter.next();
         if (writer.id != i) {
           return false;
@@ -90,6 +89,7 @@ public class CustomOutputTest extends EndToEndTestCase {
     assertFalse(jobId.isEmpty());
     executeTasksUntilEmpty("default");
     JobInfo info = pipelineService.getJobInfo(jobId);
+    @SuppressWarnings("unchecked")
     MapReduceResult<Boolean> result = (MapReduceResult<Boolean>) info.getOutput();
     assertNotNull(result);
     assertTrue(result.getOutputResult());

@@ -65,7 +65,7 @@ class DatastoreInputReader extends InputReader<Entity> {
   }
 
   @Override
-  public void open() {
+  public void beginShard() {
     currentKey = null;
     iterator = null;
   }

@@ -41,8 +41,8 @@ public class UnmarshallingInputReader<T> extends InputReader<T> {
   }
 
   @Override
-  public void open() throws IOException {
-    reader.open();
+  public void beginShard() throws IOException {
+    reader.beginShard();
   }
 
   @Override
@@ -56,8 +56,8 @@ public class UnmarshallingInputReader<T> extends InputReader<T> {
   }
 
   @Override
-  public void close() throws IOException {
-    reader.close();
+  public void endShard() throws IOException {
+    reader.endShard();
   }
 
   @Override

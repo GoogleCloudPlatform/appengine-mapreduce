@@ -41,7 +41,7 @@ public final class LogInputReader extends InputReader<RequestLogs> {
   }
 
   @Override
-  public void open() {
+  public void beginShard() {
     lastOffset = null;
     lastLog = null;
   }

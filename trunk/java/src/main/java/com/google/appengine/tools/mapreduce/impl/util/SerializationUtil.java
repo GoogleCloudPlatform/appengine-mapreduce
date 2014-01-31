@@ -246,6 +246,7 @@ public class SerializationUtil {
     return deserializeFromByteArray(bytes, false);
   }
 
+  @SuppressWarnings("resource")
   public static <T> T deserializeFromByteBuffer(ByteBuffer bytes, final boolean ignoreHeader) {
     return deserializeFromStream(new ByteBufferInputStream(bytes), ignoreHeader);
   }

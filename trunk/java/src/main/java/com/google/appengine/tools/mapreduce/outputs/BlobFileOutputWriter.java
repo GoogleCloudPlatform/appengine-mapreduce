@@ -75,7 +75,7 @@ public final class BlobFileOutputWriter extends OutputWriter<ByteBuffer> {
     }
   }
 
-  @Override public void close() throws IOException {
+  @Override public void endShard() throws IOException {
     if (closed) {
       return;
     }

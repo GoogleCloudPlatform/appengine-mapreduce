@@ -21,12 +21,12 @@ public class GoogleCloudStorageLevelDbOutputWriterTest extends TestCase {
   public void testIsPadded() throws IOException {
     LevelDbTest.ByteArrayOutputWriter arrayOutputWriter = new LevelDbTest.ByteArrayOutputWriter();
     LevelDbOutputWriter writer = new GoogleCloudStorageLevelDbOutputWriter(arrayOutputWriter);
-    writer.open();
+    writer.beginShard();
     writer.beginSlice();
     writer.write(ByteBuffer.allocate(1));
     writer.endSlice();
     assertEquals(MapReduceConstants.GCS_IO_BLOCK_SIZE, arrayOutputWriter.bout.size());
-    writer.close();
+    writer.endShard();
     assertEquals(MapReduceConstants.GCS_IO_BLOCK_SIZE, arrayOutputWriter.bout.size());
   }
 

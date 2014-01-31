@@ -89,20 +89,20 @@ public class GoogleCloudStorageLevelDbInputReaderTest extends TestCase {
   public void writeData(GcsFilename filename, ByteBufferGenerator gen) throws IOException {
     LevelDbOutputWriter writer = new GoogleCloudStorageLevelDbOutputWriter(
         new GoogleCloudStorageFileOutputWriter(filename, "TestData"));
-    writer.open();
+    writer.beginShard();
     writer.beginSlice();
     while (gen.hasNext()) {
       writer.write(gen.next());
     }
     writer.endSlice();
-    writer.close();
+    writer.endShard();
   }
 
   public void testReading() throws IOException {
     writeData(filename, new ByteBufferGenerator(100));
     GoogleCloudStorageLevelDbInputReader reader =
         new GoogleCloudStorageLevelDbInputReader(filename, BLOCK_SIZE * 2);
-    reader.open();
+    reader.beginShard();
     ByteBufferGenerator expected = new ByteBufferGenerator(100);
     reader.beginSlice();
     while (expected.hasNext()) {
@@ -117,7 +117,7 @@ public class GoogleCloudStorageLevelDbInputReaderTest extends TestCase {
     writeData(filename, new ByteBufferGenerator(100));
     GoogleCloudStorageLevelDbInputReader reader =
         new GoogleCloudStorageLevelDbInputReader(filename, BLOCK_SIZE * 2);
-    reader.open();
+    reader.beginShard();
     ByteBufferGenerator expected = new ByteBufferGenerator(100);
     while (expected.hasNext()) {
       reader = reconstruct(reader);

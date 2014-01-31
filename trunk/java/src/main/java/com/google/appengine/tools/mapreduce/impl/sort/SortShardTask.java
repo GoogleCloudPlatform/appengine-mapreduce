@@ -111,7 +111,7 @@ public class SortShardTask extends WorkerShardTask<
 
   @Override
   protected void setContextOnWorker() {
-    inMemSorter.setContext(new SortContext(context,out));
+    inMemSorter.setContext(new SortContext(context, out));
   }
 
   @Override

@@ -11,6 +11,10 @@ import java.util.NoSuchElementException;
  * <p>Created by {@link Input} to read input for a given shard.  Reads input for
  * a shard as a number of slices, where the slicing is up to the caller.
  *
+ * <p>
+ * {@link #beginShard} is called before any calls to {@link #beginSlice} or {@link #next}
+ * to setup the reader.
+ *
  * <p>Each slice is read by calling {@link #beginSlice}, then {@link #next}
  * and/or {@link #getProgress} any number of times in any order, then
  * {@link #endSlice}.  Between two slices, before the first slice, or after the
@@ -22,8 +26,8 @@ import java.util.NoSuchElementException;
  * not be serialized.  If the slice is retried later, the {@code InputReader}
  * serialized after the previous slice will be deserialized again.
  *
- * <p>This class is really an interface that might be evolving. In order to avoid breaking
- * users when we change the interface, we made it an abstract class.
+ * <p>
+ * At the end of the final slice, {@link #endShard()} will be called after {@link #endSlice()}.
  *
  * @author ohler@google.com (Christian Ohler)
  *
@@ -64,13 +68,29 @@ public abstract class InputReader<I> implements Serializable {
   public void endSlice() throws IOException {}
 
   /**
+   * @deprecated Override beginShard instead.
+   * @throws IOException in the event of failure
+   */
+  @Deprecated
+  public void open() throws IOException {}
+
+  /**
    * Performs setup at the beginning of the shard. This method is invoked before the first call to
    * {@link #beginSlice}. It will not be invoked again unless the shard restarts. When a shard is
    * restarted, this method is invoked and the input should be read from the beginning.
    *
    * @throws IOException in the event of failure
    */
-  public void open() throws IOException {}
+  public void beginShard() throws IOException {
+    open();
+  }
+
+  /**
+   * @deprecated Override endShard instead.
+   * @throws IOException in the event of failure
+   */
+  @Deprecated
+  public void close() throws IOException {}
 
   /**
    * Called after endSlice if there will not be any subsequent calls to beginSlice or next.
@@ -78,7 +98,9 @@ public abstract class InputReader<I> implements Serializable {
    *
    * @throws IOException in the event of failure
    */
-  public void close() throws IOException {}
+  public void endShard() throws IOException {
+    close();
+  }
 
   /**
    * @return The estimated minimum memory that will be used by this reader.

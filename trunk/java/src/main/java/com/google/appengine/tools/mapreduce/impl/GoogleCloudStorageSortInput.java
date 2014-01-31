@@ -47,14 +47,14 @@ public class GoogleCloudStorageSortInput extends Input<KeyValue<ByteBuffer, Byte
     }
 
     @Override
-    public void open() throws IOException {
+    public void beginShard() throws IOException {
       Marshaller<ByteBuffer> identity = Marshallers.getByteBufferMarshaller();
       Marshaller<KeyValue<ByteBuffer, ByteBuffer>> marshaller =
           new KeyValueMarshaller<>(identity, identity);
       GoogleCloudStorageLevelDbInputReader in =
           new GoogleCloudStorageLevelDbInputReader(file, DEFAULT_IO_BUFFER_SIZE);
       reader = new UnmarshallingInputReader<>(in, marshaller);
-      reader.open();
+      reader.beginShard();
     }
 
     @Override
