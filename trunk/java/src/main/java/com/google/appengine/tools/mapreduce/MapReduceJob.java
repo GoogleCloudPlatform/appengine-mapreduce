@@ -98,6 +98,7 @@ public class MapReduceJob<I, K, V, O, R>
   public static <I, K, V, O, R> String start(
       MapReduceSpecification<I, K, V, O, R> specification, MapReduceSettings settings) {
     checkQueueSettings(settings.getWorkerQueueName());
+    validateSpec(specification);
     PipelineService pipelineService = PipelineServiceFactory.newPipelineService();
     return pipelineService.startNewPipeline(new MapReduceJob<I, K, V, O, R>(), specification,
         settings, makeJobSettings(settings));
@@ -678,6 +679,7 @@ public class MapReduceJob<I, K, V, O, R>
   @Override
   public Value<MapReduceResult<R>> run(
       MapReduceSpecification<I, K, V, O, R> mrSpec, MapReduceSettings settings) {
+    validateSpec(mrSpec);
     getAndSaveBucketName(settings);
     String mrJobId = getJobKey().getName();
     FutureValue<MapReduceResult<List<GoogleCloudStorageFileSet>>> mapResult = futureCall(
@@ -693,6 +695,19 @@ public class MapReduceJob<I, K, V, O, R>
     futureCall(new CleanupPipelineJob(mrJobId, settings), sortResult,
         makeJobSettings(settings, waitFor(reduceResult)));
     return reduceResult;
+  }
+
+  private static void validateSpec(MapReduceSpecification<?, ?, ?, ?, ?> mrSpec) {
+    Preconditions.checkNotNull(mrSpec.getJobName());
+    Preconditions.checkNotNull(mrSpec.getMapper());
+    Preconditions.checkNotNull(mrSpec.getReducer());
+    Preconditions.checkNotNull(mrSpec.getInput());
+    Preconditions.checkNotNull(mrSpec.getOutput());
+    Preconditions.checkNotNull(mrSpec.getIntermediateKeyMarshaller());
+    Preconditions.checkNotNull(mrSpec.getIntermediateValueMarshaller());
+    int numShards = mrSpec.getOutput().getNumShards();
+    Preconditions.checkArgument(numShards > 0 && numShards <= 100,
+        "Invalid number of reduce shards: " + numShards + " must be between 1 and 100.");
   }
 
   public Value<MapReduceResult<R>> handleException(Throwable t) throws Throwable {
