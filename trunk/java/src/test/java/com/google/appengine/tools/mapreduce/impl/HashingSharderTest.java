@@ -1,8 +1,9 @@
 package com.google.appengine.tools.mapreduce.impl;
 
+import static java.nio.charset.StandardCharsets.US_ASCII;
+
 import com.google.appengine.tools.mapreduce.Marshaller;
 import com.google.appengine.tools.mapreduce.Marshallers;
-import com.google.common.base.Charsets;
 import com.google.common.primitives.Ints;
 
 import junit.framework.TestCase;
@@ -59,7 +60,7 @@ public class HashingSharderTest extends TestCase {
 
       @Override
       public ByteBuffer createKey(Random r) {
-        return ByteBuffer.wrap(("Foo-" + i++).getBytes(Charsets.US_ASCII));
+        return ByteBuffer.wrap(("Foo-" + i++).getBytes(US_ASCII));
       }
     };
     verifyWithKeyMaker(100, keyMaker);

@@ -4,8 +4,8 @@ import static com.google.appengine.tools.mapreduce.CounterNames.SORT_CALLS;
 import static com.google.appengine.tools.mapreduce.CounterNames.SORT_WALLTIME_MILLIS;
 import static com.google.appengine.tools.mapreduce.impl.MapReduceConstants.MAX_LAST_ITEM_STRING_SIZE;
 import static com.google.appengine.tools.mapreduce.impl.MapReduceConstants.MAX_SORT_READ_TIME_MILLIS;
-import static com.google.common.base.Charsets.UTF_8;
 import static com.google.common.base.Preconditions.checkNotNull;
+import static java.nio.charset.StandardCharsets.UTF_8;
 
 import com.google.appengine.tools.mapreduce.InputReader;
 import com.google.appengine.tools.mapreduce.KeyValue;

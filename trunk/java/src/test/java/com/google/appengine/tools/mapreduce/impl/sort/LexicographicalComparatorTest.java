@@ -1,7 +1,9 @@
 package com.google.appengine.tools.mapreduce.impl.sort;
 
+import static java.nio.charset.StandardCharsets.US_ASCII;
+import static java.nio.charset.StandardCharsets.UTF_8;
+
 import com.google.appengine.tools.mapreduce.Marshallers;
-import com.google.common.base.Charsets;
 
 import junit.framework.TestCase;
 
@@ -16,7 +18,7 @@ public class LexicographicalComparatorTest extends TestCase {
 
   public void testSelfCompare() {
     LexicographicalComparator comp = new LexicographicalComparator();
-    ByteBuffer value = ByteBuffer.wrap("A long Test String".getBytes(Charsets.US_ASCII));
+    ByteBuffer value = ByteBuffer.wrap("A long Test String".getBytes(US_ASCII));
     assertEquals(0, comp.compare(value, value));
     value = Marshallers.getLongMarshaller().toBytes(-1L);
     assertEquals(0, comp.compare(value, value));
@@ -25,8 +27,8 @@ public class LexicographicalComparatorTest extends TestCase {
     value = Marshallers.getLongMarshaller().toBytes(1L);
     assertEquals(0, comp.compare(value, value));
 
-    value = ByteBuffer.wrap("A long Test String".getBytes(Charsets.US_ASCII));
-    ByteBuffer same = ByteBuffer.wrap("A long Test String".getBytes(Charsets.US_ASCII));
+    value = ByteBuffer.wrap("A long Test String".getBytes(US_ASCII));
+    ByteBuffer same = ByteBuffer.wrap("A long Test String".getBytes(US_ASCII));
     assertEquals(0, comp.compare(value, same));
     value = Marshallers.getLongMarshaller().toBytes(1234567890L);
     same = Marshallers.getLongMarshaller().toBytes(1234567890L);
@@ -35,26 +37,26 @@ public class LexicographicalComparatorTest extends TestCase {
 
   public void testCompare() {
     LexicographicalComparator comp = new LexicographicalComparator();
-    ByteBuffer left = ByteBuffer.wrap("502539523".getBytes(Charsets.US_ASCII));
-    ByteBuffer right = ByteBuffer.wrap("-1930858313".getBytes(Charsets.US_ASCII));
+    ByteBuffer left = ByteBuffer.wrap("502539523".getBytes(US_ASCII));
+    ByteBuffer right = ByteBuffer.wrap("-1930858313".getBytes(US_ASCII));
     assertTrue(comp.compare(left, right) > 0);
-    left = ByteBuffer.wrap("foo".getBytes(Charsets.US_ASCII));
-    right = ByteBuffer.wrap("bar".getBytes(Charsets.US_ASCII));
+    left = ByteBuffer.wrap("foo".getBytes(US_ASCII));
+    right = ByteBuffer.wrap("bar".getBytes(US_ASCII));
     assertTrue(comp.compare(left, right) > 0);
-    left = ByteBuffer.wrap("A".getBytes(Charsets.US_ASCII));
-    right = ByteBuffer.wrap("Z".getBytes(Charsets.US_ASCII));
+    left = ByteBuffer.wrap("A".getBytes(US_ASCII));
+    right = ByteBuffer.wrap("Z".getBytes(US_ASCII));
     assertTrue(comp.compare(left, right) < 0);
-    left = ByteBuffer.wrap("".getBytes(Charsets.US_ASCII));
-    right = ByteBuffer.wrap("x".getBytes(Charsets.US_ASCII));
+    left = ByteBuffer.wrap("".getBytes(US_ASCII));
+    right = ByteBuffer.wrap("x".getBytes(US_ASCII));
     assertTrue(comp.compare(left, right) < 0);
-    left = ByteBuffer.wrap("x".getBytes(Charsets.US_ASCII));
-    right = ByteBuffer.wrap("".getBytes(Charsets.US_ASCII));
+    left = ByteBuffer.wrap("x".getBytes(US_ASCII));
+    right = ByteBuffer.wrap("".getBytes(US_ASCII));
     assertTrue(comp.compare(left, right) > 0);
-    left = ByteBuffer.wrap("0".getBytes(Charsets.US_ASCII));
-    right = ByteBuffer.wrap("0".getBytes(Charsets.US_ASCII));
+    left = ByteBuffer.wrap("0".getBytes(US_ASCII));
+    right = ByteBuffer.wrap("0".getBytes(US_ASCII));
     assertTrue(comp.compare(left, right) == 0);
-    left = ByteBuffer.wrap("00".getBytes(Charsets.US_ASCII));
-    right = ByteBuffer.wrap("0".getBytes(Charsets.US_ASCII));
+    left = ByteBuffer.wrap("00".getBytes(US_ASCII));
+    right = ByteBuffer.wrap("0".getBytes(US_ASCII));
     assertTrue(comp.compare(left, right) > 0);
   }
 
@@ -91,8 +93,8 @@ public class LexicographicalComparatorTest extends TestCase {
     for (int i = 0; i < 100000; i++) {
       String s1 = getRandomString(r);
       String s2 = getRandomString(r);
-      ByteBuffer b1 = Charsets.UTF_8.encode(s1);
-      ByteBuffer b2 = Charsets.UTF_8.encode(s2);
+      ByteBuffer b1 = UTF_8.encode(s1);
+      ByteBuffer b2 = UTF_8.encode(s2);
       assertEquals(s1.compareTo(s2) > 0, comp.compare(b1, b2) > 0);
       assertEquals(s1.compareTo(s2) < 0, comp.compare(b1, b2) < 0);
     }
@@ -103,7 +105,7 @@ public class LexicographicalComparatorTest extends TestCase {
     while (chars.hasRemaining()) {
       chars.append((char) r.nextInt());
     } // Round-triping the data so as to transform out any invalid sequences
-    return Charsets.UTF_8.decode(Charsets.UTF_8.encode(chars)).toString();
+    return UTF_8.decode(UTF_8.encode(chars)).toString();
   }
 
   public void testNumbersCompare() {

@@ -1,9 +1,10 @@
 package com.google.appengine.tools.mapreduce.impl.sort;
 
+import static java.nio.charset.StandardCharsets.US_ASCII;
+
 import com.google.appengine.tools.mapreduce.KeyValue;
 import com.google.appengine.tools.mapreduce.OutputWriter;
 import com.google.appengine.tools.mapreduce.impl.IncrementalTaskContext;
-import com.google.common.base.Charsets;
 import com.google.common.collect.Iterators;
 
 import junit.framework.TestCase;
@@ -52,7 +53,7 @@ public class SortTest extends TestCase {
         throw new NoSuchElementException();
       }
       String string = new UUID(sequence.nextLong(), sequence.nextLong()).toString();
-      ByteBuffer key = ByteBuffer.allocate(KEY_SIZE).put(string.getBytes(Charsets.US_ASCII));
+      ByteBuffer key = ByteBuffer.allocate(KEY_SIZE).put(string.getBytes(US_ASCII));
       key.limit(key.position());
       key.rewind();
       ByteBuffer value = ByteBuffer.allocate(VALUE_SIZE);
@@ -131,7 +132,7 @@ public class SortTest extends TestCase {
     assertEquals(numberToWrite, map.size());
     String last = "\0";
     for (ByteBuffer key : map.keySet()) {
-      String current = Charsets.US_ASCII.decode(key).toString();
+      String current = US_ASCII.decode(key).toString();
       assertTrue("Last: " + last + " vs " + current, last.compareTo(current) < 0);
       last = current;
     }
@@ -148,7 +149,7 @@ public class SortTest extends TestCase {
     assertEquals(numberToWrite, map.size());
     String last = null;
     for (ByteBuffer key : map.keySet()) {
-      String string = Charsets.US_ASCII.decode(key).toString();
+      String string = US_ASCII.decode(key).toString();
       if (last != null) {
         assertTrue("Last: " + last + " vs " + string, last.compareTo(string) < 0);
       }
@@ -168,7 +169,7 @@ public class SortTest extends TestCase {
     assertEquals(numberToWrite, map.size());
     String last = "\0";
     for (ByteBuffer key : map.keySet()) {
-      String string = Charsets.US_ASCII.decode(key).toString();
+      String string = US_ASCII.decode(key).toString();
       assertTrue("Last: " + last + " vs " + string, last.compareTo(string) < 0);
       last = string;
     }
@@ -186,7 +187,7 @@ public class SortTest extends TestCase {
     assertEquals(numberToWrite, map.size());
     String last = "\0";
     for (ByteBuffer key : map.keySet()) {
-      String string = Charsets.US_ASCII.decode(key).toString();
+      String string = US_ASCII.decode(key).toString();
       assertTrue("Last: " + last + " vs " + string, last.compareTo(string) < 0);
       last = string;
     }
@@ -206,7 +207,7 @@ public class SortTest extends TestCase {
     assertEquals(numberToWrite - 1, map.size());
     String previous = "\0";
     for (ByteBuffer key : map.keySet()) {
-      String string = Charsets.US_ASCII.decode(key).toString();
+      String string = US_ASCII.decode(key).toString();
       assertTrue("Last: " + previous + " vs " + string, previous.compareTo(string) <= 0);
       previous = string;
     }
