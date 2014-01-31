@@ -253,6 +253,16 @@ public class ShardedJobRunner<T extends IncrementalTask> implements ShardedJobHa
       log.warning(taskId + ": Task gone");
       return null;
     }
+    if (!taskState.getStatus().isActive()) {
+      log.info(taskId + ": Task no longer active: " + taskState);
+      return null;
+    }
+    if (!jobState.getStatus().isActive()) {
+      taskState.setStatus(new Status(StatusCode.ABORTED));
+      log.info(taskId + ": Job no longer active: " + jobState + ", aborting task.");
+      updateTask(jobState, taskState, null);
+      return null;
+    }
     if (sequenceNumber == taskState.getSequenceNumber()) {
       if (taskState.getSliceStartTime() == null) {
         return taskState;
@@ -291,10 +301,6 @@ public class ShardedJobRunner<T extends IncrementalTask> implements ShardedJobHa
     final ShardedJobState<T> jobState = lookupJobState(null, jobId);
     if (jobState == null) {
       log.info(taskId + ": Job gone");
-      return;
-    }
-    if (!jobState.getStatus().isActive()) {
-      log.info(taskId + ": Job no longer active: " + jobState);
       return;
     }
     Transaction tx = DATASTORE.beginTransaction();
@@ -379,9 +385,8 @@ public class ShardedJobRunner<T extends IncrementalTask> implements ShardedJobHa
           if (existing == null) {
             log.info(taskId + ": Ignoring an update, as task disappeared while processing");
           } else if (existing.getSequenceNumber() != taskState.getSequenceNumber() - 1) {
-            log.warning(taskId + ": Ignoreing an update, Task processed concurrently;" +
-              " was sequence number " + (taskState.getSequenceNumber() - 1) + ", now " +
-              existing.getSequenceNumber());
+            log.warning(taskId + ": Ignoring an update, a concurrent execution changed it to: "
+                + existing);
           } else {
             if (existing.getRetryCount() < taskState.getRetryCount()) {
               // Slice retry, we need to reset state
