@@ -165,6 +165,7 @@ public final class MapReduceServletImpl {
    * Handle serving of static resources (which we do dynamically so users
    * only have to add one entry to their web.xml).
    */
+  @SuppressWarnings("resource")
   static void handleStaticResources(String handler, HttpServletResponse response)
       throws IOException {
     String fileName;

@@ -165,7 +165,7 @@ public class ShardedJobRunner<T extends IncrementalTask> implements ShardedJobHa
           Key key = IncrementalTaskState.Serializer.makeKey(getTaskId(jobId, lastCount));
           keys.add(key);
         }
-        TreeMap<Integer,Entity> ordered = new TreeMap<>();
+        TreeMap<Integer, Entity> ordered = new TreeMap<>();
         for (Entry<Key, Entity> entry : DATASTORE.get(keys).entrySet()) {
           ordered.put(parseTaskNumberFromTaskId(jobId, entry.getKey().getName()), entry.getValue());
         }

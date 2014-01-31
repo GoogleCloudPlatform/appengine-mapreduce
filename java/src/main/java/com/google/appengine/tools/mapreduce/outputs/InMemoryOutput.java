@@ -48,7 +48,7 @@ public class InMemoryOutput<O> extends Output<O, List<List<O>>> {
     }
 
     @Override
-    public void close() {
+    public void endShard() {
       closed = true;
     }
   }

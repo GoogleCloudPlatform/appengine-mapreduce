@@ -76,7 +76,7 @@ public class DatastoreOutputTest extends TestCase {
       throws IOException, ClassNotFoundException, EntityNotFoundException {
     DatastoreOutput output = new DatastoreOutput(1);
     OutputWriter<Entity> writer = output.createWriters().get(0);
-    writer.open();
+    writer.beginShard();
     writer.beginSlice();
     writer.write(entity1);
     writer = reconstruct(writer);
@@ -84,7 +84,7 @@ public class DatastoreOutputTest extends TestCase {
     writer.write(entity2);
     writer.write(entity3);
     writer.endSlice();
-    writer.close();
+    writer.endShard();
 
     DatastoreService ds = DatastoreServiceFactory.getDatastoreService();
     try {

@@ -17,8 +17,8 @@ public abstract class ForwardingOutputWriter<O> extends OutputWriter<O> {
   protected abstract OutputWriter<?> getDelegate();
 
   @Override
-  public void open() throws IOException {
-    getDelegate().open();
+  public void beginShard() throws IOException {
+    getDelegate().beginShard();
   }
 
   @Override
@@ -32,8 +32,8 @@ public abstract class ForwardingOutputWriter<O> extends OutputWriter<O> {
   }
 
   @Override
-  public void close() throws IOException {
-    getDelegate().close();
+  public void endShard() throws IOException {
+    getDelegate().endShard();
   }
 
   @Override

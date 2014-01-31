@@ -28,14 +28,14 @@ public class MarshallingOutputWriterUnmarshallingInputReaderTest extends TestCas
     Collection<MarshallingOutputWriter<String>> writers = output.createWriters();
     assertEquals(1, writers.size());
     MarshallingOutputWriter<String> writer = writers.iterator().next();
-    writer.open();
+    writer.beginShard();
     writer.beginSlice();
     writer.write("Foo");
     writer.write("Bar");
     writer.endSlice();
     writer.beginSlice();
     writer.write("Baz");
-    writer.close();
+    writer.endShard();
     List<List<ByteBuffer>> data = output.finish(writers);
     UnmarshallingInput<String> input =
         new UnmarshallingInput<>(new InMemoryInput<>(data), stringMarshaller);

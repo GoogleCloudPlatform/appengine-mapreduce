@@ -47,14 +47,14 @@ public final class ConcatenatingInputReader<I> extends InputReader<I> {
           throw new NoSuchElementException();
         }
         reader = readers.get(index++);
-        reader.open();
+        reader.beginShard();
         reader.beginSlice();
       }
       try {
         return reader.next();
       } catch (NoSuchElementException e) {
         reader.endSlice();
-        reader.close();
+        reader.endShard();
         reader = null;
       }
     }
@@ -83,15 +83,15 @@ public final class ConcatenatingInputReader<I> extends InputReader<I> {
   }
 
   @Override
-  public void open() {
+  public void beginShard() {
     reader = null;
     index = 0;
   }
 
   @Override
-  public void close() throws IOException {
+  public void endShard() throws IOException {
     if (reader != null) {
-      reader.close();
+      reader.endShard();
     }
   }
 

@@ -47,7 +47,7 @@ public final class InMemoryInput<I> extends Input<I> {
     }
 
     @Override
-    public void open() {
+    public void beginShard() {
       pos = 0;
     }
 

@@ -67,9 +67,9 @@ final class MergingReader<K, V> extends InputReader<KeyValue<K, Iterator<V>>> {
   }
 
   @Override
-  public void open() throws IOException {
+  public void beginShard() throws IOException {
     for (PeekingInputReader<KeyValue<ByteBuffer, Iterator<V>>> reader : readers) {
-      reader.open();
+      reader.beginShard();
     }
   }
 
@@ -228,9 +228,9 @@ final class MergingReader<K, V> extends InputReader<KeyValue<K, Iterator<V>>> {
   }
 
   @Override
-  public void close() throws IOException {
+  public void endShard() throws IOException {
     for (PeekingInputReader<KeyValue<ByteBuffer, Iterator<V>>> reader : readers) {
-      reader.close();
+      reader.endShard();
     }
   }
 

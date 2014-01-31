@@ -40,7 +40,7 @@ public class NoOutput<O, R> extends Output<O, R> {
     }
 
     @Override
-    public void close() {
+    public void endShard() {
       // nothing
     }
   }

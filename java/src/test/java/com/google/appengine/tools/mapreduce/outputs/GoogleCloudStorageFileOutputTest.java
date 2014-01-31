@@ -66,7 +66,7 @@ public class GoogleCloudStorageFileOutputTest extends TestCase {
       out.beginSlice();
       out.write(ByteBuffer.wrap(SMALL_CONTENT));
       out.endSlice();
-      out.close();
+      out.endShard();
     }
     GoogleCloudStorageFileSet files = creator.finish(writers);
     assertEquals(NUM_SHARDS, files.getNumFiles());
@@ -80,7 +80,7 @@ public class GoogleCloudStorageFileOutputTest extends TestCase {
 
   private void beginShard(List<? extends OutputWriter<ByteBuffer>> writers) throws IOException {
     for (OutputWriter<ByteBuffer> writer : writers) {
-      writer.open();
+      writer.beginShard();
     }
   }
 
@@ -107,7 +107,7 @@ public class GoogleCloudStorageFileOutputTest extends TestCase {
       out.beginSlice();
       out.write(ByteBuffer.wrap(content));
       out.endSlice();
-      out.close();
+      out.endShard();
     }
     GoogleCloudStorageFileSet files = creator.finish(writers);
     assertEquals(NUM_SHARDS, files.getNumFiles());

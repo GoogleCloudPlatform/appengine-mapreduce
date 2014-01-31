@@ -42,7 +42,7 @@ public class DatastoreOutput extends Output<Entity, Void> {
     }
 
     @Override
-    public void write(Entity entity) throws IOException {
+    public void write(Entity entity) {
       pool.put(entity);
     }
 
@@ -53,7 +53,7 @@ public class DatastoreOutput extends Output<Entity, Void> {
     }
 
     @Override
-    public void close() {
+    public void endShard() {
       // Nothing to do
     }
 

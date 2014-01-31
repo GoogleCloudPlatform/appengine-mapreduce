@@ -20,10 +20,11 @@ import com.google.appengine.tools.mapreduce.outputs.InMemoryOutput;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 
+import org.joda.time.DateTime;
+import org.joda.time.format.DateTimeFormat;
+import org.joda.time.format.DateTimeFormatter;
+
 import java.io.IOException;
-import java.text.DateFormat;
-import java.text.SimpleDateFormat;
-import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
 import java.util.NoSuchElementException;
@@ -82,8 +83,8 @@ public class InProcessMapReduce<I, K, V, O, R> {
     return "InProcessMapReduce.Impl(" + id + ")";
   }
 
-  MapReduceResultImpl<List<List<KeyValue<K,V>>>> map(
-      List<? extends InputReader<I>> inputs, InMemoryOutput<KeyValue<K,V>> output) {
+  MapReduceResultImpl<List<List<KeyValue<K, V>>>> map(
+      List<? extends InputReader<I>> inputs, InMemoryOutput<KeyValue<K, V>> output) {
     log.info("Map phase started");
 
     ImmutableList.Builder<WorkerShardTask<I, KeyValue<K, V>, MapperContext<K, V>>> tasks =
@@ -194,12 +195,17 @@ public class InProcessMapReduce<I, K, V, O, R> {
     return new MapReduceResultImpl<>(output.finish(outputs), counters);
   }
 
-  private static final DateFormat DATE_FORMAT = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
+  private static final DateTimeFormatter DATE_FORMAT =
+      DateTimeFormat.forPattern("yyyy-MM-dd'T'HH:mm:ss");
+
+  private static String getMapReduceId() {
+    DateTime dt = new DateTime();
+    return "in-process-mr-" + DATE_FORMAT.print(dt) + "-" + new Random().nextInt(1000000);
+  }
 
   public static <I, K, V, O, R> MapReduceResult<R> runMapReduce(
       MapReduceSpecification<I, K, V, O, R> mrSpec) throws IOException {
-    String mapReduceId =
-        "in-process-mr-" + DATE_FORMAT.format(new Date()) + "-" + new Random().nextInt(1000000);
+    String mapReduceId = getMapReduceId();
     InProcessMapReduce<I, K, V, O, R> mapReduce = new InProcessMapReduce<>(mapReduceId, mrSpec);
     log.info(mapReduce + " started");
 

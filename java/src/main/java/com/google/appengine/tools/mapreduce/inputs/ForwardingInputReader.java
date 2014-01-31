@@ -38,12 +38,12 @@ public abstract class ForwardingInputReader<T> extends InputReader<T> {
   }
 
   @Override
-  public void open() throws IOException {
-    getDelegate().open();
+  public void beginShard() throws IOException {
+    getDelegate().beginShard();
   }
 
   @Override
-  public void close() throws IOException {
-    getDelegate().close();
+  public void endShard() throws IOException {
+    getDelegate().endShard();
   }
 }

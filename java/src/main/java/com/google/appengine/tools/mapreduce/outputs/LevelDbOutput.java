@@ -6,7 +6,6 @@ import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.appengine.tools.mapreduce.Output;
 import com.google.appengine.tools.mapreduce.OutputWriter;
-import com.google.appengine.tools.mapreduce.inputs.GoogleCloudStorageLevelDbInput;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -16,7 +15,8 @@ import java.util.List;
 
 /**
  * An {@link Output} that writes LevelDb records.
- * Data written with this class can be read with {@link GoogleCloudStorageLevelDbInput}.
+ * Data written with this class can be read with
+ * {@link com.google.appengine.tools.mapreduce.inputs.GoogleCloudStorageLevelDbInput}.
  *
  * @param <R> type returned by {@link #finish}
  */

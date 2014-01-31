@@ -50,7 +50,7 @@ public final class ConsecutiveLongInput extends Input<Long> {
     }
 
     @Override
-    public void open() {
+    public void beginShard() {
       next = start;
     }
   }

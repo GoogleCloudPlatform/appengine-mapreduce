@@ -52,7 +52,7 @@ public class BlobstoreInputReaderTest extends BlobstoreInputTestCase {
       if (performSerialization) {
         reader = recreate(reader);
       }
-      reader.open();
+      reader.beginShard();
       if (performSerialization) {
         reader = recreate(reader);
       }
@@ -72,7 +72,7 @@ public class BlobstoreInputReaderTest extends BlobstoreInputTestCase {
           reader = recreate(reader);
         }
       }
-      reader.close();
+      reader.endShard();
     }
 
     assertEquals("Number of records read", RECORDS_COUNT, recordsRead);
