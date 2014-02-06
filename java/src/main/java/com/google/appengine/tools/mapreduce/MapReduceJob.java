@@ -8,10 +8,13 @@ import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.appengine.api.appidentity.AppIdentityServiceFactory;
 import com.google.appengine.api.appidentity.AppIdentityServiceFailureException;
+import com.google.appengine.api.backends.BackendService;
+import com.google.appengine.api.backends.BackendServiceFactory;
 import com.google.appengine.api.datastore.Key;
 import com.google.appengine.api.labs.modules.ModulesService;
 import com.google.appengine.api.labs.modules.ModulesServiceFactory;
 import com.google.appengine.api.taskqueue.DeferredTask;
+import com.google.appengine.api.taskqueue.DeferredTaskContext;
 import com.google.appengine.api.taskqueue.Queue;
 import com.google.appengine.api.taskqueue.QueueFactory;
 import com.google.appengine.api.taskqueue.QueueStatistics;
@@ -76,6 +79,9 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.CancellationException;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+
+import javax.servlet.http.HttpServletRequest;
+
 
 /**
  * A Pipeline job that runs a MapReduce.
@@ -143,13 +149,20 @@ public class MapReduceJob<I, K, V, O, R>
     String module = mrSettings.getModule();
     String version = null;
     if (backend == null) {
-      ModulesService modulesService = ModulesServiceFactory.getModulesService();
-      String currentModule = modulesService.getCurrentModule();
       if (module == null) {
-        module = currentModule;
-        version = modulesService.getCurrentVersion();
+        BackendService backendService = BackendServiceFactory.getBackendService();
+        String currentBackend = backendService.getCurrentBackend();
+        // If currentBackend contains ':' it is actually a B type module (see b/12893879)
+        if (currentBackend != null && currentBackend.indexOf(':') == -1) {
+          backend = currentBackend;
+        } else {
+          ModulesService modulesService = ModulesServiceFactory.getModulesService();
+          module = modulesService.getCurrentModule();
+          version = modulesService.getCurrentVersion();
+        }
       } else {
-        if (module.equals(currentModule)) {
+        ModulesService modulesService = ModulesServiceFactory.getModulesService();
+        if (module.equals(modulesService.getCurrentModule())) {
           version = modulesService.getCurrentVersion();
         } else {
           // TODO(user): we may want to support providing a version for a module
@@ -555,7 +568,8 @@ public class MapReduceJob<I, K, V, O, R>
     @Override
     public Value<String> run(MapReduceResult<List<GoogleCloudStorageFileSet>> files) {
       PipelineService service = PipelineServiceFactory.newPipelineService();
-      return immediate(service.startNewPipeline(new CleanupJob(mrJobId, settings), files));
+      return immediate(service.startNewPipeline(
+          new CleanupJob(mrJobId, settings), files, makeJobSettings(settings)));
     }
   }
 
@@ -582,14 +596,16 @@ public class MapReduceJob<I, K, V, O, R>
         public void run() {
           PipelineService service = PipelineServiceFactory.newPipelineService();
           try {
-            service.deletePipelineRecords(key, false, false);
+            service.deletePipelineRecords(key, true, false);
             log.info("Deleted pipeline: " + key);
           } catch (IllegalStateException e) {
-            log.info(
-                "Failed to delete pipeline: " + key + " (probably active) retrying in 5 minutes.");
-            // TODO(user): replace exception with line bellow once 1.8.9 is public
-            // DeferredTaskContext.markForRetry();
-            throw new RuntimeException("Retry deferred task", e);
+            log.log(Level.WARNING, "Failed to force delete pipeline: " + key);
+            HttpServletRequest request = DeferredTaskContext.getCurrentRequest();
+            if (request != null && request.getIntHeader("X-AppEngine-TaskExecutionCount") < 3) {
+              // TODO(user): replace exception with line bellow once 1.9.0 is public
+              // DeferredTaskContext.markForRetry();
+              throw new RuntimeException("Retry deferred task", e);
+            }
           } catch (NoSuchObjectException e) {
             // Already done
           }
@@ -635,6 +651,7 @@ public class MapReduceJob<I, K, V, O, R>
             futureCall(new CleanupFilesJob(mrJobId), immediate(files), makeJobSettings(settings));
         waitForAll[index++] = waitFor(futureCall);
       }
+      // TODO(user): should not be needed once b/9940384 is fixed
       return futureCall(new DeletePipelineJob(getPipelineKey().getName(), settings),
           makeJobSettings(settings, waitForAll));
     }
