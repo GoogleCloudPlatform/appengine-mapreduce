@@ -117,10 +117,10 @@ public class CollisionFindingServlet extends HttpServlet {
     return bucket;
   }
 
+  // [START createMapReduceSpec]
   static MapReduceSpecification<Long, Integer, Integer, ArrayList<Integer>,
       GoogleCloudStorageFileSet> createMapReduceSpec(String bucket, long start, long limit,
       int shards) {
-    // [START createMapReduceSpec]
     ConsecutiveLongInput input = new ConsecutiveLongInput(start, limit, shards);
     Mapper<Long, Integer, Integer> mapper = new SeedToRandomMapper();
     Marshaller<Integer> intermediateKeyMarshaller = Marshallers.getIntegerMarshaller();
@@ -138,8 +138,8 @@ public class CollisionFindingServlet extends HttpServlet {
         intermediateValueMarshaller,
         reducer,
         output);
-    // [END createMapReduceSpec]
   }
+  // [END createMapReduceSpec]
 
   // [START getSettings]
   static MapReduceSettings getSettings(String bucket) {
