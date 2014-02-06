@@ -7,29 +7,30 @@
 </head>
 
 <body>
-  <h1>Hello MapReduce!</h1>
+  <h1>MapReduce Sample Programs</h1>
 
   <table>
     <tr>
-      <td>This is an example Map Reduce that demos parallel computation. <br />
-        For the purposes of illustration this MapReduce looks for collisions in
-        Java's Random number generator. (There are not any.) <br /> Here a
-        collision is defined as multiple seed values that when next is called
-        produce the same output value. <br /> The input source is a range of
-        numbers to test, and any collisions are logged and written out to a file
-        in Google Cloud Storage. (Which in this case will be empty.) <br />
-        <a href="/randomcollisions">Random collisions example.</a>
-      </td>
+      <td><Big>Random collisions example</Big><br />
+        This example demonstrates parallel computation. It looks for collisions
+        in Java's random number generator, <br />
+        where a collision is defined as multiple seed values
+        that produce the same output value when <code>next()</code> is called. <br />
+        The input source is a range of numbers to test. Collisions are logged and
+        written out to a file in Google Cloud Storage. <br />
+        (No collisions occur so the file will be empty.) <br />
+        <a href="/randomcollisions">Run the example.</a> <br /></td>
     </tr>
     <tr>
-      <td>There is also a second more complex example that chains three
-        MapReduces together:<br /> The first MapReduce creates some datastore
-        entities <br /> The second MapReduce does some analysis on them <br />
-        and the third MapReduce deletes them. <br /> On the whole it does not
-        do anything useful, but it shows how to chain mapreduce jobs together,
-        and how to interact with the datastore from mapreduce jobs. <br />
-        It also gives an example of validating a request using a token. <br />
-        <a href="/entitycount">Entity counting example.</a>
+      <td><br /><Big>Entity counting example</Big><br />
+        The example shows how to “chain" MapReduce jobs together,
+        running them sequentially, one after the other. <br />
+        It runs three MapReduce jobs: <br />
+        The first job creates some datastore entities,
+        the second job analyzes them, and the third job deletes them. <br />
+        The example also shows how to access the datastore from a
+        MapReduce job, and how to validate a request using a token. <br />
+        <a href="/entitycount">Run the example.</a>
       </td>
     </tr>
   </table>
