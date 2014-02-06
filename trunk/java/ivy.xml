@@ -8,7 +8,7 @@
   <dependencies>
     <dependency org="com.google.appengine" name="appengine-api-1.0-sdk" rev="${sdk_version}"
                 conf="${sdk}->default"/>
-    <dependency org="com.google.appengine" name="appengine-api-labs" rev="${sdk_version}"
+    <dependency org="com.google.appengine" name="appengine-api-labs" rev="1.8.9"
                 conf="${sdk}->default"/>
     <dependency org="javax.servlet" name="servlet-api" rev="2.5"
                 conf="${sdk}->default"/>
