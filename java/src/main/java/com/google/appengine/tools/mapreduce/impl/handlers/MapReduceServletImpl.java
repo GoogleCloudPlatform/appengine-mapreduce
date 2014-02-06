@@ -3,17 +3,19 @@ package com.google.appengine.tools.mapreduce.impl.handlers;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
+import com.google.appengine.tools.mapreduce.MapReduceJob;
 import com.google.appengine.tools.mapreduce.MapReduceServlet;
 import com.google.appengine.tools.mapreduce.impl.shardedjob.ShardedJobHandler;
 import com.google.appengine.tools.mapreduce.impl.shardedjob.ShardedJobRunner;
 import com.google.appengine.tools.pipeline.NoSuchObjectException;
 import com.google.appengine.tools.pipeline.OrphanedObjectException;
 import com.google.appengine.tools.pipeline.PipelineServiceFactory;
+import com.google.common.collect.ImmutableMap;
 
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -25,11 +27,50 @@ import javax.servlet.http.HttpServletResponse;
 public final class MapReduceServletImpl {
 
   private static final Logger log = Logger.getLogger(MapReduceServlet.class.getName());
+  private static final Map<String, Resource> RESOURCES = ImmutableMap.<String, Resource>builder()
+      .put("status", new Resource("/_ah/pipeline/list?class_path=" + MapReduceJob.class.getName()))
+      .put("detail", new Resource("detail.html", "text/html"))
+      .put("base.css", new Resource("base.css", "text/css"))
+      .put("jquery.js", new Resource("jquery-1.6.1.min.js", "text/javascript"))
+      .put("jquery-json.js", new Resource("jquery.json-2.2.min.js", "text/javascript"))
+      .put("jquery-url.js", new Resource("jquery.url.js", "text/javascript"))
+      .put("status.js", new Resource("status.js", "text/javascript"))
+      .build();
 
   public static final String CONTROLLER_PATH = "controllerCallback";
   public static final String WORKER_PATH = "workerCallback";
   public static final String SHUFFLE_CALLBACK_PATH = "shuffleCallback";
   static final String COMMAND_PATH = "command";
+
+  private static class Resource {
+    private final String filename;
+    private final String contentType;
+    private final String redirect;
+
+    Resource(String filename, String contentType) {
+      this.filename = filename;
+      this.contentType = contentType;
+      this.redirect = null;
+    }
+
+    Resource(String redirect) {
+      this.redirect = redirect;
+      filename = null;
+      contentType = null;
+    }
+
+    String getRedirect() {
+      return redirect;
+    }
+
+    String getFilename() {
+      return filename;
+    }
+
+    String getContentType() {
+      return contentType;
+    }
+  }
 
   private MapReduceServletImpl() {
   }
@@ -168,41 +209,26 @@ public final class MapReduceServletImpl {
   @SuppressWarnings("resource")
   static void handleStaticResources(String handler, HttpServletResponse response)
       throws IOException {
-    String fileName;
-    if (handler.equals("status")) {
-      response.setContentType("text/html");
-      fileName = "overview.html";
-    } else if (handler.equals("detail")) {
-      response.setContentType("text/html");
-      fileName = "detail.html";
-    } else if (handler.equals("base.css")) {
-      response.setContentType("text/css");
-      fileName = "base.css";
-    } else if (handler.equals("jquery.js")) {
-      response.setContentType("text/javascript");
-      fileName = "jquery-1.6.1.min.js";
-    } else if (handler.equals("jquery-json.js")) {
-      response.setContentType("text/javascript");
-      fileName = "jquery.json-2.2.min.js";
-    } else if (handler.equals("status.js")) {
-      response.setContentType("text/javascript");
-      fileName = "status.js";
-    } else {
+    Resource resource = RESOURCES.get(handler);
+    if (resource == null) {
       response.sendError(HttpServletResponse.SC_NOT_FOUND);
       return;
     }
-
+    if (resource.getRedirect() != null) {
+      response.sendRedirect(resource.getRedirect());
+      return;
+    }
+    response.setContentType(resource.getContentType());
     response.setHeader("Cache-Control", "public; max-age=300");
-
     try {
       InputStream resourceStream = MapReduceServlet.class.getResourceAsStream(
-          "/com/google/appengine/tools/mapreduce/" + fileName);
+          "/com/google/appengine/tools/mapreduce/" + resource.getFilename());
       if (resourceStream == null) {
         resourceStream = MapReduceServlet.class.getResourceAsStream(
-            "/third_party/java_src/appengine_mapreduce2/static/" + fileName);
+            "/third_party/java_src/appengine_mapreduce2/static/" + resource.getFilename());
       }
       if (resourceStream == null) {
-        throw new RuntimeException("Couldn't find static file for MapReduce library: " + fileName);
+        throw new RuntimeException("Missing MapReduce static file " + resource.getFilename());
       }
       OutputStream responseStream = response.getOutputStream();
       byte[] buffer = new byte[1024];
@@ -214,8 +240,6 @@ public final class MapReduceServletImpl {
         responseStream.write(buffer, 0, bytesRead);
       }
       responseStream.flush();
-    } catch (FileNotFoundException e) {
-      throw new RuntimeException("Couldn't find static file for MapReduce library", e);
     } catch (IOException e) {
       throw new RuntimeException("Couldn't read static file for MapReduce library", e);
     }
