@@ -194,7 +194,11 @@
   <target name="javadoc" depends="dependencies_test,dependencies_sdk,dependencies_thirdparty">
     <delete dir="${javadoc}"/>
     <mkdir dir="${javadoc}"/>
-    <javadoc packagenames="com.google.appengine.tools.mapreduce" sourcepath="${src}"
+    <javadoc packagenames="com.google.appengine.tools.mapreduce,
+        com.google.appengine.tools.mapreduce.inputs,
+        com.google.appengine.tools.mapreduce.outputs,
+        com.google.appengine.tools.mapreduce.reducers"
+         sourcepath="${src}"
              destdir="${javadoc}" author="false" version="false" use="true"
              windowtitle="App Engine MapReduce Library">
       <classpath>
