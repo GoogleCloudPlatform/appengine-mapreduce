@@ -170,7 +170,7 @@ public class Marshallers {
   /**
    * Does nothing. Is useful for cases where a marshaller is required but not wanted.
    */
-  public static class ByteBufferMarshaller extends Marshaller<ByteBuffer> {
+  private static class ByteBufferMarshaller extends Marshaller<ByteBuffer> {
 
     private static final long serialVersionUID = -8188886996472169025L;
 
