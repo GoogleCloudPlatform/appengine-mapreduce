@@ -596,15 +596,23 @@ public class MapReduceJob<I, K, V, O, R>
         public void run() {
           PipelineService service = PipelineServiceFactory.newPipelineService();
           try {
-            service.deletePipelineRecords(key, true, false);
+            service.deletePipelineRecords(key);
             log.info("Deleted pipeline: " + key);
           } catch (IllegalStateException e) {
-            log.log(Level.WARNING, "Failed to force delete pipeline: " + key);
+            log.warning("Failed to delete pipeline: " + key);
             HttpServletRequest request = DeferredTaskContext.getCurrentRequest();
             if (request != null && request.getIntHeader("X-AppEngine-TaskExecutionCount") < 3) {
-              // TODO(user): replace exception with line bellow once 1.9.0 is public
+              // TODO(user): replace exception with the line bellow once 1.9.0 is public
               // DeferredTaskContext.markForRetry();
+              // Also when using markForRetry we could make the first delete attempt sooner
+              // as retries will not be noisy.
               throw new RuntimeException("Retry deferred task", e);
+            }
+            try {
+              service.deletePipelineRecords(key, true, false);
+              log.info("Force deleted pipeline: " + key);
+            } catch (Exception ex) {
+              log.log(Level.WARNING, "Failed to force delete pipeline: " + key, ex);
             }
           } catch (NoSuchObjectException e) {
             // Already done
@@ -612,8 +620,8 @@ public class MapReduceJob<I, K, V, O, R>
         }
       };
       Queue queue = QueueFactory.getQueue(settings.getWorkerQueueName());
-      queue.add(TaskOptions.Builder.withPayload(deleteRecordsTask).countdownMillis(300 * 1000)
-          .retryOptions(RetryOptions.Builder.withMinBackoffSeconds(300).maxBackoffSeconds(300)));
+      queue.add(TaskOptions.Builder.withPayload(deleteRecordsTask).countdownMillis(10000)
+          .retryOptions(RetryOptions.Builder.withMinBackoffSeconds(2).maxBackoffSeconds(10)));
       return null;
     }
   }
