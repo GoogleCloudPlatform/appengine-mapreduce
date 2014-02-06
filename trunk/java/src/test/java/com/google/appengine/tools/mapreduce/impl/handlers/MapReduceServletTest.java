@@ -25,6 +25,7 @@ import com.google.appengine.tools.development.testing.LocalDatastoreServiceTestC
 import com.google.appengine.tools.development.testing.LocalMemcacheServiceTestConfig;
 import com.google.appengine.tools.development.testing.LocalServiceTestHelper;
 import com.google.appengine.tools.development.testing.LocalTaskQueueTestConfig;
+import com.google.appengine.tools.mapreduce.MapReduceJob;
 import com.google.appengine.tools.mapreduce.MapReduceServlet;
 
 import junit.framework.TestCase;
@@ -80,6 +81,7 @@ public class MapReduceServletTest extends TestCase {
         MapReduceServletImpl.COMMAND_PATH + "/" + StatusHandler.GET_JOB_DETAIL_PATH, false, true);
     expect(request.getMethod()).andReturn("GET").anyTimes();
     HttpServletResponse response = createMock(HttpServletResponse.class);
+    @SuppressWarnings("resource")
     PrintWriter responseWriter = createMock(PrintWriter.class);
     responseWriter.write('{');
     responseWriter.write("\"error_class\"");
@@ -135,6 +137,7 @@ public class MapReduceServletTest extends TestCase {
     HttpServletResponse resp = createMock(HttpServletResponse.class);
     resp.setContentType("text/javascript");
     resp.setHeader("Cache-Control", "public; max-age=300");
+    @SuppressWarnings("resource")
     ServletOutputStream sos = createMock(ServletOutputStream.class);
     expect(resp.getOutputStream()).andReturn(sos);
     sos.write((byte[]) EasyMock.anyObject(), EasyMock.eq(0), EasyMock.anyInt());
@@ -148,17 +151,10 @@ public class MapReduceServletTest extends TestCase {
 
   public void testStaticResources_status() throws Exception {
     HttpServletResponse resp = createMock(HttpServletResponse.class);
-    resp.setContentType("text/html");
-    resp.setHeader("Cache-Control", "public; max-age=300");
-    ServletOutputStream sos = createMock(ServletOutputStream.class);
-    expect(resp.getOutputStream()).andReturn(sos);
-    sos.write((byte[]) EasyMock.anyObject(), EasyMock.eq(0), EasyMock.anyInt());
-    EasyMock.expectLastCall().atLeastOnce();
-    sos.flush();
-    EasyMock.expectLastCall().anyTimes();
-    replay(resp, sos);
+    resp.sendRedirect("/_ah/pipeline/list?class_path=" + MapReduceJob.class.getName());
+    replay(resp);
     MapReduceServletImpl.handleStaticResources("status", resp);
-    verify(resp, sos);
+    verify(resp);
   }
 
   private static HttpServletRequest createMockRequest(
