@@ -99,7 +99,8 @@ public class DatastoreMutationPoolTest extends TestCase {
   }
 
   private DatastoreMutationPool makeMutationPool(int countLimit, int bytesLimit) {
-    return DatastoreMutationPool.create(ds, countLimit, bytesLimit);
+    return DatastoreMutationPool.create(ds, new DatastoreMutationPool.Params.Builder()
+        .countLimit(countLimit).bytesLimit(bytesLimit).build());
   }
 
   /**

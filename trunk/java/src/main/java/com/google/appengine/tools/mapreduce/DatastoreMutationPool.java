@@ -138,17 +138,11 @@ public class DatastoreMutationPool {
     return new DatastoreMutationPool(ds, params);
   }
 
-  public static DatastoreMutationPool create(
-      DatastoreService ds, int countLimit, int bytesLimit) {
-    Params.Builder paramBuilder = new Params.Builder();
-    paramBuilder.countLimit(countLimit);
-    paramBuilder.bytesLimit(bytesLimit);
-    return create(ds, paramBuilder.build());
-  }
-
   public static DatastoreMutationPool create() {
-    return create(
-        DatastoreServiceFactory.getDatastoreService(), DEFAULT_COUNT_LIMIT, DEFAULT_BYTES_LIMIT);
+    Params.Builder paramBuilder = new Params.Builder();
+    paramBuilder.countLimit(DEFAULT_COUNT_LIMIT);
+    paramBuilder.bytesLimit(DEFAULT_BYTES_LIMIT);
+    return create(DatastoreServiceFactory.getDatastoreService(), paramBuilder.build());
   }
 
   /**
