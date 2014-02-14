@@ -31,11 +31,11 @@ import com.google.common.base.Predicates;
 import com.google.common.collect.AbstractIterator;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
-import com.google.common.collect.Iterators;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.ConcurrentModificationException;
 import java.util.Iterator;
 import java.util.List;
@@ -150,7 +150,7 @@ public class ShardedJobRunner<T extends IncrementalTask> implements ShardedJobHa
   Iterator<IncrementalTaskState<T>> lookupTasks(final String jobId, final int taskCount) {
     return new AbstractIterator<IncrementalTaskState<T>>() {
       private int lastCount;
-      private Iterator<Entity> lastBatch = Iterators.emptyIterator();
+      private Iterator<Entity> lastBatch = Collections.emptyIterator();
 
       @Override
       protected IncrementalTaskState<T> computeNext() {
