@@ -172,7 +172,7 @@ function constructStageNode(pipelineId, infoMap, sidebar) {
   // Determine timing information based on state.
   var statusTimeLabel = null;
   var statusTimeMs = null;
-  var statusRuntimeDiv = null
+  var statusRuntimeDiv = null;
 
   if (infoMap.status == 'done') {
     statusRuntimeDiv = $('<div class="status-runtime">');
@@ -648,7 +648,7 @@ function findActivePipeline(pipelineId, isRoot) {
     } else {
       return 0;
     }
-  })
+  });
 
   for (var i = 0; i < children.length; ++i) {
     var foundPipelineId = findActivePipeline(children[i], false);
@@ -792,8 +792,18 @@ function initStatus() {
         AUTO_REFRESH = false;
       } else if (mapping[0] == 'root') {
         ROOT_PIPELINE_ID = mapping[1];
+        if (ROOT_PIPELINE_ID.match(/^pipeline-/)) {
+          ROOT_PIPELINE_ID = ROOT_PIPELINE_ID.substring(9);
+        }
       }
     });
+  }
+
+  if (!Boolean(ROOT_PIPELINE_ID)) {
+    setButter('Missing root param' +
+        '. For a job list click <a href="list">here</a>.',
+        true, null, true);
+    return;
   }
 
   var loadingMsg = 'Loading... #' + ROOT_PIPELINE_ID;
@@ -803,15 +813,21 @@ function initStatus() {
     url: 'rpc/tree?root_pipeline_id=' + ROOT_PIPELINE_ID,
     dataType: 'text',
     error: function(request, textStatus) {
-      if (request.status = 404) {
+      if (request.status == 404) {
         if (++attempts <= 5) {
           setButter(loadingMsg + ' [attempt #' + attempts + ']');
           window.setTimeout(function() {
             $.ajax(jQuery.extend({}, ajaxRequest));
           }, 2000);
         } else {
-          setButter('Could not find pipeline #' + ROOT_PIPELINE_ID, false);
+          setButter('Could not find pipeline #' + ROOT_PIPELINE_ID +
+              '. For a job list click <a href="list">here</a>.',
+              true, null, true);
         }
+      } else if (request.status == 449) {
+        var newURL =
+            '?root=' + request.statusText + '#pipeline-' + ROOT_PIPELINE_ID;
+        window.location.replace(newURL);
       } else {
         getResponseDataJson(textStatus);
       }
@@ -841,7 +857,7 @@ function initStatusDone() {
     collapsed: true,
     unique: false,
     cookieId: 'pipeline Id here',
-    toggle: handleTreeToggle,
+    toggle: handleTreeToggle
   });
   $('#sidebar').show();
 
