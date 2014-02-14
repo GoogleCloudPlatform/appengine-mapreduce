@@ -591,7 +591,7 @@ function generateSidebar(statusMap, nextPipelineId, rootElement) {
   var parentInfoMap = statusMap.pipelines[nextPipelineId];
   currentElement.append(
       constructStageNode(nextPipelineId, parentInfoMap, true));
-  
+
   if (statusMap.pipelines[nextPipelineId]) {
     var children = statusMap.pipelines[nextPipelineId].children;
     if (children.length > 0) {
@@ -740,7 +740,7 @@ function handleHashChange() {
   // Update the detail status frame.
   var stageNode = constructStageNode(pipelineId, infoMap, false);
   $('#overview').remove();
-  stageNode.attr('id', 'overview')
+  stageNode.attr('id', 'overview');
   $('#detail').append(stageNode);
 
   // Make sure everything is the right size.
@@ -796,13 +796,25 @@ function initStatus() {
     });
   }
 
-  setButter('Loading... #' + ROOT_PIPELINE_ID);
-  $.ajax({
+  var loadingMsg = 'Loading... #' + ROOT_PIPELINE_ID;
+  var attempts = 1;
+  var ajaxRequest = {
     type: 'GET',
     url: 'rpc/tree?root_pipeline_id=' + ROOT_PIPELINE_ID,
     dataType: 'text',
     error: function(request, textStatus) {
-      getResponseDataJson(textStatus);
+      if (request.status = 404) {
+        if (++attempts <= 5) {
+          setButter(loadingMsg + ' [attempt #' + attempts + ']');
+          window.setTimeout(function() {
+            $.ajax(jQuery.extend({}, ajaxRequest));
+          }, 2000);
+        } else {
+          setButter('Could not find pipeline #' + ROOT_PIPELINE_ID, false);
+        }
+      } else {
+        getResponseDataJson(textStatus);
+      }
     },
     success: function(data, textStatus, request) {
       var response = getResponseDataJson(null, data);
@@ -812,7 +824,9 @@ function initStatus() {
         initStatusDone();
       }
     }
-  });
+  };
+  setButter(loadingMsg);
+  $.ajax(jQuery.extend({}, ajaxRequest));
 }
 
 
