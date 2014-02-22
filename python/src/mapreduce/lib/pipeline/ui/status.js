@@ -825,8 +825,8 @@ function initStatus() {
               true, null, true);
         }
       } else if (request.status == 449) {
-        var newURL =
-            '?root=' + request.statusText + '#pipeline-' + ROOT_PIPELINE_ID;
+        var root = request.getResponseHeader('root_pipeline_id');
+        var newURL = '?root=' + root + '#pipeline-' + ROOT_PIPELINE_ID;
         window.location.replace(newURL);
       } else {
         getResponseDataJson(textStatus);
