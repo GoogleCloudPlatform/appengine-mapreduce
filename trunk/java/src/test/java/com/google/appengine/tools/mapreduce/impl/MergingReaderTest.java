@@ -42,7 +42,7 @@ public class MergingReaderTest extends TestCase {
   }
 
     @Override
-    public ByteBuffer next() throws IOException, NoSuchElementException {
+    public ByteBuffer next() throws NoSuchElementException {
       if (offset >= keys.size()) {
         throw new NoSuchElementException();
       }
@@ -68,6 +68,23 @@ public class MergingReaderTest extends TestCase {
       fail(String.valueOf(next));
     } catch (NoSuchElementException e) {
       // expected
+    }
+  }
+
+  public void testReaderWithEmptyIteraors() throws IOException {
+    List<PeekingInputReader<KeyValue<ByteBuffer, Iterator<Integer>>>> readers = new ArrayList<>();
+    int numKeys = 2;
+    readers.add(createReader(numKeys, 1));
+    readers.add(createReader(numKeys, 0));
+    MergingReader<String, Integer> merging =
+        new MergingReader<>(readers, Marshallers.getStringMarshaller());
+    merging.beginSlice();
+    for (int key = 0; key < numKeys; key++) {
+      KeyValue<String, Iterator<Integer>> next = merging.next();
+      assertEquals(String.valueOf(key), next.getKey());
+      Iterator<Integer> iter = next.getValue();
+      assertEquals(Integer.valueOf(0), iter.next());
+      assertFalse(iter.hasNext());
     }
   }
 
@@ -184,6 +201,7 @@ public class MergingReaderTest extends TestCase {
     }
   }
 
+  @SuppressWarnings("unchecked")
   private MergingReader<String, Integer> reconstruct(
       MergingReader<String, Integer> reader) throws IOException, ClassNotFoundException {
     ByteArrayOutputStream bout = new ByteArrayOutputStream();
