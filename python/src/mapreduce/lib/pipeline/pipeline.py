@@ -1475,6 +1475,9 @@ class _PipelineContext(object):
       cursor: Stringified Datastore cursor where the notification query
         should pick up.
       max_to_notify: Used for testing.
+
+    Raises:
+      PipelineStatusError: If any of the barriers are in a bad state.
     """
     if not isinstance(slot_key, db.Key):
       slot_key = db.Key(slot_key)
@@ -1500,10 +1503,9 @@ class _PipelineContext(object):
       for blocking_slot_key in barrier.blocking_slots:
         slot_record = blocking_slot_dict.get(blocking_slot_key)
         if slot_record is None:
-          logging.error('Barrier "%s" relies on Slot "%s" which is missing.',
-                        barrier.key(), blocking_slot_key)
-          all_ready = False
-          break
+          raise UnexpectedPipelineError(
+              'Barrier "%r" relies on Slot "%r" which is missing.' %
+              (barrier.key(), blocking_slot_key))
         if slot_record.status != _SlotRecord.FILLED:
           all_ready = False
           break
