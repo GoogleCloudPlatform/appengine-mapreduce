@@ -33,7 +33,7 @@ public class LevelDbTest extends TestCase {
   @SuppressWarnings("serial")
   private static class TestLevelDbInputReader extends LevelDbInputReader {
 
-    private ReadableByteChannel channel;
+    private final ReadableByteChannel channel;
 
     TestLevelDbInputReader(ReadableByteChannel channel) {
       this.channel = channel;
@@ -89,7 +89,9 @@ public class LevelDbTest extends TestCase {
     int overriddenBlockSize = 100;
     ByteArrayOutputWriter arrayOutputWriter = new ByteArrayOutputWriter();
     LevelDbOutputWriter writer = new LevelDbOutputWriter(arrayOutputWriter, overriddenBlockSize);
+    writer.beginShard();
     List<byte[]> written = writeRandomItems(r, writer, 11, 10); // Bigger than one block
+    writer.endShard();
     byte[] writtenData = arrayOutputWriter.toByteArray();
 
     for (int i = 0; i < writtenData.length; i++) {
@@ -118,7 +120,9 @@ public class LevelDbTest extends TestCase {
     int overriddenBlockSize = 100;
     ByteArrayOutputWriter arrayOutputWriter = new ByteArrayOutputWriter();
     LevelDbOutputWriter writer = new LevelDbOutputWriter(arrayOutputWriter, overriddenBlockSize);
+    writer.beginShard();
     List<byte[]> written = writeRandomItems(r, writer, 11, 10); // Bigger than one block
+    writer.endShard();
     byte[] writtenData = arrayOutputWriter.toByteArray();
     for (int i = 0; i < 11 * 10; i++) {
       byte[] toRead = new byte[i];
@@ -148,18 +152,17 @@ public class LevelDbTest extends TestCase {
   public void testSlicingOneBlockPad() throws IOException {
     ByteArrayOutputWriter arrayOutputWriter = new ByteArrayOutputWriter();
     LevelDbOutputWriter writer = new LevelDbOutputWriter(arrayOutputWriter);
-    testSlicing(writer, arrayOutputWriter);
+    testSlicing(writer, arrayOutputWriter, 10, 100);
   }
 
 
-  static void testSlicing(LevelDbOutputWriter writer, ByteArrayOutputWriter arrayOutputWriter)
-      throws IOException {
-    writer.beginShard();
+  static void testSlicing(LevelDbOutputWriter writer, ByteArrayOutputWriter arrayOutputWriter,
+      int num, int size) throws IOException {
     Random r = new Random(0);
-    List<byte[]> written = writeRandomItems(r, writer, 10, 100);
-    writer.endSlice();
-    writer.beginSlice();
-    written.addAll(writeRandomItems(r, writer, 10, 100));
+    writer.beginShard();
+    List<byte[]> written = writeRandomItems(r, writer, num, size);
+    written.addAll(writeRandomItems(r, writer, num, size));
+    writer.endShard();
     byte[] writtenData = arrayOutputWriter.toByteArray();
     assertEquals(0, writtenData.length % BLOCK_SIZE);
     ByteArrayInputStream arrayInputStream = new ByteArrayInputStream(writtenData);
@@ -209,7 +212,9 @@ public class LevelDbTest extends TestCase {
     Random r = new Random(0);
     ByteArrayOutputWriter arrayOutputWriter = new ByteArrayOutputWriter();
     LevelDbOutputWriter writer = new LevelDbOutputWriter(arrayOutputWriter);
+    writer.beginShard();
     List<byte[]> written = writeRandomItems(r, writer, number, size);
+    writer.endShard();
     byte[] writtenData = arrayOutputWriter.toByteArray();
     assertEquals(0, writtenData.length % BLOCK_SIZE);
     ByteArrayInputStream arrayInputStream = new ByteArrayInputStream(writtenData);
@@ -232,6 +237,7 @@ public class LevelDbTest extends TestCase {
       // expected
     }
     reader.endSlice();
+    reader.endShard();
   }
 
   static List<byte[]> writeRandomItems(Random r, LevelDbOutputWriter writer, int number, int size)
@@ -245,7 +251,6 @@ public class LevelDbTest extends TestCase {
       writer.write(ByteBuffer.wrap(data));
     }
     writer.endSlice();
-    writer.endShard();
     return written;
   }
 
