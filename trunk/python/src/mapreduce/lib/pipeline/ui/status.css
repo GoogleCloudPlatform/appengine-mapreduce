@@ -149,7 +149,8 @@ abbr {
 #sidebar .status-done {
   background-color: #BEEDBE;
 }
-#sidebar .status-aborted {
+#sidebar .status-aborted,
+#sidebar .status-canceled {
   background-color: #EDBEC6;
 }
 #sidebar .status-retry {
