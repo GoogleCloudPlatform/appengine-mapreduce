@@ -91,6 +91,10 @@ class ControlTest(testutil.HandlerTestBase):
                    "base_path": "/mapreduce_base_path",
                    "queue_name": queue_name})
     self.assertEqual(state.mapreduce_spec.params, params)
+
+    job_config = map_job.JobConfig._to_map_job_config(state.mapreduce_spec,
+                                                      queue_name)
+    self.assertEqual(0, job_config._api_version)
     return task["eta"]
 
   def testStartMap(self):

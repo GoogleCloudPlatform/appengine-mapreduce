@@ -79,23 +79,24 @@ class _JobConfigMeta(type):
 class _Option(object):
   """An option for _Config."""
 
-  def __init__(self, kind, required=False, default=None, can_be_none=False):
+  def __init__(self, kind, required=False, default_factory=None,
+               can_be_none=False):
     """Init.
 
     Args:
       kind: type of the option.
       required: whether user is required to supply a value.
-      default: default value if user didn't provide one.
+      default_factory: a factory, when called, returns the default value.
       can_be_none: whether value can be None.
 
     Raises:
       ValueError: if arguments aren't compatible.
     """
-    if required and default is not None:
-      raise ValueError("No default value when option is required.")
+    if required and default_factory is not None:
+      raise ValueError("No default_factory value when option is required.")
     self.kind = kind
     self.required = required
-    self.default = default
+    self.default_factory = default_factory
     self.can_be_none = can_be_none
 
 
@@ -127,29 +128,35 @@ class _Config(object):
 
   def _set_values(self, kwds, _lenient):
     for k, option in self._options.iteritems():
-      v = kwds.get(k, option.default)
+      v = kwds.get(k)
+      if v is None and option.default_factory:
+        v = option.default_factory()
       setattr(self, k, v)
       if _lenient:
         continue
       if v is None and option.can_be_none:
         continue
-      if issubclass(type(v), type) and not issubclass(v, option.kind):
+      if isinstance(v, type) and not issubclass(v, option.kind):
         raise TypeError(
-            "Expect subclass of %r for option %s" % (option.kind, k))
-      if not issubclass(type(v), type) and not isinstance(v, option.kind):
-        raise TypeError("Expect type %r for option %s" % (
-            option.kind, k))
+            "Expect subclass of %r for option %s. Got %r" % (
+                option.kind, k, v))
+      if not isinstance(v, type) and not isinstance(v, option.kind):
+        raise TypeError("Expect type %r for option %s. Got %r" % (
+            option.kind, k, v))
 
   def __eq__(self, other):
     if not isinstance(other, self.__class__):
       return False
     return other.__dict__ == self.__dict__
 
-  def _to_json(self):
+  def __repr__(self):
+    return str(self.__dict__)
+
+  def to_json(self):
     return {"config": pickle.dumps(self)}
 
   @classmethod
-  def _from_json(cls, json):
+  def from_json(cls, json):
     return pickle.loads(json["config"])
 
 

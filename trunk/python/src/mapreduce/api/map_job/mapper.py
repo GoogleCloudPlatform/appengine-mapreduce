@@ -35,7 +35,7 @@ class Mapper(object):
     Make it idempotent.
 
     Args:
-      ctx: context.Context object.
+      ctx: map_job.ShardContext object.
     """
     pass
 
@@ -49,7 +49,7 @@ class Mapper(object):
     won't be called.
 
     Args:
-      ctx: context.Context object.
+      ctx: map_job.ShardContext object.
     """
     pass
 
@@ -60,7 +60,7 @@ class Mapper(object):
     Make it idempotent.
 
     Args:
-      ctx: context.Context object.
+      ctx: map_job.SliceContext object.
     """
     pass
 
@@ -74,7 +74,7 @@ class Mapper(object):
     won't be called.
 
     Args:
-      ctx: context.Context object.
+      ctx: map_job.SliceContext object.
     """
     pass
 

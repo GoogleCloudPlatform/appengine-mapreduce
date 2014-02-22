@@ -8,5 +8,8 @@
 #    of user to type more.
 # 3. Class names should not have "map_job" prefix.
 from .map_job_config import JobConfig
+from .map_job_context import JobContext
+from .map_job_context import ShardContext
+from .map_job_context import SliceContext
 from .map_job_control import start
 from .mapper import Mapper
