@@ -134,8 +134,16 @@ public abstract class LevelDbInputReader extends InputReader<ByteBuffer> {
   public ByteBuffer next() throws IOException, NoSuchElementException {
     finalRecord.clear();
     RecordType lastRead = RecordType.NONE;
-    while (true) {
+    ByteBuffer result = null;
+    while (result == null) {
       Record record = readPhysicalRecord();
+      if (record == null) { // EOF
+        if (lastRead == RecordType.NONE) {
+          throw new NoSuchElementException();
+        } else {
+          throw new CorruptDataException("Premature end of file");
+        }
+      }
       switch (record.type()) {
         case NONE:
           if (lastRead != RecordType.NONE) {
@@ -147,7 +155,8 @@ public abstract class LevelDbInputReader extends InputReader<ByteBuffer> {
           if (lastRead != RecordType.NONE) {
             throw new CorruptDataException("Invalid RecordType: " + record.type);
           }
-          return record.data().slice();
+          result = record.data().slice();
+          break;
         case FIRST:
           if (lastRead != RecordType.NONE) {
             throw new CorruptDataException("Invalid RecordType: " + record.type);
@@ -155,38 +164,40 @@ public abstract class LevelDbInputReader extends InputReader<ByteBuffer> {
           finalRecord = appendToBuffer(finalRecord, record.data());
           break;
         case MIDDLE:
-          if (lastRead == RecordType.NONE) {
-            throw new CorruptDataException("Invalid RecordType: " + record.type);
+          if (lastRead != RecordType.FIRST && lastRead != RecordType.MIDDLE) {
+            throw new CorruptDataException("Unrecognized RecordType: " + record.type);
           }
           finalRecord = appendToBuffer(finalRecord, record.data());
           break;
         case LAST:
-          if (lastRead == RecordType.NONE) {
-            throw new CorruptDataException("Invalid RecordType: " + record.type);
+          if (lastRead != RecordType.FIRST && lastRead != RecordType.MIDDLE) {
+            throw new CorruptDataException("Unrecognized RecordType: " + record.type);
           }
           finalRecord = appendToBuffer(finalRecord, record.data());
           finalRecord.flip();
-          return finalRecord.slice();
+          result = finalRecord.slice();
+          break;
         default:
-          throw new CorruptDataException("Invalid RecordType: " + record.type.value());
+          throw new CorruptDataException("Unrecognized RecordType: " + record.type.value());
       }
       lastRead = record.type();
     }
+    return result;
   }
 
   private void validateRemainderIsEmpty() throws IOException {
     long bytesToBlockEnd = findBytesToBlockEnd();
+    if (bytesToBlockEnd == blockSize) {
+      return;
+    }
     tmpBuffer.clear();
     tmpBuffer.limit((int) bytesToBlockEnd);
     int read =  read(tmpBuffer);
-    if (read == -1) {
-      throw new NoSuchElementException();
-    }
-    offset += read;
     if (read != bytesToBlockEnd) {
       throw new CorruptDataException(
           "There are " + bytesToBlockEnd + " but " + read + " were read.");
     }
+    offset += read;
     tmpBuffer.flip();
     for (int i = 0; i < bytesToBlockEnd; i++) {
       byte b = tmpBuffer.get(i);
@@ -201,7 +212,7 @@ public abstract class LevelDbInputReader extends InputReader<ByteBuffer> {
   /**
    * Reads the next record from the LevelDb data stream.
    *
-   * @return Record data about the physical record read.
+   * @return Record data about the physical record read. Or null if the end of the steam is reached.
    * @throws IOException
    */
   private Record readPhysicalRecord() throws IOException {
@@ -214,7 +225,7 @@ public abstract class LevelDbInputReader extends InputReader<ByteBuffer> {
     tmpBuffer.limit(LevelDbConstants.HEADER_LENGTH);
     int bytesRead = read(tmpBuffer);
     if (bytesRead == -1) {
-      return new Record(RecordType.NONE, null);
+      return null;
     }
     offset += bytesRead;
     if (bytesRead != LevelDbConstants.HEADER_LENGTH) {
@@ -228,7 +239,6 @@ public abstract class LevelDbInputReader extends InputReader<ByteBuffer> {
     if (length > bytesToBlockEnd || length < 0) {
       throw new CorruptDataException("Length is too large:" + length);
     }
-
     tmpBuffer.clear();
     tmpBuffer.limit(length);
     bytesRead = read(tmpBuffer);
