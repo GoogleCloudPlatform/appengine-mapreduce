@@ -3056,14 +3056,20 @@ def get_root_list(class_path=None, cursor=None, count=50):
 
   results = []
   for pipeline_record in root_list:
-    output = _get_internal_status(
-        pipeline_record.key(),
-        pipeline_dict=pipeline_dict,
-        slot_dict=slot_dict,
-        barrier_dict=barrier_dict,
-        status_dict=status_dict)
-    output['pipelineId'] = pipeline_record.key().name()
-    results.append(output)
+    try:
+      output = _get_internal_status(
+          pipeline_record.key(),
+          pipeline_dict=pipeline_dict,
+          slot_dict=slot_dict,
+          barrier_dict=barrier_dict,
+          status_dict=status_dict)
+      output['pipelineId'] = pipeline_record.key().name()
+      results.append(output)
+    except PipelineStatusError, e:
+      output = {'status': e.message}
+      output['classPath'] = ''
+      output['pipelineId'] = pipeline_record.key().name()
+      results.append(output)
 
   result_dict = {}
   cursor = query.cursor()
