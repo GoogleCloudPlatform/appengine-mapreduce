@@ -2,6 +2,7 @@ package com.google.appengine.tools.mapreduce.inputs;
 
 import com.google.appengine.tools.mapreduce.InputReader;
 import com.google.appengine.tools.mapreduce.Marshaller;
+import com.google.appengine.tools.mapreduce.Marshallers;
 import com.google.appengine.tools.mapreduce.impl.util.SerializationUtil;
 
 import java.io.IOException;
@@ -45,8 +46,14 @@ public class PeekingInputReader<T> extends UnmarshallingInputReader<T> implement
    */
   private void writeObject(ObjectOutputStream aOutputStream) throws IOException {
     aOutputStream.defaultWriteObject();
-    SerializationUtil.writeObjectToOutputStreamUsingMarshaller(peekedItem, getMarshaller(),
-        aOutputStream);
+    ByteBuffer peekedItemBytes = null;
+    if (peeked) {
+      peekedItemBytes = getMarshaller().toBytes(peekedItem);
+      // In case marshalling modified the item
+      peekedItem = getMarshaller().fromBytes(peekedItemBytes.slice());
+    }
+    SerializationUtil.writeObjectToOutputStreamUsingMarshaller(peekedItemBytes,
+        Marshallers.getByteBufferMarshaller(), aOutputStream);
   }
 
   /**
@@ -73,7 +80,10 @@ public class PeekingInputReader<T> extends UnmarshallingInputReader<T> implement
   }
 
   /**
-   * @return the element that will be returned by next() next. Or null if there is no next element.
+   * Returns the element that will be returned by {@link #next()} next. Or null if there is no next
+   * element. If null elements are allowed in the input, one can distinguish between the end of the
+   * input and a null element by calling {@link #hasNext()}
+   *
    * @throws RuntimeException In the event that reading from input fails.
    */
   public T peek() {

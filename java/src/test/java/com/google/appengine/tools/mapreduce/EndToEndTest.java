@@ -261,12 +261,7 @@ public class EndToEndTest extends EndToEndTestCase {
     }
   }
 
-  private static class RougeMapperPreparer extends Preparer {
-
-    public RougeMapperPreparer(RandomLongInput input) {
-      input.setSeed(0L);
-    }
-
+  private static class SlicingPreparer extends Preparer {
     @Override
     public MapReduceSettings prepare() {
       MapReduceSettings settings = super.prepare();
@@ -375,7 +370,7 @@ public class EndToEndTest extends EndToEndTestCase {
     int[][] runs = {{10, 2, 0}, {10, 0, 10}, {10, 3, 5}, {10, 0, 22}, {10, 1, 50}};
     for (int[] run : runs) {
       RandomLongInput input = new RandomLongInput(run[0], shardsCount);
-      runWithPipeline(new RougeMapperPreparer(input),
+      runWithPipeline(new SlicingPreparer(),
           MapReduceSpecification.of("Shard-retry test",
               input,
               new RougeMapper(shardsCount, run[1], run[2]),
@@ -399,7 +394,7 @@ public class EndToEndTest extends EndToEndTestCase {
     int[][] runs = {{5, 0}, {4, 21}, {3, 50}};
     for (int[] run : runs) {
       RandomLongInput input = new RandomLongInput(10, shardsCount);
-      MapReduceSettings mrSettings = new RougeMapperPreparer(input).prepare();
+      MapReduceSettings mrSettings = new SlicingPreparer().prepare();
       MapReduceSpecification<Long, String, Long, String, String> mrSpec =
           MapReduceSpecification.of(
               "Shard-retry failed", input, new RougeMapper(shardsCount, run[0], run[1]),
@@ -751,6 +746,38 @@ public class EndToEndTest extends EndToEndTestCase {
           }
         });
   }
+
+
+  public void testSlicingJob() throws Exception {
+    runTest(new SlicingPreparer(),
+        MapReduceSpecification.of("Test MR",
+            new ConsecutiveLongInput(-100, 100, 10),
+            new Mod37Mapper(),
+            Marshallers.getStringMarshaller(),
+            Marshallers.getLongMarshaller(),
+            KeyProjectionReducer.<String, Long>create(),
+            new InMemoryOutput<String>(5)),
+        new Verifier<List<List<String>>>() {
+          @Override
+          public void verify(MapReduceResult<List<List<String>>> result) throws Exception {
+            Counters counters = result.getCounters();
+            assertEquals(200, counters.getCounter(CounterNames.MAPPER_CALLS).getValue());
+            assertEquals(37, counters.getCounter(CounterNames.REDUCER_CALLS).getValue());
+
+            List<List<String>> actualOutput = result.getOutputResult();
+            assertEquals(5, actualOutput.size());
+            List<String> allKeys = new ArrayList<>();
+            for (int shard = 0; shard < 5; shard++) {
+              allKeys.addAll(actualOutput.get(shard));
+            }
+            assertEquals(37, allKeys.size());
+            for (int i = 0; i < 37; i++) {
+              assertTrue(String.valueOf(i), allKeys.contains(String.valueOf(i)));
+            }
+          }
+        });
+  }
+
 
   @SuppressWarnings("serial")
   static class SideOutputMapper extends Mapper<Long, String, Void> {
