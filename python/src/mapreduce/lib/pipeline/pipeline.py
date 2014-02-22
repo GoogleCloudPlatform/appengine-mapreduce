@@ -165,7 +165,7 @@ class Slot(object):
       raise UnexpectedPipelineError('Slot with key "%s" missing a name.' %
                                     slot_key)
     if slot_key is None:
-      slot_key = db.Key.from_path(_SlotRecord.kind(), uuid.uuid1().hex)
+      slot_key = db.Key.from_path(_SlotRecord.kind(), uuid.uuid4().hex)
       self._exists = _TEST_MODE
     else:
       self._exists = True
@@ -453,7 +453,7 @@ class Pipeline(object):
       self._context = _PipelineContext('', 'default', '')
       self._root_pipeline_key = _TEST_ROOT_PIPELINE_KEY
       self._pipeline_key = db.Key.from_path(
-          _PipelineRecord.kind(), uuid.uuid1().hex)
+          _PipelineRecord.kind(), uuid.uuid4().hex)
       self.outputs = PipelineFuture(self.output_names)
       self._context.evaluate_test(self)
 
@@ -619,7 +619,7 @@ class Pipeline(object):
       PipelineSetupError if the pipeline could not start for any other reason.
     """
     if not idempotence_key:
-      idempotence_key = uuid.uuid1().hex
+      idempotence_key = uuid.uuid4().hex
     elif not isinstance(idempotence_key, unicode):
       try:
         idempotence_key.encode('utf-8')
@@ -650,7 +650,7 @@ class Pipeline(object):
       kwargs: Ignored keyword arguments usually passed to start().
     """
     if not idempotence_key:
-      idempotence_key = uuid.uuid1().hex
+      idempotence_key = uuid.uuid4().hex
     pipeline_key = db.Key.from_path(_PipelineRecord.kind(), idempotence_key)
     context = _PipelineContext('', 'default', base_path)
     future = PipelineFuture(self.output_names, force_strict=True)
@@ -2190,7 +2190,7 @@ class _PipelineContext(object):
           return
 
       child_pipeline_key = db.Key.from_path(
-          _PipelineRecord.kind(), uuid.uuid1().hex)
+          _PipelineRecord.kind(), uuid.uuid4().hex)
       all_output_slots.update(output_slots)
       all_children_keys.append(child_pipeline_key)
 
@@ -2680,8 +2680,11 @@ def _get_timestamp_ms(when):
     when: A datetime.datetime instance.
 
   Returns:
-    Integer time since the epoch in milliseconds.
+    Integer time since the epoch in milliseconds. If the supplied 'when' is
+    None, the return value will be None.
   """
+  if when is None:
+    return None
   ms_since_epoch = float(time.mktime(when.utctimetuple()) * 1000.0)
   ms_since_epoch += when.microsecond / 1000.0
   return int(ms_since_epoch)
@@ -2906,7 +2909,7 @@ def get_status_tree(root_pipeline_id):
   """Gets the full status tree of a pipeline.
 
   Args:
-    root_pipeline_id: The root pipeline ID to get status for.
+    root_pipeline_id: The pipeline ID to get status for.
 
   Returns:
     Dictionary with the keys:
@@ -2923,11 +2926,17 @@ def get_status_tree(root_pipeline_id):
     raise PipelineStatusError(
         'Could not find pipeline ID "%s"' % root_pipeline_id)
 
-  if (root_pipeline_key !=
-      _PipelineRecord.root_pipeline.get_value_for_datastore(
-          root_pipeline_record)):
-    raise PipelineStatusError(
-        'Pipeline ID "%s" is not a root pipeline!' % root_pipeline_id)
+  # If the supplied root_pipeline_id is not actually the root pipeline that's
+  # okay. We'll find the real root and override the value they passed in.
+  actual_root_key = _PipelineRecord.root_pipeline.get_value_for_datastore(
+      root_pipeline_record)
+  if actual_root_key != root_pipeline_key:
+    root_pipeline_key = actual_root_key
+    root_pipeline_id = root_pipeline_key.id_or_name()
+    root_pipeline_record = db.get(root_pipeline_key)
+    if not root_pipeline_record:
+      raise PipelineStatusError(
+          'Could not find pipeline ID "%s"' % root_pipeline_id)
 
   # Run all queries asynchronously.
   queries = {}
