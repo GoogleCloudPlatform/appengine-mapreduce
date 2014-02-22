@@ -117,10 +117,18 @@ final class MergingReader<K, V> extends InputReader<KeyValue<K, Iterator<V>>> {
       if (currentValues.hasNext()) {
         return true;
       }
-      if (lowestReaderQueue.isEmpty()) {
-        return false;
+      while (!lowestReaderQueue.isEmpty()) {
+        PeekingInputReader<KeyValue<ByteBuffer, Iterator<V>>> reader = lowestReaderQueue.peek();
+        KeyValue<ByteBuffer, Iterator<V>> kv = reader.peek();
+        if (comparator.compare(kv.getKey(), key) != 0) {
+          break;
+        }
+        if (kv.getValue().hasNext()) {
+          return true;
+        }
+        consumePeekedValue(kv);
       }
-      return comparator.compare(lowestReaderQueue.peek().peek().getKey(), key) == 0;
+      return false;
     }
 
     /**
@@ -155,7 +163,8 @@ final class MergingReader<K, V> extends InputReader<KeyValue<K, Iterator<V>>> {
    * @param peekedKeyValue The peeked value to be consumed
    * @param reader Where the value came from
    */
-  private void consumePeekedValueFromReader(KeyValue<ByteBuffer, Iterator<V>> peekedKeyValue,
+  private static <V> void consumePeekedValueFromReader(
+      KeyValue<ByteBuffer, Iterator<V>> peekedKeyValue,
       PeekingInputReader<KeyValue<ByteBuffer, Iterator<V>>> reader) {
     if (reader == null || !peekedKeyValue.equals(reader.next())) {
       throw new ConcurrentModificationException("Reading from values is not threadsafe.");
