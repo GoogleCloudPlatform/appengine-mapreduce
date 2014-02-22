@@ -23,9 +23,10 @@ class Bar(Foo):
 
 class TestConfig(parameters._Config):
   a = parameters._Option(str, required=True)
-  b = parameters._Option(bool, default=True)
+  b = parameters._Option(bool, default_factory=lambda: True)
   c = parameters._Option(Foo, can_be_none=True)
   d = parameters._Option(Foo)
+  e = parameters._Option(str, default_factory=lambda: 'data')
 
 
 class TestConfig2(parameters._Config):
@@ -35,6 +36,11 @@ class TestConfig2(parameters._Config):
 
 class TestConfig3(TestConfig2, TestConfig):
   pass
+
+
+class TestConfig4(parameters._Config):
+  # Default factory returns None while the option can not have None value.
+  a = parameters._Option(str, can_be_none=False, default_factory=lambda: None)
 
 
 class JobConfigTest(unittest.TestCase):
@@ -48,6 +54,7 @@ class JobConfigTest(unittest.TestCase):
     self.assertEqual(True, config.b)
     self.assertEqual(None, config.c)
     self.assertEqual(Bar, config.d)
+    self.assertEqual('data', config.e)
 
   def testInstanceTypeCheck(self):
     self.assertRaises(TypeError, TestConfig, a='foo', d=Bar,
@@ -68,7 +75,7 @@ class JobConfigTest(unittest.TestCase):
 
   def testToFromJson(self):
     config = TestConfig(a='foo', b=True, c=Foo, d=Bar)
-    config2 = TestConfig._from_json(config._to_json())
+    config2 = TestConfig.from_json(config.to_json())
     self.assertTrue(config == config2)
 
   def testConfigInheritance(self):
@@ -78,13 +85,17 @@ class JobConfigTest(unittest.TestCase):
     self.assertEqual('bar', config.b)
     self.assertEqual(2, config.z)
 
+  def testNoneValue(self):
+    _ = TestConfig4(a='1')
+    self.assertRaises(TypeError, TestConfig4)
+
 
 class OptionTest(unittest.TestCase):
 
   def testDefault(self):
     self.assertRaises(ValueError,
                       parameters._Option,
-                      str, required=True, default=1)
+                      str, required=True, default_factory=lambda: 1)
 
 
 class UserParametersTest(unittest.TestCase):

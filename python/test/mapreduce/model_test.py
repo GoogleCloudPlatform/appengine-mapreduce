@@ -26,8 +26,6 @@ import types
 import unittest
 import urlparse
 
-from google.appengine.api import apiproxy_stub_map
-from google.appengine.api import datastore_file_stub
 from google.appengine.ext import db
 from google.appengine.ext import testbed
 from mapreduce import hooks
@@ -82,20 +80,6 @@ class HugeTaskTest(unittest.TestCase):
     self.assertRaises(DeprecationWarning,
                       model.HugeTask.decode_payload,
                       request)
-
-
-class GetDescendingKeyTest(unittest.TestCase):
-  """Tests the _get_descending_key function."""
-
-  def testBasic(self):
-    """Basic test of the function."""
-    now = 1234567890
-    os.environ["REQUEST_ID_HASH"] = "12345678"
-
-    self.assertEquals(
-        "159453012940012345678",
-        model._get_descending_key(
-            gettime=lambda: now))
 
 
 class TestReader(object):

@@ -21,7 +21,6 @@
 import base64
 import collections
 import logging
-import traceback
 import os
 import re
 
@@ -30,6 +29,10 @@ from mapreduce import model
 from google.appengine.ext.webapp import mock_webapp
 
 # TODO(user): Add tests for this file.
+
+# Change level to logging.DEBUG to see stacktrack on failed task executions.
+_LOGGING_LEVEL = logging.ERROR
+logging.getLogger().setLevel(_LOGGING_LEVEL)
 
 
 def decode_task_payload(task):
@@ -181,8 +184,8 @@ def execute_all_tasks(taskqueue, queue="default", handlers_map=None):
         handler = execute_task(task, retries, handlers_map=handlers_map)
         task_run_counts[handler.__class__] += 1
         break
-      # pylint: disable=bare-except
-      except:
+      # pylint: disable=broad-except
+      except Exception, e:
         retries += 1
         # Arbitrary large number.
         if retries > 100:
@@ -193,6 +196,7 @@ def execute_all_tasks(taskqueue, queue="default", handlers_map=None):
             "Task %s is being retried for the %s time",
             task["name"],
             retries)
+        logging.debug(e)
 
   return task_run_counts
 

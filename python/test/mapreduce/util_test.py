@@ -230,7 +230,7 @@ class GetTaskHeadersTest(unittest.TestCase):
         name="foo", mapreduce_id="foo_id",
         mapper_spec=model.MapperSpec("foo", "foo", {}, 8).to_json())
     task = taskqueue.Task(url="/relative_url",
-                          headers=util._get_task_headers(mr_spec))
+                          headers=util._get_task_headers(mr_spec.mapreduce_id))
     self.assertEqual("foo_id", task.headers[util._MR_ID_TASK_HEADER])
     self.assertEqual("v7.foo-module.foo.appspot.com",
                      task.headers["Host"])
@@ -326,6 +326,20 @@ class ObjToPathTest(unittest.TestCase):
 
   def testUnexpectedType(self):
     self.assertRaises(TypeError, util._obj_to_path, self.testUnexpectedType)
+
+
+class GetDescendingKeyTest(unittest.TestCase):
+  """Tests the _get_descending_key function."""
+
+  def testBasic(self):
+    """Basic test of the function."""
+    now = 1234567890
+    os.environ["REQUEST_ID_HASH"] = "12345678"
+
+    self.assertEquals(
+        "159453012940012345678",
+        util._get_descending_key(
+            gettime=lambda: now))
 
 
 if __name__ == "__main__":
