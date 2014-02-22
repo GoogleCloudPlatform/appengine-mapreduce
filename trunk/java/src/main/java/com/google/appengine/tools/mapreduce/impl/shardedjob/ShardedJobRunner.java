@@ -25,6 +25,7 @@ import com.google.appengine.tools.cloudstorage.RetryHelperException;
 import com.google.appengine.tools.cloudstorage.RetryParams;
 import com.google.appengine.tools.mapreduce.impl.shardedjob.Status.StatusCode;
 import com.google.apphosting.api.ApiProxy.ApiProxyException;
+import com.google.apphosting.api.ApiProxy.RequestTooLargeException;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Predicates;
@@ -117,7 +118,7 @@ public class ShardedJobRunner<T extends IncrementalTask> implements ShardedJobHa
   private static final ExceptionHandler EXCEPTION_HANDLER = new ExceptionHandler.Builder().retryOn(
       ApiProxyException.class, ConcurrentModificationException.class,
       DatastoreFailureException.class, CommittedButStillApplyingException.class,
-      DatastoreTimeoutException.class).build();
+      DatastoreTimeoutException.class).abortOn(RequestTooLargeException.class).build();
 
   private ShardedJobStateImpl<T> lookupJobState(Transaction tx, String jobId) {
     try {
