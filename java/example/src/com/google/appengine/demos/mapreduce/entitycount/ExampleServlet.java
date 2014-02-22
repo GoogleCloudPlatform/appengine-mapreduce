@@ -47,7 +47,7 @@ public class ExampleServlet extends HttpServlet {
           + "Runs three MapReduces: <br /> <ul> <li> Creates random MapReduceTest "
           + "entities of the type:  " + DATASTORE_TYPE + ".</li> "
           + "<li> Counts the number of each character in all entities of this type.</li>"
-          + "<li> Deletes all entities of the type: " + DATASTORE_TYPE + "</li> </ul> <div> <br />"
+          + "<li> Deletes all entities of the type: " + DATASTORE_TYPE + ".</li> </ul> <div> <br />"
           + "Entities to create: <input name='entities' value='10000'> <br />"
           + "Entity payload size: <input name='payloadBytesPerEntity' value='1000'> <br />"
           + "ShardCount: <input name='shardCount' value='10'> <br />"
