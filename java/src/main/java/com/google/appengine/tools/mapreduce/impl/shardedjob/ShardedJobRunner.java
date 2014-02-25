@@ -43,6 +43,7 @@ import java.util.ConcurrentModificationException;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map.Entry;
+import java.util.Random;
 import java.util.TreeMap;
 import java.util.concurrent.Callable;
 import java.util.logging.Level;
@@ -307,8 +308,8 @@ public class ShardedJobRunner<T extends IncrementalTask> implements ShardedJobHa
       log.info("Lock for " + taskId + " is being held. Will retry after "
           + (taskState.getSliceStartTime() + sliceTimeoutMillis - currentTime));
     } else {
-      ShardRetryState<T> retryState = handleShardFailure(jobState, taskState,
-          new RuntimeException("Lock for " + taskId + " expired."));
+      ShardRetryState<T> retryState = handleShardFailure(jobState, taskState, new RuntimeException(
+          "Lock for " + taskId + " expired on slice: " + taskState.getSequenceNumber()));
       updateTask(jobState, taskState, retryState, false);
     }
   }
@@ -324,8 +325,9 @@ public class ShardedJobRunner<T extends IncrementalTask> implements ShardedJobHa
       locked = true;
     } catch (ConcurrentModificationException ex) {
       // TODO(user): would be nice to have a test for it. b/12822091 can help with that.
-      log.warning("Failed to aquire the lock, Will reschedule task.");
-      long eta = System.currentTimeMillis() + 1000;
+      log.warning("Failed to aquire the lock, Will reschedule task for: " + taskState.getJobId()
+          + " on slice " + taskState.getSequenceNumber());
+      long eta = System.currentTimeMillis() + new Random().nextInt(5000) + 5000;
       scheduleWorkerTask(null, jobState.getSettings(), taskState, eta);
     }
     return locked;
