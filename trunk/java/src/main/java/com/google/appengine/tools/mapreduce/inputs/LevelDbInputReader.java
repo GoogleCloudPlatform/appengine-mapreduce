@@ -1,5 +1,7 @@
 package com.google.appengine.tools.mapreduce.inputs;
 
+import static com.google.appengine.tools.mapreduce.impl.util.LevelDbConstants.HEADER_LENGTH;
+
 import com.google.appengine.tools.mapreduce.CorruptDataException;
 import com.google.appengine.tools.mapreduce.InputReader;
 import com.google.appengine.tools.mapreduce.impl.util.Crc32c;
@@ -11,6 +13,8 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.channels.ReadableByteChannel;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.NoSuchElementException;
 
 /**
@@ -20,11 +24,15 @@ import java.util.NoSuchElementException;
  * If you want to read about the format it is here:
  * {@linkplain "https://code.google.com/p/leveldb/"}
  *
+ * This implementation deviates from the specification above, in that it allows blocks to be zero
+ * padded regardless of how much data is in the block, rather than only if the block is within 6
+ * bytes of full.
+ *
  * Data is read in as needed, so the only state required to reconstruct this class when it is
  * serialized is the offset.
  *
- * In the event that corrupt data is encountered a {@link CorruptDataException} is thrown.
- * If this occurs, do not continue to attempt to read. Behavior is not guaranteed.
+ * In the event that corrupt data is encountered a {@link CorruptDataException} is thrown. If this
+ * occurs, do not continue to attempt to read. Behavior is not guaranteed.
  *
  * For internal use only. User code cannot safely depend on this class.
  */
@@ -37,8 +45,6 @@ public abstract class LevelDbInputReader extends InputReader<ByteBuffer> {
   private final int blockSize;
   /** A temp buffer that is used to hold contents and headers as they are read*/
   private transient ByteBuffer tmpBuffer;
-  /** The buffer that contains the data that will ultimately be returned to the caller*/
-  private transient ByteBuffer finalRecord;
 
   private long bytesRead;
   private ReadableByteChannel in;
@@ -96,10 +102,13 @@ public abstract class LevelDbInputReader extends InputReader<ByteBuffer> {
 
   @Override
   public void beginSlice() {
-    tmpBuffer = ByteBuffer.allocate(blockSize);
-    tmpBuffer.order(ByteOrder.LITTLE_ENDIAN);
-    finalRecord = ByteBuffer.allocate(blockSize);
-    finalRecord.order(ByteOrder.LITTLE_ENDIAN);
+    tmpBuffer = allocate(blockSize);
+  }
+
+  private static ByteBuffer allocate(int size) {
+    ByteBuffer result = ByteBuffer.allocate(size);
+    result.order(ByteOrder.LITTLE_ENDIAN);
+    return result;
   }
 
   private static final class Record {
@@ -132,75 +141,34 @@ public abstract class LevelDbInputReader extends InputReader<ByteBuffer> {
    */
   @Override
   public ByteBuffer next() throws IOException, NoSuchElementException {
-    finalRecord.clear();
-    RecordType lastRead = RecordType.NONE;
-    ByteBuffer result = null;
-    while (result == null) {
-      Record record = readPhysicalRecord();
-      if (record == null) { // EOF
-        if (lastRead == RecordType.NONE) {
-          throw new NoSuchElementException();
-        } else {
-          throw new CorruptDataException("Premature end of file");
-        }
-      }
-      switch (record.type()) {
-        case NONE:
-          if (lastRead != RecordType.NONE) {
-            throw new CorruptDataException("Found None record following: " + record.type);
-          }
-          validateRemainderIsEmpty();
-          break;
-        case FULL:
-          if (lastRead != RecordType.NONE) {
-            throw new CorruptDataException("Invalid RecordType: " + record.type);
-          }
-          result = record.data().slice();
-          break;
-        case FIRST:
-          if (lastRead != RecordType.NONE) {
-            throw new CorruptDataException("Invalid RecordType: " + record.type);
-          }
-          finalRecord = appendToBuffer(finalRecord, record.data());
-          break;
-        case MIDDLE:
-          if (lastRead != RecordType.FIRST && lastRead != RecordType.MIDDLE) {
-            throw new CorruptDataException("Unrecognized RecordType: " + record.type);
-          }
-          finalRecord = appendToBuffer(finalRecord, record.data());
-          break;
-        case LAST:
-          if (lastRead != RecordType.FIRST && lastRead != RecordType.MIDDLE) {
-            throw new CorruptDataException("Unrecognized RecordType: " + record.type);
-          }
-          finalRecord = appendToBuffer(finalRecord, record.data());
-          finalRecord.flip();
-          result = finalRecord.slice();
-          break;
-        default:
-          throw new CorruptDataException("Unrecognized RecordType: " + record.type.value());
-      }
-      lastRead = record.type();
+    Record record = readPhysicalRecord(true);
+    while (record.type().equals(RecordType.NONE)) {
+      validateBufferIsZeros(record.data());
+      record = readPhysicalRecord(true);
     }
-    return result;
+    if (record.type().equals(RecordType.FULL)) {
+      return record.data();
+    }
+    if (record.type().equals(RecordType.FIRST)) {
+      ArrayList<ByteBuffer> result = new ArrayList<>();
+      result.add(record.data());
+      record = readPhysicalRecord(false);
+      while (record.type().equals(RecordType.MIDDLE)) {
+        result.add(record.data());
+        record = readPhysicalRecord(false);
+      }
+      if (!record.type().equals(RecordType.LAST)) {
+        throw new CorruptDataException("Unterminated first block. Found: " + record.type.value());
+      }
+      result.add(record.data());
+      return copyAll(result);
+    }
+    throw new CorruptDataException("Unexpected RecordType: " + record.type.value());
   }
 
-  private void validateRemainderIsEmpty() throws IOException {
-    long bytesToBlockEnd = findBytesToBlockEnd();
-    if (bytesToBlockEnd == blockSize) {
-      return;
-    }
-    tmpBuffer.clear();
-    tmpBuffer.limit((int) bytesToBlockEnd);
-    int read =  read(tmpBuffer);
-    if (read != bytesToBlockEnd) {
-      throw new CorruptDataException(
-          "There are " + bytesToBlockEnd + " but " + read + " were read.");
-    }
-    offset += read;
-    tmpBuffer.flip();
-    for (int i = 0; i < bytesToBlockEnd; i++) {
-      byte b = tmpBuffer.get(i);
+  private void validateBufferIsZeros(ByteBuffer buffer) {
+    for (int i = buffer.position(); i < buffer.limit(); i++) {
+      byte b = buffer.get(i);
       if (b != 0) {
         throw new CorruptDataException("Found a non-zero byte: " + b
             + " before the end of the block " + i
@@ -212,51 +180,67 @@ public abstract class LevelDbInputReader extends InputReader<ByteBuffer> {
   /**
    * Reads the next record from the LevelDb data stream.
    *
-   * @return Record data about the physical record read. Or null if the end of the steam is reached.
+   * @param expectEnd if end of stream encountered will throw {@link NoSuchElementException} when
+   *        true and {@link CorruptDataException} when false.
+   * @return Record data of the physical record read.
    * @throws IOException
    */
-  private Record readPhysicalRecord() throws IOException {
-    long bytesToBlockEnd = findBytesToBlockEnd();
-    if (bytesToBlockEnd < LevelDbConstants.HEADER_LENGTH) {
-      return new Record(RecordType.NONE, null);
+  private Record readPhysicalRecord(boolean expectEnd) throws IOException {
+    int bytesToBlockEnd = findBytesToBlockEnd();
+    if (bytesToBlockEnd < HEADER_LENGTH) {
+      readToTmp(bytesToBlockEnd, expectEnd);
+      return createRecordFromTmp(RecordType.NONE);
     }
+    readToTmp(HEADER_LENGTH, expectEnd);
 
-    tmpBuffer.clear();
-    tmpBuffer.limit(LevelDbConstants.HEADER_LENGTH);
-    int bytesRead = read(tmpBuffer);
-    if (bytesRead == -1) {
-      return null;
-    }
-    offset += bytesRead;
-    if (bytesRead != LevelDbConstants.HEADER_LENGTH) {
-      throw new CorruptDataException("Premature end of file was expecting at least: "
-          + bytesToBlockEnd + " but found only: " + bytesRead);
-    }
-    tmpBuffer.flip();
     int checksum = tmpBuffer.getInt();
-    short length = tmpBuffer.getShort();
-    RecordType type = RecordType.get(tmpBuffer.get());
+    int length = tmpBuffer.getShort();
     if (length > bytesToBlockEnd || length < 0) {
       throw new CorruptDataException("Length is too large:" + length);
     }
-    tmpBuffer.clear();
-    tmpBuffer.limit(length);
-    bytesRead = read(tmpBuffer);
-    offset += bytesRead;
-    if (bytesRead != length) {
-      throw new CorruptDataException("Premature end of file was expecting at least: " + length
-          + " but found only: " + bytesRead);
+    RecordType type = RecordType.get(tmpBuffer.get());
+    if (type == RecordType.NONE && length == 0) {
+      length = bytesToBlockEnd - HEADER_LENGTH;
     }
+    readToTmp(length, false);
+
     if (!isValidCrc(checksum, tmpBuffer, type.value())) {
       throw new CorruptDataException("Checksum doesn't validate.");
     }
-
-    tmpBuffer.flip();
-    return new Record(type, tmpBuffer);
+    return createRecordFromTmp(type);
   }
 
-  private final long findBytesToBlockEnd() {
-    return blockSize - (offset % blockSize);
+  /**
+   * Reads {@code length} number of bytes into {@link #tmpBuffer}. {@link #offset} is incremented
+   * and {@link #tmpBuffer} is flipped.
+   *
+   * @param expectEnd if end of stream encountered will throw {@link NoSuchElementException} when
+   *        true and {@link CorruptDataException} when false.
+   */
+  private void readToTmp(int length, boolean expectEnd) throws IOException {
+    tmpBuffer.clear();
+    tmpBuffer.limit(length);
+    int read = read(tmpBuffer);
+    if (read == -1 && expectEnd) {
+      throw new NoSuchElementException();
+    }
+    if (read != length) {
+      throw new CorruptDataException("Premature end of file was expecting at least: "
+          + length + " but found only: " + read);
+    }
+    offset += read;
+    tmpBuffer.flip();
+  }
+
+  private Record createRecordFromTmp(RecordType type) {
+    ByteBuffer data = allocate(tmpBuffer.remaining());
+    data.put(tmpBuffer);
+    data.flip();
+    return new Record(type, data);
+  }
+
+  private final int findBytesToBlockEnd() {
+    return (int) (blockSize - (offset % blockSize));
   }
 
   /**
@@ -268,7 +252,7 @@ public abstract class LevelDbInputReader extends InputReader<ByteBuffer> {
    * @return true if the {@link Crc32c} validates.
    */
   private static boolean isValidCrc(int checksum, ByteBuffer data, byte type) {
-    if (checksum == 0 && type == 0 && data.limit() == 0) {
+    if (checksum == 0 && type == 0) {
       return true;
     }
     Crc32c crc = new Crc32c();
@@ -279,26 +263,18 @@ public abstract class LevelDbInputReader extends InputReader<ByteBuffer> {
   }
 
   /**
-   * Appends a {@link ByteBuffer} to another. This may modify the inputed buffer that will be
-   * appended to.
-   *
-   * @param to the {@link ByteBuffer} to append to.
-   * @param from the {@link ByteBuffer} to append.
-   * @return the resulting appended {@link ByteBuffer}
+   * Copies a list of byteBuffers into a single new byteBuffer.
    */
-  private static ByteBuffer appendToBuffer(ByteBuffer to, ByteBuffer from) {
-    if (to.remaining() < from.remaining()) {
-      int capacity = to.capacity();
-      while (capacity - to.position() < from.remaining()) {
-        capacity *= 2;
-      }
-      ByteBuffer newBuffer = ByteBuffer.allocate(capacity);
-      to.flip();
-      newBuffer.put(to);
-      to = newBuffer;
-      to.order(ByteOrder.LITTLE_ENDIAN);
+  private static ByteBuffer copyAll(List<ByteBuffer> buffers) {
+    int size = 0;
+    for (ByteBuffer b : buffers) {
+      size += b.remaining();
     }
-    to.put(from);
-    return to;
+    ByteBuffer result = allocate(size);
+    for (ByteBuffer b : buffers) {
+      result.put(b);
+    }
+    result.flip();
+    return result;
   }
 }
