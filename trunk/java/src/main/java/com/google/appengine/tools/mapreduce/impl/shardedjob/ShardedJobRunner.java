@@ -123,6 +123,9 @@ public class ShardedJobRunner<T extends IncrementalTask> implements ShardedJobHa
       DatastoreTimeoutException.class, TransientFailureException.class,
       TransactionalTaskException.class).abortOn(RequestTooLargeException.class).build();
 
+  private static final ExceptionHandler AGGRESIVE_EXCEPTION_HANDLER =
+      new ExceptionHandler.Builder().retryOn(Exception.class).build();
+
   private ShardedJobStateImpl<T> lookupJobState(Transaction tx, String jobId) {
     try {
       Entity entity = DATASTORE.get(tx, ShardedJobStateImpl.ShardedJobSerializer.makeKey(jobId));
@@ -274,7 +277,7 @@ public class ShardedJobRunner<T extends IncrementalTask> implements ShardedJobHa
     if (!jobState.getStatus().isActive()) {
       taskState.setStatus(new Status(StatusCode.ABORTED));
       log.info(taskId + ": Job no longer active: " + jobState + ", aborting task.");
-      updateTask(jobState, taskState, null);
+      updateTask(jobState, taskState, null, false);
       return null;
     }
     if (sequenceNumber == taskState.getSequenceNumber()) {
@@ -306,7 +309,7 @@ public class ShardedJobRunner<T extends IncrementalTask> implements ShardedJobHa
     } else {
       ShardRetryState<T> retryState = handleShardFailure(jobState, taskState,
           new RuntimeException("Lock for " + taskId + " expired."));
-      updateTask(jobState, taskState, retryState);
+      updateTask(jobState, taskState, retryState, false);
     }
   }
 
@@ -380,7 +383,7 @@ public class ShardedJobRunner<T extends IncrementalTask> implements ShardedJobHa
     }
 
     try {
-      updateTask(jobState, taskState, retryState);
+      updateTask(jobState, taskState, retryState, true);
     } catch (RetryHelperException ex) {
       log.severe("Failed to write end of slice for task: " + taskState.getTask());
       // TODO(user): consider what to do here when this fail (though options are limited)
@@ -402,9 +405,11 @@ public class ShardedJobRunner<T extends IncrementalTask> implements ShardedJobHa
 
   private void updateTask(final ShardedJobState<T> jobState,
       final IncrementalTaskState<T> taskState, /* Nullable */
-      final ShardRetryState<T> shardRetryState) {
+      final ShardRetryState<T> shardRetryState, boolean aggresiveRetry) {
     taskState.setSequenceNumber(taskState.getSequenceNumber() + 1);
     taskState.setSliceStartTime(null);
+    ExceptionHandler exceptionHandler =
+        aggresiveRetry ? AGGRESIVE_EXCEPTION_HANDLER : EXCEPTION_HANDLER;
     RetryHelper.runWithRetries(callable(new Runnable() {
       @Override
       public void run() {
@@ -451,7 +456,7 @@ public class ShardedJobRunner<T extends IncrementalTask> implements ShardedJobHa
               jobState.getSettings());
         }
       }
-    }), DATASTORE_RETRY_FOREVER_PARAMS, EXCEPTION_HANDLER);
+    }), DATASTORE_RETRY_FOREVER_PARAMS, exceptionHandler);
   }
 
   private ShardRetryState<T> handleShardFailure(final ShardedJobState<T> jobState,
