@@ -19,6 +19,8 @@ import com.google.appengine.api.datastore.Key;
 import com.google.appengine.api.datastore.Transaction;
 import com.google.appengine.api.taskqueue.QueueFactory;
 import com.google.appengine.api.taskqueue.TaskOptions;
+import com.google.appengine.api.taskqueue.TransactionalTaskException;
+import com.google.appengine.api.taskqueue.TransientFailureException;
 import com.google.appengine.tools.cloudstorage.ExceptionHandler;
 import com.google.appengine.tools.cloudstorage.RetryHelper;
 import com.google.appengine.tools.cloudstorage.RetryHelperException;
@@ -118,7 +120,8 @@ public class ShardedJobRunner<T extends IncrementalTask> implements ShardedJobHa
   private static final ExceptionHandler EXCEPTION_HANDLER = new ExceptionHandler.Builder().retryOn(
       ApiProxyException.class, ConcurrentModificationException.class,
       DatastoreFailureException.class, CommittedButStillApplyingException.class,
-      DatastoreTimeoutException.class).abortOn(RequestTooLargeException.class).build();
+      DatastoreTimeoutException.class, TransientFailureException.class,
+      TransactionalTaskException.class).abortOn(RequestTooLargeException.class).build();
 
   private ShardedJobStateImpl<T> lookupJobState(Transaction tx, String jobId) {
     try {
@@ -379,7 +382,7 @@ public class ShardedJobRunner<T extends IncrementalTask> implements ShardedJobHa
     try {
       updateTask(jobState, taskState, retryState);
     } catch (RetryHelperException ex) {
-      log.severe("Failed to write end of slice. Serialzing next task: " + taskState.getTask());
+      log.severe("Failed to write end of slice for task: " + taskState.getTask());
       // TODO(user): consider what to do here when this fail (though options are limited)
       throw ex;
     }
