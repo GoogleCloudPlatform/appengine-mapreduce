@@ -23,6 +23,7 @@ import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
 import java.util.Random;
@@ -107,6 +108,30 @@ public class GoogleCloudStorageLevelDbInputReaderTest extends TestCase {
     reader.beginSlice();
     while (expected.hasNext()) {
       ByteBuffer read = reader.next();
+      assertEquals(expected.next(), read);
+    }
+    verifyEmpty(reader);
+    reader.endSlice();
+  }
+
+  public void testRecordsDontChange() throws IOException {
+    writeData(filename, new ByteBufferGenerator(1000));
+    GoogleCloudStorageLevelDbInputReader reader =
+        new GoogleCloudStorageLevelDbInputReader(filename, BLOCK_SIZE * 2);
+    reader.beginShard();
+    ByteBufferGenerator expected = new ByteBufferGenerator(1000);
+    reader.beginSlice();
+    ArrayList<ByteBuffer> recordsRead = new ArrayList<>();
+    try {
+      while (true) {
+        recordsRead.add(reader.next());
+      }
+    } catch (NoSuchElementException e) {
+      // used a break
+    }
+    for (int i = 0; i < recordsRead.size(); i++) {
+      assertTrue(expected.hasNext());
+      ByteBuffer read = recordsRead.get(i);
       assertEquals(expected.next(), read);
     }
     verifyEmpty(reader);
