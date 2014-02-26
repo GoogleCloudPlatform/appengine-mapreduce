@@ -63,7 +63,6 @@ import com.google.appengine.tools.pipeline.PromisedValue;
 import com.google.appengine.tools.pipeline.Value;
 import com.google.appengine.tools.pipeline.impl.servlets.PipelineServlet;
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Charsets;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
@@ -71,6 +70,7 @@ import com.google.common.collect.ImmutableList;
 import java.io.IOException;
 import java.io.Serializable;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -734,6 +734,7 @@ public class MapReduceJob<I, K, V, O, R>
     Preconditions.checkNotNull(mrSpec.getIntermediateKeyMarshaller());
     Preconditions.checkNotNull(mrSpec.getIntermediateValueMarshaller());
     int numShards = mrSpec.getOutput().getNumShards();
+    // remove once b/13138360 is fixed.
     Preconditions.checkArgument(numShards > 0 && numShards <= 100,
         "Invalid number of reduce shards: " + numShards + " must be between 1 and 100.");
   }
@@ -780,7 +781,7 @@ public class MapReduceJob<I, K, V, O, R>
     }
     try (GcsOutputChannel channel =
         gcsService.createOrReplace(filename, GcsFileOptions.getDefaultInstance())) {
-      channel.write(ByteBuffer.wrap("Delete me!".getBytes(Charsets.UTF_8)));
+      channel.write(ByteBuffer.wrap("Delete me!".getBytes(StandardCharsets.UTF_8)));
     } finally {
       gcsService.delete(filename);
     }

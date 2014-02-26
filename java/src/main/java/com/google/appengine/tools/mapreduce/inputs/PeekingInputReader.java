@@ -2,12 +2,9 @@ package com.google.appengine.tools.mapreduce.inputs;
 
 import com.google.appengine.tools.mapreduce.InputReader;
 import com.google.appengine.tools.mapreduce.Marshaller;
-import com.google.appengine.tools.mapreduce.Marshallers;
-import com.google.appengine.tools.mapreduce.impl.util.SerializationUtil;
+import com.google.appengine.tools.mapreduce.impl.util.SerializableValue;
 
 import java.io.IOException;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
 import java.nio.ByteBuffer;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
@@ -21,39 +18,10 @@ public class PeekingInputReader<T> extends UnmarshallingInputReader<T> implement
 
   private static final long serialVersionUID = -1740668578124485473L;
   // TODO(user): May be a problem if peeked values are large b/10294530
-  private transient T peekedItem; // assigned in readObject & peek
-  private boolean peeked; // assigned in readObject & peek
+  private SerializableValue<T> peekedItem; // assigned in readObject & peek
 
   public PeekingInputReader(InputReader<ByteBuffer> reader, Marshaller<T> marshaller){
     super(reader, marshaller);
-  }
-
-  /**
-   * Called by java serialization
-   * Reads the peeked value. (Uses the user provided marshaller because the object may not be
-   * java serializable.)
-   */
-  private void readObject(ObjectInputStream aInputStream) throws ClassNotFoundException,
-      IOException {
-    aInputStream.defaultReadObject();
-    peekedItem =
-        SerializationUtil.readObjectFromObjectStreamUsingMarshaller(getMarshaller(), aInputStream);
-  }
-
-  /**
-   * Called by java serialization Writes the peeked value. (Uses the user provided marshaller
-   * because the object may not be java serializable.)
-   */
-  private void writeObject(ObjectOutputStream aOutputStream) throws IOException {
-    aOutputStream.defaultWriteObject();
-    ByteBuffer peekedItemBytes = null;
-    if (peeked) {
-      peekedItemBytes = getMarshaller().toBytes(peekedItem);
-      // In case marshalling modified the item
-      peekedItem = getMarshaller().fromBytes(peekedItemBytes.slice());
-    }
-    SerializationUtil.writeObjectToOutputStreamUsingMarshaller(peekedItemBytes,
-        Marshallers.getByteBufferMarshaller(), aOutputStream);
   }
 
   /**
@@ -65,8 +33,9 @@ public class PeekingInputReader<T> extends UnmarshallingInputReader<T> implement
   @Override
   public T next() throws NoSuchElementException {
     T result;
-    if (peeked) {
-      result = peekedItem;
+    if (peekedItem != null) {
+      result = peekedItem.getValue();
+      peekedItem = null;
     } else {
       try {
         result = super.next();
@@ -74,8 +43,6 @@ public class PeekingInputReader<T> extends UnmarshallingInputReader<T> implement
         throw new RuntimeException("Failed to read next input", e);
       }
     }
-    peekedItem = null;
-    peeked = false;
     return result;
   }
 
@@ -87,23 +54,22 @@ public class PeekingInputReader<T> extends UnmarshallingInputReader<T> implement
    * @throws RuntimeException In the event that reading from input fails.
    */
   public T peek() {
-    if (!peeked) {
+    if (peekedItem == null) {
       try {
-        peekedItem = super.next();
-        peeked = true;
+        peekedItem = SerializableValue.of(getMarshaller(), super.next());
       } catch (NoSuchElementException e) {
         // ignore.
       } catch (IOException e) {
         throw new RuntimeException("Failed to read next input", e);
       }
     }
-    return peekedItem;
+    return peekedItem == null ? null : peekedItem.getValue();
   }
 
   @Override
   public boolean hasNext() {
     peek();
-    return peeked;
+    return peekedItem != null;
   }
 
   @Override

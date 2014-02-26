@@ -81,7 +81,6 @@ public class MapReduceServletTest extends TestCase {
         MapReduceServletImpl.COMMAND_PATH + "/" + StatusHandler.GET_JOB_DETAIL_PATH, false, true);
     expect(request.getMethod()).andReturn("GET").anyTimes();
     HttpServletResponse response = createMock(HttpServletResponse.class);
-    @SuppressWarnings("resource")
     PrintWriter responseWriter = createMock(PrintWriter.class);
     responseWriter.write('{');
     responseWriter.write("\"error_class\"");
@@ -137,7 +136,6 @@ public class MapReduceServletTest extends TestCase {
     HttpServletResponse resp = createMock(HttpServletResponse.class);
     resp.setContentType("text/javascript");
     resp.setHeader("Cache-Control", "public; max-age=300");
-    @SuppressWarnings("resource")
     ServletOutputStream sos = createMock(ServletOutputStream.class);
     expect(resp.getOutputStream()).andReturn(sos);
     sos.write((byte[]) EasyMock.anyObject(), EasyMock.eq(0), EasyMock.anyInt());

@@ -56,7 +56,6 @@ class BlobstoreInputReader extends InputReader<byte[]> {
   @Override
   public void beginSlice() throws IOException {
     Preconditions.checkState(in == null, "%s: Already initialized.", this);
-    @SuppressWarnings("resource")
     InputStream blobInputStream =
         new BlobstoreInputStream(new BlobKey(blobKey), startOffset + offset);
     in = new LineInputStream(blobInputStream, endOffset - startOffset - offset, terminator);

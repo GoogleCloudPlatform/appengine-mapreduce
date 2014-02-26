@@ -1,18 +1,17 @@
 package com.google.appengine.tools.mapreduce.impl;
 
+import static com.google.appengine.tools.mapreduce.Marshallers.getByteBufferMarshaller;
+
 import com.google.appengine.tools.mapreduce.InputReader;
 import com.google.appengine.tools.mapreduce.KeyValue;
 import com.google.appengine.tools.mapreduce.Marshaller;
-import com.google.appengine.tools.mapreduce.Marshallers;
 import com.google.appengine.tools.mapreduce.ReducerInput;
 import com.google.appengine.tools.mapreduce.impl.sort.LexicographicalComparator;
-import com.google.appengine.tools.mapreduce.impl.util.SerializationUtil;
+import com.google.appengine.tools.mapreduce.impl.util.SerializableValue;
 import com.google.appengine.tools.mapreduce.inputs.PeekingInputReader;
 import com.google.common.base.Preconditions;
 
 import java.io.IOException;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
 import java.nio.ByteBuffer;
 import java.util.Comparator;
 import java.util.ConcurrentModificationException;
@@ -37,7 +36,7 @@ final class MergingReader<K, V> extends InputReader<KeyValue<K, Iterator<V>>> {
   private static final LexicographicalComparator comparator = new LexicographicalComparator();
   private final List<PeekingInputReader<KeyValue<ByteBuffer, Iterator<V>>>> readers;
   private final Marshaller<K> keyMarshaller;
-  private transient ByteBuffer lastKey;
+  private SerializableValue<ByteBuffer> lastKey;
   private transient PriorityQueue<PeekingInputReader<KeyValue<ByteBuffer, Iterator<V>>>>
       lowestReaderQueue;
 
@@ -45,25 +44,6 @@ final class MergingReader<K, V> extends InputReader<KeyValue<K, Iterator<V>>> {
       Marshaller<K> keyMarshaller) {
     this.readers = Preconditions.checkNotNull(readers);
     this.keyMarshaller = Preconditions.checkNotNull(keyMarshaller);
-  }
-
-  /**
-   * Called by java serialization
-   */
-  private void readObject(ObjectInputStream aInputStream) throws ClassNotFoundException,
-      IOException {
-    aInputStream.defaultReadObject();
-    lastKey = SerializationUtil.readObjectFromObjectStreamUsingMarshaller(
-        Marshallers.getByteBufferMarshaller(), aInputStream);
-  }
-
-  /**
-   * Called by java serialization
-   */
-  private void writeObject(ObjectOutputStream aOutputStream) throws IOException {
-    aOutputStream.defaultWriteObject();
-    SerializationUtil.writeObjectToOutputStreamUsingMarshaller(lastKey,
-        Marshallers.getByteBufferMarshaller(), aOutputStream);
   }
 
   @Override
@@ -180,10 +160,11 @@ final class MergingReader<K, V> extends InputReader<KeyValue<K, Iterator<V>>> {
     skipLeftoverItems();
     PeekingInputReader<KeyValue<ByteBuffer, Iterator<V>>> reader = lowestReaderQueue.remove();
     KeyValue<ByteBuffer, Iterator<V>> lowest = reader.next();
-    CombiningReader values = new CombiningReader(lowest.getKey(), lowest.getValue());
+    ByteBuffer lowestKey = lowest.getKey();
+    CombiningReader values = new CombiningReader(lowestKey, lowest.getValue());
     addReaderToQueueIfNotEmpty(reader);
-    lastKey = lowest.getKey();
-    return new KeyValue<K, Iterator<V>>(keyMarshaller.fromBytes(lastKey.slice()), values);
+    lastKey = SerializableValue.of(getByteBufferMarshaller(), lowestKey);
+    return new KeyValue<K, Iterator<V>>(keyMarshaller.fromBytes(lowestKey.slice()), values);
   }
 
   private void addReaderToQueueIfNotEmpty(
@@ -216,7 +197,7 @@ final class MergingReader<K, V> extends InputReader<KeyValue<K, Iterator<V>>> {
   private boolean skipItemsOnReader(PeekingInputReader<KeyValue<ByteBuffer, Iterator<V>>> reader) {
     boolean itemSkipped = false;
     KeyValue<ByteBuffer, Iterator<V>> keyValue = reader.peek();
-    while (keyValue != null && (comparator.compare(keyValue.getKey(), lastKey) == 0)) {
+    while (keyValue != null && comparator.compare(keyValue.getKey(), lastKey.getValue()) == 0) {
       consumePeekedValueFromReader(keyValue, reader);
       itemSkipped = true;
       keyValue = reader.peek();
