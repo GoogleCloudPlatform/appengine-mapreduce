@@ -8,7 +8,7 @@
   <property name="thirdparty" value="thirdparty"/>
   <property name="sdk" value="sdk"/>
   <property name="test" value="test"/>
-  <property name="sdk_version" value="[1.8.9,1.10)"/>
+  <property name="sdk_version" value="[1.9.0,1.10)"/>
 
   <!-- Paths -->
   <property name="src" location="src/main/java"/>
@@ -101,7 +101,7 @@
         <section name="com/google/appengine/tools/mapreduce">
           <attribute name="Specification-Vendor" value="Google" />
           <attribute name="Implementation-Vendor" value="Google" />
-          <attribute name="Implementation-Vendor-Id" value="com.google" />
+          <attribute name="Implementation-Vendor-Id" value="com.google.appengine.tools" />
         </section>
       </manifest>
       <zipfileset dir="${src}"/>

@@ -6,6 +6,9 @@
   <name>App Engine MapReduce Library</name>
   <description>A user space MapReduce library for Google App Engine.</description>
   <url>http://code.google.com/p/appengine-mapreduce/</url>
+  <organization>
+    <name>Google</name>
+  </organization>
   <version>0.5-SNAPSHOT</version>
   <packaging>jar</packaging>
   <licenses>
@@ -15,7 +18,7 @@
     </license>
   </licenses>
   <properties>
-    <appengine.target.version>[1.8.9,1.10)</appengine.target.version>
+    <appengine.target.version>[1.9.0,1.10)</appengine.target.version>
   </properties>
   <build>
     <plugins>
@@ -25,6 +28,18 @@
         <configuration>
           <source>1.7</source>
           <target>1.7</target>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-jar-plugin</artifactId>
+        <configuration>
+          <archive>
+            <manifest>
+              <addDefaultImplementationEntries>true</addDefaultImplementationEntries>
+              <addDefaultSpecificationEntries>true</addDefaultSpecificationEntries>
+            </manifest>
+          </archive>
         </configuration>
       </plugin>
     </plugins>
@@ -43,11 +58,6 @@
       <version>${appengine.target.version}</version>
     </dependency>
     <dependency>
-      <groupId>com.google.appengine</groupId>
-      <artifactId>appengine-api-labs</artifactId>
-      <version>1.8.9</version>
-    </dependency>
-    <dependency>
       <groupId>javax.servlet</groupId>
       <artifactId>servlet-api</artifactId>
       <version>2.5</version>
@@ -56,12 +66,12 @@
     <dependency>
       <groupId>com.google.appengine.tools</groupId>
       <artifactId>appengine-gcs-client</artifactId>
-      <version>[0.3.5,0.4)</version>
+      <version>[0.3.6,0.4)</version>
     </dependency>
     <dependency>
       <groupId>com.google.appengine.tools</groupId>
       <artifactId>appengine-pipeline</artifactId>
-      <version>[0.2.5,0.3)</version>
+      <version>[0.2.6,0.3)</version>
     </dependency>
     <dependency>
       <groupId>com.googlecode.charts4j</groupId>
