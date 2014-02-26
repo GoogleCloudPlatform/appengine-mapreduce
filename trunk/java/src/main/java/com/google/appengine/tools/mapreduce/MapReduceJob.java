@@ -604,11 +604,9 @@ public class MapReduceJob<I, K, V, O, R>
             if (request != null) {
               int attempts = request.getIntHeader("X-AppEngine-TaskExecutionCount");
               if (attempts <= 5) {
-                // TODO(user): replace exception with the line bellow once 1.9.0 is public
-                // DeferredTaskContext.markForRetry();
-                // Also when using markForRetry we could make the first delete attempt sooner
-                // as retries will not be noisy.
-                throw new RuntimeException("Retry deferred task #" + attempts);
+                log.info("Request to retry deferred task #" + attempts);
+                DeferredTaskContext.markForRetry();
+                return;
               }
             }
             try {
