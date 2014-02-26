@@ -5,7 +5,7 @@ package com.google.appengine.tools.mapreduce.impl.shardedjob;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.appengine.api.backends.BackendServiceFactory;
-import com.google.appengine.api.labs.modules.ModulesServiceFactory;
+import com.google.appengine.api.modules.ModulesServiceFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -163,8 +163,7 @@ public final class ShardedJobSettings implements Serializable {
     if (backend != null) {
       return BackendServiceFactory.getBackendService().getBackendAddress(backend);
     }
-    // TODO(user): change to getVersionHostname when 1.8.9 is released
-    return ModulesServiceFactory.getModulesService().getModuleHostname(module, version);
+    return ModulesServiceFactory.getModulesService().getVersionHostname(module, version);
   }
 
   public String getTaskQueueTarget() {
