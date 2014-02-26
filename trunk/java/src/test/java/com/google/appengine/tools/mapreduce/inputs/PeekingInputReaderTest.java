@@ -20,8 +20,8 @@ public class PeekingInputReaderTest extends TestCase {
 
   @SuppressWarnings("serial")
   private static class MarshallingInputReader<T> extends InputReader<ByteBuffer> {
-    private InputReader<T> input;
-    private Marshaller<T> marshaller;
+    private final InputReader<T> input;
+    private final Marshaller<T> marshaller;
 
     MarshallingInputReader(InputReader<T> input, Marshaller<T> marshaller) {
       this.input = input;

@@ -28,17 +28,17 @@ public class MergingReaderTest extends TestCase {
   private static class StaticInputReader extends InputReader<ByteBuffer> {
 
     private static final long serialVersionUID = 1L;
-    private ArrayList<String> keys;
-    private ArrayList<List<Integer>> valueSets;
-    private KeyValuesMarshaller<String, Integer> marshaller;
+    private final ArrayList<String> keys;
+    private final ArrayList<List<Integer>> valueSets;
+    private final KeyValuesMarshaller<String, Integer> marshaller;
     private int offset = 0;
 
     public StaticInputReader(LinkedHashMap<String, List<Integer>> results) {
       super();
-      this.marshaller = new KeyValuesMarshaller<>(Marshallers.getStringMarshaller(),
+      marshaller = new KeyValuesMarshaller<>(Marshallers.getStringMarshaller(),
           Marshallers.getIntegerMarshaller());
-      this.keys = new ArrayList<>(results.keySet());
-      this.valueSets = new ArrayList<>(results.values());
+      keys = new ArrayList<>(results.keySet());
+      valueSets = new ArrayList<>(results.values());
   }
 
     @Override
@@ -201,7 +201,6 @@ public class MergingReaderTest extends TestCase {
     }
   }
 
-  @SuppressWarnings("unchecked")
   private MergingReader<String, Integer> reconstruct(
       MergingReader<String, Integer> reader) throws IOException, ClassNotFoundException {
     ByteArrayOutputStream bout = new ByteArrayOutputStream();

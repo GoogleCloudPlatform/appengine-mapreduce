@@ -126,7 +126,7 @@ public abstract class EndToEndTestCase {
   }
 
   protected String getTaskId(TaskStateInfo taskStateInfo) throws UnsupportedEncodingException {
-    return decodeParameters(taskStateInfo).get(ShardedJobRunner.TASK_ID_PARAM);
+    return decodeParameters(taskStateInfo).get(ShardedJobHandler.TASK_ID_PARAM);
   }
 
   // Sadly there's no way to parse query string with JDK. This is a good enough approximation.

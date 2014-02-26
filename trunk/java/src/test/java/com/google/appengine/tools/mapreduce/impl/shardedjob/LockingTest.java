@@ -34,10 +34,13 @@ public class LockingTest extends EndToEndTestCase {
    * This class relies on a static member to block and to count so that it works across
    * serialization. Therefore it is invalid to construct more than one of these at a time.
    */
+  @SuppressWarnings("serial")
   private static class StaticBlockingTask extends TestTask {
+
     static AtomicInteger timesRun = new AtomicInteger(0);
     static Semaphore runStarted = new Semaphore(0);
     static Semaphore finishRun = new Semaphore(0);
+
     public StaticBlockingTask(int result) {
       super(1, 1, result, 1);
     }

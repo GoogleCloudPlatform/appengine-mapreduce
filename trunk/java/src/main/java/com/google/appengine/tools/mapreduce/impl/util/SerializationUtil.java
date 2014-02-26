@@ -20,7 +20,6 @@ import com.google.appengine.api.datastore.Blob;
 import com.google.appengine.api.datastore.Entity;
 import com.google.appengine.tools.mapreduce.CorruptDataException;
 import com.google.appengine.tools.mapreduce.Marshaller;
-import com.google.common.io.Closeables;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -246,7 +245,6 @@ public class SerializationUtil {
     return deserializeFromByteArray(bytes, false);
   }
 
-  @SuppressWarnings("resource")
   public static <T> T deserializeFromByteBuffer(ByteBuffer bytes, final boolean ignoreHeader) {
     return deserializeFromStream(new ByteBufferInputStream(bytes), ignoreHeader);
   }
@@ -329,7 +327,14 @@ public class SerializationUtil {
     } catch (IOException e) {
       throw new RuntimeException("Can't serialize object: " + o, e);
     } finally {
-      Closeables.closeQuietly(out);
+      try {
+        // We want to make sure deflater end method is called
+        if (out != null) {
+          out.close();
+        }
+      } catch (IOException ignore) {
+        // ignore
+      }
     }
   }
 
