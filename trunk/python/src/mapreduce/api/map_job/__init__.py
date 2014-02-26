@@ -11,5 +11,5 @@ from .map_job_config import JobConfig
 from .map_job_context import JobContext
 from .map_job_context import ShardContext
 from .map_job_context import SliceContext
-from .map_job_control import start
+from .map_job_control import Job
 from .mapper import Mapper
