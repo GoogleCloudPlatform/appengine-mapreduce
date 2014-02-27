@@ -9,7 +9,7 @@
   <organization>
     <name>Google</name>
   </organization>
-  <version>0.5-SNAPSHOT</version>
+  <version>0.6-SNAPSHOT</version>
   <packaging>jar</packaging>
   <licenses>
     <license>
@@ -66,12 +66,12 @@
     <dependency>
       <groupId>com.google.appengine.tools</groupId>
       <artifactId>appengine-gcs-client</artifactId>
-      <version>[0.3.6,0.4)</version>
+      <version>[0.3.7,0.4)</version>
     </dependency>
     <dependency>
       <groupId>com.google.appengine.tools</groupId>
       <artifactId>appengine-pipeline</artifactId>
-      <version>[0.2.6,0.3)</version>
+      <version>[0.2.7,0.3)</version>
     </dependency>
     <dependency>
       <groupId>com.googlecode.charts4j</groupId>
