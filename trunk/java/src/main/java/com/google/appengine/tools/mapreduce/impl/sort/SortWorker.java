@@ -42,6 +42,9 @@ public class SortWorker extends Worker<SortContext> {
   private static final Logger log = Logger.getLogger(SortWorker.class.getName());
 
   private static final long SORT_MEMORY_OVERHEAD = 8 * 1024 * 1024; // Estimate.
+  private static final String DISABLE_ALLOCATE_DIRECT_PROPERTY =
+      SortWorker.class.getName() + ".disable_allocate_direct";
+
 
   /**
    * Fraction of system ram sort will allocate. There are multiple values in case the largest
@@ -368,16 +371,18 @@ public class SortWorker extends Worker<SortContext> {
    */
   @VisibleForTesting
   ByteBuffer allocateMemory() {
-    Runtime runtime = Runtime.getRuntime();
-    for (int retries = 0; retries < MEMORY_ALLOCATION_ATTEMPTS; retries++) {
-      int targetCapacity = getMemoryForSort(retries);
-      try {
-        return ByteBuffer.allocateDirect(targetCapacity);
-      } catch (OutOfMemoryError e) {
-        log.info("Failed to allocate direct memory for sort: " + targetCapacity
-            + " retrying with a smaller buffer.");
+    if (!Boolean.getBoolean(DISABLE_ALLOCATE_DIRECT_PROPERTY)) {
+      for (int retries = 0; retries < MEMORY_ALLOCATION_ATTEMPTS; retries++) {
+        int targetCapacity = getMemoryForSort(retries);
+        try {
+          return ByteBuffer.allocateDirect(targetCapacity);
+        } catch (OutOfMemoryError e) {
+          log.info("Failed to allocate direct memory for sort: " + targetCapacity
+              + " retrying with a smaller buffer.");
+        }
       }
     }
+    Runtime runtime = Runtime.getRuntime();
     int targetCapacity = getMemoryForSort(MEMORY_ALLOCATION_ATTEMPTS);
     try {
       if (targetCapacity < runtime.freeMemory() + (runtime.maxMemory() - runtime.totalMemory())) {
