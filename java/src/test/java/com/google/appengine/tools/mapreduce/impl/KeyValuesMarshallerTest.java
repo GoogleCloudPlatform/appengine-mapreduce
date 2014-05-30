@@ -30,7 +30,8 @@ public class KeyValuesMarshallerTest extends TestCase {
     assertEquals(bytes, marshaller.toBytes(reconstructed));
   }
 
-  private <K, V> void validateEqual(K key, List<V> values, KeyValue<K, ? extends Iterable<V>> reconstructed) {
+  private <K, V> void validateEqual(K key, List<V> values,
+      KeyValue<K, ? extends Iterable<V>> reconstructed) {
     assertEquals(key, reconstructed.getKey());
     Iterator<V> reconValues = reconstructed.getValue().iterator();
     for (V value : values) {
