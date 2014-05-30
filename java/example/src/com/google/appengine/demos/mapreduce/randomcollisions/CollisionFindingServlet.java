@@ -105,7 +105,9 @@ public class CollisionFindingServlet extends HttpServlet {
     MapReduceSpecification<Long, Integer, Integer, ArrayList<Integer>, GoogleCloudStorageFileSet>
         mapReduceSpec = createMapReduceSpec(bucket, start, limit, shards);
     MapReduceSettings settings = getSettings(bucket, queue, module);
+    // [START startMapReduceJob]
     String id = MapReduceJob.start(mapReduceSpec, settings);
+    // [END startMapReduceJob]
     // [END start_mapreduce]
     resp.sendRedirect("/_ah/pipeline/status.html?root=" + id);
   }
