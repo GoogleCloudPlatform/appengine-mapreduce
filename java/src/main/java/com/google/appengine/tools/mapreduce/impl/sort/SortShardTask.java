@@ -114,7 +114,7 @@ public class SortShardTask extends WorkerShardTask<KeyValue<ByteBuffer, ByteBuff
   }
 
   @Override
-  public boolean allowSliceRetry() {
+  public boolean allowSliceRetry(boolean abandon) {
     return true;
   }
 

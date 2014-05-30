@@ -54,7 +54,7 @@ public class TestTask implements IncrementalTaskWithContext {
   }
 
   @Override
-  public boolean allowSliceRetry() {
+  public boolean allowSliceRetry(boolean abandon) {
     return false;
   }
 }
