@@ -32,8 +32,7 @@ public class CleanupPipelineJob extends Job1<Void, List<GoogleCloudStorageFileSe
       settings[index++] = waitFor(futureCall);
     }
     // TODO(user): should not be needed once b/9940384 is fixed
-    futureCall(new DeletePipelineJob(getPipelineKey().getName()), settings);
-    return null;
+    return futureCall(new DeletePipelineJob(getPipelineKey().getName()), settings);
   }
 
   public static void cleanup(List<GoogleCloudStorageFileSet> files, JobSetting... settings) {
