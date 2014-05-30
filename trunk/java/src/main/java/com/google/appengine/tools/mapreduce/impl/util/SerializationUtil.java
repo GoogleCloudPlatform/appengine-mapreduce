@@ -30,6 +30,7 @@ import com.google.appengine.tools.mapreduce.CorruptDataException;
 import com.google.appengine.tools.mapreduce.Marshaller;
 import com.google.common.base.Function;
 import com.google.common.collect.Iterables;
+import com.google.common.collect.Lists;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -370,11 +371,12 @@ public class SerializationUtil {
     byte[] bytes = serializeToByteArray(o, false, compression);
 
     // deleting previous shards
-    DATASTORE.delete(tx, getShardedValueKeysFor(tx, entity.getKey(), property));
+    List<Key> toDelete = Lists.newArrayList(getShardedValueKeysFor(tx, entity.getKey(), property));
 
     Object value;
     if (bytes.length < MAX_BLOB_BYTE_SIZE) {
       value = new Blob(bytes);
+      DATASTORE.delete(tx, toDelete);
     } else {
       int shardId = 0;
       int offset = 0;
@@ -383,11 +385,14 @@ public class SerializationUtil {
         int limit = offset + MAX_BLOB_BYTE_SIZE;
         byte[] chunk = Arrays.copyOfRange(bytes, offset, Math.min(limit, bytes.length));
         offset = limit;
-        String keyName = String.format("shard-%04d", ++shardId);
+        String keyName = String.format("shard-%02d", ++shardId);
         Entity shard = new Entity(SHARDED_VALUE_KIND, keyName, entity.getKey());
         shard.setProperty("property", property);
         shard.setUnindexedProperty("content", new Blob(chunk));
         shards.add(shard);
+      }
+      if (shards.size() < toDelete.size()) {
+        DATASTORE.delete(tx, toDelete.subList(shards.size(), toDelete.size()));
       }
       value = DATASTORE.put(tx, shards);
     }

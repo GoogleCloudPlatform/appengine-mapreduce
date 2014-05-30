@@ -27,9 +27,8 @@ class ShardedJobServiceImpl implements ShardedJobService {
   }
 
   @Override
-  public <T extends IncrementalTask> Iterator<IncrementalTaskState<T>> lookupTasks(
-      ShardedJobState state) {
-    return new ShardedJobRunner<T>().lookupTasks(state.getJobId(), state.getTotalTaskCount(), true);
+  public Iterator<IncrementalTaskState<IncrementalTask>> lookupTasks(ShardedJobState state) {
+    return new ShardedJobRunner<>().lookupTasks(state.getJobId(), state.getTotalTaskCount(), true);
   }
 
   @Override

@@ -1,13 +1,11 @@
 package com.google.appengine.tools.mapreduce.impl.shardedjob;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-
 import com.google.appengine.api.datastore.DatastoreService;
 import com.google.appengine.api.datastore.DatastoreServiceFactory;
 import com.google.appengine.api.datastore.Entity;
 import com.google.appengine.api.datastore.EntityNotFoundException;
 import com.google.appengine.api.datastore.Query;
+import com.google.appengine.tools.mapreduce.EndToEndTestCase;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -15,7 +13,6 @@ import org.junit.runners.BlockJUnit4ClassRunner;
 
 import java.util.Iterator;
 import java.util.Map;
-
 
 /**
  * Tests the format in which ShardedJobs are written to the datastore.

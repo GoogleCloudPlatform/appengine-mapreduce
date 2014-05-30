@@ -5,7 +5,7 @@ package com.google.appengine.tools.mapreduce.impl.shardedjob;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 import java.io.Serializable;
-import java.util.List;
+import java.util.Iterator;
 
 /**
  * Aggregates results from {@link IncrementalTask}s and receives notification
@@ -34,7 +34,7 @@ public abstract class ShardedJobController<T extends IncrementalTask> implements
   /**
    * Called when the sharded job has completed successfully.
    */
-  public abstract void completed(List<? extends T> completedTasks);
+  public abstract void completed(Iterator<T> completedTasks);
 
   /**
    * Called when the sharded job has failed to complete successfully.

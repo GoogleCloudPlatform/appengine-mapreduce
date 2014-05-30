@@ -24,6 +24,7 @@ import org.joda.time.format.DateTimeFormat;
 import org.joda.time.format.DateTimeFormatter;
 
 import java.io.IOException;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Random;
 import java.util.logging.Logger;
@@ -83,10 +84,9 @@ public class InProcessMap<I, O, R> {
           }
 
           @Override
-          public void completed(
-              List<? extends WorkerShardTask<I, O, MapOnlyMapperContext<O>>> tasks) {
-            for (WorkerShardTask<I, O, MapOnlyMapperContext<O>> task : tasks) {
-              counters.addAll(task.getContext().getCounters());
+          public void completed(Iterator<WorkerShardTask<I, O, MapOnlyMapperContext<O>>> tasks) {
+            while (tasks.hasNext()) {
+              counters.addAll(tasks.next().getContext().getCounters());
             }
           }
         });

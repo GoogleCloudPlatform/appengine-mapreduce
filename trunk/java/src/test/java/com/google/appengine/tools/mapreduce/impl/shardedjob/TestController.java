@@ -4,7 +4,7 @@ import static junit.framework.Assert.assertEquals;
 import static junit.framework.Assert.fail;
 import static org.junit.Assert.assertFalse;
 
-import java.util.List;
+import java.util.Iterator;
 
 /**
  * A mock controller used for unit tests. It simply sums the inputs to combine the results.
@@ -22,10 +22,10 @@ public class TestController extends ShardedJobController<TestTask> {
   }
 
   @Override
-  public void completed(List<? extends TestTask> results) {
+  public void completed(Iterator<TestTask> results) {
     int sum = 0;
-    for (TestTask r : results) {
-      sum += r.getResult();
+    while (results.hasNext()) {
+      sum += results.next().getResult();
     }
     assertEquals(expectedResult, sum);
     assertFalse(completed);

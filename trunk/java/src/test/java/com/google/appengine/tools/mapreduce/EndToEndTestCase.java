@@ -9,6 +9,7 @@ import com.google.appengine.api.blobstore.dev.LocalBlobstoreService;
 import com.google.appengine.api.taskqueue.dev.LocalTaskQueue;
 import com.google.appengine.api.taskqueue.dev.QueueStateInfo;
 import com.google.appengine.api.taskqueue.dev.QueueStateInfo.HeaderWrapper;
+import com.google.appengine.api.taskqueue.dev.QueueStateInfo.TaskStateInfo;
 import com.google.appengine.tools.development.ApiProxyLocal;
 import com.google.appengine.tools.development.testing.LocalDatastoreServiceTestConfig;
 import com.google.appengine.tools.development.testing.LocalFileServiceTestConfig;
@@ -16,12 +17,16 @@ import com.google.appengine.tools.development.testing.LocalMemcacheServiceTestCo
 import com.google.appengine.tools.development.testing.LocalModulesServiceTestConfig;
 import com.google.appengine.tools.development.testing.LocalServiceTestHelper;
 import com.google.appengine.tools.development.testing.LocalTaskQueueTestConfig;
+import com.google.appengine.tools.mapreduce.impl.shardedjob.ShardedJobHandler;
 import com.google.appengine.tools.pipeline.impl.servlets.PipelineServlet;
 import com.google.appengine.tools.pipeline.impl.servlets.TaskHandler;
 import com.google.apphosting.api.ApiProxy;
 import com.google.common.base.CharMatcher;
 
 import junit.framework.TestCase;
+
+import org.junit.After;
+import org.junit.Before;
 
 import java.io.ByteArrayInputStream;
 import java.io.ObjectInputStream;
@@ -58,8 +63,9 @@ public abstract class EndToEndTestCase extends TestCase {
     return null;
   }
 
+  @Before
   @Override
-  protected void setUp() throws Exception {
+  public void setUp() throws Exception {
     super.setUp();
     helper.setUp();
     Map<String, String> envAttributes = getEnvAttributes();
@@ -72,13 +78,22 @@ public abstract class EndToEndTestCase extends TestCase {
     proxy.setProperty(LocalBlobstoreService.NO_STORAGE_PROPERTY, "true");
   }
 
+  @After
   @Override
-  protected void tearDown() throws Exception {
+  public void tearDown() throws Exception {
     helper.tearDown();
     super.tearDown();
   }
 
-  private void executeTask(String queueName, QueueStateInfo.TaskStateInfo taskStateInfo)
+  protected List<QueueStateInfo.TaskStateInfo> getTasks() {
+    return getTasks("default");
+  }
+
+  protected List<QueueStateInfo.TaskStateInfo> getTasks(String queueName) {
+    return taskQueue.getQueueStateInfo().get(queueName).getTaskInfo();
+  }
+
+  protected void executeTask(String queueName, QueueStateInfo.TaskStateInfo taskStateInfo)
       throws Exception {
     logger.info("Executing task " + taskStateInfo.getTaskName()
         + " with URL " + taskStateInfo.getUrl());
@@ -159,6 +174,14 @@ public abstract class EndToEndTestCase extends TestCase {
     }
   }
 
+  protected TaskStateInfo grabNextTaskFromQueue(String queueName) {
+    List<TaskStateInfo> taskInfo = getTasks(queueName);
+    assertFalse(taskInfo.isEmpty());
+    TaskStateInfo taskStateInfo = taskInfo.get(0);
+    taskQueue.deleteTask(queueName, taskStateInfo.getTaskName());
+    return taskStateInfo;
+  }
+
   // Sadly there's no way to parse query string with JDK. This is a good enough approximation.
   private static Map<String, String> decodeParameters(String requestBody)
       throws UnsupportedEncodingException {
@@ -176,5 +199,9 @@ public abstract class EndToEndTestCase extends TestCase {
     }
 
     return result;
+  }
+
+  protected String getTaskId(TaskStateInfo taskStateInfo) throws UnsupportedEncodingException {
+    return decodeParameters(taskStateInfo.getBody()).get(ShardedJobHandler.TASK_ID_PARAM);
   }
 }

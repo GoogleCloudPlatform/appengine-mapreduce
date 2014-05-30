@@ -2,11 +2,9 @@ package com.google.appengine.tools.mapreduce.impl.shardedjob;
 
 import static com.google.appengine.tools.mapreduce.impl.shardedjob.Status.StatusCode.DONE;
 import static com.google.appengine.tools.mapreduce.impl.shardedjob.Status.StatusCode.RUNNING;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
 
 import com.google.appengine.api.taskqueue.dev.QueueStateInfo.TaskStateInfo;
+import com.google.appengine.tools.mapreduce.EndToEndTestCase;
 import com.google.apphosting.api.ApiProxy;
 import com.google.apphosting.api.ApiProxy.Environment;
 import com.google.common.collect.ImmutableList;
@@ -28,7 +26,16 @@ import java.util.concurrent.atomic.AtomicInteger;
 @RunWith(BlockJUnit4ClassRunner.class)
 public class LockingTest extends EndToEndTestCase {
 
+  private final ShardedJobService service = ShardedJobServiceFactory.getShardedJobService();
   private final String queueName = "default";
+  private ShardedJobSettings settings;
+
+  @Before
+  @Override
+  public void setUp() throws Exception {
+    super.setUp();
+    settings = new ShardedJobSettings.Builder().build();
+  }
 
   /**
    * This class relies on a static member to block and to count so that it works across
@@ -177,8 +184,8 @@ public class LockingTest extends EndToEndTestCase {
   public void testExpiryRestartsShard() throws Exception {
     //Setting the timeout to 0 insures that the shard will have timed out by the time the
     //duplicate arrives.
-    ShardedJobSettings settings = new ShardedJobSettings.Builder().setControllerPath("/controller")
-        .setWorkerPath("/worker").setSliceTimeoutMillis(0).build();
+    ShardedJobSettings settings =
+        new ShardedJobSettings.Builder().setSliceTimeoutMillis(0).build();
     final String jobId = startNewTask(settings);
 
     //Run task

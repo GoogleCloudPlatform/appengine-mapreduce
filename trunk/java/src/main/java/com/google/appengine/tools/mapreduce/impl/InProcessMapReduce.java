@@ -125,9 +125,9 @@ public class InProcessMapReduce<I, K, V, O, R> {
 
           @Override
           public void completed(
-              List<? extends WorkerShardTask<I, KeyValue<K, V>, MapperContext<K, V>>> tasks) {
-            for (WorkerShardTask<I, KeyValue<K, V>, MapperContext<K, V>> task : tasks) {
-              counters.addAll(task.getContext().getCounters());
+              Iterator<WorkerShardTask<I, KeyValue<K, V>, MapperContext<K, V>>> tasks) {
+            while (tasks.hasNext()) {
+              counters.addAll(tasks.next().getContext().getCounters());
             }
           }
         });
@@ -208,9 +208,9 @@ public class InProcessMapReduce<I, K, V, O, R> {
 
       @Override
       public void completed(
-          List<? extends WorkerShardTask<KeyValue<K, Iterator<V>>, O, ReducerContext<O>>> tasks) {
-        for (WorkerShardTask<KeyValue<K, Iterator<V>>, O, ReducerContext<O>> task : tasks) {
-          counters.addAll(task.getContext().getCounters());
+          Iterator<WorkerShardTask<KeyValue<K, Iterator<V>>, O, ReducerContext<O>>> tasks) {
+        while (tasks.hasNext()) {
+          counters.addAll(tasks.next().getContext().getCounters());
         }
       }
     });

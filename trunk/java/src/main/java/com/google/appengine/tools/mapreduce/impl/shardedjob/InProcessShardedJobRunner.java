@@ -33,6 +33,6 @@ public class InProcessShardedJobRunner {
       task.cleanup();
       results.add(task);
     }
-    controller.completed(results);
+    controller.completed(results.iterator());
   }
 }
