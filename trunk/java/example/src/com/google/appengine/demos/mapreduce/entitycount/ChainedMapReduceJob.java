@@ -76,15 +76,27 @@ public class ChainedMapReduceJob extends Job0<MapReduceResult<List<List<KeyValue
   // [END chain_job_example]
 
   MapReduceSettings getSettings(String bucket) {
-    return new MapReduceSettings.Builder().setWorkerQueueName("mapreduce-workers")
-        .setBucketName(bucket).setModule("mapreduce").build();
+    // [START mapSettings]
+    MapReduceSettings settings = new MapReduceSettings.Builder()
+        .setWorkerQueueName("mapreduce-workers")
+        .setBucketName(bucket)
+        .setModule("mapreduce")
+        .build();
+    // [END mapSettings]
+    return settings;
   }
 
   MapSpecification<Long, Entity, Void> getCreationJobSpec(int bytesPerEntity, int entities,
       int shardCount) {
-    return new MapSpecification.Builder<>(new ConsecutiveLongInput(0, entities, shardCount),
-        new EntityCreator(datastoreType, bytesPerEntity), new DatastoreOutput()).setJobName(
-        "Create MapReduce entities").build();
+    // [START mapSpec]
+    MapSpecification<Long, Entity, Void> spec = new MapSpecification.Builder<>(
+        new ConsecutiveLongInput(0, entities, shardCount),
+        new EntityCreator(datastoreType, bytesPerEntity),
+        new DatastoreOutput())
+        .setJobName("Create MapReduce entities")
+        .build();
+    // [END mapSpec]
+    return spec;
   }
 
   MapReduceSpecification<Entity, String, Long, KeyValue<String, Long>,
