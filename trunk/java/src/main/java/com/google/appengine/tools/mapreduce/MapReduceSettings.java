@@ -43,7 +43,11 @@ public class MapReduceSettings extends MapSettings {
 
     public Builder(MapReduceSettings settings) {
       super(settings);
-      bucketName = settings.bucketName;
+      this.bucketName = settings.bucketName;
+    }
+
+    public Builder(MapSettings settings) {
+      super(settings);
     }
 
     @Override
