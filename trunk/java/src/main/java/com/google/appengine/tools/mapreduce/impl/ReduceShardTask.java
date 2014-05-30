@@ -13,7 +13,6 @@ import com.google.appengine.tools.mapreduce.Reducer;
 import com.google.appengine.tools.mapreduce.ReducerContext;
 import com.google.appengine.tools.mapreduce.ReducerInput;
 import com.google.appengine.tools.mapreduce.Worker;
-import com.google.appengine.tools.mapreduce.impl.shardedjob.ShardFailureException;
 
 import java.io.IOException;
 import java.io.ObjectInputStream;
@@ -53,11 +52,7 @@ public class ReduceShardTask<K, V, O>
   @Override
   protected void callWorker(KeyValue<K, Iterator<V>> input) {
     ReducerInput<V> value = ReducerInputs.fromIterator(input.getValue());
-    try {
-      reducer.reduce(input.getKey(), value);
-    } catch (RuntimeException ex) {
-      throw new ShardFailureException(getContext().getShardNumber(), ex);
-    }
+    reducer.reduce(input.getKey(), value);
   }
 
   @Override
@@ -93,7 +88,7 @@ public class ReduceShardTask<K, V, O>
 
   @Override
   public boolean allowSliceRetry() {
-    return !context.emitCalled() || out.allowSliceRetry();
+    return (!context.emitCalled() || out.allowSliceRetry()) && reducer.allowSliceRetry();
   }
 
   private void readObject(ObjectInputStream stream) throws IOException, ClassNotFoundException {

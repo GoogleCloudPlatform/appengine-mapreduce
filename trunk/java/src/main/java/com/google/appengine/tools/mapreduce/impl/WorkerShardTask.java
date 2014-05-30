@@ -78,8 +78,8 @@ public abstract class WorkerShardTask<I, O, C extends WorkerContext<O>> implemen
       beginSlice();
     } catch (JobFailureException | RecoverableException | ShardFailureException ex) {
       throw ex;
-    } catch (IOException | RuntimeException ex) {
-      throw new RecoverableException("Failed on beginSlice/beginShard", ex);
+    } catch (IOException ex) {
+      throw new RuntimeException("IOException during beginSlice", ex);
     }
     overallStopwatch = Stopwatch.createStarted();
     inputStopwatch =  Stopwatch.createUnstarted();

@@ -26,7 +26,7 @@ import com.google.appengine.tools.mapreduce.impl.HashingSharder;
 import com.google.appengine.tools.mapreduce.impl.InProcessMap;
 import com.google.appengine.tools.mapreduce.impl.InProcessMapReduce;
 import com.google.appengine.tools.mapreduce.impl.MapReduceConstants;
-import com.google.appengine.tools.mapreduce.impl.shardedjob.RecoverableException;
+import com.google.appengine.tools.mapreduce.impl.shardedjob.ShardFailureException;
 import com.google.appengine.tools.mapreduce.inputs.ConsecutiveLongInput;
 import com.google.appengine.tools.mapreduce.inputs.DatastoreInput;
 import com.google.appengine.tools.mapreduce.inputs.ForwardingInputReader;
@@ -385,11 +385,13 @@ public class EndToEndTest extends EndToEndTestCase {
     private static int[] totalMapCount;
     private static int[] successfulMapCount;
     private static Map<Integer, AtomicInteger>[] sliceAttemptsPerShardRetry;
+    private static int[] shardFailureCount;
     private static int[] sliceFailureCount;
-    private static boolean firstSlice;
+    private static boolean firstSlice; // fail at 2nd slice to avoid beginShard for slice failure
     private final int sliceFailures;
     private final int shardFailures;
     private int shardNum;
+    private boolean allowSliceRetry = true;
 
     @SuppressWarnings("unchecked")
     private RougeMapper(int shards, int shardFailures, int sliceFailures) {
@@ -401,11 +403,21 @@ public class EndToEndTest extends EndToEndTestCase {
       endSliceCount = new int[shards];
       totalMapCount = new int[shards];
       successfulMapCount = new int[shards];
+      shardFailureCount = new int[shards];
       sliceFailureCount = new int[shards];
       sliceAttemptsPerShardRetry = new HashMap[shards];
       for (int i = 0; i < shards; i++) {
         sliceAttemptsPerShardRetry[i] = new HashMap<>();
       }
+    }
+
+    void setAllowSliceRetry(boolean allowSliceRetry) {
+      this.allowSliceRetry = allowSliceRetry;
+    }
+
+    @Override
+    public boolean allowSliceRetry() {
+      return allowSliceRetry;
     }
 
     private void incrementCounter(String name) {
@@ -433,16 +445,8 @@ public class EndToEndTest extends EndToEndTestCase {
     public void beginSlice() {
       shardNum = getContext().getShardNumber();
       sliceAttemptsPerShardRetry[shardNum].get(beginShardCount[shardNum]).getAndIncrement();
-      // We expect only beginSlice[last_successful_attempt] to be available
-
       incrementCounter("beginSlice", beginShardCount[shardNum]);
-      // Start with slice failures after, shard failure and a first successful slice
       beginSliceCount[shardNum]++;
-      if (!firstSlice) {
-        if (++sliceFailureCount[shardNum] <= sliceFailures) {
-          throw new RecoverableException("bla", null);
-        }
-      }
     }
 
     @Override
@@ -464,11 +468,16 @@ public class EndToEndTest extends EndToEndTestCase {
     public void map(Long input) {
       totalMapCount[shardNum]++;
       incrementCounter("map");
-      if (beginShardCount[shardNum] <= shardFailures) {
-        throw new RuntimeException("Bad state");
+      if (!firstSlice) {
+        if (sliceFailureCount[shardNum] < sliceFailures) {
+          sliceFailureCount[shardNum]++;
+          throw new RuntimeException("bla");
+        }
+        if (shardFailureCount[shardNum] < shardFailures) {
+          shardFailureCount[shardNum]++;
+          throw new ShardFailureException("Bad state");
+        }
       }
-      // TODO(user): Once we support slice failure during map phase
-      // by checking with the writer, we should have a test for it here.
       successfulMapCount[shardNum]++;
     }
   }
@@ -502,16 +511,18 @@ public class EndToEndTest extends EndToEndTestCase {
     RougeMapperVerifier(int shards, int mapCount, int shardFailures, int sliceFailures) {
       this.shards = shards;
       this.mapCount = mapCount;
-      this.shardFailures = shardFailures;
       this.sliceFailures = sliceFailures;
-      shardFailuresDueToSliceRetry = sliceFailures / SLICE_ATTEMPTS;
-      successfulMapCount = mapCount + shardFailuresDueToSliceRetry;
-      totalMapCount = mapCount + shardFailures + shardFailuresDueToSliceRetry;
-      beginShardCount = shardFailures + shardFailuresDueToSliceRetry + 1;
+      this.shardFailuresDueToSliceRetry = sliceFailures / SLICE_ATTEMPTS;
+      this.shardFailures = shardFailuresDueToSliceRetry + shardFailures;
+      successfulMapCount = mapCount + this.shardFailures;
+      totalMapCount = mapCount + 2 * shardFailures
+          + (1 + SLICE_ATTEMPTS) * shardFailuresDueToSliceRetry + sliceFailures % SLICE_ATTEMPTS;
+      beginShardCount = this.shardFailures + 1;
       endShardCount = 1; // always 1
       // 1 extra for eof (for both [begin/end]Slice)
-      beginSliceCount = shardFailures + shardFailuresDueToSliceRetry + sliceFailures + mapCount + 1;
-      endSliceCount = mapCount + shardFailuresDueToSliceRetry + 1;
+      beginSliceCount =  1 + totalMapCount;
+      endSliceCount = 1 + this.shardFailures + mapCount;
+
     }
 
     @Override
@@ -544,21 +555,29 @@ public class EndToEndTest extends EndToEndTestCase {
       assertEquals(successfulMapCount, RougeMapper.successfulMapCount[shard]);
       assertEquals(totalMapCount, RougeMapper.totalMapCount[shard]);
 
-      // check counter for shard failures
-      for (int i = 1; i < shardFailures; i++) {
-        assertEquals(1, RougeMapper.sliceAttemptsPerShardRetry[shard].get(i).intValue());
-      }
-      for (int i = shardFailures + 1; i < beginShardCount; i++) {
-        // 1 go through, 1 fail + 20 retries fail
+      int shardTry = 1;
+      while (shardTry <= shardFailuresDueToSliceRetry) {
+         // 1 go through, 1 fail + 20 retries fail
         assertEquals(1 + SLICE_ATTEMPTS,
-            RougeMapper.sliceAttemptsPerShardRetry[shard].get(i).intValue());
+            RougeMapper.sliceAttemptsPerShardRetry[shard].get(shardTry).intValue());
+        shardTry++;
       }
-      if (shardFailuresDueToSliceRetry > 0){
-        assertEquals(mapCount + 1 + sliceFailures % SLICE_ATTEMPTS,
-            RougeMapper.sliceAttemptsPerShardRetry[shard].get(beginShardCount).intValue());
-      } else {
-        assertEquals(successfulMapCount + sliceFailures + 1,
-            RougeMapper.sliceAttemptsPerShardRetry[shard].get(beginShardCount).intValue());
+      int failedSlices = sliceFailures % SLICE_ATTEMPTS;
+      while (shardTry <= shardFailures) {
+        if (failedSlices > 0) {
+          assertEquals(1 + failedSlices + 1,
+              RougeMapper.sliceAttemptsPerShardRetry[shard].get(shardTry).intValue());
+          failedSlices = 0;
+        } else {
+          assertEquals(2, RougeMapper.sliceAttemptsPerShardRetry[shard].get(shardTry).intValue());
+        }
+        shardTry++;
+      }
+      while (shardTry <= beginShardCount) {
+        assertEquals(failedSlices + mapCount + 1,
+            RougeMapper.sliceAttemptsPerShardRetry[shard].get(shardTry).intValue());
+        failedSlices = 0;
+        shardTry++;
       }
 
       for (int i = 1; i < beginShardCount; i++) {
@@ -575,10 +594,10 @@ public class EndToEndTest extends EndToEndTestCase {
     }
   }
 
-  public void testShardRetriesSuccess() throws Exception {
+  public void testShardAndSliceRetriesSuccess() throws Exception {
     int shardsCount = 1;
     // {input-size, shard-failure, slice-failure}
-    int[][] runs = {{10, 2, 0}, {10, 0, 10}, {10, 3, 5}, {10, 0, 22}, {10, 1, 50}};
+    int[][] runs = {{10, 0, 0}, {10, 2, 0}, {10, 0, 10}, {10, 3, 5}, {10, 0, 22}, {10, 1, 50}};
     for (int[] run : runs) {
       RandomLongInput input = new RandomLongInput(run[0], shardsCount);
       runWithPipeline(new SlicingPreparer(),
@@ -599,9 +618,34 @@ public class EndToEndTest extends EndToEndTestCase {
             }
           });
     }
+
+    // Disallow slice-retry
+    runs = new int[][]{{10, 0, 0}, {10, 4, 0}, {10, 0, 4}, {10, 3, 1}, {10, 1, 3}};
+    for (int[] run : runs) {
+      RandomLongInput input = new RandomLongInput(run[0], shardsCount);
+      RougeMapper mapper = new RougeMapper(shardsCount, run[1], run[2]);
+      mapper.setAllowSliceRetry(false);
+      runWithPipeline(new SlicingPreparer(),
+          new MapReduceSpecification.Builder<>(
+              input,
+              mapper,
+              NoReducer.<String, Long, String>create(),
+              new NoOutput<String, String>())
+                  .setKeyMarshaller(Marshallers.getStringMarshaller())
+                  .setValueMarshaller(Marshallers.getLongMarshaller())
+                  .setJobName("Shard-retry test")
+                  .build(),
+          new RougeMapperVerifier(shardsCount, run[0], run[1] + run[2], 0) {
+            @Override
+            public void verify(MapReduceResult<String> result) throws Exception {
+              super.verify(result);
+              assertNull(result.getOutputResult());
+            }
+          });
+    }
   }
 
-  public void testShardRetriesFailure() throws Exception {
+  public void testShardAndSliceRetriesFailure() throws Exception {
     int shardsCount = 1;
     // {shard-failure, slice-failure}
     int[][] runs = {{5, 0}, {4, 21}, {3, 50}};
@@ -622,31 +666,29 @@ public class EndToEndTest extends EndToEndTestCase {
       assertTrue(info.getException().getMessage().matches(
           "Stage map-.* was not completed successfuly \\(status=ERROR, message=.*\\)"));
     }
-  }
 
-  // Slice exceeds max allowed and fallback to shard-retry
-  public void testSliceRetriesFailure() throws Exception {
-    int shardsCount = 1;
-    final RandomLongInput input = new RandomLongInput(10, shardsCount);
-    input.setSeed(0L);
-    MapReduceSpecification<Long, String, Long, String, String> mrSpec =
-        new MapReduceSpecification.Builder<>(input, new RougeMapper(shardsCount, 5, 0),
-        NoReducer.<String, Long, String>create(), new NoOutput<String, String>())
-        .setJobName("Shard-retry failed").setKeyMarshaller(Marshallers.getStringMarshaller())
-        .setValueMarshaller(Marshallers.getLongMarshaller()).build();
-    MapReduceSettings mrSettings = new MapReduceSettings.Builder().build();
-    String jobId = pipelineService.startNewPipeline(new MapReduceJob<>(mrSpec, mrSettings));
-    assertFalse(jobId.isEmpty());
-    executeTasksUntilEmpty("default");
-    JobInfo info = pipelineService.getJobInfo(jobId);
-    assertNull(info.getOutput());
-    assertEquals(JobInfo.State.STOPPED_BY_ERROR, info.getJobState());
-    assertTrue(info.getException().getMessage().matches(
-        "Stage map-.* was not completed successfuly \\(status=ERROR, message=.*\\)"));
-    assertEquals("Shard 0 failed.", info.getException().getCause().getMessage());
-    assertEquals("Bad state", info.getException().getCause().getCause().getMessage());
+    // Disallow slice-retry
+    runs = new int[][]{{5, 0}, {0, 5}, {4, 1}, {1, 4}};
+    for (int[] run : runs) {
+      RandomLongInput input = new RandomLongInput(10, shardsCount);
+      RougeMapper mapper = new RougeMapper(shardsCount, run[0], run[1]);
+      mapper.setAllowSliceRetry(false);
+      MapReduceSettings mrSettings = new SlicingPreparer().prepare();
+      MapReduceSpecification<Long, String, Long, String, String> mrSpec =
+          new MapReduceSpecification.Builder<>(input, mapper,
+          NoReducer.<String, Long, String>create(), new NoOutput<String, String>())
+          .setJobName("Shard-retry failed").setKeyMarshaller(Marshallers.getStringMarshaller())
+          .setValueMarshaller(Marshallers.getLongMarshaller()).build();
+      String jobId = pipelineService.startNewPipeline(new MapReduceJob<>(mrSpec, mrSettings));
+      assertFalse(jobId.isEmpty());
+      executeTasksUntilEmpty("default");
+      JobInfo info = pipelineService.getJobInfo(jobId);
+      assertNull(info.getOutput());
+      assertEquals(JobInfo.State.STOPPED_BY_ERROR, info.getJobState());
+      assertTrue(info.getException().getMessage().matches(
+          "Stage map-.* was not completed successfuly \\(status=ERROR, message=.*\\)"));
+    }
   }
-
   public void testPassThroughToString() throws Exception {
     final RandomLongInput input = new RandomLongInput(10, 1);
     input.setSeed(0L);
@@ -763,7 +805,7 @@ public class EndToEndTest extends EndToEndTestCase {
     }
   }
 
-  @SuppressWarnings({"serial", "rawtypes"})
+  @SuppressWarnings({"serial", "rawtypes", "unchecked"})
   static class TestOutputWriter<T> extends ForwardingOutputWriter<T> {
 
     static OutputWriter delegate;
