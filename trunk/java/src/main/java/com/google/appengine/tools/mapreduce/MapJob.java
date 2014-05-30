@@ -17,7 +17,7 @@ import com.google.appengine.tools.mapreduce.impl.shardedjob.ShardedJobServiceFac
 import com.google.appengine.tools.mapreduce.impl.shardedjob.ShardedJobSettings;
 import com.google.appengine.tools.mapreduce.impl.shardedjob.Status;
 import com.google.appengine.tools.pipeline.FutureValue;
-import com.google.appengine.tools.pipeline.Job2;
+import com.google.appengine.tools.pipeline.Job0;
 import com.google.appengine.tools.pipeline.JobSetting;
 import com.google.appengine.tools.pipeline.NoSuchObjectException;
 import com.google.appengine.tools.pipeline.OrphanedObjectException;
@@ -25,6 +25,7 @@ import com.google.appengine.tools.pipeline.PipelineService;
 import com.google.appengine.tools.pipeline.PipelineServiceFactory;
 import com.google.appengine.tools.pipeline.PromisedValue;
 import com.google.appengine.tools.pipeline.Value;
+import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 
@@ -42,11 +43,18 @@ import java.util.logging.Logger;
  * @param <O> type of output values
  * @param <R> type of final result
  */
-public class MapJob<I, O, R>
-    extends Job2<MapReduceResult<R>, MapSpecification<I, O, R>, MapSettings> {
+public class MapJob<I, O, R> extends Job0<MapReduceResult<R>> {
 
   private static final long serialVersionUID = 723635736794527552L;
   private static final Logger log = Logger.getLogger(MapJob.class.getName());
+
+  private final MapSpecification<I, O, R> specification;
+  private final MapSettings settings;
+
+  public MapJob(MapSpecification<I, O, R> specification, MapSettings settings) {
+    this.specification = specification;
+    this.settings = settings;
+  }
 
   /**
    * Starts a {@link MapJob} with the given parameters in a new Pipeline.
@@ -58,8 +66,8 @@ public class MapJob<I, O, R>
       settings = new MapSettings.Builder(settings).setWorkerQueueName("default").build();
     }
     PipelineService pipelineService = PipelineServiceFactory.newPipelineService();
-    return pipelineService.startNewPipeline(new MapJob<I, O, R>(), specification,
-        settings, settings.toJobSettings());
+    return pipelineService.startNewPipeline(
+        new MapJob<>(specification, settings), settings.toJobSettings());
   }
 
   static class WorkerController<I, O, R, C extends WorkerContext<O>> extends
@@ -124,7 +132,8 @@ public class MapJob<I, O, R>
   }
 
   @Override
-  public Value<MapReduceResult<R>> run(MapSpecification<I, O, R> mrSpec, MapSettings settings) {
+  public Value<MapReduceResult<R>> run() {
+    MapSettings settings = this.settings;
     if (settings.getWorkerQueueName() == null) {
       String queue = getOnQueue();
       if (queue == null) {
@@ -136,7 +145,7 @@ public class MapJob<I, O, R>
     }
     String jobId = getJobKey().getName();
     Context context = new BaseContext(jobId);
-    Input<I> input = mrSpec.getInput();
+    Input<I> input = specification.getInput();
     input.setContext(context);
     List<? extends InputReader<I>> readers;
     try {
@@ -144,9 +153,9 @@ public class MapJob<I, O, R>
     } catch (IOException e) {
       throw new RuntimeException(e);
     }
-    Output<O, R> output = mrSpec.getOutput();
+    Output<O, R> output = specification.getOutput();
     output.setContext(context);
-    String shardedJobName = mrSpec.getJobName() + " (map-only)";
+    String shardedJobName = specification.getJobName() + " (map-only)";
     List<? extends OutputWriter<O>> writers = output.createWriters(readers.size());
     Preconditions.checkState(readers.size() == writers.size(), "%s: %s readers, %s writers",
         shardedJobName, readers.size(), writers.size());
@@ -154,7 +163,7 @@ public class MapJob<I, O, R>
         ImmutableList.builder();
     for (int i = 0; i < readers.size(); i++) {
       mapTasks.add(new MapOnlyShardTask<>(jobId, i, readers.size(), readers.get(i),
-          mrSpec.getMapper(), writers.get(i), settings.getMillisPerSlice()));
+          specification.getMapper(), writers.get(i), settings.getMillisPerSlice()));
     }
     ShardedJobSettings shardedJobSettings = settings.toShardedJobSettings(jobId, getPipelineKey());
     PromisedValue<ResultAndStatus<R>> resultAndStatus = newPromise();
@@ -180,5 +189,10 @@ public class MapJob<I, O, R>
   public Value<MapReduceResult<R>> handleException(Throwable t) throws Throwable {
     log.log(Level.SEVERE, "MapJob failed because of: ", t);
     throw t;
+  }
+
+  @Override
+  public String getJobDisplayName() {
+    return Optional.fromNullable(specification.getJobName()).or(super.getJobDisplayName());
   }
 }

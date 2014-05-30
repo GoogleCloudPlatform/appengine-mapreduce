@@ -124,8 +124,7 @@ public class EndToEndTest extends EndToEndTestCase {
   private <I, K, V, O, R> void runWithPipeline(MapReducePreparer preparer,
       MapReduceSpecification<I, K, V, O, R> mrSpec, Verifier<R> verifier) throws Exception {
     MapReduceSettings mrSettings = preparer.prepare();
-    String jobId = pipelineService.startNewPipeline(new MapReduceJob<I, K, V, O, R>(),
-        mrSpec, mrSettings);
+    String jobId = pipelineService.startNewPipeline(new MapReduceJob<>(mrSpec, mrSettings));
     assertFalse(jobId.isEmpty());
     executeTasksUntilEmpty("default");
     JobInfo info = pipelineService.getJobInfo(jobId);
@@ -145,7 +144,7 @@ public class EndToEndTest extends EndToEndTestCase {
   private <I, O, R> void runWithPipeline(MapPreparer preparer,
       MapSpecification<I, O, R> mrSpec, Verifier<R> verifier) throws Exception {
     MapSettings mrSettings = preparer.prepare();
-    String jobId = pipelineService.startNewPipeline(new MapJob<I, O, R>(), mrSpec, mrSettings);
+    String jobId = pipelineService.startNewPipeline(new MapJob<>(mrSpec, mrSettings));
     assertFalse(jobId.isEmpty());
     executeTasksUntilEmpty("default");
     JobInfo info = pipelineService.getJobInfo(jobId);
@@ -567,8 +566,7 @@ public class EndToEndTest extends EndToEndTestCase {
           NoReducer.<String, Long, String>create(), new NoOutput<String, String>())
           .setJobName("Shard-retry failed").setKeyMarshaller(Marshallers.getStringMarshaller())
           .setValueMarshaller(Marshallers.getLongMarshaller()).build();
-      String jobId = pipelineService.startNewPipeline(
-          new MapReduceJob<Long, String, Long, String, String>(), mrSpec, mrSettings);
+      String jobId = pipelineService.startNewPipeline(new MapReduceJob<>(mrSpec, mrSettings));
       assertFalse(jobId.isEmpty());
       executeTasksUntilEmpty("default");
       JobInfo info = pipelineService.getJobInfo(jobId);
@@ -590,8 +588,7 @@ public class EndToEndTest extends EndToEndTestCase {
         .setJobName("Shard-retry failed").setKeyMarshaller(Marshallers.getStringMarshaller())
         .setValueMarshaller(Marshallers.getLongMarshaller()).build();
     MapReduceSettings mrSettings = new MapReduceSettings.Builder().build();
-    String jobId = pipelineService.startNewPipeline(
-        new MapReduceJob<Long, String, Long, String, String>(), mrSpec, mrSettings);
+    String jobId = pipelineService.startNewPipeline(new MapReduceJob<>(mrSpec, mrSettings));
     assertFalse(jobId.isEmpty());
     executeTasksUntilEmpty("default");
     JobInfo info = pipelineService.getJobInfo(jobId);

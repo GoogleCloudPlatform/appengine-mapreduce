@@ -50,22 +50,16 @@ public class ChainedMapReduceJob extends Job0<MapReduceResult<List<List<KeyValue
 
   @Override
   public FutureValue<MapReduceResult<List<List<KeyValue<String, Long>>>>> run() throws Exception {
-    MapJob<Long, Entity, Void> createJob = new MapJob<>();
-    MapReduceJob<Entity, String, Long, KeyValue<String, Long>, List<List<KeyValue<String, Long>>>>
-        countJob = new MapReduceJob<>();
-    MapJob<Key, Void, Void> deleteJob = new MapJob<>();
-
     MapReduceSettings settings = getSettings(bucket);
 
-    FutureValue<MapReduceResult<Void>> createFuture = futureCall(createJob,
-        immediate(getCreationJobSpec(bytesPerEntity, entities, shardCount)), immediate(settings));
+    FutureValue<MapReduceResult<Void>> createFuture = futureCall(
+        new MapJob<>(getCreationJobSpec(bytesPerEntity, entities, shardCount), settings));
 
     FutureValue<MapReduceResult<List<List<KeyValue<String, Long>>>>> countFuture = futureCall(
-        countJob, immediate(getCountJobSpec(shardCount, shardCount)), immediate(settings),
+        new MapReduceJob<>(getCountJobSpec(shardCount, shardCount), settings),
         waitFor(createFuture));
 
-    futureCall(deleteJob, immediate(getDeleteJobSpec(shardCount)), immediate(settings),
-        waitFor(countFuture));
+    futureCall(new MapJob<>(getDeleteJobSpec(shardCount), settings), waitFor(countFuture));
 
     return countFuture;
   }

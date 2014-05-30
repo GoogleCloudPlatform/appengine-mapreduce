@@ -65,10 +65,8 @@ public class UsingPipelineServlet extends HttpServlet {
       spec = createMapReduceSpec(bucket, start, limit, shards);
       MapReduceSettings settings = getSettings(bucket, null, null);
       // [START start_as_pipeline]
-      MapReduceJob<Long, Integer, Integer, ArrayList<Integer>, GoogleCloudStorageFileSet>
-          mapReduceJob = new MapReduceJob<>();
       FutureValue<MapReduceResult<GoogleCloudStorageFileSet>> mapReduceResult =
-          futureCall(mapReduceJob, immediate(spec), immediate(settings));
+          futureCall(new MapReduceJob<>(spec, settings));
       // [END start_as_pipeline]
       return futureCall(new LogFileNamesJob(), mapReduceResult);
     }
