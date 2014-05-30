@@ -296,9 +296,8 @@ public class ShardedJobRunner<T extends IncrementalTask> implements ShardedJobHa
     if (sequenceNumber == taskState.getSequenceNumber()) {
       if (!taskState.getLockInfo().isLocked()) {
         return taskState;
-      } else {
-        handleLockHeld(taskId, jobState, taskState);
       }
+      handleLockHeld(taskId, jobState, taskState);
     } else {
       if (taskState.getSequenceNumber() > sequenceNumber) {
         log.info(taskId + ": Task sequence number " + sequenceNumber + " already completed: "
@@ -310,19 +309,31 @@ public class ShardedJobRunner<T extends IncrementalTask> implements ShardedJobHa
     return null;
   }
 
+  /**
+   * Handle a locked slice case.
+   */
   private void handleLockHeld(String taskId, ShardedJobStateImpl<T> jobState,
       IncrementalTaskState<T> taskState) {
     long currentTime = System.currentTimeMillis();
     int sliceTimeoutMillis = jobState.getSettings().getSliceTimeoutMillis();
     long lockExpiration = taskState.getLockInfo().lockedSince() + sliceTimeoutMillis;
-    if (lockExpiration > currentTime &&
-        !wasRequestCompleted(taskState.getLockInfo().getRequestId())) {
+    boolean wasRequestCompleted = wasRequestCompleted(taskState.getLockInfo().getRequestId());
+
+    if (lockExpiration > currentTime && !wasRequestCompleted) {
+      // if lock was not expired AND not abandon reschedule in 1 minute.
       long eta = Math.min(lockExpiration, currentTime + 60_000);
       scheduleWorkerTask(null, jobState.getSettings(), taskState, eta);
       log.info("Lock for " + taskId + " is being held. Will retry after " + (eta - currentTime));
     } else {
-      ShardRetryState<T> retryState = handleShardFailure(jobState, taskState, new RuntimeException(
+      ShardRetryState<T> retryState;
+      if (wasRequestCompleted) {
+        retryState = handleSliceFailure(jobState, taskState, new RuntimeException(
+            "Resuming after abandon lock for " + taskId + " on slice: "
+                + taskState.getSequenceNumber()), true);
+      } else {
+        retryState = handleShardFailure(jobState, taskState, new RuntimeException(
           "Lock for " + taskId + " expired on slice: " + taskState.getSequenceNumber()));
+      }
       updateTask(jobState, taskState, retryState, false);
     }
   }
@@ -412,7 +423,7 @@ public class ShardedJobRunner<T extends IncrementalTask> implements ShardedJobHa
           "Shard " + taskState.getTaskId() + " triggered job failure", ex);
       handleJobFailure(taskState, ex);
     } catch (RuntimeException ex) {
-      retryState = handleSliceFailure(jobState, taskState, ex);
+      retryState = handleSliceFailure(jobState, taskState, ex, false);
     } catch (Throwable ex) {
       log.log(Level.WARNING, "Slice encountered an Error.");
       retryState = handleShardFailure(jobState, taskState, new RuntimeException("Error", ex));
@@ -428,8 +439,8 @@ public class ShardedJobRunner<T extends IncrementalTask> implements ShardedJobHa
   }
 
   private ShardRetryState<T> handleSliceFailure(ShardedJobStateImpl<T> jobState,
-      IncrementalTaskState<T> taskState, RuntimeException ex) {
-    if (!(ex instanceof RecoverableException) && !taskState.getTask().allowSliceRetry()) {
+      IncrementalTaskState<T> taskState, RuntimeException ex, boolean abandon) {
+    if (!(ex instanceof RecoverableException) && !taskState.getTask().allowSliceRetry(abandon)) {
       return handleShardFailure(jobState, taskState, ex);
     }
     int attempts = taskState.incrementAndGetRetryCount();

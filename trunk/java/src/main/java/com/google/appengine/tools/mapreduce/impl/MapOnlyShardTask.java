@@ -78,8 +78,9 @@ public class MapOnlyShardTask<I, O> extends WorkerShardTask<I, O, MapOnlyMapperC
   }
 
   @Override
-  public boolean allowSliceRetry() {
-    return (!context.emitCalled() || out.allowSliceRetry()) && mapper.allowSliceRetry();
+  public boolean allowSliceRetry(boolean abandon) {
+    boolean skipWriterCheck = !abandon && !context.emitCalled();
+    return (skipWriterCheck || out.allowSliceRetry()) && mapper.allowSliceRetry();
   }
 
   private void readObject(ObjectInputStream stream) throws IOException, ClassNotFoundException {

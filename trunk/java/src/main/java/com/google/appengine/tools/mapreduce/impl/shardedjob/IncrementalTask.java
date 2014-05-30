@@ -45,7 +45,8 @@ public interface IncrementalTask extends Serializable {
   boolean isDone();
 
   /**
-   * @return true if slice retries are permitted.
+   * @param abandon true if a retry is due to an abandoned lock.
+   * @return true if a slice retry after failure are permitted.
    */
-  boolean allowSliceRetry();
+  boolean allowSliceRetry(boolean abandon);
 }

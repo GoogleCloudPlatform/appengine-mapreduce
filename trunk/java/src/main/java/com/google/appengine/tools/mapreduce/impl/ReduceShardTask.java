@@ -87,8 +87,9 @@ public class ReduceShardTask<K, V, O>
   }
 
   @Override
-  public boolean allowSliceRetry() {
-    return (!context.emitCalled() || out.allowSliceRetry()) && reducer.allowSliceRetry();
+  public boolean allowSliceRetry(boolean abandon) {
+    boolean skipWriterCheck = !abandon && !context.emitCalled();
+    return (skipWriterCheck || out.allowSliceRetry()) && reducer.allowSliceRetry();
   }
 
   private void readObject(ObjectInputStream stream) throws IOException, ClassNotFoundException {
