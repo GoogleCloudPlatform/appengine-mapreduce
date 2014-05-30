@@ -5,6 +5,7 @@ from mapreduce import input_readers
 from mapreduce import output_writers
 from mapreduce import parameters
 from mapreduce import util
+from mapreduce.api.map_job import input_reader
 from mapreduce.api.map_job import mapper as mapper_module
 
 
@@ -44,7 +45,7 @@ class JobConfig(parameters._Config):
   # This will break most circular dependencies because api only needs to
   # import other apis and utils.
   # The class of input reader to use.
-  input_reader_cls = _Option(input_readers.InputReader, required=True)
+  input_reader_cls = _Option(input_reader.InputReader, required=True)
 
   # Parameters for input reader. Varies by input reader class.
   input_reader_params = _Option(dict, default_factory=lambda: {})
