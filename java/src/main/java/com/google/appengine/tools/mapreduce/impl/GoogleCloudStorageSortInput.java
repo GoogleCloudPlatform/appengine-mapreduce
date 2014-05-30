@@ -18,7 +18,6 @@ import com.google.appengine.tools.mapreduce.inputs.GoogleCloudStorageLevelDbInpu
 import com.google.appengine.tools.mapreduce.inputs.UnmarshallingInputReader;
 import com.google.common.collect.ImmutableList;
 
-import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
@@ -39,22 +38,15 @@ public class GoogleCloudStorageSortInput extends Input<KeyValue<ByteBuffer, Byte
 
     private static final long serialVersionUID = 3310058647644865812L;
 
-    private final GcsFilename file;
     private InputReader<KeyValue<ByteBuffer, ByteBuffer>> reader;
 
     private ReaderImpl(GcsFilename file) {
-      this.file = file;
-    }
-
-    @Override
-    public void beginShard() throws IOException {
       Marshaller<ByteBuffer> identity = Marshallers.getByteBufferMarshaller();
       Marshaller<KeyValue<ByteBuffer, ByteBuffer>> marshaller =
           new KeyValueMarshaller<>(identity, identity);
       GoogleCloudStorageLevelDbInputReader in =
           new GoogleCloudStorageLevelDbInputReader(file, DEFAULT_IO_BUFFER_SIZE);
       reader = new UnmarshallingInputReader<>(in, marshaller);
-      reader.beginShard();
     }
 
     @Override

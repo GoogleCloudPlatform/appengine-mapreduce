@@ -15,6 +15,8 @@ import com.google.appengine.tools.mapreduce.ReducerInput;
 import com.google.appengine.tools.mapreduce.Worker;
 import com.google.appengine.tools.mapreduce.impl.shardedjob.ShardFailureException;
 
+import java.io.IOException;
+import java.io.ObjectInputStream;
 import java.util.Iterator;
 
 /**
@@ -33,19 +35,18 @@ public class ReduceShardTask<K, V, O>
   private final long millisPerSlice;
   private final InputReader<KeyValue<K, Iterator<V>>> in;
   private final OutputWriter<O> out;
-  private final IncrementalTaskContext context;
 
   public ReduceShardTask(String mrJobId, int shardNumber, int shardCount,
       InputReader<KeyValue<K, Iterator<V>>> in, Reducer<K, V, O> reducer, OutputWriter<O> out,
       long millisPerSlice) {
+    super(new IncrementalTaskContext(mrJobId, shardNumber, shardCount, REDUCER_CALLS,
+        REDUCER_WALLTIME_MILLIS));
     this.in = checkNotNull(in, "Null in");
     this.out = checkNotNull(out, "Null out");
     this.reducer = checkNotNull(reducer, "Null reducer");
     this.millisPerSlice = millisPerSlice;
-    this.context = new IncrementalTaskContext(mrJobId, shardNumber, shardCount, REDUCER_CALLS,
-        REDUCER_WALLTIME_MILLIS);
+    fillContext();
   }
-
 
   @Override
   protected void callWorker(KeyValue<K, Iterator<V>> input) {
@@ -53,7 +54,7 @@ public class ReduceShardTask<K, V, O>
     try {
       reducer.reduce(input.getKey(), value);
     } catch (RuntimeException ex) {
-      throw new ShardFailureException(context.getShardNumber(), ex);
+      throw new ShardFailureException(getContext().getShardNumber(), ex);
     }
   }
 
@@ -79,11 +80,6 @@ public class ReduceShardTask<K, V, O>
   }
 
   @Override
-  protected void setContextOnWorker() {
-    reducer.setContext(new ReducerContextImpl<>(context, out));
-  }
-
-  @Override
   public OutputWriter<O> getOutputWriter() {
     return out;
   }
@@ -93,8 +89,15 @@ public class ReduceShardTask<K, V, O>
     return in;
   }
 
-  @Override
-  public IncrementalTaskContext getContext() {
-    return context;
+  private void readObject(ObjectInputStream stream) throws IOException, ClassNotFoundException {
+    stream.defaultReadObject();
+    fillContext();
+  }
+
+  private void fillContext() {
+    ReducerContext<O> ctx = new ReducerContextImpl<>(getContext(), out);
+    in.setContext(ctx);
+    out.setContext(ctx);
+    reducer.setContext(ctx);
   }
 }

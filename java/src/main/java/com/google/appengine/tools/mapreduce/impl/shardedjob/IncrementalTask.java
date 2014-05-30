@@ -34,10 +34,10 @@ public interface IncrementalTask extends Serializable {
   void run();
 
   /**
-   * Frees any resources claimed in prepare.
+   * Clean up and release any resources claimed in prepare.
    * Implementations of this method should not throw under any circumstances.
    */
-  void release();
+  void cleanup();
 
   /**
    * @return true iff this task is done and run should no longer be invoked.

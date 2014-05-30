@@ -9,13 +9,16 @@ import com.google.appengine.tools.mapreduce.InputReader;
 import com.google.appengine.tools.mapreduce.KeyValue;
 import com.google.appengine.tools.mapreduce.MapReduceResult;
 import com.google.appengine.tools.mapreduce.MapReduceSpecification;
+import com.google.appengine.tools.mapreduce.Mapper;
 import com.google.appengine.tools.mapreduce.MapperContext;
 import com.google.appengine.tools.mapreduce.Output;
 import com.google.appengine.tools.mapreduce.OutputWriter;
+import com.google.appengine.tools.mapreduce.Reducer;
 import com.google.appengine.tools.mapreduce.ReducerContext;
 import com.google.appengine.tools.mapreduce.impl.shardedjob.InProcessShardedJobRunner;
 import com.google.appengine.tools.mapreduce.impl.shardedjob.ShardedJobController;
 import com.google.appengine.tools.mapreduce.impl.shardedjob.Status;
+import com.google.appengine.tools.mapreduce.impl.util.SerializationUtil;
 import com.google.appengine.tools.mapreduce.outputs.InMemoryOutput;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
@@ -92,7 +95,7 @@ public class InProcessMapReduce<I, K, V, O, R> {
     List<? extends OutputWriter<KeyValue<K, V>>> writers = output.createWriters();
     for (int shard = 0; shard < inputs.size(); shard++) {
       WorkerShardTask<I, KeyValue<K, V>, MapperContext<K, V>> task = new MapShardTask<>(
-          id, shard, inputs.size(), inputs.get(shard), mrSpec.getMapper(), writers.get(shard),
+          id, shard, inputs.size(), inputs.get(shard), getCopyOfMapper(), writers.get(shard),
           Long.MAX_VALUE);
       tasks.add(task);
     }
@@ -155,6 +158,20 @@ public class InProcessMapReduce<I, K, V, O, R> {
     };
   }
 
+  @SuppressWarnings("unchecked")
+  private Mapper<I, K, V> getCopyOfMapper() {
+    Mapper<I, K, V> mapper = mrSpec.getMapper();
+    byte[] bytes = SerializationUtil.serializeToByteArray(mapper);
+    return (Mapper<I, K, V>) SerializationUtil.deserializeFromByteArray(bytes);
+  }
+
+  @SuppressWarnings("unchecked")
+  private Reducer<K, V, O> getCopyOfReducer() {
+    Reducer<K, V, O> reducer = mrSpec.getReducer();
+    byte[] bytes = SerializationUtil.serializeToByteArray(reducer);
+    return (Reducer<K, V, O>) SerializationUtil.deserializeFromByteArray(bytes);
+  }
+
   MapReduceResult<R> reduce(List<List<KeyValue<K, List<V>>>> inputs, Output<O, R> output,
       Counters mapCounters) throws IOException {
     List<? extends OutputWriter<O>> outputs = output.createWriters();
@@ -166,7 +183,7 @@ public class InProcessMapReduce<I, K, V, O, R> {
     for (int shard = 0; shard < outputs.size(); shard++) {
       WorkerShardTask<KeyValue<K, Iterator<V>>, O, ReducerContext<O>> task =
           new ReduceShardTask<>(id, shard, outputs.size(), getReducerInputReader(inputs.get(shard)),
-              mrSpec.getReducer(), outputs.get(shard), Long.MAX_VALUE);
+              getCopyOfReducer(), outputs.get(shard), Long.MAX_VALUE);
       tasks.add(task);
     }
     final Counters counters = new CountersImpl();

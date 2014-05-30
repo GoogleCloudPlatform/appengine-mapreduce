@@ -7,8 +7,7 @@ import com.google.appengine.tools.mapreduce.impl.IncrementalTaskWithContext;
 
 
 /**
- * A simple intermediate tasks object to be used in unit tests. Not that this differers from
- * TestWorkerTask in that it does not use workerResult for its result.
+ * A simple intermediate tasks object to be used in unit tests.
  *
  */
 public class TestTask implements IncrementalTaskWithContext {
@@ -37,7 +36,7 @@ public class TestTask implements IncrementalTaskWithContext {
   }
 
   @Override
-  public void release() {
+  public void cleanup() {
   }
 
   @Override

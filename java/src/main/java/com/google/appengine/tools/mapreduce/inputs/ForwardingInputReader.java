@@ -1,6 +1,7 @@
 package com.google.appengine.tools.mapreduce.inputs;
 
 import com.google.appengine.tools.mapreduce.InputReader;
+import com.google.appengine.tools.mapreduce.ShardContext;
 
 import java.io.IOException;
 import java.util.NoSuchElementException;
@@ -45,5 +46,20 @@ public abstract class ForwardingInputReader<T> extends InputReader<T> {
   @Override
   public void endShard() throws IOException {
     getDelegate().endShard();
+  }
+
+  @Override
+  public long estimateMemoryRequirement() {
+    return getDelegate().estimateMemoryRequirement();
+  }
+
+  @Override
+  public void setContext(ShardContext context) {
+    getDelegate().setContext(context);
+  }
+
+  @Override
+  public ShardContext getContext() {
+    return getDelegate().getContext();
   }
 }

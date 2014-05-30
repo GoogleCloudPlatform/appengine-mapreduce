@@ -18,6 +18,9 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
+ * Base class for the specific MR stage workers.
+ * Each subclass is responsible to set the context on its input, output, and worker.
+ *
  * @author ohler@google.com (Christian Ohler)
  *
  * @param <I> type of input values consumed by the worker
@@ -36,23 +39,24 @@ public abstract class WorkerShardTask<I, O, C extends WorkerContext<O>> implemen
   private transient Stopwatch workerStopwatch;
   protected transient Long claimedMemory; // Assigned in prepare
 
-  boolean inputExhausted = false;
+  private final IncrementalTaskContext context;
+  private boolean inputExhausted = false;
   private boolean isFirstSlice = true;
+
+  protected WorkerShardTask(IncrementalTaskContext context) {
+    this.context = context;
+  }
+
+  @Override
+  public final IncrementalTaskContext getContext() {
+    return context;
+  }
 
   @Override
   public String toString() {
-    return getClass().getSimpleName() + "(" + getContext().getJobId() + ", "
-        + getContext().getShardNumber() + "/" + getContext().getShardCount() + ")";
+    return getClass().getSimpleName() + "[context=" + context + ", inputExhausted="
+        + inputExhausted + ", isFirstSlice=" + isFirstSlice + "]";
   }
-
-  protected abstract void callWorker(I input);
-  protected abstract String formatLastWorkItem(I item);
-
-  /**
-   * @return true iff a checkpoint should be performed.
-   */
-  protected abstract boolean shouldCheckpoint(long timeElapsed);
-  protected abstract long estimateMemoryRequirement();
 
   @Override
   public void run() {
@@ -61,12 +65,12 @@ public abstract class WorkerShardTask<I, O, C extends WorkerContext<O>> implemen
     } catch (RecoverableException | ShardFailureException ex) {
       throw ex;
     } catch (RuntimeException ex) {
-      throw new ShardFailureException(getContext().getShardNumber(), ex);
+      throw new ShardFailureException(context.getShardNumber(), ex);
     }
   }
 
   @Override
-  public void release() {
+  public void cleanup() {
     if (claimedMemory != null) {
       LIMITER.release(claimedMemory);
     }
@@ -136,8 +140,8 @@ public abstract class WorkerShardTask<I, O, C extends WorkerContext<O>> implemen
         + overallStopwatch + ", workerStopwatch=" + workerStopwatch + ", inputStopwatch="
         + inputStopwatch);
 
-    getContext().incrementWorkerCalls(workerCalls);
-    getContext().incrementWorkerMillis(workerStopwatch.elapsed(MILLISECONDS));
+    context.incrementWorkerCalls(workerCalls);
+    context.incrementWorkerMillis(workerStopwatch.elapsed(MILLISECONDS));
 
     try {
       endSlice(inputExhausted);
@@ -145,9 +149,9 @@ public abstract class WorkerShardTask<I, O, C extends WorkerContext<O>> implemen
       // TODO(user): similar to callWorker, if writer has a way to indicate that a slice-retry
       // is OK we should consider a broader catch and possibly throwing RecoverableException
       throw new ShardFailureException(
-          getContext().getShardNumber(), "Failed on endSlice/endShard", ex);
+          context.getShardNumber(), "Failed on endSlice/endShard", ex);
     }
-    getContext().setLastWorkItemString(formatLastWorkItem(next));
+    context.setLastWorkItemString(formatLastWorkItem(next));
   }
 
   private void beginSlice() throws IOException {
@@ -156,7 +160,6 @@ public abstract class WorkerShardTask<I, O, C extends WorkerContext<O>> implemen
       getInputReader().beginShard();
     }
     getInputReader().beginSlice();
-    setContextOnWorker();
     getOutputWriter().beginSlice();
     if (isFirstSlice) {
       getWorker().beginShard();
@@ -199,12 +202,14 @@ public abstract class WorkerShardTask<I, O, C extends WorkerContext<O>> implemen
     return inputExhausted;
   }
 
-  protected abstract void setContextOnWorker();
-
+  /**
+   * @return true iff a checkpoint should be performed.
+   */
+  protected abstract boolean shouldCheckpoint(long timeElapsed);
+  protected abstract long estimateMemoryRequirement();
   protected abstract Worker<C> getWorker();
-
+  protected abstract InputReader<I> getInputReader();
+  protected abstract void callWorker(I input);
+  protected abstract String formatLastWorkItem(I item);
   public abstract OutputWriter<O> getOutputWriter();
-
-  public abstract InputReader<I> getInputReader();
-
 }

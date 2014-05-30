@@ -13,12 +13,11 @@ import java.io.IOException;
 /**
  * @author ohler@google.com (Christian Ohler)
  */
-class MapperContextImpl<K, V> extends AbstractWorkerContext<KeyValue<K, V>> implements
-    MapperContext<K, V> {
+class MapperContextImpl<K, V> extends BaseShardContext implements MapperContext<K, V> {
 
   private final OutputWriter<KeyValue<K, V>> output;
 
-  MapperContextImpl(OutputWriter<KeyValue<K, V>> output, IncrementalTaskContext c) {
+  MapperContextImpl(IncrementalTaskContext c, OutputWriter<KeyValue<K, V>> output) {
     super(c);
     this.output = checkNotNull(output, "Null output");
   }

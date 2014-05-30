@@ -8,6 +8,10 @@ import java.io.ObjectOutputStream;
 import java.io.Serializable;
 import java.nio.ByteBuffer;
 
+/**
+ * A {@link Serializable} instance of any given value and its {@link Marshaller}.
+ * @param <T>
+ */
 public final class SerializableValue<T> implements Serializable {
 
   private static final long serialVersionUID = -5188676157133889956L;

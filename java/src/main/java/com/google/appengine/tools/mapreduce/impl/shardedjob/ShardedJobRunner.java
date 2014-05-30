@@ -360,7 +360,7 @@ public class ShardedJobRunner<T extends IncrementalTask> implements ShardedJobHa
           runAndUpdateTask(jobId, taskId, sequenceNumber, jobState, taskState);
         }
       } finally {
-        task.release();
+        task.cleanup();
       }
     } finally {
       rollbackIfActive(tx);

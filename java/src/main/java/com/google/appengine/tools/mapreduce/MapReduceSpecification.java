@@ -2,6 +2,7 @@
 
 package com.google.appengine.tools.mapreduce;
 
+import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 import java.io.Serializable;
@@ -76,6 +77,13 @@ public final class MapReduceSpecification<I, K, V, O, R> implements Serializable
         checkNotNull(intermediateValueMarshaller, "Null intermediateValueMarshaller");
     this.reducer = checkNotNull(reducer, "Null reducer");
     this.output = checkNotNull(output, "Null output");
+    checkNumShards("reduce", output.getNumShards(), 100);
+  }
+
+  private static void checkNumShards(String stage, int shards, int maxShards) {
+    // remove once b/13138360 is fixed.
+    checkArgument(shards > 0 && shards <= maxShards, "Invalid number of " + stage + " shards: "
+        + shards + " must be between 1 and " + maxShards + ".");
   }
 
   public String getJobName() {
@@ -142,6 +150,7 @@ public final class MapReduceSpecification<I, K, V, O, R> implements Serializable
 
   public MapReduceSpecification<I, K, V, O, R> setOutput(Output<O, R> output) {
     this.output = checkNotNull(output, "Null output");
+    checkNumShards("reduce", output.getNumShards(), 100);
     return this;
   }
 

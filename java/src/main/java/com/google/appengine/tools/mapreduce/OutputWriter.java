@@ -36,6 +36,22 @@ import java.io.Serializable;
 public abstract class OutputWriter<O> implements Serializable {
   private static final long serialVersionUID = 5225114373913821210L;
 
+  private transient ShardContext context;
+
+  /**
+   * Used internally to sets the context to be used for the processing that follows.
+   */
+  public void setContext(ShardContext context) {
+    this.context = context;
+  }
+
+  /**
+   * Returns the current context, or null if none.
+   */
+  public ShardContext getContext() {
+    return context;
+  }
+
   /**
    * Prepares the writer for writing after possibly having gone through
    * serialization or deserialization.

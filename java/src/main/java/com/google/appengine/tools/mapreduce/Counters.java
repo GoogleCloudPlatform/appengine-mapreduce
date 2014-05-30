@@ -23,5 +23,5 @@ public interface Counters extends Serializable {
   /**
    * @param other Another counter object who's counters should all be added to this one.
    */
-  public void addAll(Counters other);
+  void addAll(Counters other);
 }
