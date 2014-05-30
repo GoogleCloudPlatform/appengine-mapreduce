@@ -78,7 +78,7 @@ public class UsingPipelineServlet extends HttpServlet {
 
     @Override
     public Value<Void> run(MapReduceResult<GoogleCloudStorageFileSet> result) {
-      for (GcsFilename name : result.getOutputResult().getAllFiles()) {
+      for (GcsFilename name : result.getOutputResult().getFiles()) {
         LOG.info("Output stored to file: " + name);
       }
       return null;

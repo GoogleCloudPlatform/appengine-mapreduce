@@ -25,6 +25,7 @@ import com.google.appengine.tools.cloudstorage.GcsServiceFactory;
 import com.google.appengine.tools.mapreduce.impl.HashingSharder;
 import com.google.appengine.tools.mapreduce.impl.InProcessMap;
 import com.google.appengine.tools.mapreduce.impl.InProcessMapReduce;
+import com.google.appengine.tools.mapreduce.impl.MapReduceConstants;
 import com.google.appengine.tools.mapreduce.impl.shardedjob.RecoverableException;
 import com.google.appengine.tools.mapreduce.inputs.ConsecutiveLongInput;
 import com.google.appengine.tools.mapreduce.inputs.DatastoreInput;
@@ -284,6 +285,52 @@ public class EndToEndTest extends EndToEndTestCase {
           assertEquals(50, outputResult.get(1).size());
         }
       });
+  }
+
+  public void testSomeShardsEmpty() throws Exception {
+    runTest(new MapReducePreparer(), new MapReduceSpecification.Builder<>(
+        new ConsecutiveLongInput(0, 5, 10), new Mod37Mapper(),
+        ValueProjectionReducer.<String, Long>create(), new InMemoryOutput<Long>())
+        .setKeyMarshaller(Marshallers.getStringMarshaller())
+        .setValueMarshaller(Marshallers.getLongMarshaller())
+        .setJobName("Empty test MR")
+        .setNumReducers(10)
+        .build(), new Verifier<List<List<Long>>>() {
+      @Override
+      public void verify(MapReduceResult<List<List<Long>>> result) throws Exception {
+        assertNotNull(result.getOutputResult());
+        assertEquals(5, result.getCounters().getCounter(CounterNames.MAPPER_CALLS).getValue());
+        assertEquals(5, result.getCounters().getCounter(CounterNames.REDUCER_CALLS).getValue());
+        HashSet<Long> allOutput = new HashSet<>();
+        for (List<Long> output : result.getOutputResult()) {
+          allOutput.addAll(output);
+        }
+        assertEquals(5, allOutput.size());
+      }
+    });
+  }
+
+  public void testManyReduceShards() throws Exception {
+    runTest(new MapReducePreparer(), new MapReduceSpecification.Builder<>(
+        new ConsecutiveLongInput(0, 50000, 10), new Mod37Mapper(),
+        ValueProjectionReducer.<String, Long>create(), new InMemoryOutput<Long>())
+        .setKeyMarshaller(Marshallers.getStringMarshaller())
+        .setValueMarshaller(Marshallers.getLongMarshaller())
+        .setJobName("Empty test MR")
+        .setNumReducers(MapReduceConstants.MAX_WRITER_FANOUT * 2 + 1)
+        .build(), new Verifier<List<List<Long>>>() {
+      @Override
+      public void verify(MapReduceResult<List<List<Long>>> result) throws Exception {
+        assertNotNull(result.getOutputResult());
+        assertEquals(50000, result.getCounters().getCounter(CounterNames.MAPPER_CALLS).getValue());
+        assertEquals(37, result.getCounters().getCounter(CounterNames.REDUCER_CALLS).getValue());
+        HashSet<Long> allOutput = new HashSet<>();
+        for (List<Long> output : result.getOutputResult()) {
+          allOutput.addAll(output);
+        }
+        assertEquals(50000, allOutput.size());
+      }
+    });
   }
 
   public void testDoNothingWithEmptyReadersList() throws Exception {
@@ -658,7 +705,7 @@ public class EndToEndTest extends EndToEndTestCase {
             ArrayList<Long> results = new ArrayList<>();
             GcsService gcsService = GcsServiceFactory.createGcsService();
             ByteBuffer holder = ByteBuffer.allocate(8);
-            for (GcsFilename file : result.getOutputResult().getAllFiles()) {
+            for (GcsFilename file : result.getOutputResult().getFiles()) {
               try (GcsInputChannel channel = gcsService.openPrefetchingReadChannel(file, 0, 4096)) {
                 int read = channel.read(holder);
                 while (read != -1) {

@@ -73,10 +73,10 @@ public class SortTest extends TestCase {
     @SuppressWarnings("serial")
     public MapSortContext() {
       super(new IncrementalTaskContext("TestJob", 1, 1, "calls", "time"),
-        new OutputWriter<KeyValue<ByteBuffer, ? extends Iterable<ByteBuffer>>>() {
+        new OutputWriter<KeyValue<ByteBuffer, List<ByteBuffer>>>() {
 
         @Override
-        public void write(KeyValue<ByteBuffer, ? extends Iterable<ByteBuffer>> value) {
+        public void write(KeyValue<ByteBuffer, List<ByteBuffer>> value) {
           throw new UnsupportedOperationException();
         }
 
@@ -91,7 +91,7 @@ public class SortTest extends TestCase {
     int sameKeyCount = 0;
 
     @Override
-    public void emit(KeyValue<ByteBuffer, ? extends Iterable<ByteBuffer>> keyValue) {
+    public void emit(KeyValue<ByteBuffer, List<ByteBuffer>> keyValue) {
       ByteBuffer key = keyValue.getKey();
       List<ByteBuffer> list = map.get(key);
       if (list == null) {

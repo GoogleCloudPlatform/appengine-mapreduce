@@ -28,7 +28,7 @@ public class DeleteFilesJob extends Job1<Void, GoogleCloudStorageFileSet> {
    */
   @Override
   public Value<Void> run(GoogleCloudStorageFileSet files) throws Exception {
-    for (GcsFilename file : files.getAllFiles()) {
+    for (GcsFilename file : files.getFiles()) {
       try {
         gcs.delete(file);
       } catch (RetriesExhaustedException | IOException e) {

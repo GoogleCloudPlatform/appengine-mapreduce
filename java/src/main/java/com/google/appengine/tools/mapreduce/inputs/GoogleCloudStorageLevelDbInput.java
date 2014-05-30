@@ -43,7 +43,7 @@ public final class GoogleCloudStorageLevelDbInput extends Input<ByteBuffer> {
   @Override
   public List<InputReader<ByteBuffer>> createReaders() {
     List<InputReader<ByteBuffer>> result = new ArrayList<>();
-    for (GcsFilename file : files.getAllFiles()) {
+    for (GcsFilename file : files.getFiles()) {
       result.add(new GoogleCloudStorageLevelDbInputReader(file, bufferSize));
     }
     return result;

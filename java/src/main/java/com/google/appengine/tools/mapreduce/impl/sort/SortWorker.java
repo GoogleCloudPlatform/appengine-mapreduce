@@ -198,11 +198,11 @@ public class SortWorker extends Worker<SortContext> {
   }
 
   private void emit(ByteBuffer key, ByteBuffer value) {
-    getContext().emit(KeyValue.of(key, ImmutableList.of(value)));
+    getContext().emit(KeyValue.of(key, (List<ByteBuffer>) ImmutableList.of(value)));
   }
 
   private void emit(ByteBuffer key, List<ByteBuffer> values) {
-    getContext().emit(KeyValue.of(key, ImmutableList.copyOf(values)));
+    getContext().emit(KeyValue.of(key, (List<ByteBuffer>) ImmutableList.copyOf(values)));
   }
 
   /**

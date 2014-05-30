@@ -36,11 +36,11 @@ public class GoogleCloudStorageReduceInput<K, V> extends Input<KeyValue<K, Itera
   private static final long serialVersionUID = 8877197357362096382L;
   private final Marshaller<K> keyMarshaller;
   private final Marshaller<V> valueMarshaller;
-  private final List<GoogleCloudStorageFileSet> allReducerFileSets;
+  private final FilesByShard filesByShard;
 
-  public GoogleCloudStorageReduceInput(List<GoogleCloudStorageFileSet> files,
+  public GoogleCloudStorageReduceInput(FilesByShard files,
       Marshaller<K> keyMarshaller, Marshaller<V> valueMarshaller) {
-    this.allReducerFileSets = checkNotNull(files, "Null files");
+    this.filesByShard = checkNotNull(files, "Null files");
     this.keyMarshaller = checkNotNull(keyMarshaller, "Null keyMarshaller");
     this.valueMarshaller = checkNotNull(valueMarshaller, "Null valueMarshaller");
   }
@@ -50,8 +50,8 @@ public class GoogleCloudStorageReduceInput<K, V> extends Input<KeyValue<K, Itera
     Marshaller<KeyValue<ByteBuffer, ? extends Iterable<V>>> marshaller =
         Marshallers.getKeyValuesMarshaller(Marshallers.getByteBufferMarshaller(), valueMarshaller);
     ImmutableList.Builder<MergingReader<K, V>> result = ImmutableList.builder();
-    for (GoogleCloudStorageFileSet reducerInputFileSet : allReducerFileSets) {
-      result.add(createReaderForShard(marshaller, reducerInputFileSet));
+    for (int shard = 0; shard < filesByShard.getShardCount(); shard++) {
+      result.add(createReaderForShard(marshaller, filesByShard.getFilesForShard(shard)));
     }
     return result.build();
   }
