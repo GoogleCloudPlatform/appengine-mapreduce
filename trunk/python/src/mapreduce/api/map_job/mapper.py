@@ -1,11 +1,13 @@
 #!/usr/bin/env python
 """Interface for user defined mapper."""
 
+from . import shard_life_cycle
 # pylint: disable=invalid-name
+# pylint: disable=protected-access
 
 
 # TODO(user): Move common APIs to parent class.
-class Mapper(object):
+class Mapper(shard_life_cycle._ShardLifeCycle):
   """Interface user's mapper should implement.
 
   Each shard initiates one instance. The instance is pickled
@@ -25,56 +27,6 @@ class Mapper(object):
     """Init.
 
     Init must not take additional arguments.
-    """
-    pass
-
-  def begin_shard(self, ctx):
-    """Called at the beginning of a shard.
-
-    This method may be called more than once due to slice retry.
-    Make it idempotent.
-
-    Args:
-      ctx: map_job.ShardContext object.
-    """
-    pass
-
-  def end_shard(self, ctx):
-    """Called at the end of a shard.
-
-    This method may be called more than once due to slice retry.
-    Make it idempotent.
-
-    If shard execution error out before reaching the end, this method
-    won't be called.
-
-    Args:
-      ctx: map_job.ShardContext object.
-    """
-    pass
-
-  def begin_slice(self, ctx):
-    """Called at the beginning of a slice.
-
-    This method may be called more than once due to slice retry.
-    Make it idempotent.
-
-    Args:
-      ctx: map_job.SliceContext object.
-    """
-    pass
-
-  def end_slice(self, ctx):
-    """Called at the end of a slice.
-
-    This method may be called more than once due to slice retry.
-    Make it idempotent.
-
-    If slice execution error out before reaching the end, this method
-    won't be called.
-
-    Args:
-      ctx: map_job.SliceContext object.
     """
     pass
 
