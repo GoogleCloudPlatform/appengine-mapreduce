@@ -39,9 +39,9 @@ import java.util.Set;
  */
 public class MapReduceJobTest extends TestCase {
 
-  private ModuleInfo module1 =
+  private final ModuleInfo module1 =
       new ModuleInfo("module1", new VersionInfo("v1", 10), new VersionInfo("v2", 20));
-  private ModuleInfo module2 =
+  private final ModuleInfo module2 =
       new ModuleInfo("default", new VersionInfo("1", 1), new VersionInfo("2", 1));
   private final LocalServiceTestHelper helper = new LocalServiceTestHelper(
       new LocalDatastoreServiceTestConfig(), new LocalModulesServiceTestConfig(module1, module2),
@@ -217,11 +217,11 @@ public class MapReduceJobTest extends TestCase {
         new BackendValidator(null), new ModuleValidator(null), new QueueValidator("queue1"));
     mrSettings = new MapReduceSettings().setBackend("backend1");
     verifyPipelineSettings(MapReduceJob.makeJobSettings(mrSettings),
-        new BackendValidator("backend1"), new ModuleValidator(null), new QueueValidator("default"));
+        new BackendValidator("backend1"), new ModuleValidator(null), new QueueValidator(null));
     mrSettings = new MapReduceSettings().setModule("m1");
     verifyPipelineSettings(MapReduceJob.makeJobSettings(mrSettings, new StatusConsoleUrl("u1")),
         new BackendValidator(null), new ModuleValidator("m1"),
-        new QueueValidator("default"), new StatusConsoleValidator("u1"));
+        new QueueValidator(null), new StatusConsoleValidator("u1"));
   }
 
   @SafeVarargs

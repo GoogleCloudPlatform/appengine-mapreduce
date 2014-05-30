@@ -4,6 +4,7 @@ import static com.google.appengine.demos.mapreduce.randomcollisions.CollisionFin
 import static com.google.appengine.demos.mapreduce.randomcollisions.CollisionFindingServlet.getBucketParam;
 import static com.google.appengine.demos.mapreduce.randomcollisions.CollisionFindingServlet.getLongParam;
 import static com.google.appengine.demos.mapreduce.randomcollisions.CollisionFindingServlet.getSettings;
+import static com.google.appengine.demos.mapreduce.randomcollisions.CollisionFindingServlet.getStringParam;
 
 import com.google.appengine.tools.cloudstorage.GcsFilename;
 import com.google.appengine.tools.mapreduce.GoogleCloudStorageFileSet;
@@ -14,6 +15,7 @@ import com.google.appengine.tools.mapreduce.MapReduceSpecification;
 import com.google.appengine.tools.pipeline.FutureValue;
 import com.google.appengine.tools.pipeline.Job0;
 import com.google.appengine.tools.pipeline.Job1;
+import com.google.appengine.tools.pipeline.JobSetting;
 import com.google.appengine.tools.pipeline.PipelineService;
 import com.google.appengine.tools.pipeline.PipelineServiceFactory;
 import com.google.appengine.tools.pipeline.Value;
@@ -61,7 +63,7 @@ public class UsingPipelineServlet extends HttpServlet {
     public Value<Void> run() throws Exception {
       MapReduceSpecification<Long, Integer, Integer, ArrayList<Integer>, GoogleCloudStorageFileSet>
       spec = createMapReduceSpec(bucket, start, limit, shards);
-      MapReduceSettings settings = getSettings(bucket);
+      MapReduceSettings settings = getSettings(bucket, null, null);
       // [START start_as_pipeline]
       MapReduceJob<Long, Integer, Integer, ArrayList<Integer>, GoogleCloudStorageFileSet>
           mapReduceJob = new MapReduceJob<>();
@@ -87,12 +89,15 @@ public class UsingPipelineServlet extends HttpServlet {
 
   @Override
   public void doPost(HttpServletRequest req, HttpServletResponse resp) throws IOException {
+    String queue = getStringParam(req, "queue", "mapreduce-workers");
+    String module = getStringParam(req, "module", "mapreduce");
     String bucket = getBucketParam(req);
     long start = getLongParam(req, "start", 0);
     long limit = getLongParam(req, "limit", 100 * 1000 * 1000);
     int shards = Math.max(1, Math.min(100, Ints.saturatedCast(getLongParam(req, "shards", 30))));
     PipelineService service = PipelineServiceFactory.newPipelineService();
-    String pipelineId = service.startNewPipeline(new MyPipelineJob(bucket, start, limit, shards));
+    String pipelineId = service.startNewPipeline(new MyPipelineJob(bucket, start, limit, shards),
+        new JobSetting.OnQueue(queue), new JobSetting.OnModule(module));
     resp.sendRedirect("/_ah/pipeline/status.html?root=" + pipelineId);
   }
 }

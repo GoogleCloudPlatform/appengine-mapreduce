@@ -28,8 +28,8 @@ public class MapReduceSettings implements Serializable, Cloneable {
   private String baseUrl = DEFAULT_BASE_URL;
   private String backend;
   private String module;
-  private String controllerQueueName = "default";
-  private String workerQueueName = "default";
+  private String controllerQueueName;
+  private String workerQueueName;
   private String bucketName;
   private int millisPerSlice = DEFAULT_MILLIS_PER_SLICE;
   private int maxShardRetries = DEFAULT_SHARD_RETREIES;
@@ -95,7 +95,7 @@ public class MapReduceSettings implements Serializable, Cloneable {
    */
   @Deprecated
   public MapReduceSettings setControllerQueueName(String controllerQueueName) {
-    this.controllerQueueName = checkNotNull(controllerQueueName, "Null controllerQueueName");
+    this.controllerQueueName = controllerQueueName;
     return this;
   }
 
@@ -107,7 +107,7 @@ public class MapReduceSettings implements Serializable, Cloneable {
    * Sets the TaskQueue that will be used to queue MapReduce jobs.
    */
   public MapReduceSettings setWorkerQueueName(String workerQueueName) {
-    this.workerQueueName = checkNotNull(workerQueueName, "Null workerQueueName");
+    this.workerQueueName = workerQueueName;
     return this;
   }
 
