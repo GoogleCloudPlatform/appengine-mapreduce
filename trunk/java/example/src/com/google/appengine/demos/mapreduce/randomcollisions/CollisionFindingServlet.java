@@ -66,8 +66,8 @@ public class CollisionFindingServlet extends HttpServlet {
           + "(Must be greater than starting integer and less than 2^31-1) <br />"
           + "Number of shards <input value='10' name='shards' />"
           + "(Must be between 1 and 100) <br />"
-          + "<input name='queue' value='mapreduce-workers'/><br />"
-          + "<input name='module' value='mapreduce'/><br />"
+          + "Queue name: <input name='queue' value='mapreduce-workers'/><br />"
+          + "Module: <input name='module' value='mapreduce'/><br />"
           + "<input type='submit' value='Start MapReduce' />"
           + "</div> </form> </body></html>");
     }
