@@ -21,7 +21,7 @@ public class ValueProjectionReducer<K, V> extends Reducer<K, V, V> {
     return new ValueProjectionReducer<>();
   }
 
-  private ValueProjectionReducer() {
+  public ValueProjectionReducer() {
   }
 
   @Override

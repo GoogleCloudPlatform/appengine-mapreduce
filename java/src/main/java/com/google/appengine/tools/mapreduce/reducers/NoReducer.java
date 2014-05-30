@@ -27,7 +27,7 @@ public class NoReducer<K, V, O> extends Reducer<K, V, O> {
     return new NoReducer<>();
   }
 
-  private NoReducer() {
+  public NoReducer() {
   }
 
   @Override

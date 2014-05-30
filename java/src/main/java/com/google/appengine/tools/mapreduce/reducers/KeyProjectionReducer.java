@@ -22,7 +22,7 @@ public class KeyProjectionReducer<K, V> extends Reducer<K, V, K> {
     return new KeyProjectionReducer<>();
   }
 
-  private KeyProjectionReducer() {
+  public KeyProjectionReducer() {
   }
 
   @Override
