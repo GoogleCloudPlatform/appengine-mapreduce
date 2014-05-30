@@ -1078,8 +1078,6 @@ class _GoogleCloudStorageOutputWriter(OutputWriter):
     self._streaming_buffer.close()
 
     if self._no_dup:
-      # TODO(user): This doesn't work properly when the filenames have
-      # spaces in them. It's not being re-quoted properly. b/12066572
       cloudstorage_api._copy2(
           self._streaming_buffer.name,
           self._streaming_buffer.name,
