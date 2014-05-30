@@ -9,10 +9,9 @@ import static com.google.appengine.tools.pipeline.impl.servlets.PipelineServlet.
 import com.google.appengine.api.datastore.Key;
 import com.google.appengine.api.datastore.KeyFactory;
 import com.google.appengine.tools.development.testing.LocalDatastoreServiceTestConfig;
+import com.google.appengine.tools.development.testing.LocalModulesServiceTestConfig;
 import com.google.appengine.tools.development.testing.LocalServiceTestHelper;
 import com.google.appengine.tools.development.testing.LocalTaskQueueTestConfig;
-import com.google.appengine.tools.mapreduce.LocalModulesServiceTestConfig.ModuleInfo;
-import com.google.appengine.tools.mapreduce.LocalModulesServiceTestConfig.VersionInfo;
 import com.google.appengine.tools.mapreduce.impl.shardedjob.ShardedJobSettings;
 import com.google.appengine.tools.mapreduce.inputs.NoInput;
 import com.google.appengine.tools.mapreduce.outputs.NoOutput;
@@ -39,13 +38,13 @@ import java.util.Set;
  */
 public class MapReduceJobTest extends TestCase {
 
-  private final ModuleInfo module1 =
-      new ModuleInfo("module1", new VersionInfo("v1", 10), new VersionInfo("v2", 20));
-  private final ModuleInfo module2 =
-      new ModuleInfo("default", new VersionInfo("1", 1), new VersionInfo("2", 1));
   private final LocalServiceTestHelper helper = new LocalServiceTestHelper(
-      new LocalDatastoreServiceTestConfig(), new LocalModulesServiceTestConfig(module1, module2),
-      new LocalTaskQueueTestConfig());
+      new LocalDatastoreServiceTestConfig(), new LocalTaskQueueTestConfig(),
+      new LocalModulesServiceTestConfig()
+        .addBasicScalingModuleVersion("module1", "v1", 10)
+        .addBasicScalingModuleVersion("module1", "v2", 10)
+        .addBasicScalingModuleVersion("default", "1", 1)
+        .addBasicScalingModuleVersion("default", "2", 1));
 
   @SuppressWarnings("serial")
   private static class DummyMapper extends Mapper<Long, String, Long> {
@@ -95,7 +94,7 @@ public class MapReduceJobTest extends TestCase {
     assertNull(sjSettings.getBackend());
     assertEquals("default", sjSettings.getModule());
     assertEquals("1", sjSettings.getVersion());
-    assertEquals("localhost", sjSettings.getTaskQueueTarget());
+    assertEquals("1.default.test.localhost", sjSettings.getTaskQueueTarget());
     assertEquals(mrSettings.getWorkerQueueName(), sjSettings.getQueueName());
     assertEquals(getPath(mrSettings, "job1", CONTROLLER_PATH), sjSettings.getControllerPath());
     assertEquals(getPath(mrSettings, "job1", WORKER_PATH), sjSettings.getWorkerPath());
