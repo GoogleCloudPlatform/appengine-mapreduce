@@ -100,7 +100,9 @@ public class CollisionFindingServlet extends HttpServlet {
     MapReduceSpecification<Long, Integer, Integer, ArrayList<Integer>, GoogleCloudStorageFileSet>
         mapReduceSpec = createMapReduceSpec(bucket, start, limit, shards);
     MapReduceSettings settings = getSettings(bucket);
+    // [START startMapReduceJob]
     String id = MapReduceJob.start(mapReduceSpec, settings);
+    // [END startMapReduceJob]
     // [END start_mapreduce]
     resp.sendRedirect("/_ah/pipeline/status.html?root=" + id);
   }
@@ -131,20 +133,28 @@ public class CollisionFindingServlet extends HttpServlet {
     Output<ArrayList<Integer>, GoogleCloudStorageFileSet> output = new MarshallingOutput<>(
         new GoogleCloudStorageFileOutput(bucket, "CollidingSeeds-%04d", "integers", shards),
         outputMarshaller);
-    return MapReduceSpecification.of("DemoMapreduce",
-        input,
-        mapper,
-        intermediateKeyMarshaller,
-        intermediateValueMarshaller,
-        reducer,
-        output);
+    // [START mapReduceSpec]
+    MapReduceSpecification spec = MapReduceSpecification.of("DemoMapreduce",
+        input, // must extend Input
+        mapper, // must extend Mapper
+        intermediateKeyMarshaller, // must extend Marshaller
+        intermediateValueMarshaller, // must extend Marshaller
+        reducer, // must extend Reducer
+        output); // must extend Output
+    // [END mapReduceSpec]
+    return spec;
   }
   // [END createMapReduceSpec]
 
   // [START getSettings]
   public static MapReduceSettings getSettings(String bucket) {
-    return new MapReduceSettings().setWorkerQueueName("mapreduce-workers").setBucketName(bucket)
+    // [START mapReduceSettings]
+    MapReduceSettings settings = new MapReduceSettings()
+        .setWorkerQueueName("mapreduce-workers")
+        .setBucketName(bucket)
         .setModule("mapreduce");
+    // [END mapReduceSettings]
+    return settings;
   }
   // [END getSettings]
 
