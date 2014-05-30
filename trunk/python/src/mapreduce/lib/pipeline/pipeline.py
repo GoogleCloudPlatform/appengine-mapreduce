@@ -56,17 +56,15 @@ import util as mr_util
 # pylint: disable=protected-access
 
 # For convenience
+_BarrierIndex = models._BarrierIndex
+_BarrierRecord = models._BarrierRecord
 _PipelineRecord = models._PipelineRecord
 _SlotRecord = models._SlotRecord
-_BarrierRecord = models._BarrierRecord
 _StatusRecord = models._StatusRecord
 
 
 # Overall TODOs:
 # - Add a human readable name for start()
-# - Consider using sha1 of the UUID for user-supplied pipeline keys to ensure
-#   that they keys are definitely not sequential or guessable (Python's uuid1
-#   method generates roughly sequential IDs).
 
 # Potential TODOs:
 # - Add support for ANY N barriers.
@@ -386,7 +384,7 @@ class Pipeline(object):
 
   Modifiable instance properties:
     backoff_seconds: How many seconds to use as the constant factor in
-      exponential backoff; may be changed by the user
+      exponential backoff; may be changed by the user.
     backoff_factor: Base factor to use for exponential backoff. The formula
       followed is (backoff_seconds * backoff_factor^current_attempt).
     max_attempts: Maximum number of retry attempts to make before failing
@@ -1455,7 +1453,9 @@ class _PipelineContext(object):
         slot_record.put()
         task = taskqueue.Task(
             url=self.barrier_handler_path,
-            params=dict(slot_key=slot.key),
+            params=dict(
+                slot_key=slot.key,
+                use_barrier_indexes=True),
             headers={'X-Ae-Slot-Key': slot.key,
                      'X-Ae-Filler-Pipeline-Key': filler_pipeline_key})
         task.add(queue_name=self.queue_name, transactional=True)
@@ -1467,6 +1467,7 @@ class _PipelineContext(object):
   def notify_barriers(self,
                       slot_key,
                       cursor,
+                      use_barrier_indexes,
                       max_to_notify=_MAX_BARRIERS_TO_NOTIFY):
     """Searches for barriers affected by a slot and triggers completed ones.
 
@@ -1474,6 +1475,10 @@ class _PipelineContext(object):
       slot_key: db.Key or stringified key of the _SlotRecord that was filled.
       cursor: Stringified Datastore cursor where the notification query
         should pick up.
+      use_barrier_indexes: When True, use _BarrierIndex records to determine
+        which _Barriers to trigger by having this _SlotRecord filled. When
+        False, use the old method that queries for _BarrierRecords by
+        the blocking_slots parameter.
       max_to_notify: Used for testing.
 
     Raises:
@@ -1481,10 +1486,25 @@ class _PipelineContext(object):
     """
     if not isinstance(slot_key, db.Key):
       slot_key = db.Key(slot_key)
-    query = (
-        _BarrierRecord.all(cursor=cursor)
-        .filter('blocking_slots =', slot_key))
-    results = query.fetch(max_to_notify)
+    logging.debug('Notifying slot %r', slot_key)
+
+    if use_barrier_indexes:
+      # Please see models.py:_BarrierIndex to understand how _BarrierIndex
+      # entities relate to _BarrierRecord entities.
+      query = (
+          _BarrierIndex.all(cursor=cursor, keys_only=True)
+          .ancestor(slot_key))
+      barrier_index_list = query.fetch(max_to_notify)
+      barrier_key_list = [
+          _BarrierIndex.to_barrier_key(key) for key in barrier_index_list]
+      results = db.get(barrier_key_list)
+    else:
+      # TODO(user): Delete this backwards compatible codepath and
+      # make use_barrier_indexes the assumed default in all cases.
+      query = (
+          _BarrierRecord.all(cursor=cursor)
+          .filter('blocking_slots =', slot_key))
+      results = query.fetch(max_to_notify)
 
     # Fetch all blocking _SlotRecords for any potentially triggered barriers.
     blocking_slot_keys = []
@@ -1499,23 +1519,23 @@ class _PipelineContext(object):
     task_list = []
     updated_barriers = []
     for barrier in results:
-      all_ready = True
+      ready_slots = []
       for blocking_slot_key in barrier.blocking_slots:
         slot_record = blocking_slot_dict.get(blocking_slot_key)
         if slot_record is None:
           raise UnexpectedPipelineError(
               'Barrier "%r" relies on Slot "%r" which is missing.' %
               (barrier.key(), blocking_slot_key))
-        if slot_record.status != _SlotRecord.FILLED:
-          all_ready = False
-          break
+        if slot_record.status == _SlotRecord.FILLED:
+          ready_slots.append(blocking_slot_key)
 
       # When all of the blocking_slots have been filled, consider the barrier
       # ready to trigger. We'll trigger it regardless of the current
       # _BarrierRecord status, since there could be task queue failures at any
       # point in this flow; this rolls forward the state and de-dupes using
       # the task name tombstones.
-      if all_ready:
+      pending_slots = set(barrier.blocking_slots) - set(ready_slots)
+      if not pending_slots:
         if barrier.status != _BarrierRecord.FIRED:
           barrier.status = _BarrierRecord.FIRED
           barrier.trigger_time = self._gettime()
@@ -1531,12 +1551,16 @@ class _PipelineContext(object):
           # contention on the _PipelineRecord entity.
           countdown = 1
         pipeline_key = _BarrierRecord.target.get_value_for_datastore(barrier)
+        logging.debug('Firing barrier %r', barrier.key())
         task_list.append(taskqueue.Task(
             url=path,
             countdown=countdown,
             name='ae-barrier-fire-%s-%s' % (pipeline_key.name(), purpose),
             params=dict(pipeline_key=pipeline_key, purpose=purpose),
             headers={'X-Ae-Pipeline-Key': pipeline_key}))
+      else:
+        logging.debug('Not firing barrier %r, Waiting for slots: %r',
+                      barrier.key(), pending_slots)
 
     # Blindly overwrite _BarrierRecords that have an updated status. This is
     # acceptable because by this point all finalization barriers for
@@ -1556,7 +1580,10 @@ class _PipelineContext(object):
       task_list.append(taskqueue.Task(
           name='%s-ae-barrier-notify-%d' % (prefix, end),
           url=self.barrier_handler_path,
-          params=dict(slot_key=slot_key, cursor=query.cursor())))
+          params=dict(
+              slot_key=slot_key,
+              cursor=query.cursor(),
+              use_barrier_indexes=use_barrier_indexes)))
 
     if task_list:
       try:
@@ -1721,12 +1748,11 @@ class _PipelineContext(object):
           class_path=pipeline._class_path,
           max_attempts=pipeline.max_attempts))
 
-      entities_to_put.append(_BarrierRecord(
-          parent=pipeline._pipeline_key,
-          key_name=_BarrierRecord.FINALIZE,
-          target=pipeline._pipeline_key,
-          root_pipeline=pipeline._pipeline_key,
-          blocking_slots=list(output_slots)))
+      entities_to_put.extend(_PipelineContext._create_barrier_entities(
+          pipeline._pipeline_key,
+          pipeline._pipeline_key,
+          _BarrierRecord.FINALIZE,
+          output_slots))
 
       db.put(entities_to_put)
 
@@ -2210,25 +2236,94 @@ class _PipelineContext(object):
         pipelines_to_run.add(child_pipeline_key)
         child_pipeline.start_time = self._gettime()
       else:
-        entities_to_put.append(_BarrierRecord(
-            parent=child_pipeline_key,
-            key_name=_BarrierRecord.START,
-            target=child_pipeline_key,
-            root_pipeline=root_pipeline_key,
-            blocking_slots=list(dependent_slots)))
+        entities_to_put.extend(_PipelineContext._create_barrier_entities(
+            root_pipeline_key,
+            child_pipeline_key,
+            _BarrierRecord.START,
+            dependent_slots))
 
-      entities_to_put.append(_BarrierRecord(
-          parent=child_pipeline_key,
-          key_name=_BarrierRecord.FINALIZE,
-          target=child_pipeline_key,
-          root_pipeline=root_pipeline_key,
-          blocking_slots=list(output_slots)))
+      entities_to_put.extend(_PipelineContext._create_barrier_entities(
+          root_pipeline_key,
+          child_pipeline_key,
+          _BarrierRecord.FINALIZE,
+          output_slots))
+
+    # This generator pipeline's finalization barrier must include all of the
+    # outputs of any child pipelines that it runs. This ensures the finalized
+    # calls will not happen until all child pipelines have completed.
+    #
+    # The transition_run() call below will update the FINALIZE _BarrierRecord
+    # for this generator pipeline to include all of these child outputs in
+    # its list of blocking_slots. That update is done transactionally to
+    # make sure the _BarrierRecord only lists the slots that matter.
+    #
+    # However, the notify_barriers() method doesn't find _BarrierRecords
+    # through the blocking_slots field. It finds them through _BarrierIndexes
+    # entities. Thus, before we update the FINALIZE _BarrierRecord in
+    # transition_run(), we need to write _BarrierIndexes for all child outputs.
+    barrier_entities = _PipelineContext._create_barrier_entities(
+        root_pipeline_key,
+        pipeline_key,
+        _BarrierRecord.FINALIZE,
+        all_output_slots)
+    # Ignore the first element which is the _BarrierRecord. That entity must
+    # have already been created and put in the datastore for the parent
+    # pipeline before this code generated child pipelines.
+    barrier_indexes = barrier_entities[1:]
+    entities_to_put.extend(barrier_indexes)
 
     db.put(entities_to_put)
+
     self.transition_run(pipeline_key,
                         blocking_slot_keys=all_output_slots,
                         fanned_out_pipelines=all_children_keys,
                         pipelines_to_run=pipelines_to_run)
+
+  @staticmethod
+  def _create_barrier_entities(root_pipeline_key,
+                               child_pipeline_key,
+                               purpose,
+                               blocking_slot_keys):
+    """Creates all of the entities required for a _BarrierRecord.
+
+    Args:
+      root_pipeline_key: The root pipeline this is part of.
+      child_pipeline_key: The pipeline this barrier is for.
+      purpose: _BarrierRecord.START or _BarrierRecord.FINALIZE.
+      blocking_slot_keys: Set of db.Keys corresponding to _SlotRecords that
+        this barrier should wait on before firing.
+
+    Returns:
+      List of entities, starting with the _BarrierRecord entity, followed by
+      _BarrierIndexes used for firing when _SlotRecords are filled in the same
+      order as the blocking_slot_keys list provided. All of these entities
+      should be put in the Datastore to ensure the barrier fires properly.
+    """
+    result = []
+
+    blocking_slot_keys = list(blocking_slot_keys)
+
+    barrier = _BarrierRecord(
+        parent=child_pipeline_key,
+        key_name=purpose,
+        target=child_pipeline_key,
+        root_pipeline=root_pipeline_key,
+        blocking_slots=blocking_slot_keys)
+
+    result.append(barrier)
+
+    for slot_key in blocking_slot_keys:
+      barrier_index_path = []
+      barrier_index_path.extend(slot_key.to_path())
+      barrier_index_path.extend(child_pipeline_key.to_path())
+      barrier_index_path.extend([_BarrierIndex.kind(), purpose])
+      barrier_index_key = db.Key.from_path(*barrier_index_path)
+      barrier_index = _BarrierIndex(
+          key=barrier_index_key,
+          root_pipeline=root_pipeline_key)
+      result.append(barrier_index)
+
+    return result
 
   def handle_run_exception(self, pipeline_key, pipeline_func, e):
     """Handles an exception raised by a Pipeline's user code.
@@ -2330,7 +2425,9 @@ class _PipelineContext(object):
         # NOTE: Always update a generator pipeline's finalization barrier to
         # include all of the outputs of any pipelines that it runs, to ensure
         # that finalized calls will not happen until all child pipelines have
-        # completed.
+        # completed. This must happen transactionally with the enqueue of
+        # the fan-out kickoff task above to ensure the child output slots and
+        # the barrier blocking slots are the same.
         barrier_key = db.Key.from_path(
             _BarrierRecord.kind(), _BarrierRecord.FINALIZE,
             parent=pipeline_key)
@@ -2479,7 +2576,8 @@ class _BarrierHandler(webapp.RequestHandler):
     context = _PipelineContext.from_environ(self.request.environ)
     context.notify_barriers(
         self.request.get('slot_key'),
-        self.request.get('cursor'))
+        self.request.get('cursor'),
+        use_barrier_indexes=self.request.get('use_barrier_indexes') == 'True')
 
 
 class _PipelineHandler(webapp.RequestHandler):
@@ -2584,6 +2682,10 @@ class _CleanupHandler(webapp.RequestHandler):
         _StatusRecord.all(keys_only=True)
         .filter('root_pipeline =', root_pipeline_key))
     db.delete(status_keys)
+    barrier_index_keys = (
+        _BarrierIndex.all(keys_only=True)
+        .filter('root_pipeline =', root_pipeline_key))
+    db.delete(barrier_index_keys)
 
 
 class _CallbackHandler(webapp.RequestHandler):

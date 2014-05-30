@@ -27,6 +27,8 @@ import util
 class _PipelineRecord(db.Model):
   """Represents a Pipeline.
 
+  Key name is a randomly assigned UUID. No parent entity.
+
   Properties:
     class_path: Path of the Python class to use for this pipeline.
     root_pipeline: The root of the whole workflow; set to itself this pipeline
@@ -114,6 +116,10 @@ class _PipelineRecord(db.Model):
 class _SlotRecord(db.Model):
   """Represents an output slot.
 
+  Key name is a randomly assigned UUID. No parent for slots of child pipelines.
+  For the outputs of root pipelines, the parent entity is the root
+  _PipelineRecord (see Pipeline.start()).
+
   Properties:
     root_pipeline: The root of the workflow.
     filler: The pipeline that filled this slot.
@@ -160,6 +166,10 @@ class _SlotRecord(db.Model):
 class _BarrierRecord(db.Model):
   """Represents a barrier.
 
+  Key name is the purpose of the barrier (START or FINALIZE). Parent entity
+  is the _PipelineRecord the barrier should trigger when all of its
+  blocking_slots are filled.
+
   Properties:
     root_pipeline: The root of the workflow.
     target: The pipeline to run when the barrier fires.
@@ -188,6 +198,73 @@ class _BarrierRecord(db.Model):
   @classmethod
   def kind(cls):
     return '_AE_Pipeline_Barrier'
+
+
+class _BarrierIndex(db.Model):
+  """Indicates a _BarrierRecord that is dependent on a slot.
+
+  Previously, when a _SlotRecord was filled, notify_barriers() would query for
+  all _BarrierRecords where the 'blocking_slots' property equals the
+  _SlotRecord's key. The problem with that approach is the 'blocking_slots'
+  index is eventually consistent, meaning _BarrierRecords that were just written
+  will not match the query. When pipelines are created and barriers are notified
+  in rapid succession, the inconsistent queries can cause certain barriers never
+  to fire. The outcome is a pipeline is WAITING and never RUN, even though all
+  of its dependent slots have been filled.
+
+  This entity is used to make it so barrier fan-out is fully consistent
+  with the High Replication Datastore. It's used by notify_barriers() to
+  do fully consistent ancestor queries every time a slot is filled. This
+  ensures that even all _BarrierRecords dependent on a _SlotRecord will
+  be found regardless of eventual consistency.
+
+  The key path for _BarrierIndexes is this for root entities:
+
+    _PipelineRecord<owns_slot_id>/_SlotRecord<slot_id>/
+        _PipelineRecord<dependent_pipeline_id>/_BarrierIndex<purpose>
+
+  And this for child pipelines:
+
+    _SlotRecord<slot_id>/_PipelineRecord<dependent_pipeline_id>/
+        _BarrierIndex<purpose>
+
+  That path is translated to the _BarrierRecord it should fire:
+
+    _PipelineRecord<dependent_pipeline_id>/_BarrierRecord<purpose>
+
+  All queries for _BarrierIndexes are key-only and thus the model requires
+  no properties or helper methods.
+  """
+
+  # Enable this entity to be cleaned up.
+  root_pipeline = db.ReferenceProperty(_PipelineRecord)
+
+  @classmethod
+  def kind(cls):
+    return '_AE_Barrier_Index'
+
+  @classmethod
+  def to_barrier_key(cls, barrier_index_key):
+    """Converts a _BarrierIndex key to a _BarrierRecord key.
+
+    Args:
+      barrier_index_key: db.Key for a _BarrierIndex entity.
+
+    Returns:
+      db.Key for the corresponding _BarrierRecord entity.
+    """
+    barrier_index_path = barrier_index_key.to_path()
+
+    # Pick out the items from the _BarrierIndex key path that we need to
+    # construct the _BarrierRecord key path.
+    (pipeline_kind, dependent_pipeline_id,
+     unused_kind, purpose) = barrier_index_path[-4:]
+
+    barrier_record_path = (
+        pipeline_kind, dependent_pipeline_id,
+        _BarrierRecord.kind(), purpose)
+
+    return db.Key.from_path(*barrier_record_path)
 
 
 class _StatusRecord(db.Model):
