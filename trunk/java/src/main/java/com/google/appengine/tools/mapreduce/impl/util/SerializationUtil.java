@@ -17,9 +17,19 @@
 package com.google.appengine.tools.mapreduce.impl.util;
 
 import com.google.appengine.api.datastore.Blob;
+import com.google.appengine.api.datastore.DatastoreService;
+import com.google.appengine.api.datastore.DatastoreServiceFactory;
 import com.google.appengine.api.datastore.Entity;
+import com.google.appengine.api.datastore.Key;
+import com.google.appengine.api.datastore.PreparedQuery;
+import com.google.appengine.api.datastore.Query;
+import com.google.appengine.api.datastore.Query.FilterOperator;
+import com.google.appengine.api.datastore.Query.FilterPredicate;
+import com.google.appengine.api.datastore.Transaction;
 import com.google.appengine.tools.mapreduce.CorruptDataException;
 import com.google.appengine.tools.mapreduce.Marshaller;
+import com.google.common.base.Function;
+import com.google.common.collect.Iterables;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -35,7 +45,11 @@ import java.io.OutputStream;
 import java.io.Serializable;
 import java.io.StreamCorruptedException;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.logging.Logger;
 import java.util.zip.Deflater;
@@ -50,6 +64,16 @@ import java.util.zip.InflaterInputStream;
 public class SerializationUtil {
 
   private static final Logger log = Logger.getLogger(SerializationUtil.class.getName());
+  private static final DatastoreService DATASTORE = DatastoreServiceFactory.getDatastoreService();
+  // 1MB - 200K slack for the rest of the properties and entity overhead
+  private static final int MAX_BLOB_BYTE_SIZE = 1024 * 1024 - 200 * 1024;
+  private static final String SHARDED_VALUE_KIND = "MR-ShardedValue";
+  private static final Function<Entity, Key> ENTITY_TO_KEY = new Function<Entity, Key>() {
+    @Override
+    public Key apply(Entity entity) {
+      return entity.getKey();
+    }
+  };
 
   /**
    * Type of compression to optionally use when serializing/deserializing objects.
@@ -288,18 +312,36 @@ public class SerializationUtil {
   }
 
   public static <T extends Serializable> T deserializeFromDatastoreProperty(
-      Entity entity, String propertyName) {
-    return deserializeFromDatastoreProperty(entity, propertyName, false);
+      Entity entity, String property) {
+    return deserializeFromDatastoreProperty(entity, property, false);
   }
 
   @SuppressWarnings("unchecked")
   public static <T extends Serializable> T deserializeFromDatastoreProperty(
-      Entity entity, String propertyName, boolean lenient) {
+      Entity entity, String property, boolean lenient) {
+    Object value = entity.getProperty(property);
     try {
-      return (T) deserializeFromByteArray(((Blob) entity.getProperty(propertyName)).getBytes());
+      byte[] bytes;
+      if (value instanceof Blob) {
+        bytes = ((Blob) value).getBytes();
+      } else {
+        Collection<Key> keys = (Collection<Key>) value;
+        Map<Key, Entity> shards = DATASTORE.get(keys);
+        ByteArrayOutputStream bout = new ByteArrayOutputStream();
+        for (Key key : keys) {
+          Entity shard = shards.get(key);
+          if (shard == null) {
+            throw new CorruptDataException("Missing data shard " + key);
+          }
+          byte[] shardBytes = ((Blob) shard.getProperty("content")).getBytes();
+          bout.write(shardBytes, 0, shardBytes.length);
+        }
+        bytes = bout.toByteArray();
+      }
+      return (T) deserializeFromByteArray(bytes);
     } catch (RuntimeException ex) {
       if (lenient) {
-        log.info("Deserialization of " + entity.getKey() + "#" + propertyName + " failed: "
+        log.info("Deserialization of " + entity.getKey() + "#" + property + " failed: "
             + ex.getMessage() + ", returning null instead.");
         return null;
       }
@@ -307,12 +349,49 @@ public class SerializationUtil {
     }
   }
 
-  public static Blob serializeToDatastoreProperty(Serializable o) {
-    return new Blob(serializeToByteArray(o, false, null));
+  public static void serializeToDatastoreProperty(
+      Transaction tx, Entity entity, String property, Serializable o) {
+    serializeToDatastoreProperty(tx, entity, property, o, null);
   }
 
-  public static Blob serializeToDatastoreProperty(Serializable o, CompressionType compression) {
-    return new Blob(serializeToByteArray(o, false, compression));
+  public static Iterable<Key> getShardedValueKeysFor(Transaction tx, Key parent, String property) {
+    Query query = new Query(SHARDED_VALUE_KIND);
+    query.setAncestor(parent);
+    if (property != null) {
+      query.setFilter(new FilterPredicate("property", FilterOperator.EQUAL, property));
+    }
+    query.setKeysOnly();
+    PreparedQuery preparedQuery = DATASTORE.prepare(tx, query);
+    return Iterables.transform(preparedQuery.asIterable(), ENTITY_TO_KEY);
+  }
+
+  public static void serializeToDatastoreProperty(
+      Transaction tx, Entity entity, String property, Serializable o, CompressionType compression) {
+    byte[] bytes = serializeToByteArray(o, false, compression);
+
+    // deleting previous shards
+    DATASTORE.delete(tx, getShardedValueKeysFor(tx, entity.getKey(), property));
+
+    Object value;
+    if (bytes.length < MAX_BLOB_BYTE_SIZE) {
+      value = new Blob(bytes);
+    } else {
+      int shardId = 0;
+      int offset = 0;
+      List<Entity> shards = new ArrayList<>(bytes.length / MAX_BLOB_BYTE_SIZE + 1);
+      while (offset < bytes.length) {
+        int limit = offset + MAX_BLOB_BYTE_SIZE;
+        byte[] chunk = Arrays.copyOfRange(bytes, offset, Math.min(limit, bytes.length));
+        offset = limit;
+        String keyName = String.format("shard-%04d", ++shardId);
+        Entity shard = new Entity(SHARDED_VALUE_KIND, keyName, entity.getKey());
+        shard.setProperty("property", property);
+        shard.setUnindexedProperty("content", new Blob(chunk));
+        shards.add(shard);
+      }
+      value = DATASTORE.put(tx, shards);
+    }
+    entity.setUnindexedProperty(property, value);
   }
 
   public static byte[] serializeToByteArray(Serializable o) {

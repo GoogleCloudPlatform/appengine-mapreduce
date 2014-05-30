@@ -29,7 +29,14 @@ import com.google.appengine.tools.cloudstorage.ExceptionHandler;
 import com.google.appengine.tools.cloudstorage.RetryHelper;
 import com.google.appengine.tools.cloudstorage.RetryHelperException;
 import com.google.appengine.tools.cloudstorage.RetryParams;
+import com.google.appengine.tools.mapreduce.impl.pipeline.DeletePipelineJob;
 import com.google.appengine.tools.mapreduce.impl.shardedjob.Status.StatusCode;
+import com.google.appengine.tools.mapreduce.impl.util.SerializationUtil;
+import com.google.appengine.tools.pipeline.Job0;
+import com.google.appengine.tools.pipeline.JobSetting;
+import com.google.appengine.tools.pipeline.PipelineService;
+import com.google.appengine.tools.pipeline.PipelineServiceFactory;
+import com.google.appengine.tools.pipeline.Value;
 import com.google.apphosting.api.ApiProxy.ApiProxyException;
 import com.google.apphosting.api.ApiProxy.ArgumentException;
 import com.google.apphosting.api.ApiProxy.RequestTooLargeException;
@@ -43,7 +50,6 @@ import com.google.common.collect.Iterables;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.ConcurrentModificationException;
 import java.util.Iterator;
@@ -250,7 +256,7 @@ public class ShardedJobRunner<T extends IncrementalTask> implements ShardedJobHa
           if (jobState.getActiveTaskCount() == 0 && jobState.getStatus().isActive()) {
             jobState.setStatus(new Status(DONE));
           }
-          DATASTORE.put(tx, ShardedJobStateImpl.ShardedJobSerializer.toEntity(jobState));
+          DATASTORE.put(tx, ShardedJobStateImpl.ShardedJobSerializer.toEntity(tx, jobState));
           tx.commit();
           return jobState;
         } finally {
@@ -355,7 +361,7 @@ public class ShardedJobRunner<T extends IncrementalTask> implements ShardedJobHa
       IncrementalTaskState<T> taskState) {
     boolean locked = false;
     taskState.getLockInfo().lock();
-    Entity entity = IncrementalTaskState.Serializer.toEntity(taskState);
+    Entity entity = IncrementalTaskState.Serializer.toEntity(tx, taskState);
     try {
       DATASTORE.put(tx, entity);
       tx.commit();
@@ -510,11 +516,11 @@ public class ShardedJobRunner<T extends IncrementalTask> implements ShardedJobHa
 
       private void writeTaskState(IncrementalTaskState<T> taskState,
           ShardRetryState<T> shardRetryState, Transaction tx) {
-        Entity taskStateEntity = IncrementalTaskState.Serializer.toEntity(taskState);
+        Entity taskStateEntity = IncrementalTaskState.Serializer.toEntity(tx, taskState);
         if (shardRetryState == null) {
           DATASTORE.put(tx, taskStateEntity);
         } else {
-          Entity retryStateEntity = ShardRetryState.Serializer.toEntity(shardRetryState);
+          Entity retryStateEntity = ShardRetryState.Serializer.toEntity(tx, shardRetryState);
           DATASTORE.put(tx, Arrays.asList(taskStateEntity, retryStateEntity));
         }
       }
@@ -561,8 +567,8 @@ public class ShardedJobRunner<T extends IncrementalTask> implements ShardedJobHa
         }
         taskState = IncrementalTaskState.<T>create(taskId, jobId, startTimeMillis, initialTask);
         ShardRetryState<T> retryState = ShardRetryState.createFor(taskState);
-        DATASTORE.put(tx, Arrays.asList(IncrementalTaskState.Serializer.toEntity(taskState),
-            ShardRetryState.Serializer.toEntity(retryState)));
+        DATASTORE.put(tx, Arrays.asList(IncrementalTaskState.Serializer.toEntity(tx, taskState),
+            ShardRetryState.Serializer.toEntity(tx, retryState)));
         scheduleWorkerTask(tx, settings, taskState, null);
         tx.commit();
       } finally {
@@ -577,7 +583,7 @@ public class ShardedJobRunner<T extends IncrementalTask> implements ShardedJobHa
     try {
       ShardedJobStateImpl<T> existing = lookupJobState(tx, jobId);
       if (existing == null) {
-        DATASTORE.put(tx, ShardedJobStateImpl.ShardedJobSerializer.toEntity(jobState));
+        DATASTORE.put(tx, ShardedJobStateImpl.ShardedJobSerializer.toEntity(tx, jobState));
         tx.commit();
         log.info(jobId + ": Writing initial job state");
       } else {
@@ -598,7 +604,7 @@ public class ShardedJobRunner<T extends IncrementalTask> implements ShardedJobHa
     if (initialTasks.isEmpty()) {
       log.info(jobId + ": No tasks, immediately complete: " + controller);
       jobState.setStatus(new Status(DONE));
-      DATASTORE.put(ShardedJobStateImpl.ShardedJobSerializer.toEntity(jobState));
+      DATASTORE.put(ShardedJobStateImpl.ShardedJobSerializer.toEntity(null, jobState));
       controller.completed(initialTasks);
     } else {
       writeInitialJobState(jobState);
@@ -626,7 +632,7 @@ public class ShardedJobRunner<T extends IncrementalTask> implements ShardedJobHa
         return;
       }
       jobState.setStatus(status);
-      DATASTORE.put(tx, ShardedJobStateImpl.ShardedJobSerializer.toEntity(jobState));
+      DATASTORE.put(tx, ShardedJobStateImpl.ShardedJobSerializer.toEntity(tx, jobState));
       tx.commit();
     } finally {
       rollbackIfActive(tx);
@@ -647,25 +653,101 @@ public class ShardedJobRunner<T extends IncrementalTask> implements ShardedJobHa
     changeJobStatus(jobId, new Status(ABORTED));
   }
 
+
+  private static class DeleteShardsInfos extends Job0<Void> {
+
+    private static final long serialVersionUID = -4342214189527672009L;
+    private final String jobId;
+    private final int start;
+    private final int end;
+
+    private DeleteShardsInfos(String jobId, int start, int end) {
+      this.jobId = jobId;
+      this.start = start;
+      this.end = end;
+    }
+
+    private static void addParentKeyToList(List<Key> list, Key parent) {
+      for (Key child : SerializationUtil.getShardedValueKeysFor(null, parent, null)) {
+        list.add(child);
+      }
+      list.add(parent);
+    }
+
+    @Override
+    public Value<Void> run() {
+      final List<Key> toDelete = new ArrayList<>((end - start) * 2);
+      for (int i = start; i < end; i++) {
+        String taskId = getTaskId(jobId, i);
+        addParentKeyToList(toDelete, IncrementalTaskState.Serializer.makeKey(taskId));
+        addParentKeyToList(toDelete, ShardRetryState.Serializer.makeKey(taskId));
+      }
+      RetryHelper.runWithRetries(callable(new Runnable() {
+        @Override
+        public void run() {
+          DATASTORE.delete(toDelete);
+        }
+      }), DATASTORE_RETRY_FOREVER_PARAMS, EXCEPTION_HANDLER);
+      return null;
+    }
+
+    @Override
+    public String getJobDisplayName() {
+      return "DeleteShardsInfos: " + jobId + "[" + start + "-" + end + "]";
+    }
+  }
+
+  private static class DeleteShardedJob extends Job0<Void> {
+
+    private static final long serialVersionUID = -6850669259843382958L;
+    private static final int TASKS_PER_DELETE = 20;
+    private final String jobId;
+    private final int taskCount;
+
+    public DeleteShardedJob(String jobId, int taskCount) {
+      this.jobId = jobId;
+      this.taskCount = taskCount;
+    }
+
+    @Override
+    public Value<Void> run() {
+      int childJobs = (int) Math.ceil(taskCount / (double) TASKS_PER_DELETE);
+      JobSetting[] waitFor = new JobSetting[childJobs];
+      int startOffset = 0;
+      for (int i = 0; i < childJobs; i++) {
+        int endOffset = Math.min(taskCount, startOffset + TASKS_PER_DELETE);
+        DeleteShardsInfos task = new DeleteShardsInfos(jobId, startOffset, endOffset);
+        waitFor[i] = new JobSetting.WaitForSetting(futureCall(task));
+        startOffset = endOffset;
+      }
+      // TODO(user): should not be needed once b/9940384 or b/14966450 are fixed.
+      return futureCall(new DeletePipelineJob(getPipelineKey().getName()), waitFor);
+    }
+
+    @Override
+    public String getJobDisplayName() {
+      return "DeleteShardedJob: " + jobId;
+    }
+  }
+
   boolean cleanupJob(String jobId) {
     ShardedJobStateImpl<T> jobState = lookupJobState(null, jobId);
     if (jobState == null) {
       return true;
-    } else if (jobState.getStatus().isActive()) {
+    }
+    if (jobState.getStatus().isActive()) {
       return false;
     }
     int taskCount = jobState.getTotalTaskCount();
-    final Collection<Key> toDelete = new ArrayList<>(1 + 2 * taskCount);
-    toDelete.add(ShardedJobStateImpl.ShardedJobSerializer.makeKey(jobId));
-    for (int i = 0; i < taskCount; i++) {
-      String taskId = getTaskId(jobId, i);
-      toDelete.add(IncrementalTaskState.Serializer.makeKey(taskId));
-      toDelete.add(ShardRetryState.Serializer.makeKey(taskId));
+    if (taskCount > 0) {
+      PipelineService pipeline = PipelineServiceFactory.newPipelineService();
+      pipeline.startNewPipeline(new DeleteShardedJob(jobId, taskCount));
     }
+    final Key jobKey = ShardedJobStateImpl.ShardedJobSerializer.makeKey(jobId);
     RetryHelper.runWithRetries(callable(new Runnable() {
       @Override
       public void run() {
-        DATASTORE.delete(toDelete);
+        DATASTORE.delete(jobKey);
       }
     }), DATASTORE_RETRY_FOREVER_PARAMS, EXCEPTION_HANDLER);
     return true;

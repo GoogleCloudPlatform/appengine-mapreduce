@@ -48,7 +48,8 @@ public interface ShardedJobService {
 
   /**
    * Deletes all data of a completed job with the given ID.
-   * Returns true if data is gone.
+   * Data is being deleted asynchronously.
+   * Returns true if job was already deleted or asynchronous task was submitted successfully.
    */
   boolean cleanupJob(String jobId);
 }

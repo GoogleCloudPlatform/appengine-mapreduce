@@ -2,12 +2,13 @@
 
 package com.google.appengine.tools.mapreduce.impl.shardedjob;
 
+import static com.google.appengine.tools.mapreduce.impl.util.SerializationUtil.serializeToDatastoreProperty;
 import static com.google.common.base.Preconditions.checkNotNull;
 
-import com.google.appengine.api.datastore.Blob;
 import com.google.appengine.api.datastore.Entity;
 import com.google.appengine.api.datastore.Key;
 import com.google.appengine.api.datastore.KeyFactory;
+import com.google.appengine.api.datastore.Transaction;
 import com.google.appengine.tools.mapreduce.impl.shardedjob.Status.StatusCode;
 import com.google.appengine.tools.mapreduce.impl.util.SerializationUtil;
 import com.google.common.base.Preconditions;
@@ -141,21 +142,18 @@ class ShardedJobStateImpl<T extends IncrementalTask> implements ShardedJobState 
       return KeyFactory.createKey(ENTITY_KIND, jobId);
     }
 
-    static Entity toEntity(ShardedJobStateImpl<?> in) {
-      Entity out = new Entity(makeKey(in.getJobId()));
-      out.setUnindexedProperty(CONTROLLER_PROPERTY,
-          new Blob(SerializationUtil.serializeToByteArray(in.getController())));
-      out.setUnindexedProperty(SETTINGS_PROPERTY,
-          new Blob(SerializationUtil.serializeToByteArray(in.getSettings())));
-      out.setUnindexedProperty(TOTAL_TASK_COUNT_PROPERTY, in.getTotalTaskCount());
-      out.setUnindexedProperty(START_TIME_PROPERTY, in.getStartTimeMillis());
-      out.setUnindexedProperty(MOST_RECENT_UPDATE_TIME_PROPERTY,
+    static Entity toEntity(Transaction tx, ShardedJobStateImpl<?> in) {
+      Key key = makeKey(in.getJobId());
+      Entity jobState = new Entity(key);
+      serializeToDatastoreProperty(tx, jobState, CONTROLLER_PROPERTY, in.getController());
+      serializeToDatastoreProperty(tx, jobState, SETTINGS_PROPERTY, in.getSettings());
+      serializeToDatastoreProperty(tx, jobState, SHARDS_COMPLETED_PROPERTY, in.shardsCompleted);
+      serializeToDatastoreProperty(tx, jobState, STATUS_PROPERTY, in.getStatus());
+      jobState.setUnindexedProperty(TOTAL_TASK_COUNT_PROPERTY, in.getTotalTaskCount());
+      jobState.setUnindexedProperty(START_TIME_PROPERTY, in.getStartTimeMillis());
+      jobState.setUnindexedProperty(MOST_RECENT_UPDATE_TIME_PROPERTY,
           in.getMostRecentUpdateTimeMillis());
-      out.setUnindexedProperty(SHARDS_COMPLETED_PROPERTY,
-          SerializationUtil.serializeToDatastoreProperty(in.shardsCompleted));
-      out.setUnindexedProperty(STATUS_PROPERTY,
-         SerializationUtil.serializeToDatastoreProperty(in.getStatus()));
-      return out;
+      return jobState;
     }
 
     static <T extends IncrementalTask> ShardedJobStateImpl<T> fromEntity(Entity in) {
