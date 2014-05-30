@@ -14,3 +14,4 @@ from .map_job_context import ShardContext
 from .map_job_context import SliceContext
 from .map_job_control import Job
 from .mapper import Mapper
+from .output_writer import OutputWriter
