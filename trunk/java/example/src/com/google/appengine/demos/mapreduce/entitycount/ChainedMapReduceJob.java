@@ -1,6 +1,7 @@
 package com.google.appengine.demos.mapreduce.entitycount;
 
 import com.google.appengine.api.datastore.Entity;
+import com.google.appengine.api.datastore.Key;
 import com.google.appengine.tools.mapreduce.KeyValue;
 import com.google.appengine.tools.mapreduce.MapJob;
 import com.google.appengine.tools.mapreduce.MapReduceJob;
@@ -12,6 +13,7 @@ import com.google.appengine.tools.mapreduce.MapSpecification;
 import com.google.appengine.tools.mapreduce.Marshallers;
 import com.google.appengine.tools.mapreduce.inputs.ConsecutiveLongInput;
 import com.google.appengine.tools.mapreduce.inputs.DatastoreInput;
+import com.google.appengine.tools.mapreduce.inputs.DatastoreKeyInput;
 import com.google.appengine.tools.mapreduce.outputs.DatastoreOutput;
 import com.google.appengine.tools.mapreduce.outputs.InMemoryOutput;
 import com.google.appengine.tools.pipeline.FutureValue;
@@ -51,7 +53,7 @@ public class ChainedMapReduceJob extends Job0<MapReduceResult<List<List<KeyValue
     MapJob<Long, Entity, Void> createJob = new MapJob<>();
     MapReduceJob<Entity, String, Long, KeyValue<String, Long>, List<List<KeyValue<String, Long>>>>
         countJob = new MapReduceJob<>();
-    MapJob<Entity, Void, Void> deleteJob = new MapJob<>();
+    MapJob<Key, Void, Void> deleteJob = new MapJob<>();
 
     MapReduceSettings settings = getSettings(bucket);
 
@@ -102,9 +104,10 @@ public class ChainedMapReduceJob extends Job0<MapReduceResult<List<List<KeyValue
         .build();
   }
 
-  MapSpecification<Entity, Void, Void> getDeleteJobSpec(int mapShardCount) {
-    return new MapSpecification.Builder<Entity, Void, Void>(
-        new DatastoreInput(datastoreType, mapShardCount), new DeleteEntityMapper(null)).setJobName(
-        "Delete MapReduce entities").build();
+  MapSpecification<Key, Void, Void> getDeleteJobSpec(int mapShardCount) {
+    DatastoreKeyInput input = new DatastoreKeyInput(datastoreType, mapShardCount);
+    DeleteEntityMapper mapper = new DeleteEntityMapper();
+    return new MapSpecification.Builder<Key, Void, Void>(input, mapper)
+        .setJobName("Delete MapReduce entities").build();
   }
 }

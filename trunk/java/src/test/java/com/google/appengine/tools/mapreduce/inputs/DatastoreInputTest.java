@@ -160,7 +160,7 @@ public class DatastoreInputTest extends TestCase {
     for (int i = 1; i <= scatterKeys; i++) {
       entities.add(new Entity(ENTITY_KIND_NAME, i));
     }
-    Iterable<Key> splitKeys = DatastoreInput.chooseSplitPoints(entities, numShards);
+    Iterable<Key> splitKeys = BaseDatastoreInput.chooseSplitPoints(entities, numShards);
     // We start with 0 since the first shard includes the region before the first scatter key
     long lastId = 0;
     for (Key key : splitKeys) {
