@@ -13,13 +13,9 @@ import com.google.appengine.api.backends.BackendServiceFactory;
 import com.google.appengine.api.datastore.Key;
 import com.google.appengine.api.modules.ModulesService;
 import com.google.appengine.api.modules.ModulesServiceFactory;
-import com.google.appengine.api.taskqueue.DeferredTask;
-import com.google.appengine.api.taskqueue.DeferredTaskContext;
 import com.google.appengine.api.taskqueue.Queue;
 import com.google.appengine.api.taskqueue.QueueFactory;
 import com.google.appengine.api.taskqueue.QueueStatistics;
-import com.google.appengine.api.taskqueue.RetryOptions;
-import com.google.appengine.api.taskqueue.TaskOptions;
 import com.google.appengine.api.taskqueue.TransientFailureException;
 import com.google.appengine.tools.cloudstorage.ExceptionHandler;
 import com.google.appengine.tools.cloudstorage.GcsFileOptions;
@@ -27,7 +23,6 @@ import com.google.appengine.tools.cloudstorage.GcsFilename;
 import com.google.appengine.tools.cloudstorage.GcsOutputChannel;
 import com.google.appengine.tools.cloudstorage.GcsService;
 import com.google.appengine.tools.cloudstorage.GcsServiceFactory;
-import com.google.appengine.tools.cloudstorage.RetriesExhaustedException;
 import com.google.appengine.tools.cloudstorage.RetryHelper;
 import com.google.appengine.tools.cloudstorage.RetryHelperException;
 import com.google.appengine.tools.cloudstorage.RetryParams;
@@ -38,12 +33,14 @@ import com.google.appengine.tools.mapreduce.impl.GoogleCloudStorageReduceInput;
 import com.google.appengine.tools.mapreduce.impl.GoogleCloudStorageSortInput;
 import com.google.appengine.tools.mapreduce.impl.GoogleCloudStorageSortOutput;
 import com.google.appengine.tools.mapreduce.impl.HashingSharder;
-import com.google.appengine.tools.mapreduce.impl.MapReduceConstants;
 import com.google.appengine.tools.mapreduce.impl.MapReduceResultImpl;
 import com.google.appengine.tools.mapreduce.impl.MapShardTask;
 import com.google.appengine.tools.mapreduce.impl.ReduceShardTask;
 import com.google.appengine.tools.mapreduce.impl.WorkerShardTask;
-import com.google.appengine.tools.mapreduce.impl.shardedjob.ShardedJob;
+import com.google.appengine.tools.mapreduce.impl.pipeline.CleanupPipelineJob;
+import com.google.appengine.tools.mapreduce.impl.pipeline.ExamineStatusAndReturnResult;
+import com.google.appengine.tools.mapreduce.impl.pipeline.ResultAndStatus;
+import com.google.appengine.tools.mapreduce.impl.pipeline.ShardedJob;
 import com.google.appengine.tools.mapreduce.impl.shardedjob.ShardedJobController;
 import com.google.appengine.tools.mapreduce.impl.shardedjob.ShardedJobServiceFactory;
 import com.google.appengine.tools.mapreduce.impl.shardedjob.ShardedJobSettings;
@@ -69,7 +66,6 @@ import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 
 import java.io.IOException;
-import java.io.Serializable;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -80,8 +76,6 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.CancellationException;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-
-import javax.servlet.http.HttpServletRequest;
 
 
 /**
@@ -95,11 +89,12 @@ import javax.servlet.http.HttpServletRequest;
  * @param <O> type of output values
  * @param <R> type of final result
  */
+@SuppressWarnings("deprecation")
 public class MapReduceJob<I, K, V, O, R>
     extends Job2<MapReduceResult<R>, MapReduceSpecification<I, K, V, O, R>, MapReduceSettings> {
 
   private static final long serialVersionUID = 723635736794527552L;
-  private static final Logger log = Logger.getLogger(MapReduceJob.class.getName());
+  static final Logger log = Logger.getLogger(MapReduceJob.class.getName());
 
   private static final ExceptionHandler QUEUE_EXCEPTION_HANDLER =
       new ExceptionHandler.Builder().retryOn(TransientFailureException.class).build();
@@ -176,49 +171,6 @@ public class MapReduceJob<I, K, V, O, R>
     settings[2] = new JobSetting.OnQueue(mrSettings.getWorkerQueueName());
     System.arraycopy(extra, 0, settings, 3, extra.length);
     return settings;
-  }
-
-  private static class ResultAndStatus<R> implements Serializable {
-
-    private static final long serialVersionUID = 7862563622882782696L;
-
-    private final MapReduceResult<R> result;
-    private final Status status;
-
-    public ResultAndStatus(MapReduceResult<R> result, Status status) {
-      this.result = result;
-      this.status = status;
-    }
-
-    public MapReduceResult<R> getResult() {
-      return result;
-    }
-
-    public Status getStatus() {
-      return status;
-    }
-  }
-
-  // TODO(user): This class will not be needed once b/11279055 is fixed.
-  private static class ExamineStatusAndReturnResult<R>
-      extends Job1<MapReduceResult<R>, ResultAndStatus<R>> {
-
-    private static final long serialVersionUID = -4916783324594785878L;
-
-    private final String stage;
-
-    ExamineStatusAndReturnResult(String stage) {
-      this.stage = stage;
-    }
-
-    @Override
-    public Value<MapReduceResult<R>> run(ResultAndStatus<R> resultAndStatus) {
-      Status status = resultAndStatus.getStatus();
-      if (status.getStatusCode() == Status.StatusCode.DONE) {
-        return immediate(resultAndStatus.getResult());
-      }
-      throw new MapReduceJobException(stage, status);
-    }
   }
 
   private static class WorkerController<I, O, R, C extends WorkerContext<O>> extends
@@ -543,159 +495,20 @@ public class MapReduceJob<I, K, V, O, R>
     }
   }
 
-  /**
-   * A sub-pipeline to delete intermediate data
-   */
-  private static class CleanupPipelineJob extends
-      Job1<String, MapReduceResult<List<GoogleCloudStorageFileSet>>> {
-    private static final long serialVersionUID = 354137030664235135L;
-
-    private final String mrJobId;
-    private final MapReduceSettings settings;
-
-    private CleanupPipelineJob(String mrJobId, MapReduceSettings settings) {
-      this.settings = settings;
-      this.mrJobId = checkNotNull(mrJobId, "Null mrJobId");
-    }
-
-    @Override
-    public String toString() {
-      return getClass().getSimpleName() + "(" + mrJobId + ")";
-    }
-
-    @Override
-    public Value<String> run(MapReduceResult<List<GoogleCloudStorageFileSet>> files) {
-      PipelineService service = PipelineServiceFactory.newPipelineService();
-      return immediate(service.startNewPipeline(
-          new CleanupJob(mrJobId, settings), files, makeJobSettings(settings)));
-    }
-  }
-
-  /**
-   * A Job to delete records of the pipeline it is in. (Used by CleanupPipelineJob)
-   */
-  private static class DeletePipelineJob extends Job0<Void> {
-
-    private static final long serialVersionUID = 7957145050871420619L;
-    private final String key;
-    private final MapReduceSettings settings;
-
-    private DeletePipelineJob(String key, MapReduceSettings settings) {
-      this.key = key;
-      this.settings = settings;
-    }
-
-    @Override
-    public Value<Void> run() {
-      DeferredTask deleteRecordsTask = new DeferredTask() {
-        private static final long serialVersionUID = -7510918963650055768L;
-
-        @Override
-        public void run() {
-          PipelineService service = PipelineServiceFactory.newPipelineService();
-          try {
-            service.deletePipelineRecords(key);
-            log.info("Deleted pipeline: " + key);
-          } catch (IllegalStateException e) {
-            log.warning("Failed to delete pipeline: " + key);
-            HttpServletRequest request = DeferredTaskContext.getCurrentRequest();
-            if (request != null) {
-              int attempts = request.getIntHeader("X-AppEngine-TaskExecutionCount");
-              if (attempts <= 5) {
-                log.info("Request to retry deferred task #" + attempts);
-                DeferredTaskContext.markForRetry();
-                return;
-              }
-            }
-            try {
-              service.deletePipelineRecords(key, true, false);
-              log.warning("Force deleted pipeline: " + key);
-            } catch (Exception ex) {
-              log.log(Level.WARNING, "Failed to force delete pipeline: " + key, ex);
-            }
-          } catch (NoSuchObjectException e) {
-            // Already done
-          }
-        }
-      };
-      Queue queue = QueueFactory.getQueue(settings.getWorkerQueueName());
-      queue.add(TaskOptions.Builder.withPayload(deleteRecordsTask).countdownMillis(10000)
-          .retryOptions(RetryOptions.Builder.withMinBackoffSeconds(2).maxBackoffSeconds(20)));
-      return null;
-    }
-  }
-
-
-  /**
-   * A Job that kicks off a CleanupFilesJob for each fileset it is provided.
-   */
-  private static class CleanupJob extends
+  private static class Cleanup extends
       Job1<Void, MapReduceResult<List<GoogleCloudStorageFileSet>>> {
-    private static final long serialVersionUID = 354137030664235135L;
 
-    private final String mrJobId;
+    private static final long serialVersionUID = 4559443543355672948L;
+
     private final MapReduceSettings settings;
 
-    private CleanupJob(String mrJobId, MapReduceSettings settings) {
+    public Cleanup(MapReduceSettings settings) {
       this.settings = settings;
-      this.mrJobId = checkNotNull(mrJobId, "Null mrJobId");
     }
 
     @Override
-    public String toString() {
-      return getClass().getSimpleName() + "(" + mrJobId + ")";
-    }
-
-    /**
-     * Kicks off a job to delete each of the provided GoogleCloudStorageFileSets in parallel.
-     */
-    @Override
-    public Value<Void> run(MapReduceResult<List<GoogleCloudStorageFileSet>> fileSet) {
-      JobSetting[] waitForAll = new JobSetting[fileSet.getOutputResult().size()];
-      int index = 0;
-      for (GoogleCloudStorageFileSet files : fileSet.getOutputResult()) {
-        FutureValue<Void> futureCall =
-            futureCall(new CleanupFilesJob(mrJobId), immediate(files), makeJobSettings(settings));
-        waitForAll[index++] = waitFor(futureCall);
-      }
-      // TODO(user): should not be needed once b/9940384 is fixed
-      return futureCall(new DeletePipelineJob(getPipelineKey().getName(), settings),
-          makeJobSettings(settings, waitForAll));
-    }
-  }
-
-  /**
-   * A job which deletes all the files in the provided GoogleCloudStorageFileSet
-   */
-  private static class CleanupFilesJob extends Job1<Void, GoogleCloudStorageFileSet> {
-    private static final long serialVersionUID = 1386781994496334846L;
-    private static final GcsService gcs =
-        GcsServiceFactory.createGcsService(MapReduceConstants.GCS_RETRY_PARAMETERS);
-    private final String mrJobId;
-
-    private CleanupFilesJob(String mrJobId) {
-      this.mrJobId = checkNotNull(mrJobId, "Null mrJobId");
-    }
-
-    @Override
-    public String toString() {
-      return getClass().getSimpleName() + "(" + mrJobId + ")";
-    }
-
-    /**
-     * Deletes the files in the provided GoogleCloudStorageFileSet
-     */
-    @Override
-    public Value<Void> run(GoogleCloudStorageFileSet files) throws Exception {
-      for (GcsFilename file : files.getAllFiles()) {
-        try {
-          gcs.delete(file);
-        } catch (RetriesExhaustedException e) {
-          log.log(Level.WARNING, "Failed to cleanup file: " + file, e);
-        } catch (IOException e) {
-          log.log(Level.WARNING, "Failed to cleanup file: " + file, e);
-        }
-      }
+    public Value<Void> run(MapReduceResult<List<GoogleCloudStorageFileSet>> result) {
+      CleanupPipelineJob.cleanup(result.getOutputResult(), makeJobSettings(settings));
       return null;
     }
   }
@@ -719,13 +532,11 @@ public class MapReduceJob<I, K, V, O, R>
     FutureValue<MapReduceResult<List<GoogleCloudStorageFileSet>>> sortResult = futureCall(
         new SortJob(mrJobId, mrSpec, settings), mapResult,
         makeJobSettings(settings, maxAttempts(1)));
-    futureCall(new CleanupPipelineJob(mrJobId, settings), mapResult,
-        makeJobSettings(settings, waitFor(sortResult)));
+    futureCall(new Cleanup(settings), mapResult, waitFor(sortResult));
     FutureValue<MapReduceResult<R>> reduceResult = futureCall(
         new ReduceJob<>(mrJobId, mrSpec, settings), mapResult, sortResult,
         makeJobSettings(settings, maxAttempts(1)));
-    futureCall(new CleanupPipelineJob(mrJobId, settings), sortResult,
-        makeJobSettings(settings, waitFor(reduceResult)));
+    futureCall(new Cleanup(settings), sortResult, waitFor(reduceResult));
     return reduceResult;
   }
 
