@@ -6,12 +6,12 @@ import com.google.appengine.tools.mapreduce.impl.shardedjob.Status;
 /**
  * An exception that is thrown upon MapReduceJob failure.
  */
-public final class MapReduceJobException extends RuntimeException {
+public class MapReduceJobException extends RuntimeException {
 
   private static final long serialVersionUID = 2875093254119004898L;
   private final String stage;
 
-  public MapReduceJobException(String stage, Status status) {
+  MapReduceJobException(String stage, Status status) {
     super("Stage " + stage + " was not completed successfuly (status=" + status.getStatusCode()
         + ", message=" + status.getException() + ")", status.getException());
     this.stage = stage;
