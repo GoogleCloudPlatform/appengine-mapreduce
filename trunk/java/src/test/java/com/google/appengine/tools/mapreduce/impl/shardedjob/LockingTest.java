@@ -150,8 +150,7 @@ public class LockingTest extends EndToEndTestCase {
     //Duplicate task (first task is still running)
     executeTask(jobId, taskFromQueue); //Should not block because will not execute run.
     TaskStateInfo delayedRetry = grabNextTaskFromQueue(queueName);
-    //This assumes that the above did not take more that 1 minute to execute.
-    assertTrue(delayedRetry.getEtaDelta() > 0.9 * settings.getSliceTimeoutMillis() / 1000);
+    assertTrue(delayedRetry.getEtaDelta() > 0);
 
     //First task completes
     StaticBlockingTask.finishRun.release();
@@ -234,7 +233,7 @@ public class LockingTest extends EndToEndTestCase {
     assertEquals(a.getSequenceNumber(), b.getSequenceNumber());
     assertEquals(a.getRetryCount(), b.getRetryCount());
     assertEquals(a.getTaskId(), b.getTaskId());
-    assertEquals(a.getSliceStartTime(), b.getSliceStartTime());
+    assertEquals(a.getLockInfo().lockedSince(), b.getLockInfo().lockedSince());
     assertEquals(a.getMostRecentUpdateMillis(), b.getMostRecentUpdateMillis());
   }
 

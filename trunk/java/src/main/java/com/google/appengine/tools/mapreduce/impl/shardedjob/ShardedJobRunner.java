@@ -17,6 +17,10 @@ import com.google.appengine.api.datastore.Entity;
 import com.google.appengine.api.datastore.EntityNotFoundException;
 import com.google.appengine.api.datastore.Key;
 import com.google.appengine.api.datastore.Transaction;
+import com.google.appengine.api.log.LogQuery;
+import com.google.appengine.api.log.LogService;
+import com.google.appengine.api.log.LogServiceFactory;
+import com.google.appengine.api.log.RequestLogs;
 import com.google.appengine.api.taskqueue.QueueFactory;
 import com.google.appengine.api.taskqueue.TaskOptions;
 import com.google.appengine.api.taskqueue.TransactionalTaskException;
@@ -110,6 +114,7 @@ public class ShardedJobRunner<T extends IncrementalTask> implements ShardedJobHa
   private static final Logger log = Logger.getLogger(ShardedJobRunner.class.getName());
 
   private static final DatastoreService DATASTORE = DatastoreServiceFactory.getDatastoreService();
+  private static final LogService LOG_SERVICE = LogServiceFactory.getLogService();
 
   private static final RetryParams DATASTORE_RETRY_PARAMS = new RetryParams.Builder()
       .initialRetryDelayMillis(1000).maxRetryDelayMillis(30000).retryMinAttempts(5).build();
@@ -288,7 +293,7 @@ public class ShardedJobRunner<T extends IncrementalTask> implements ShardedJobHa
       return null;
     }
     if (sequenceNumber == taskState.getSequenceNumber()) {
-      if (taskState.getSliceStartTime() == null) {
+      if (!taskState.getLockInfo().isLocked()) {
         return taskState;
       } else {
         handleLockHeld(taskId, jobState, taskState);
@@ -308,11 +313,12 @@ public class ShardedJobRunner<T extends IncrementalTask> implements ShardedJobHa
       IncrementalTaskState<T> taskState) {
     long currentTime = System.currentTimeMillis();
     int sliceTimeoutMillis = jobState.getSettings().getSliceTimeoutMillis();
-    if (taskState.getSliceStartTime() + sliceTimeoutMillis > currentTime) {
-      scheduleWorkerTask(null, jobState.getSettings(), taskState,
-          taskState.getSliceStartTime() + sliceTimeoutMillis);
-      log.info("Lock for " + taskId + " is being held. Will retry after "
-          + (taskState.getSliceStartTime() + sliceTimeoutMillis - currentTime));
+    long lockExpiration = taskState.getLockInfo().lockedSince() + sliceTimeoutMillis;
+    if (lockExpiration > currentTime &&
+        !wasRequestCompleted(taskState.getLockInfo().getRequestId())) {
+      long eta = Math.min(lockExpiration, currentTime + 60_000);
+      scheduleWorkerTask(null, jobState.getSettings(), taskState, eta);
+      log.info("Lock for " + taskId + " is being held. Will retry after " + (eta - currentTime));
     } else {
       ShardRetryState<T> retryState = handleShardFailure(jobState, taskState, new RuntimeException(
           "Lock for " + taskId + " expired on slice: " + taskState.getSequenceNumber()));
@@ -320,10 +326,23 @@ public class ShardedJobRunner<T extends IncrementalTask> implements ShardedJobHa
     }
   }
 
+  private static boolean wasRequestCompleted(String requestId) {
+    if (requestId != null) {
+      LogQuery query = LogQuery.Builder.withRequestIds(Collections.singletonList(requestId));
+      for (RequestLogs requestLog : LOG_SERVICE.fetch(query)) {
+        if (requestLog.isFinished()) {
+          log.info("Previous un-released lock for request " + requestId + " has finished");
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
   private boolean lockShard(Transaction tx, ShardedJobState<T> jobState,
       IncrementalTaskState<T> taskState) {
     boolean locked = false;
-    taskState.setSliceStartTime(System.currentTimeMillis());
+    taskState.getLockInfo().lock();
     Entity entity = IncrementalTaskState.Serializer.toEntity(taskState);
     try {
       DATASTORE.put(tx, entity);
@@ -335,6 +354,10 @@ public class ShardedJobRunner<T extends IncrementalTask> implements ShardedJobHa
           + " on slice " + taskState.getSequenceNumber());
       long eta = System.currentTimeMillis() + new Random().nextInt(5000) + 5000;
       scheduleWorkerTask(null, jobState.getSettings(), taskState, eta);
+    } finally {
+      if (!locked) {
+        taskState.getLockInfo().unlock();
+      }
     }
     return locked;
   }
@@ -444,7 +467,7 @@ public class ShardedJobRunner<T extends IncrementalTask> implements ShardedJobHa
       final IncrementalTaskState<T> taskState, /* Nullable */
       final ShardRetryState<T> shardRetryState, boolean aggresiveRetry) {
     taskState.setSequenceNumber(taskState.getSequenceNumber() + 1);
-    taskState.setSliceStartTime(null);
+    taskState.getLockInfo().unlock();
     ExceptionHandler exceptionHandler =
         aggresiveRetry ? AGGRESIVE_EXCEPTION_HANDLER : EXCEPTION_HANDLER;
     RetryHelper.runWithRetries(callable(new Runnable() {

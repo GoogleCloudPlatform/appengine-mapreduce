@@ -11,6 +11,7 @@ import com.google.appengine.api.datastore.KeyFactory;
 import com.google.appengine.tools.mapreduce.impl.shardedjob.Status.StatusCode;
 import com.google.appengine.tools.mapreduce.impl.util.SerializationUtil;
 import com.google.appengine.tools.mapreduce.impl.util.SerializationUtil.CompressionType;
+import com.google.apphosting.api.ApiProxy;
 import com.google.common.base.Preconditions;
 import com.google.common.primitives.Ints;
 
@@ -30,25 +31,62 @@ public class IncrementalTaskState<T extends IncrementalTask> {
   private int retryCount;
   private T task;
   private Status status;
-  //Null when the slice (sequence) has not started yet.
-  /*Nullable*/ private Long sliceStartTime;
+  private LockInfo lockInfo;
 
+  static class LockInfo {
+
+    private static final String REQUEST_ID = "com.google.appengine.runtime.request_log_id";
+    private Long startTime;
+    private String requestId;
+
+    private LockInfo(Long startTime, String requestId) {
+      this.startTime = startTime;
+      this.requestId = requestId;
+    }
+
+    public boolean isLocked() {
+      return startTime != null;
+    }
+
+    public long lockedSince() {
+      return startTime == null ? -1 : startTime;
+    }
+
+    public String getRequestId() {
+      return requestId;
+    }
+
+    public void lock() {
+      startTime = System.currentTimeMillis();
+      requestId = (String) ApiProxy.getCurrentEnvironment().getAttributes().get(REQUEST_ID);
+    }
+
+    public void unlock() {
+      startTime = null;
+      requestId = null;
+    }
+
+    @Override
+    public String toString() {
+      return getClass().getName() + "(" + startTime + ", " + requestId + ")";
+    }
+  }
 
   /**
    * Returns a new running IncrementalTaskState.
    */
   static <T extends IncrementalTask> IncrementalTaskState<T> create(String taskId, String jobId,
       long createTime, T initialTask) {
-    return new IncrementalTaskState<>(taskId, jobId, createTime, null, checkNotNull(initialTask),
-        new Status(StatusCode.RUNNING));
+    return new IncrementalTaskState<>(taskId, jobId, createTime, new LockInfo(null, null),
+        checkNotNull(initialTask), new Status(StatusCode.RUNNING));
   }
 
   private IncrementalTaskState(String taskId, String jobId, long mostRecentUpdateMillis,
-      Long sliceStartTime, T task, Status status) {
+      LockInfo lockInfo, T task, Status status) {
     this.taskId = checkNotNull(taskId, "Null taskId");
     this.jobId = checkNotNull(jobId, "Null jobId");
     this.mostRecentUpdateMillis = mostRecentUpdateMillis;
-    this.sliceStartTime = sliceStartTime;
+    this.lockInfo = lockInfo;
     this.task = task;
     this.status = status;
   }
@@ -91,13 +129,8 @@ public class IncrementalTaskState<T extends IncrementalTask> {
     retryCount = 0;
   }
 
-  /*Nullable*/ public Long getSliceStartTime() {
-    return sliceStartTime;
-  }
-
-  public IncrementalTaskState<T> setSliceStartTime(Long sliceStartTime) {
-    this.sliceStartTime = sliceStartTime;
-    return this;
+  public LockInfo getLockInfo() {
+    return lockInfo;
   }
 
   /*Nullable*/ public T getTask() {
@@ -140,6 +173,7 @@ public class IncrementalTaskState<T extends IncrementalTask> {
     private static final String SEQUENCE_NUMBER_PROPERTY = "sequenceNumber";
     private static final String RETRY_COUNT_PROPERTY = "retryCount";
     private static final String SLICE_START_TIME = "sliceStartTime";
+    private static final String SLICE_REQUEST_ID = "sliceRequestId";
     private static final String NEXT_TASK_PROPERTY = "nextTask";
     private static final String STATUS_PROPERTY = "status";
 
@@ -152,8 +186,11 @@ public class IncrementalTaskState<T extends IncrementalTask> {
       taskState.setProperty(JOB_ID_PROPERTY, in.getJobId());
       taskState.setUnindexedProperty(MOST_RECENT_UPDATE_MILLIS_PROPERTY,
           in.getMostRecentUpdateMillis());
-      if (in.getSliceStartTime() != null) {
-        taskState.setUnindexedProperty(SLICE_START_TIME, in.getSliceStartTime());
+      if (in.getLockInfo().startTime != null) {
+        taskState.setUnindexedProperty(SLICE_START_TIME, in.getLockInfo().startTime);
+      }
+      if (in.getLockInfo().requestId != null) {
+        taskState.setUnindexedProperty(SLICE_REQUEST_ID, in.getLockInfo().requestId);
       }
       taskState.setProperty(SEQUENCE_NUMBER_PROPERTY, in.getSequenceNumber());
       taskState.setProperty(RETRY_COUNT_PROPERTY, in.getRetryCount());
@@ -170,7 +207,8 @@ public class IncrementalTaskState<T extends IncrementalTask> {
       IncrementalTaskState state = new IncrementalTaskState(in.getKey().getName(),
           (String) in.getProperty(JOB_ID_PROPERTY),
           (Long) in.getProperty(MOST_RECENT_UPDATE_MILLIS_PROPERTY),
-          (Long) in.getProperty(SLICE_START_TIME),
+          new LockInfo((Long) in.getProperty(SLICE_START_TIME),
+              (String) in.getProperty(SLICE_REQUEST_ID)),
           in.hasProperty(NEXT_TASK_PROPERTY) ? SerializationUtil
               .<IncrementalTask>deserializeFromDatastoreProperty(in, NEXT_TASK_PROPERTY)
               : null,
