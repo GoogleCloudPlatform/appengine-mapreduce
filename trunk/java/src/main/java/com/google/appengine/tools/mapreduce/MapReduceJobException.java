@@ -12,9 +12,8 @@ public class MapReduceJobException extends RuntimeException {
   private final String stage;
 
   MapReduceJobException(String stage, Status status) {
-    super("Stage " + stage + " was not completed successfuly (status="
-        + status.getStatusCode() + ", message=" + status.getException().getMessage() + ")",
-        status.getException());
+    super("Stage " + stage + " was not completed successfuly (status=" + status.getStatusCode()
+        + ", message=" + status.getException() + ")", status.getException());
     this.stage = stage;
   }
 
