@@ -2662,7 +2662,14 @@ class _GoogleCloudStorageInputReader(InputReader):
       if filename is None:
         raise StopIteration()
       try:
+        start_time = time.time()
         handle = cloudstorage.open(filename, **options)
+
+        ctx = context.get()
+        if ctx:
+          operation.counters.Increment(
+              COUNTER_IO_READ_MSEC, int((time.time() - start_time) * 1000))(ctx)
+
         return handle
       except cloudstorage.NotFoundError:
         logging.warning("File %s may have been removed. Skipping file.",
@@ -2723,7 +2730,16 @@ class _GoogleCloudStorageRecordInputReader(_GoogleCloudStorageInputReader):
         self._record_reader = records.RecordsReader(self._cur_handle)
 
       try:
-        return self._record_reader.read()
+        start_time = time.time()
+        content = self._record_reader.read()
+
+        ctx = context.get()
+        if ctx:
+          operation.counters.Increment(COUNTER_IO_READ_BYTES, len(content))(ctx)
+          operation.counters.Increment(
+              COUNTER_IO_READ_MSEC, int((time.time() - start_time) * 1000))(ctx)
+        return content
+
       except EOFError:
         self._cur_handle = None
         self._record_reader = None

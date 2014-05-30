@@ -1,6 +1,5 @@
 #!/usr/bin/env python
-#
-# Copyright 2010 Google Inc.
+# Copyright 2010 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -24,19 +23,21 @@
 
 # os_compat must be first to ensure timezones are UTC.
 # Disable "unused import" and "invalid import order"
-# pylint: disable=unused-import
+# pylint: disable=unused-import,g-bad-import-order
 from google.appengine.tools import os_compat
-# pylint: enable=unused-import
+# pylint: enable=unused-import,g-bad-import-order
 
 import imp
-from testlib import mox
 import os
 import sys
 import unittest
 
+from testlib import mox
+
 from google.appengine.api import queueinfo
 from google.appengine.datastore import datastore_stub_util
 from google.appengine.ext import testbed
+from mapreduce import model
 
 # TODO(user): Cleanup imports if/when cloudstorage becomes part of runtime.
 try:
@@ -116,6 +117,7 @@ class HandlerTestBase(unittest.TestCase):
     self.taskqueue = self.testbed.get_stub(testbed.TASKQUEUE_SERVICE_NAME)
 
     self.taskqueue.queue_yaml_parser = (
+        # pylint: disable=g-long-lambda
         lambda x: queueinfo.LoadSingleQueue(
             "queue:\n"
             "- name: default\n"
@@ -144,6 +146,20 @@ class HandlerTestBase(unittest.TestCase):
     tasks = self.taskqueue.GetTasks(queue)
     self.assertEquals(1, len(tasks))
     self.assertEquals(tasks[0]["url"], self.MAPREDUCE_URL)
+
+  def create_shard_state(self, shard_number):
+    """Create a model.ShardState.
+
+    Args:
+      shard_number: The index for this shard (zero-indexed).
+
+    Returns:
+      a model.ShardState for the given shard.
+    """
+    shard_state = model.ShardState.create_new("DummyMapReduceJobId",
+                                              shard_number)
+    shard_state.put()
+    return shard_state
 
 
 class CloudStorageTestBase(HandlerTestBase):
