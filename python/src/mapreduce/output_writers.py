@@ -1048,6 +1048,9 @@ class _GoogleCloudStorageOutputWriter(OutputWriter):
     return writer
 
   def to_json(self):
+    # TODO(user): Move all IO logic to end_slice in new API.
+    if not self._streaming_buffer.closed:
+      self._streaming_buffer.flush()
     result = {self._JSON_GCS_BUFFER: pickle.dumps(self._streaming_buffer),
               self._JSON_NO_DUP: self._no_dup}
     if self._no_dup:
