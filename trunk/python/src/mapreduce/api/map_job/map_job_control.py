@@ -75,6 +75,17 @@ class Job(object):
     """Get outputs of this job."""
     raise NotImplementedError()
 
+  def get_counters(self):
+    """Get counters from this job.
+
+    When a job is running, counter values won't be very accurate.
+
+    Yields:
+      (counter_name, value) pairs of type (basestring, int)
+    """
+    self.__update_state()
+    return self._state.counters_map.counters.iteritems()
+
   @classmethod
   def submit(cls, job_config, in_xg_transaction=False):
     """Submit the job to run.

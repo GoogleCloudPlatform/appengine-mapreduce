@@ -423,7 +423,9 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
         os.environ.get("HTTP_X_APPENGINE_QUEUENAME"))
     job_context = map_job.JobContext(job_config)
     self.shard_context = map_job.ShardContext(job_context, shard_state)
-    self.slice_context = map_job.SliceContext(self.shard_context, shard_state)
+    self.slice_context = map_job.SliceContext(self.shard_context,
+                                              shard_state,
+                                              tstate)
     try:
       if is_this_a_retry:
         task_directive = self._attempt_slice_recovery(shard_state, tstate)
@@ -533,9 +535,9 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
         break
 
     # Flush context and its pools.
-    operation.counters.Increment(
+    self.slice_context.incr(
         context.COUNTER_MAPPER_WALLTIME_MS,
-        int((self._time() - self._start_time)*1000))(ctx)
+        int((self._time() - self._start_time)*1000))
 
     if isinstance(tstate.handler, map_job.Mapper):
       tstate.handler.end_slice(self.slice_context)
@@ -560,28 +562,29 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
       True if scan should be continued, False if scan should be stopped.
     """
     if data is not input_readers.ALLOW_CHECKPOINT:
-      ctx.counters.increment(context.COUNTER_MAPPER_CALLS)
+      self.slice_context.incr(context.COUNTER_MAPPER_CALLS)
 
       handler = transient_shard_state.handler
 
       if isinstance(handler, map_job.Mapper):
-        result = handler(self.slice_context, data)
-      elif input_reader.expand_parameters:
-        result = handler(*data)
+        handler(self.slice_context, data)
       else:
-        result = handler(data)
+        if input_reader.expand_parameters:
+          result = handler(*data)
+        else:
+          result = handler(data)
 
-      if util.is_generator(result):
-        for output in result:
-          if isinstance(output, operation.Operation):
-            output(ctx)
-          else:
-            output_writer = transient_shard_state.output_writer
-            if not output_writer:
-              logging.warning(
-                  "Handler yielded %s, but no output writer is set.", output)
+        if util.is_generator(result):
+          for output in result:
+            if isinstance(output, operation.Operation):
+              output(ctx)
             else:
-              output_writer.write(output)
+              output_writer = transient_shard_state.output_writer
+              if not output_writer:
+                logging.warning(
+                    "Handler yielded %s, but no output writer is set.", output)
+              else:
+                output_writer.write(output)
 
     if self._time() - self._start_time >= parameters.config._SLICE_DURATION_SEC:
       return False
