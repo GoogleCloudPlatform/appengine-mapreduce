@@ -62,6 +62,7 @@ from mapreduce import parameters
 from mapreduce import test_support
 from mapreduce import util
 from mapreduce.api import map_job
+from mapreduce.api.map_job import shard_life_cycle
 from google.appengine.ext.webapp import mock_webapp
 
 
@@ -1598,6 +1599,55 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
 
     tasks = self.taskqueue.GetTasks("default")
     self.assertEquals(0, len(tasks))
+
+  def testMaintainLCNoOp(self):
+    shard_ctx = mock.MagicMock()
+    slice_ctx = mock.MagicMock()
+    # Do nothing if the object doesn't implement shard_life_cycle interface.
+    self.handler._maintain_LC(object(), 1, shard_ctx=shard_ctx,
+                              slice_ctx=slice_ctx)
+
+  def testMaintainLCBeginShard(self):
+    obj = mock.Mock(spec=shard_life_cycle._ShardLifeCycle)
+    shard_ctx = mock.MagicMock()
+    slice_ctx = mock.MagicMock()
+    self.handler._maintain_LC(obj, 0, shard_ctx=shard_ctx,
+                              slice_ctx=slice_ctx)
+    self.assertEqual(
+        obj.mock_calls,
+        [mock.call.begin_shard(shard_ctx),
+         mock.call.begin_slice(slice_ctx)])
+
+  def testMaintainLCEndShard(self):
+    obj = mock.Mock(spec=shard_life_cycle._ShardLifeCycle)
+    shard_ctx = mock.MagicMock()
+    slice_ctx = mock.MagicMock()
+    self.handler._maintain_LC(obj, 0, begin_slice=False, last_slice=True,
+                              shard_ctx=shard_ctx, slice_ctx=slice_ctx)
+    self.assertEqual(
+        obj.mock_calls,
+        [mock.call.end_slice(slice_ctx),
+         mock.call.end_shard(shard_ctx)])
+
+  def testMaintainLCBeginSlice(self):
+    obj = mock.Mock(spec=shard_life_cycle._ShardLifeCycle)
+    slice_ctx = mock.MagicMock()
+    shard_ctx = mock.MagicMock()
+    self.handler._maintain_LC(obj, 1, slice_ctx=slice_ctx,
+                              shard_ctx=shard_ctx)
+    self.assertEqual(
+        obj.mock_calls,
+        [mock.call.begin_slice(slice_ctx)])
+
+  def testMaintainLCEndSlice(self):
+    obj = mock.Mock(spec=shard_life_cycle._ShardLifeCycle)
+    slice_ctx = mock.MagicMock()
+    shard_ctx = mock.MagicMock()
+    self.handler._maintain_LC(obj, 1, begin_slice=False,
+                              shard_ctx=shard_ctx, slice_ctx=slice_ctx)
+    self.assertEqual(
+        obj.mock_calls,
+        [mock.call.end_slice(slice_ctx)])
 
   def testCompletedState(self):
     self.shard_state.active = False
