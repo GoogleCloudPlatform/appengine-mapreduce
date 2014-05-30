@@ -6,8 +6,7 @@ import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.appengine.api.datastore.Entity;
 import com.google.appengine.api.datastore.Text;
-import com.google.appengine.tools.mapreduce.DatastoreMutationPool;
-import com.google.appengine.tools.mapreduce.Mapper;
+import com.google.appengine.tools.mapreduce.MapOnlyMapper;
 
 import java.util.Random;
 
@@ -16,16 +15,13 @@ import java.util.Random;
  *
  * @author ohler@google.com (Christian Ohler)
  */
-class EntityCreator extends Mapper<Long, Void, Void> {
+class EntityCreator extends MapOnlyMapper<Long, Entity> {
 
   private static final long serialVersionUID = 409204195454478863L;
 
   private final String kind;
   private final int payloadBytesPerEntity;
   private final Random random = new Random();
-  // [START datastoreMutationPool]
-  private transient DatastoreMutationPool pool;
-  // [END datastoreMutationPool]
 
   public EntityCreator(String kind, int payloadBytesPerEntity) {
     this.kind = checkNotNull(kind, "Null kind");
@@ -40,23 +36,11 @@ class EntityCreator extends Mapper<Long, Void, Void> {
     return out.toString();
   }
 
-  // [START begin_and_endSlice]
-  @Override
-  public void beginSlice() {
-    pool = DatastoreMutationPool.create();
-  }
-
-  @Override
-  public void endSlice() {
-    pool.flush();
-  }
-  // [END begin_and_endSlice]
-
   @Override
   public void map(Long ignored) {
     String name = String.valueOf(random.nextLong() & Long.MAX_VALUE);
     Entity entity = new Entity(kind, name);
     entity.setProperty("payload", new Text(randomString(payloadBytesPerEntity)));
-    pool.put(entity);
+    emit(entity);
   }
 }

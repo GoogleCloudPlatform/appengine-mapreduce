@@ -10,6 +10,7 @@ import com.google.common.base.Function;
 import com.google.common.collect.ImmutableList;
 
 import java.io.IOException;
+import java.io.ObjectInputStream;
 import java.io.Serializable;
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
@@ -49,11 +50,12 @@ public class StringOutput<O, R> extends Output<O, R> {
       this.fn = checkNotNull(fn, "Null fn");
       this.terminator = checkNotNull(terminator, "Null terminator");
       this.charsetName = checkNotNull(charsetName, "Null charsetName");
+      this.charset = Charset.forName(charsetName);
     }
 
-    @Override
-    public void beginSlice() throws IOException {
-      super.beginSlice();
+    private void readObject(ObjectInputStream aInputStream) throws ClassNotFoundException,
+        IOException {
+      aInputStream.defaultReadObject();
       charset = Charset.forName(charsetName);
     }
 
@@ -103,8 +105,8 @@ public class StringOutput<O, R> extends Output<O, R> {
   }
 
   @Override
-  public List<? extends OutputWriter<O>> createWriters() {
-    List<? extends OutputWriter<ByteBuffer>> sinkWriters = sink.createWriters();
+  public List<? extends OutputWriter<O>> createWriters(int numShards) {
+    List<? extends OutputWriter<ByteBuffer>> sinkWriters = sink.createWriters(numShards);
     ImmutableList.Builder<Writer<O>> out = ImmutableList.builder();
     for (OutputWriter<ByteBuffer> sinkWriter : sinkWriters) {
       out.add(new Writer<>(sinkWriter, fn, terminator, charsetName));
@@ -123,10 +125,5 @@ public class StringOutput<O, R> extends Output<O, R> {
       sinkWriters.add(writer.out);
     }
     return sink.finish(sinkWriters.build());
-  }
-
-  @Override
-  public int getNumShards() {
-    return sink.getNumShards();
   }
 }

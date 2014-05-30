@@ -36,32 +36,27 @@ public class GoogleCloudStorageMapOutput<K, V> extends
   private final String bucket;
   private final Marshaller<K> keyMarshaller;
   private final Marshaller<V> valueMarshaller;
-  private final int mapShardCount;
-  private final int reduceShardCount;
   private final Sharder sharder;
 
-  public GoogleCloudStorageMapOutput(String bucket, String mrJobId, int mapShardCount,
+  public GoogleCloudStorageMapOutput(String bucket, String mrJobId,
       Marshaller<K> keyMarshaller, Marshaller<V> valueMarshaller, Sharder sharder) {
     this.bucket = checkNotNull(bucket, "Null bucket");
     this.sharder = checkNotNull(sharder, "Null sharder");
     this.mrJobId = checkNotNull(mrJobId, "Null mrJobId");
-    this.mapShardCount = mapShardCount;
-    checkArgument(mapShardCount >= 0);
-    this.reduceShardCount = sharder.getNumShards();
-    checkArgument(reduceShardCount >= 0);
+    checkArgument(sharder.getNumShards() >= 0);
     this.keyMarshaller = checkNotNull(keyMarshaller, "Null keyMarshaller");
     this.valueMarshaller = checkNotNull(valueMarshaller, "Null valueMarshaller");
 
   }
 
   @Override
-  public List<? extends OutputWriter<KeyValue<K, V>>> createWriters() {
-    List<ShardingWriter<K, V, GoogleCloudStorageFileSet>> result = new ArrayList<>(mapShardCount);
-    for (int i = 0; i < mapShardCount; i++) {
+  public List<? extends OutputWriter<KeyValue<K, V>>> createWriters(int shards) {
+    List<ShardingWriter<K, V, GoogleCloudStorageFileSet>> result = new ArrayList<>(shards);
+    for (int i = 0; i < shards; i++) {
       String fileNamePattern = // Filled in later
           String.format(MapReduceConstants.MAP_OUTPUT_DIR_FORMAT, mrJobId, i);
       MarshallingOutput<KeyValue<K, V>, GoogleCloudStorageFileSet> output = new MarshallingOutput<>(
-          new GoogleCloudStorageLevelDbOutput(bucket, fileNamePattern, MIME_TYPE, reduceShardCount),
+          new GoogleCloudStorageLevelDbOutput(bucket, fileNamePattern, MIME_TYPE),
           new KeyValueMarshaller<>(keyMarshaller, valueMarshaller));
       ShardingWriter<K, V, GoogleCloudStorageFileSet> shardingWriter =
           new ShardingWriter<>(keyMarshaller, sharder, output);
@@ -73,7 +68,6 @@ public class GoogleCloudStorageMapOutput<K, V> extends
   @Override
   public List<GoogleCloudStorageFileSet> finish(
       Collection<? extends OutputWriter<KeyValue<K, V>>> writers) throws IOException {
-    assert writers.size() == mapShardCount;
     List<GoogleCloudStorageFileSet> result = new ArrayList<>(writers.size());
     for (OutputWriter<KeyValue<K, V>> writer : writers) {
       @SuppressWarnings("unchecked")
@@ -84,10 +78,5 @@ public class GoogleCloudStorageMapOutput<K, V> extends
       result.add(files);
     }
     return result;
-  }
-
-  @Override
-  public int getNumShards() {
-    return mapShardCount;
   }
 }

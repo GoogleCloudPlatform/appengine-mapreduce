@@ -1,6 +1,8 @@
 // Copyright 2011 Google Inc. All Rights Reserved.
 package com.google.appengine.tools.mapreduce.impl.handlers;
 
+import static com.google.appengine.tools.mapreduce.MapSettings.CONTROLLER_PATH;
+import static com.google.appengine.tools.mapreduce.MapSettings.WORKER_PATH;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.appengine.tools.mapreduce.MapReduceJob;
@@ -34,8 +36,6 @@ public final class MapReduceServletImpl {
       .put("status.js", new Resource("status.js", "text/javascript"))
       .build();
 
-  public static final String CONTROLLER_PATH = "controllerCallback";
-  public static final String WORKER_PATH = "workerCallback";
   static final String COMMAND_PATH = "command";
 
   private static class Resource {

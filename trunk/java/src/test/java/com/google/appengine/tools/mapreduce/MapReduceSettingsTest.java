@@ -1,11 +1,13 @@
-// Copyright 2013 Google Inc. All Rights Reserved.
+// Copyright 2014 Google Inc. All Rights Reserved.
 
 package com.google.appengine.tools.mapreduce;
 
-import static com.google.appengine.tools.mapreduce.MapReduceSettings.DEFAULT_BASE_URL;
-import static com.google.appengine.tools.mapreduce.MapReduceSettings.DEFAULT_MILLIS_PER_SLICE;
-import static com.google.appengine.tools.mapreduce.MapReduceSettings.DEFAULT_SHARD_RETREIES;
-import static com.google.appengine.tools.mapreduce.MapReduceSettings.DEFAULT_SLICE_RETREIES;
+import static com.google.appengine.tools.mapreduce.MapSettings.DEFAULT_BASE_URL;
+import static com.google.appengine.tools.mapreduce.MapSettings.DEFAULT_MILLIS_PER_SLICE;
+import static com.google.appengine.tools.mapreduce.MapSettings.DEFAULT_SHARD_RETREIES;
+import static com.google.appengine.tools.mapreduce.MapSettings.DEFAULT_SLICE_RETREIES;
+
+import com.google.appengine.tools.development.testing.LocalServiceTestHelper;
 
 import junit.framework.TestCase;
 
@@ -14,11 +16,18 @@ import junit.framework.TestCase;
 @SuppressWarnings("deprecation")
 public class MapReduceSettingsTest extends TestCase {
 
+  private final LocalServiceTestHelper helper = new LocalServiceTestHelper();
+
+  @Override
+  public void setUp() {
+    helper.setUp();
+  }
+
   public void testDefaultSettings() {
-    MapReduceSettings mrSettings = new MapReduceSettings();
+    MapReduceSettings mrSettings = new MapReduceSettings.Builder().build();
     assertNull(mrSettings.getBackend());
     assertNull(mrSettings.getModule());
-    assertNull(mrSettings.getBucketName());
+    assertEquals("app_default_bucket", mrSettings.getBucketName());
     assertNull(mrSettings.getWorkerQueueName());
     assertEquals(DEFAULT_BASE_URL, mrSettings.getBaseUrl());
     assertEquals(DEFAULT_MILLIS_PER_SLICE, mrSettings.getMillisPerSlice());
@@ -27,35 +36,37 @@ public class MapReduceSettingsTest extends TestCase {
   }
 
   public void testNonDefaultSettings() {
-    MapReduceSettings mrSettings = new MapReduceSettings();
-    mrSettings.setBackend("b1");
+    MapReduceSettings.Builder builder = new MapReduceSettings.Builder();
+    builder.setBackend("b1");
     try {
-      mrSettings.setModule("m");
+      builder.setModule("m").build();
       fail("Expected exception to be thrown");
     } catch (IllegalArgumentException ex) {
       // expected
+      builder.setModule(null);
     }
-    mrSettings.setBucketName("bucket");
-    mrSettings.setWorkerQueueName("queue1");
-    mrSettings.setBaseUrl("base-url");
-    mrSettings.setMillisPerSlice(10);
+    builder = builder.setBucketName("bucket");
+    builder = builder.setWorkerQueueName("queue1");
+    builder = builder.setBaseUrl("base-url");
+    builder = builder.setMillisPerSlice(10);
     try {
-      mrSettings.setMillisPerSlice(-1);
+      builder.setMillisPerSlice(-1);
     } catch (IllegalArgumentException ex) {
       // expected
     }
-    mrSettings.setMaxShardRetries(1);
+    builder = builder.setMaxShardRetries(1);
     try {
-      mrSettings.setMillisPerSlice(-1);
+      builder.setMillisPerSlice(-1);
     } catch (IllegalArgumentException ex) {
       // expected
     }
-    mrSettings.setMaxSliceRetries(0);
+    builder = builder.setMaxSliceRetries(0);
     try {
-      mrSettings.setMillisPerSlice(-1);
+      builder.setMillisPerSlice(-1);
     } catch (IllegalArgumentException ex) {
       // expected
     }
+    MapReduceSettings mrSettings = builder.build();
     assertNull(mrSettings.getModule());
     assertEquals("b1", mrSettings.getBackend());
     assertEquals("bucket", mrSettings.getBucketName());
@@ -64,14 +75,16 @@ public class MapReduceSettingsTest extends TestCase {
     assertEquals(10, mrSettings.getMillisPerSlice());
     assertEquals(1, mrSettings.getMaxShardRetries());
     assertEquals(0, mrSettings.getMaxSliceRetries());
-    mrSettings.setBackend(null);
-    mrSettings.setModule("m1");
+
+    builder = new MapReduceSettings.Builder().setModule("m1");
     try {
-      mrSettings.setBackend("b");
+      builder.setBackend("b").build();
       fail("Expected exception to be thrown");
     } catch (IllegalArgumentException ex) {
       // expected
+      builder.setBackend(null);
     }
+    mrSettings = builder.build();
     assertNull(mrSettings.getBackend());
     assertEquals("m1", mrSettings.getModule());
   }

@@ -5,12 +5,14 @@ package com.google.appengine.tools.mapreduce.impl;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.appengine.tools.mapreduce.Counters;
+import com.google.appengine.tools.mapreduce.Input;
 import com.google.appengine.tools.mapreduce.InputReader;
 import com.google.appengine.tools.mapreduce.KeyValue;
 import com.google.appengine.tools.mapreduce.MapReduceResult;
 import com.google.appengine.tools.mapreduce.MapReduceSpecification;
 import com.google.appengine.tools.mapreduce.Mapper;
 import com.google.appengine.tools.mapreduce.MapperContext;
+import com.google.appengine.tools.mapreduce.Marshaller;
 import com.google.appengine.tools.mapreduce.Output;
 import com.google.appengine.tools.mapreduce.OutputWriter;
 import com.google.appengine.tools.mapreduce.Reducer;
@@ -20,7 +22,6 @@ import com.google.appengine.tools.mapreduce.impl.shardedjob.ShardedJobController
 import com.google.appengine.tools.mapreduce.impl.shardedjob.Status;
 import com.google.appengine.tools.mapreduce.impl.util.SerializationUtil;
 import com.google.appengine.tools.mapreduce.outputs.InMemoryOutput;
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 
 import org.joda.time.DateTime;
@@ -74,11 +75,23 @@ public class InProcessMapReduce<I, K, V, O, R> {
   }
 
   private final String id;
-  private final MapReduceSpecification<I, K, V, O, R> mrSpec;
+  private final String jobName;
+  private final Input<I> input;
+  private final Mapper<I, K, V> mapper;
+  private final Marshaller<K> keyMarshaller;
+  private final Reducer<K, V, O> reducer;
+  private final Output<O, R> output;
+  private final int numReducers;
 
   public InProcessMapReduce(String id, MapReduceSpecification<I, K, V, O, R> mrSpec) {
     this.id = checkNotNull(id, "Null id");
-    this.mrSpec = checkNotNull(mrSpec, "Null mrSpec");
+    jobName = InProcessUtil.getJobName(mrSpec);
+    input = InProcessUtil.getInput(mrSpec);
+    mapper = InProcessUtil.getMapper(mrSpec);
+    keyMarshaller = InProcessUtil.getKeyMarshaller(mrSpec);
+    reducer = InProcessUtil.getReducer(mrSpec);
+    output = InProcessUtil.getOutput(mrSpec);
+    numReducers = InProcessUtil.getNumReducers(mrSpec);
   }
 
   @Override
@@ -92,7 +105,7 @@ public class InProcessMapReduce<I, K, V, O, R> {
 
     ImmutableList.Builder<WorkerShardTask<I, KeyValue<K, V>, MapperContext<K, V>>> tasks =
         ImmutableList.builder();
-    List<? extends OutputWriter<KeyValue<K, V>>> writers = output.createWriters();
+    List<? extends OutputWriter<KeyValue<K, V>>> writers = output.createWriters(inputs.size());
     for (int shard = 0; shard < inputs.size(); shard++) {
       WorkerShardTask<I, KeyValue<K, V>, MapperContext<K, V>> task = new MapShardTask<>(
           id, shard, inputs.size(), inputs.get(shard), getCopyOfMapper(), writers.get(shard),
@@ -101,8 +114,7 @@ public class InProcessMapReduce<I, K, V, O, R> {
     }
     final Counters counters = new CountersImpl();
     InProcessShardedJobRunner.runJob(tasks.build(), new ShardedJobController<
-        WorkerShardTask<I, KeyValue<K, V>, MapperContext<K, V>>>(
-            mrSpec.getJobName() + "-map") {
+        WorkerShardTask<I, KeyValue<K, V>, MapperContext<K, V>>>(jobName + "-map") {
           // Not really meant to be serialized, but avoid warning.
           private static final long serialVersionUID = 661198005749484951L;
 
@@ -128,7 +140,7 @@ public class InProcessMapReduce<I, K, V, O, R> {
       List<List<KeyValue<K, V>>> mapperOutputs, int reduceShardCount) {
     log.info("Shuffle phase started");
     List<List<KeyValue<K, List<V>>>> out =
-        Shuffling.shuffle(mapperOutputs, mrSpec.getIntermediateKeyMarshaller(), reduceShardCount);
+        Shuffling.shuffle(mapperOutputs, keyMarshaller, reduceShardCount);
     log.info("Shuffle phase completed");
     return out;
   }
@@ -160,23 +172,19 @@ public class InProcessMapReduce<I, K, V, O, R> {
 
   @SuppressWarnings("unchecked")
   private Mapper<I, K, V> getCopyOfMapper() {
-    Mapper<I, K, V> mapper = mrSpec.getMapper();
     byte[] bytes = SerializationUtil.serializeToByteArray(mapper);
     return (Mapper<I, K, V>) SerializationUtil.deserializeFromByteArray(bytes);
   }
 
   @SuppressWarnings("unchecked")
   private Reducer<K, V, O> getCopyOfReducer() {
-    Reducer<K, V, O> reducer = mrSpec.getReducer();
     byte[] bytes = SerializationUtil.serializeToByteArray(reducer);
     return (Reducer<K, V, O>) SerializationUtil.deserializeFromByteArray(bytes);
   }
 
   MapReduceResult<R> reduce(List<List<KeyValue<K, List<V>>>> inputs, Output<O, R> output,
       Counters mapCounters) throws IOException {
-    List<? extends OutputWriter<O>> outputs = output.createWriters();
-    Preconditions.checkArgument(inputs.size() == outputs.size(), "%s reduce inputs, %s outputs",
-        inputs.size(), outputs.size());
+    List<? extends OutputWriter<O>> outputs = output.createWriters(inputs.size());
     log.info("Reduce phase started");
     ImmutableList.Builder<WorkerShardTask<KeyValue<K, Iterator<V>>, O, ReducerContext<O>>> tasks =
         ImmutableList.builder();
@@ -189,8 +197,7 @@ public class InProcessMapReduce<I, K, V, O, R> {
     final Counters counters = new CountersImpl();
     counters.addAll(mapCounters);
     InProcessShardedJobRunner.runJob(tasks.build(), new ShardedJobController<
-        WorkerShardTask<KeyValue<K, Iterator<V>>, O, ReducerContext<O>>>(mrSpec.getJobName()
-        + "-reduce") {
+        WorkerShardTask<KeyValue<K, Iterator<V>>, O, ReducerContext<O>>>(jobName + "-reduce") {
       // Not really meant to be serialized, but avoid warning.
       private static final long serialVersionUID = 575338448598450119L;
 
@@ -226,14 +233,13 @@ public class InProcessMapReduce<I, K, V, O, R> {
     InProcessMapReduce<I, K, V, O, R> mapReduce = new InProcessMapReduce<>(mapReduceId, mrSpec);
     log.info(mapReduce + " started");
 
-    List<? extends InputReader<I>> mapInput = mrSpec.getInput().createReaders();
-    InMemoryOutput<KeyValue<K, V>> mapOutput = InMemoryOutput.create(mapInput.size());
+    List<? extends InputReader<I>> mapInput = mapReduce.input.createReaders();
+    InMemoryOutput<KeyValue<K, V>> mapOutput = new InMemoryOutput<>();
     MapReduceResult<List<List<KeyValue<K, V>>>> mapResult = mapReduce.map(mapInput, mapOutput);
-    Output<O, R> reduceOutput = mrSpec.getOutput();
     List<List<KeyValue<K, List<V>>>> reducerInputs =
-        mapReduce.shuffle(mapResult.getOutputResult(), reduceOutput.getNumShards());
+        mapReduce.shuffle(mapResult.getOutputResult(), mapReduce.numReducers);
     MapReduceResult<R> result =
-        mapReduce.reduce(reducerInputs, reduceOutput, mapResult.getCounters());
+        mapReduce.reduce(reducerInputs, mapReduce.output, mapResult.getCounters());
 
     log.info(mapReduce + " finished");
     return result;

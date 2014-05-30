@@ -32,8 +32,8 @@ public class MarshallingOutput<O, R> extends Output<O, R> {
   }
 
   @Override
-  public List<MarshallingOutputWriter<O>> createWriters() {
-    List<? extends OutputWriter<ByteBuffer>> writers = sink.createWriters();
+  public List<MarshallingOutputWriter<O>> createWriters(int numShards) {
+    List<? extends OutputWriter<ByteBuffer>> writers = sink.createWriters(numShards);
     List<MarshallingOutputWriter<O>> result = new ArrayList<>(writers.size());
     for (OutputWriter<ByteBuffer> writer : writers) {
       result.add(new MarshallingOutputWriter<>(writer, marshaller));
@@ -49,10 +49,5 @@ public class MarshallingOutput<O, R> extends Output<O, R> {
       wrapped.add(writer.getDelegate());
     }
     return sink.finish(wrapped);
-  }
-
-  @Override
-  public int getNumShards() {
-    return sink.getNumShards();
   }
 }

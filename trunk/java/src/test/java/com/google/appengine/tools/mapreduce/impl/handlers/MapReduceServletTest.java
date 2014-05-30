@@ -16,6 +16,7 @@
 
 package com.google.appengine.tools.mapreduce.impl.handlers;
 
+import static com.google.appengine.tools.mapreduce.MapSettings.CONTROLLER_PATH;
 import static org.easymock.EasyMock.createMock;
 import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.replay;
@@ -105,8 +106,7 @@ public class MapReduceServletTest extends TestCase {
 
   public void testControllerCSRF() throws Exception {
     // Send it as an AJAX request but not a task queue request - should be denied.
-    HttpServletRequest request = createMockRequest(MapReduceServletImpl.CONTROLLER_PATH,
-        false, true);
+    HttpServletRequest request = createMockRequest(CONTROLLER_PATH, false, true);
     HttpServletResponse response = createMock(HttpServletResponse.class);
     response.sendError(403, "Received unexpected non-task queue request.");
     replay(request, response);

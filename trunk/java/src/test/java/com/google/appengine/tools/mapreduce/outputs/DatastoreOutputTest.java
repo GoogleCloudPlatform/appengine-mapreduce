@@ -60,22 +60,22 @@ public class DatastoreOutputTest extends TestCase {
   }
 
   public void testCreateWriters() {
-    DatastoreOutput output = new DatastoreOutput(3);
-    List<? extends OutputWriter<Entity>> writers = output.createWriters();
+    DatastoreOutput output = new DatastoreOutput();
+    List<? extends OutputWriter<Entity>> writers = output.createWriters(3);
     assertEquals(3, writers.size());
   }
 
   public void testFinish() {
-    DatastoreOutput output = new DatastoreOutput(1);
-    List<? extends OutputWriter<Entity>> writers = output.createWriters();
+    DatastoreOutput output = new DatastoreOutput();
+    List<? extends OutputWriter<Entity>> writers = output.createWriters(1);
     assertEquals(1, writers.size());
     assertNull(output.finish(writers));
   }
 
   public void testDatastoreOutputWriter()
       throws IOException, ClassNotFoundException, EntityNotFoundException {
-    DatastoreOutput output = new DatastoreOutput(1);
-    OutputWriter<Entity> writer = output.createWriters().get(0);
+    DatastoreOutput output = new DatastoreOutput();
+    OutputWriter<Entity> writer = output.createWriters(1).get(0);
     writer.beginShard();
     writer.beginSlice();
     writer.write(entity1);

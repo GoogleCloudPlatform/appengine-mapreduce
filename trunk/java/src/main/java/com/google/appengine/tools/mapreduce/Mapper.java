@@ -16,17 +16,12 @@ package com.google.appengine.tools.mapreduce;
  * @param <K> type of intermediate keys produced
  * @param <V> type of intermediate values produced
  */
-public abstract class Mapper<I, K, V> extends Worker<MapperContext<K, V>> {
+public abstract class Mapper<I, K, V> extends BaseMapper<I, KeyValue<K, V>, MapperContext<K, V>> {
+
   private static final long serialVersionUID = 1966174340710715049L;
 
   /**
-   * Processes a single input value, emitting output through the context returned by
-   * {@link Worker#getContext}.
-   */
-  public abstract void map(I value);
-
-  /**
-   * Syntactic sugar for {@code getContext().emit(key, value);}
+   * Syntactic sugar for {@code emit(KeyValue.of(key, value))}
    */
   protected void emit(K key, V value) {
     getContext().emit(key, value);

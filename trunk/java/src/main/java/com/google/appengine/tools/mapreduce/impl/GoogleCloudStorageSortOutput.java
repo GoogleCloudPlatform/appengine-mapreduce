@@ -33,7 +33,6 @@ public class GoogleCloudStorageSortOutput extends
   private static final long serialVersionUID = 8332978108336443982L;
 
   private final String bucket;
-  private final int shardCount;
   private final String mrJobId;
 
   private static class WriterCreatorImpl implements
@@ -78,15 +77,14 @@ public class GoogleCloudStorageSortOutput extends
     }
   }
 
-  public GoogleCloudStorageSortOutput(String bucket, String mrJobId, int shardCount) {
+  public GoogleCloudStorageSortOutput(String bucket, String mrJobId) {
     this.bucket = checkNotNull(bucket, "Null bucket");
-    this.shardCount = shardCount;
     this.mrJobId = checkNotNull(mrJobId, "Null mrJobId");
   }
 
   @Override
   public List<? extends OutputWriter<KeyValue<ByteBuffer, ? extends Iterable<ByteBuffer>>>>
-      createWriters() {
+      createWriters(int shardCount) {
     List<SlicingOutputWriter<KeyValue<ByteBuffer, ? extends Iterable<ByteBuffer>>, WriterCreatorImpl>>
         result = new ArrayList<>(shardCount);
     for (int i = 0; i < shardCount; i++) {
@@ -98,21 +96,13 @@ public class GoogleCloudStorageSortOutput extends
   }
 
   @Override
+  @SuppressWarnings("unchecked")
   public List<GoogleCloudStorageFileSet> finish(Collection<? extends OutputWriter<
       KeyValue<ByteBuffer, ? extends Iterable<ByteBuffer>>>> writers) {
-    assert writers.size() == shardCount;
-    List<GoogleCloudStorageFileSet> filesByShard = new ArrayList<>(shardCount);
-    for (OutputWriter<?> w : writers) {
-      @SuppressWarnings("unchecked")
-      SlicingOutputWriter<?, WriterCreatorImpl> writer =
-          (SlicingOutputWriter<?, WriterCreatorImpl>) w;
-      filesByShard.add(writer.getCreator().finish());
+    List<GoogleCloudStorageFileSet> filesByShard = new ArrayList<>(writers.size());
+    for (OutputWriter<?> writer : writers) {
+      filesByShard.add(((SlicingOutputWriter<?, WriterCreatorImpl>) writer).getCreator().finish());
     }
     return filesByShard;
-  }
-
-  @Override
-  public int getNumShards() {
-    return shardCount;
   }
 }

@@ -23,6 +23,7 @@ import com.google.appengine.tools.cloudstorage.GcsInputChannel;
 import com.google.appengine.tools.cloudstorage.GcsService;
 import com.google.appengine.tools.cloudstorage.GcsServiceFactory;
 import com.google.appengine.tools.mapreduce.impl.HashingSharder;
+import com.google.appengine.tools.mapreduce.impl.InProcessMap;
 import com.google.appengine.tools.mapreduce.impl.InProcessMapReduce;
 import com.google.appengine.tools.mapreduce.impl.shardedjob.RecoverableException;
 import com.google.appengine.tools.mapreduce.inputs.ConsecutiveLongInput;
@@ -64,6 +65,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Logger;
 
@@ -83,9 +85,15 @@ public class EndToEndTest extends EndToEndTestCase {
     pipelineService = PipelineServiceFactory.newPipelineService();
   }
 
-  private static class Preparer {
+  private static class MapReducePreparer {
     MapReduceSettings prepare() {
-      return new MapReduceSettings();
+      return new MapReduceSettings.Builder().build();
+    }
+  }
+
+  private static class MapPreparer {
+    MapSettings prepare() {
+      return new MapSettings.Builder().build();
     }
   }
 
@@ -101,13 +109,19 @@ public class EndToEndTest extends EndToEndTestCase {
   }
 
   // (runWithPipeline is also in-process in our test setup, so this is a misnomer.)
-  private <I, K, V, O, R> void runInProcess(Preparer preparer,
+  private <I, K, V, O, R> void runInProcess(MapReducePreparer preparer,
       MapReduceSpecification<I, K, V, O, R> mrSpec, Verifier<R> verifier) throws Exception {
     preparer.prepare();
     verifier.verify(InProcessMapReduce.runMapReduce(mrSpec));
   }
 
-  private <I, K, V, O, R> void runWithPipeline(Preparer preparer,
+  private <I, O, R> void runInProcess(MapPreparer preparer,
+      MapSpecification<I, O, R> mrSpec, Verifier<R> verifier) throws Exception {
+    preparer.prepare();
+    verifier.verify(InProcessMap.runMap(mrSpec));
+  }
+
+  private <I, K, V, O, R> void runWithPipeline(MapReducePreparer preparer,
       MapReduceSpecification<I, K, V, O, R> mrSpec, Verifier<R> verifier) throws Exception {
     MapReduceSettings mrSettings = preparer.prepare();
     String jobId = pipelineService.startNewPipeline(new MapReduceJob<I, K, V, O, R>(),
@@ -122,21 +136,168 @@ public class EndToEndTest extends EndToEndTestCase {
     verifier.verify(result);
   }
 
-  private <I, K, V, O, R> void runTest(Preparer preparer,
+  private <I, K, V, O, R> void runTest(MapReducePreparer preparer,
       MapReduceSpecification<I, K, V, O, R> mrSpec, Verifier<R> verifier) throws Exception {
     runInProcess(preparer, mrSpec, verifier);
     runWithPipeline(preparer, mrSpec, verifier);
   }
 
+  private <I, O, R> void runWithPipeline(MapPreparer preparer,
+      MapSpecification<I, O, R> mrSpec, Verifier<R> verifier) throws Exception {
+    MapSettings mrSettings = preparer.prepare();
+    String jobId = pipelineService.startNewPipeline(new MapJob<I, O, R>(), mrSpec, mrSettings);
+    assertFalse(jobId.isEmpty());
+    executeTasksUntilEmpty("default");
+    JobInfo info = pipelineService.getJobInfo(jobId);
+    @SuppressWarnings("unchecked")
+    MapReduceResult<R> result = (MapReduceResult<R>) info.getOutput();
+    assertEquals(JobInfo.State.COMPLETED_SUCCESSFULLY, info.getJobState());
+    assertNotNull(result);
+    verifier.verify(result);
+  }
+
+  private <I, O, R> void runTest(MapPreparer preparer,
+      MapSpecification<I, O, R> mrSpec, Verifier<R> verifier) throws Exception {
+    runInProcess(preparer, mrSpec, verifier);
+    runWithPipeline(preparer, mrSpec, verifier);
+  }
+
+  public static class MapOnly extends MapOnlyMapper<Long, String> {
+
+    private static final long serialVersionUID = 1L;
+
+    @Override
+    public void map(Long value) {
+      emit(String.valueOf(value));
+    }
+  }
+
+  public void testMapOnlyJob() throws Exception {
+      RandomLongInput input = new RandomLongInput(100, 2);
+      InMemoryOutput<String> output = new InMemoryOutput<>();
+      MapSpecification<Long, String, List<List<String>>> specification =
+          new MapSpecification.Builder<>(input, new MapOnly(), output)
+              .setJobName("mr-only")
+              .build();
+      runTest(new MapPreparer(), specification, new Verifier<List<List<String>>>() {
+        @Override
+        public void verify(MapReduceResult<List<List<String>>> result) throws Exception {
+          Counters counters = result.getCounters();
+          assertEquals(100, counters.getCounter(CounterNames.MAPPER_CALLS).getValue());
+          assertEquals(0, counters.getCounter(CounterNames.REDUCER_CALLS).getValue());
+          List<List<String>> outputResult = result.getOutputResult();
+          assertEquals(2, outputResult.size());
+          assertEquals(50, outputResult.get(0).size());
+          assertEquals(50, outputResult.get(1).size());
+        }
+      });
+  }
+
+  public static class VoidKeyMapper extends Mapper<Long, Void, String> {
+
+    private static final long serialVersionUID = 1L;
+    private final AtomicBoolean[] beginShard = {new AtomicBoolean(), new AtomicBoolean()};
+    private final AtomicBoolean[] endShard = {new AtomicBoolean(), new AtomicBoolean()};
+    private final AtomicBoolean[] inSlice = {new AtomicBoolean(), new AtomicBoolean()};
+    private final AtomicBoolean[] memory = {new AtomicBoolean(), new AtomicBoolean()};
+
+    @Override
+    public void beginShard() {
+      MapperContext<Void, String> ctx = getContext();
+      assertNotNull(ctx.getJobId());
+      assertEquals(2, ctx.getShardCount());
+      int shard = ctx.getShardNumber();
+      assertFalse(inSlice[shard].get());
+      assertFalse(endShard[shard].get());
+      beginShard[shard].set(true);
+    }
+
+    @Override
+    public void beginSlice() {
+      MapperContext<Void, String> ctx = getContext();
+      int shard = ctx.getShardNumber();
+      assertFalse(inSlice[shard].get());
+      assertFalse(endShard[shard].get());
+      assertTrue(beginShard[shard].get());
+      inSlice[shard].set(true);
+    }
+
+    @Override
+    public void endSlice() {
+      MapperContext<Void, String> ctx = getContext();
+      int shard = ctx.getShardNumber();
+      assertTrue(inSlice[shard].get());
+      assertTrue(beginShard[shard].get());
+      assertFalse(endShard[shard].get());
+      inSlice[shard].set(false);
+    }
+
+    @Override
+    public void endShard() {
+      MapperContext<Void, String> ctx = getContext();
+      int shard = ctx.getShardNumber();
+      assertFalse(inSlice[shard].get());
+      assertTrue(beginShard[ctx.getShardNumber()].get());
+      assertFalse(endShard[shard].get());
+      beginShard[shard].set(false);
+      endShard[shard].set(true);
+    }
+
+    @Override
+    public long estimateMemoryRequirement() {
+      MapperContext<Void, String> ctx = getContext();
+      int shard = ctx.getShardNumber();
+      memory[shard].set(true);
+      return 0;
+    }
+
+    @Override
+    public void map(Long value) {
+      MapperContext<Void, String> ctx = getContext();
+      int shard = ctx.getShardNumber();
+      assertTrue(inSlice[shard].get());
+      assertTrue(beginShard[shard].get());
+      assertFalse(endShard[shard].get());
+      assertTrue(memory[shard].get());
+      emit(null, String.valueOf(value));
+      getContext().incrementCounter("my-counter");
+    }
+  }
+
+  public void testAdaptedMapOnlyJob() throws Exception {
+      RandomLongInput input = new RandomLongInput(100, 2);
+      InMemoryOutput<String> output = new InMemoryOutput<>();
+      MapOnlyMapper<Long, String> mapper = MapOnlyMapper.forMapper(new VoidKeyMapper());
+      MapSpecification<Long, String, List<List<String>>> specification =
+          new MapSpecification.Builder<>(input, mapper, output)
+              .setJobName("adapted-mr-only")
+              .build();
+      runTest(new MapPreparer(), specification, new Verifier<List<List<String>>>() {
+        @Override
+        public void verify(MapReduceResult<List<List<String>>> result) throws Exception {
+          Counters counters = result.getCounters();
+          assertEquals(100, counters.getCounter(CounterNames.MAPPER_CALLS).getValue());
+          assertEquals(0, counters.getCounter(CounterNames.REDUCER_CALLS).getValue());
+          assertEquals(100, counters.getCounter("my-counter").getValue());
+          List<List<String>> outputResult = result.getOutputResult();
+          assertEquals(2, outputResult.size());
+          assertEquals(50, outputResult.get(0).size());
+          assertEquals(50, outputResult.get(1).size());
+        }
+      });
+  }
+
   public void testDoNothingWithEmptyReadersList() throws Exception {
-    runTest(new Preparer(),
-        MapReduceSpecification.of("Empty test MR",
+    runTest(new MapReducePreparer(),
+        new MapReduceSpecification.Builder<>(
             new NoInput<Long>(0),
             new Mod37Mapper(),
-            Marshallers.getStringMarshaller(),
-            Marshallers.getLongMarshaller(),
             NoReducer.<String, Long, String>create(),
-            new NoOutput<String, String>(1)),
+            new NoOutput<String, String>())
+                .setKeyMarshaller(Marshallers.getStringMarshaller())
+                .setValueMarshaller(Marshallers.getLongMarshaller())
+                .setJobName("Empty test MR")
+                .build(),
         new Verifier<String>() {
           @Override
           public void verify(MapReduceResult<String> result) throws Exception {
@@ -148,14 +309,16 @@ public class EndToEndTest extends EndToEndTestCase {
   }
 
   public void testDoNothing() throws Exception {
-    runTest(new Preparer(),
-        MapReduceSpecification.of("Empty test MR",
+    runTest(new MapReducePreparer(),
+        new MapReduceSpecification.Builder<>(
             new NoInput<Long>(1),
             new Mod37Mapper(),
-            Marshallers.getStringMarshaller(),
-            Marshallers.getLongMarshaller(),
             NoReducer.<String, Long, String>create(),
-            new NoOutput<String, String>(1)),
+            new NoOutput<String, String>())
+                .setKeyMarshaller(Marshallers.getStringMarshaller())
+                .setValueMarshaller(Marshallers.getLongMarshaller())
+                .setJobName("Empty test MR")
+                .build(),
         new Verifier<String>() {
           @Override
           public void verify(MapReduceResult<String> result) throws Exception {
@@ -264,12 +427,11 @@ public class EndToEndTest extends EndToEndTestCase {
     }
   }
 
-  private static class SlicingPreparer extends Preparer {
+  private static class SlicingPreparer extends MapReducePreparer {
     @Override
     public MapReduceSettings prepare() {
-      MapReduceSettings settings = super.prepare();
-      settings.setMillisPerSlice(0);
-      return settings;
+      MapReduceSettings.Builder builder = new MapReduceSettings.Builder(super.prepare());
+      return builder.setMillisPerSlice(0).build();
     }
   }
 
@@ -374,13 +536,15 @@ public class EndToEndTest extends EndToEndTestCase {
     for (int[] run : runs) {
       RandomLongInput input = new RandomLongInput(run[0], shardsCount);
       runWithPipeline(new SlicingPreparer(),
-          MapReduceSpecification.of("Shard-retry test",
+          new MapReduceSpecification.Builder<>(
               input,
               new RougeMapper(shardsCount, run[1], run[2]),
-              Marshallers.getStringMarshaller(),
-              Marshallers.getLongMarshaller(),
               NoReducer.<String, Long, String>create(),
-              new NoOutput<String, String>(1)),
+              new NoOutput<String, String>())
+                  .setKeyMarshaller(Marshallers.getStringMarshaller())
+                  .setValueMarshaller(Marshallers.getLongMarshaller())
+                  .setJobName("Shard-retry test")
+                  .build(),
           new RougeMapperVerifier(shardsCount, run[0], run[1], run[2]) {
             @Override
             public void verify(MapReduceResult<String> result) throws Exception {
@@ -399,10 +563,10 @@ public class EndToEndTest extends EndToEndTestCase {
       RandomLongInput input = new RandomLongInput(10, shardsCount);
       MapReduceSettings mrSettings = new SlicingPreparer().prepare();
       MapReduceSpecification<Long, String, Long, String, String> mrSpec =
-          MapReduceSpecification.of(
-              "Shard-retry failed", input, new RougeMapper(shardsCount, run[0], run[1]),
-          Marshallers.getStringMarshaller(), Marshallers.getLongMarshaller(),
-          NoReducer.<String, Long, String>create(), new NoOutput<String, String>(1));
+          new MapReduceSpecification.Builder<>(input, new RougeMapper(shardsCount, run[0], run[1]),
+          NoReducer.<String, Long, String>create(), new NoOutput<String, String>())
+          .setJobName("Shard-retry failed").setKeyMarshaller(Marshallers.getStringMarshaller())
+          .setValueMarshaller(Marshallers.getLongMarshaller()).build();
       String jobId = pipelineService.startNewPipeline(
           new MapReduceJob<Long, String, Long, String, String>(), mrSpec, mrSettings);
       assertFalse(jobId.isEmpty());
@@ -421,11 +585,13 @@ public class EndToEndTest extends EndToEndTestCase {
     final RandomLongInput input = new RandomLongInput(10, shardsCount);
     input.setSeed(0L);
     MapReduceSpecification<Long, String, Long, String, String> mrSpec =
-        MapReduceSpecification.of("Shard-retry failed", input, new RougeMapper(shardsCount, 5, 0),
-        Marshallers.getStringMarshaller(), Marshallers.getLongMarshaller(),
-        NoReducer.<String, Long, String>create(), new NoOutput<String, String>(1));
+        new MapReduceSpecification.Builder<>(input, new RougeMapper(shardsCount, 5, 0),
+        NoReducer.<String, Long, String>create(), new NoOutput<String, String>())
+        .setJobName("Shard-retry failed").setKeyMarshaller(Marshallers.getStringMarshaller())
+        .setValueMarshaller(Marshallers.getLongMarshaller()).build();
+    MapReduceSettings mrSettings = new MapReduceSettings.Builder().build();
     String jobId = pipelineService.startNewPipeline(
-        new MapReduceJob<Long, String, Long, String, String>(), mrSpec, new MapReduceSettings());
+        new MapReduceJob<Long, String, Long, String, String>(), mrSpec, mrSettings);
     assertFalse(jobId.isEmpty());
     executeTasksUntilEmpty("default");
     JobInfo info = pipelineService.getJobInfo(jobId);
@@ -440,15 +606,17 @@ public class EndToEndTest extends EndToEndTestCase {
   public void testPassThroughToString() throws Exception {
     final RandomLongInput input = new RandomLongInput(10, 1);
     input.setSeed(0L);
-    runTest(new Preparer(),
-        MapReduceSpecification.of("TestPassThroughToString",
+    runTest(new MapReducePreparer(),
+        new MapReduceSpecification.Builder<>(
             input,
             new Mod37Mapper(),
-            Marshallers.getStringMarshaller(),
-            Marshallers.getLongMarshaller(),
             ValueProjectionReducer.<String, Long>create(),
             new StringOutput<Long, List<AppEngineFile>>(
-                ",", new BlobFileOutput("Foo-%02d", "testType", 1))),
+                ",", new BlobFileOutput("Foo-%02d", "testType")))
+                .setKeyMarshaller(Marshallers.getStringMarshaller())
+                .setValueMarshaller(Marshallers.getLongMarshaller())
+                .setJobName("TestPassThroughToString")
+                .build(),
         new Verifier<List<AppEngineFile>>() {
           @Override
           public void verify(MapReduceResult<List<AppEngineFile>> result) throws Exception {
@@ -473,15 +641,18 @@ public class EndToEndTest extends EndToEndTestCase {
   public void testPassByteBufferToGcs() throws Exception {
     final RandomLongInput input = new RandomLongInput(10, 1);
     input.setSeed(0L);
-    runTest(new Preparer(),
-        MapReduceSpecification.of("TestPassThroughToByteBuffer",
-            input,
-            new LongToBytesMapper(),
-            Marshallers.getByteBufferMarshaller(),
-            Marshallers.getByteBufferMarshaller(),
-            ValueProjectionReducer.<ByteBuffer, ByteBuffer>create(),
-            new GoogleCloudStorageFileOutput("bucket", "fileNamePattern-%04d",
-                "application/octet-stream", 2)),
+    MapReduceSpecification.Builder<Long, ByteBuffer, ByteBuffer, ByteBuffer,
+        GoogleCloudStorageFileSet> builder = new MapReduceSpecification.Builder<>();
+    builder.setJobName("TestPassThroughToByteBuffer");
+    builder.setInput(input);
+    builder.setMapper(new LongToBytesMapper());
+    builder.setKeyMarshaller(Marshallers.getByteBufferMarshaller());
+    builder.setValueMarshaller(Marshallers.getByteBufferMarshaller());
+    builder.setReducer(ValueProjectionReducer.<ByteBuffer, ByteBuffer>create());
+    builder.setOutput(new GoogleCloudStorageFileOutput(
+        "bucket", "fileNamePattern-%04d", "application/octet-stream"));
+    builder.setNumReducers(2);
+    runTest(new MapReducePreparer(), builder.build(),
         new Verifier<GoogleCloudStorageFileSet>() {
           @Override
           public void verify(MapReduceResult<GoogleCloudStorageFileSet> result) throws Exception {
@@ -583,13 +754,8 @@ public class EndToEndTest extends EndToEndTestCase {
     }
 
     @Override
-    public List<? extends OutputWriter<O>> createWriters() {
-      return delegate.createWriters();
-    }
-
-    @Override
-    public int getNumShards() {
-      return delegate.getNumShards();
+    public List<? extends OutputWriter<O>> createWriters(int numShards) {
+      return delegate.createWriters(numShards);
     }
 
     @Override
@@ -619,13 +785,8 @@ public class EndToEndTest extends EndToEndTestCase {
     inputReader.setContext(anyObject(ShardContext.class));
     expectLastCall().anyTimes();
 
-    expect(output.getNumShards()).andReturn(1);
     output.setContext(anyObject(Context.class));
-    expect(output.getNumShards()).andReturn(1);
-    output.setContext(anyObject(Context.class));
-    expect(output.getNumShards()).andReturn(1);
-    output.setContext(anyObject(Context.class));
-    EasyMock.<List<? extends OutputWriter<ByteBuffer>>>expect(output.createWriters())
+    EasyMock.<List<? extends OutputWriter<ByteBuffer>>>expect(output.createWriters(1))
         .andReturn(ImmutableList.of(new TestOutputWriter<>(outputWriter)));
     outputWriter.setContext(anyObject(ShardContext.class));
     expectLastCall().atLeastOnce();
@@ -640,21 +801,23 @@ public class EndToEndTest extends EndToEndTestCase {
     output.setContext(anyObject(Context.class));
     expect(output.finish(isA(Collection.class))).andReturn(null);
     replay(input, inputReader, output, outputWriter);
-    runWithPipeline(new Preparer(),
-        MapReduceSpecification.of("testLifeCycleMethodsCalled",
+    runWithPipeline(new MapReducePreparer(),
+        new MapReduceSpecification.Builder<>(
             new TestInput<>(input),
             new LongToBytesMapper(),
-            Marshallers.getByteBufferMarshaller(),
-            Marshallers.getByteBufferMarshaller(),
             ValueProjectionReducer.<ByteBuffer, ByteBuffer>create(),
-            new TestOutput<>(output)),
+            new TestOutput<>(output))
+                .setKeyMarshaller(Marshallers.getByteBufferMarshaller())
+                .setValueMarshaller(Marshallers.getByteBufferMarshaller())
+                .setJobName("testLifeCycleMethodsCalled")
+                .build(),
         new NopVerifier<Void>());
     verify(input, inputReader, output, outputWriter);
   }
 
   public void testDatastoreData() throws Exception {
     final DatastoreService datastoreService = DatastoreServiceFactory.getDatastoreService();
-    runTest(new Preparer() {
+    runTest(new MapReducePreparer() {
           @Override
           public MapReduceSettings prepare() {
             // Datastore restriction: id cannot be zero.
@@ -664,13 +827,15 @@ public class EndToEndTest extends EndToEndTestCase {
             return super.prepare();
           }
         },
-        MapReduceSpecification.of("Test MR",
+        new MapReduceSpecification.Builder<>(
             new DatastoreInput("Test", 5),
             new TestMapper(),
-            Marshallers.getStringMarshaller(),
-            Marshallers.getLongMarshaller(),
             new TestReducer(),
-            new InMemoryOutput<KeyValue<String, List<Long>>>(1)),
+            new InMemoryOutput<KeyValue<String, List<Long>>>())
+                .setKeyMarshaller(Marshallers.getStringMarshaller())
+                .setValueMarshaller(Marshallers.getLongMarshaller())
+                .setJobName("Test MR")
+                .build(),
         new Verifier<List<List<KeyValue<String, List<Long>>>>>() {
           @Override
           public void verify(MapReduceResult<List<List<KeyValue<String, List<Long>>>>> result)
@@ -722,14 +887,16 @@ public class EndToEndTest extends EndToEndTestCase {
   }
 
   public void testNoData() throws Exception {
-    runTest(new Preparer(),
-        MapReduceSpecification.of("Test MR",
+    runTest(new MapReducePreparer(),
+        new MapReduceSpecification.Builder<>(
             new DatastoreInput("Test", 2),
             new TestMapper(),
-            Marshallers.getStringMarshaller(),
-            Marshallers.getLongMarshaller(),
             NoReducer.<String, Long, Void>create(),
-            NoOutput.<Void, Void>create(1)),
+            new NoOutput<Void, Void>())
+                .setKeyMarshaller(Marshallers.getStringMarshaller())
+                .setValueMarshaller(Marshallers.getLongMarshaller())
+                .setJobName("Test MR")
+                .build(),
         new Verifier<Void>() {
           @Override
           public void verify(MapReduceResult<Void> result) throws Exception {
@@ -774,14 +941,19 @@ public class EndToEndTest extends EndToEndTestCase {
   }
 
   public void testSomeNumbers() throws Exception {
-    runTest(new Preparer(),
-        MapReduceSpecification.of("Test MR",
-            new ConsecutiveLongInput(-10000, 10000, 10),
-            new Mod37Mapper(),
-            Marshallers.getStringMarshaller(),
-            Marshallers.getLongMarshaller(),
-            new TestReducer(),
-            new InMemoryOutput<KeyValue<String, List<Long>>>(5)),
+    MapReduceSpecification.Builder<Long, String, Long, KeyValue<String, List<Long>>,
+        List<List<KeyValue<String, List<Long>>>>> mrSpecBuilder =
+            new MapReduceSpecification.Builder<>();
+    mrSpecBuilder.setJobName("Test MR");
+    mrSpecBuilder.setInput(new ConsecutiveLongInput(-10000, 10000, 10));
+    mrSpecBuilder.setMapper(new Mod37Mapper());
+    mrSpecBuilder.setKeyMarshaller(Marshallers.getStringMarshaller());
+    mrSpecBuilder.setValueMarshaller(Marshallers.getLongMarshaller());
+    mrSpecBuilder.setReducer(new TestReducer());
+    mrSpecBuilder.setOutput(new InMemoryOutput<KeyValue<String, List<Long>>>());
+    mrSpecBuilder.setNumReducers(5);
+
+    runTest(new MapReducePreparer(), mrSpecBuilder.build(),
         new Verifier<List<List<KeyValue<String, List<Long>>>>>() {
           @Override
           public void verify(MapReduceResult<List<List<KeyValue<String, List<Long>>>>> result)
@@ -820,15 +992,19 @@ public class EndToEndTest extends EndToEndTestCase {
    * ignores the values.
    */
   public void testReduceOnlyLooksAtKeys() throws Exception {
-    runTest(new Preparer(),
-        MapReduceSpecification.of("Test MR",
-            new ConsecutiveLongInput(-10000, 10000, 10),
-            new Mod37Mapper(),
-            Marshallers.getStringMarshaller(),
-            Marshallers.getLongMarshaller(),
-            KeyProjectionReducer.<String, Long>create(),
-            new InMemoryOutput<String>(5)),
-        new Verifier<List<List<String>>>() {
+    MapReduceSpecification.Builder<Long, String, Long, String, List<List<String>>>  builder =
+        new MapReduceSpecification.Builder<>();
+    builder.setJobName("Test MR");
+    builder.setInput(new ConsecutiveLongInput(-10000, 10000, 10));
+    builder.setMapper(new Mod37Mapper());
+    builder.setKeyMarshaller(Marshallers.getStringMarshaller());
+    builder.setValueMarshaller(Marshallers.getLongMarshaller());
+    builder.setReducer(KeyProjectionReducer.<String, Long>create());
+    builder.setOutput(new InMemoryOutput<String>());
+    builder.setNumReducers(5);
+
+    runTest(new MapReducePreparer(), builder.build(),
+       new Verifier<List<List<String>>>() {
           @Override
           public void verify(MapReduceResult<List<List<String>>> result) throws Exception {
             Counters counters = result.getCounters();
@@ -851,14 +1027,17 @@ public class EndToEndTest extends EndToEndTestCase {
 
 
   public void testSlicingJob() throws Exception {
-    runTest(new SlicingPreparer(),
-        MapReduceSpecification.of("Test MR",
-            new ConsecutiveLongInput(-100, 100, 10),
-            new Mod37Mapper(),
-            Marshallers.getStringMarshaller(),
-            Marshallers.getLongMarshaller(),
-            KeyProjectionReducer.<String, Long>create(),
-            new InMemoryOutput<String>(5)),
+    MapReduceSpecification.Builder<Long, String, Long, String, List<List<String>>> builder =
+        new MapReduceSpecification.Builder<>();
+    builder.setJobName("Test MR");
+    builder.setInput(new ConsecutiveLongInput(-100, 100, 10));
+    builder.setMapper(new Mod37Mapper());
+    builder.setKeyMarshaller(Marshallers.getStringMarshaller());
+    builder.setValueMarshaller(Marshallers.getLongMarshaller());
+    builder.setReducer(KeyProjectionReducer.<String, Long>create());
+    builder.setOutput(new InMemoryOutput<String>());
+    builder.setNumReducers(5);
+    runTest(new SlicingPreparer(), builder.build(),
         new Verifier<List<List<String>>>() {
           @Override
           public void verify(MapReduceResult<List<List<String>>> result) throws Exception {
@@ -879,7 +1058,6 @@ public class EndToEndTest extends EndToEndTestCase {
           }
         });
   }
-
 
   @SuppressWarnings("serial")
   static class SideOutputMapper extends Mapper<Long, String, Void> {
@@ -920,14 +1098,17 @@ public class EndToEndTest extends EndToEndTestCase {
   }
 
   public void testSideOutput() throws Exception {
-    runTest(new Preparer(),
-        MapReduceSpecification.of("Test MR",
+
+    runTest(new MapReducePreparer(),
+        new MapReduceSpecification.Builder<>(
             new ConsecutiveLongInput(0, 6, 6),
             new SideOutputMapper(),
-            Marshallers.getStringMarshaller(),
-            Marshallers.getVoidMarshaller(),
             KeyProjectionReducer.<String, Void>create(),
-            new InMemoryOutput<String>(1)),
+            new InMemoryOutput<String>())
+                .setKeyMarshaller(Marshallers.getStringMarshaller())
+                .setValueMarshaller(Marshallers.getVoidMarshaller())
+                .setJobName("Test MR")
+                .build(),
         new Verifier<List<List<String>>>() {
           @Override
           public void verify(MapReduceResult<List<List<String>>> result) throws Exception {

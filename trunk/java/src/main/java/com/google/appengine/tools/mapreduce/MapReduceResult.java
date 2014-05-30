@@ -5,7 +5,7 @@ package com.google.appengine.tools.mapreduce;
 import java.io.Serializable;
 
 /**
- * Result of a {@link MapReduceJob}.
+ * Result of a {@link MapReduceJob} or {@link MapJob}.
  *
  * @author ohler@google.com (Christian Ohler)
  *
@@ -19,7 +19,7 @@ public interface MapReduceResult<R> extends Serializable {
   R getOutputResult();
 
   /**
-   * Returns the counter values at the end of the MapReduce.
+   * Returns the counter values at the end of the job.
    */
   Counters getCounters();
 }

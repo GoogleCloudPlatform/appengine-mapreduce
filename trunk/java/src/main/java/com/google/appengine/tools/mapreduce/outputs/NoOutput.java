@@ -4,6 +4,7 @@ package com.google.appengine.tools.mapreduce.outputs;
 
 import com.google.appengine.tools.mapreduce.Output;
 import com.google.appengine.tools.mapreduce.OutputWriter;
+import com.google.appengine.tools.mapreduce.impl.shardedjob.JobFailureException;
 import com.google.common.collect.ImmutableList;
 
 import java.util.Collection;
@@ -15,18 +16,12 @@ import java.util.List;
  *
  * @author ohler@google.com (Christian Ohler)
  *
- * @param <O> type of output values formally (but not actually) accepted by this
- *            output
- * @param <R> type of result formally returned accepted by this output
- *            (but it actually returns null)
+ * @param <O> type of output values formally (but not actually) accepted by this output
+ * @param <R> type of result formally returned accepted by this output (though always return null)
  */
 public class NoOutput<O, R> extends Output<O, R> {
 
   private static final long serialVersionUID = 965415182637510898L;
-
-  public static <O, R> NoOutput<O, R> create(int numShards) {
-    return new NoOutput<>(numShards);
-  }
 
   private static class Writer<O> extends OutputWriter<O> {
 
@@ -34,9 +29,7 @@ public class NoOutput<O, R> extends Output<O, R> {
 
     @Override
     public void write(O object) {
-      // TODO(ohler): Make this an exception that immediately aborts the entire
-      // MR rather than causing a retry.
-      throw new RuntimeException("Attempt to write to NoOutput: " + object);
+      throw new JobFailureException("Attempt to write to NoOutput: " + object);
     }
 
     @Override
@@ -45,14 +38,8 @@ public class NoOutput<O, R> extends Output<O, R> {
     }
   }
 
-  private final int numShards;
-
-  public NoOutput(int numShards) {
-    this.numShards = numShards;
-  }
-
   @Override
-  public List<? extends OutputWriter<O>> createWriters() {
+  public List<? extends OutputWriter<O>> createWriters(int numShards) {
     ImmutableList.Builder<Writer<O>> out = ImmutableList.builder();
     for (int i = 0; i < numShards; i++) {
       out.add(new Writer<O>());
@@ -61,15 +48,10 @@ public class NoOutput<O, R> extends Output<O, R> {
   }
 
   /**
-   * Returns null.
+   * Returns {@code null}.
    */
   @Override
   public R finish(Collection<? extends OutputWriter<O>> writers) {
     return null;
-  }
-
-  @Override
-  public int getNumShards() {
-    return numShards;
   }
 }

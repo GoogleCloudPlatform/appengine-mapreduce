@@ -6,7 +6,6 @@ import com.google.appengine.tools.cloudstorage.GcsFilename;
 import com.google.appengine.tools.mapreduce.GoogleCloudStorageFileSet;
 import com.google.appengine.tools.mapreduce.Output;
 import com.google.appengine.tools.mapreduce.OutputWriter;
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 
@@ -24,32 +23,27 @@ import java.util.List;
 public class GoogleCloudStorageFileOutput extends Output<ByteBuffer, GoogleCloudStorageFileSet> {
   private static final long serialVersionUID = 5544139634754912546L;
 
-  private final int shardCount;
   private final String mimeType;
   private final String fileNamePattern;
   private final String bucket;
 
   /**
-   * Creates {@code shardCount} number of output files who's names follow the provided pattern in
-   * the specified bucket.
+   * Creates output files who's names follow the provided pattern in the specified bucket.
    *
    * @param fileNamePattern a Java format string {@link java.util.Formatter} containing one int
    *        argument for the shard number.
    * @param mimeType The string to be passed as the mimeType to GCS.
    */
-  public GoogleCloudStorageFileOutput(
-      String bucket, String fileNamePattern, String mimeType, int shardCount) {
-    Preconditions.checkArgument(shardCount > 0, "Shard count not positive: %s", shardCount);
+  public GoogleCloudStorageFileOutput(String bucket, String fileNamePattern, String mimeType) {
     this.bucket = checkNotNull(bucket);
     this.mimeType = checkNotNull(mimeType, "Null mimeType");
     this.fileNamePattern = checkNotNull(fileNamePattern, "Null fileNamePattern");
-    this.shardCount = shardCount;
   }
 
   @Override
-  public List<GoogleCloudStorageFileOutputWriter> createWriters() {
+  public List<GoogleCloudStorageFileOutputWriter> createWriters(int numShards) {
     ImmutableList.Builder<GoogleCloudStorageFileOutputWriter> out = ImmutableList.builder();
-    for (int i = 0; i < shardCount; i++) {
+    for (int i = 0; i < numShards; i++) {
       GcsFilename file = new GcsFilename(bucket, String.format(fileNamePattern, i));
       out.add(new GoogleCloudStorageFileOutputWriter(file, mimeType));
     }
@@ -67,10 +61,5 @@ public class GoogleCloudStorageFileOutput extends Output<ByteBuffer, GoogleCloud
       out.add(writer.getFile().getObjectName());
     }
     return new GoogleCloudStorageFileSet(bucket, out);
-  }
-
-  @Override
-  public int getNumShards() {
-    return shardCount;
   }
 }

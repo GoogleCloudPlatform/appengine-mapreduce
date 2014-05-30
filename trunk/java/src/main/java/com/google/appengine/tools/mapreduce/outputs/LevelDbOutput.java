@@ -26,15 +26,15 @@ public class LevelDbOutput<R> extends Output<ByteBuffer, R> {
   private final Output<ByteBuffer, R> sink;
 
   /**
-   * @param sink The output where data shoud be written.
+   * @param sink The output where data should be written.
    */
   public LevelDbOutput(Output<ByteBuffer, R> sink) {
     this.sink = checkNotNull(sink, "Null sink");
   }
 
   @Override
-  public List<LevelDbOutputWriter> createWriters() {
-    List<? extends OutputWriter<ByteBuffer>> writers = sink.createWriters();
+  public List<LevelDbOutputWriter> createWriters(int numShards) {
+    List<? extends OutputWriter<ByteBuffer>> writers = sink.createWriters(numShards);
     List<LevelDbOutputWriter> result = new ArrayList<>(writers.size());
     for (OutputWriter<ByteBuffer> writer : writers) {
       result.add(new LevelDbOutputWriter(writer));
@@ -50,10 +50,5 @@ public class LevelDbOutput<R> extends Output<ByteBuffer, R> {
       wrapped.add(writer.getDelegate());
     }
     return sink.finish(wrapped);
-  }
-
-  @Override
-  public int getNumShards() {
-    return sink.getNumShards();
   }
 }

@@ -2,6 +2,7 @@
 
 package com.google.appengine.tools.mapreduce.impl;
 
+import static com.google.appengine.tools.mapreduce.impl.MapReduceConstants.DEFAULT_IO_BUFFER_SIZE;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.appengine.tools.mapreduce.GoogleCloudStorageFileSet;
@@ -72,8 +73,8 @@ public class GoogleCloudStorageReduceInput<K, V> extends Input<KeyValue<K, Itera
       GoogleCloudStorageFileSet reducerInputFileSet) {
     ArrayList<PeekingInputReader<KeyValue<ByteBuffer, ? extends Iterable<V>>>> inputFiles =
         new ArrayList<>();
-    GoogleCloudStorageLevelDbInput reducerInput = new GoogleCloudStorageLevelDbInput(
-        reducerInputFileSet, MapReduceConstants.DEFAULT_IO_BUFFER_SIZE);
+    GoogleCloudStorageLevelDbInput reducerInput =
+        new GoogleCloudStorageLevelDbInput(reducerInputFileSet, DEFAULT_IO_BUFFER_SIZE);
     for (InputReader<ByteBuffer> in : reducerInput.createReaders()) {
       inputFiles.add(new PeekingInputReader<>(in, marshaller));
     }

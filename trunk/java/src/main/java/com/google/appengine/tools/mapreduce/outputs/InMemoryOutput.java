@@ -24,10 +24,6 @@ public class InMemoryOutput<O> extends Output<O, List<List<O>>> {
 
   private static final long serialVersionUID = 184437617254585618L;
 
-  public static <O> InMemoryOutput<O> create(int numShards) {
-    return new InMemoryOutput<>(numShards);
-  }
-
   private static class Writer<O> extends OutputWriter<O> {
 
     private static final long serialVersionUID = 528522943983621278L;
@@ -76,17 +72,10 @@ public class InMemoryOutput<O> extends Output<O, List<List<O>>> {
     }
   }
 
-  private final int shardCount;
-
-  public InMemoryOutput(int shardCount) {
-    Preconditions.checkArgument(shardCount >= 0, "Negative shardCount: %s", shardCount);
-    this.shardCount = shardCount;
-  }
-
   @Override
-  public List<? extends OutputWriter<O>> createWriters() {
+  public List<? extends OutputWriter<O>> createWriters(int numShards) {
     ImmutableList.Builder<Writer<O>> out = ImmutableList.builder();
-    for (int i = 0; i < shardCount; i++) {
+    for (int i = 0; i < numShards; i++) {
       out.add(new Writer<O>());
     }
     return out.build();
@@ -105,10 +94,5 @@ public class InMemoryOutput<O> extends Output<O, List<List<O>>> {
       out.add(ImmutableList.copyOf(writer.accu));
     }
     return out.build();
-  }
-
-  @Override
-  public int getNumShards() {
-    return shardCount;
   }
 }
