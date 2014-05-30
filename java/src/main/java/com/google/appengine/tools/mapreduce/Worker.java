@@ -98,4 +98,11 @@ public abstract class Worker<C extends WorkerContext<?>> implements Serializable
   public long estimateMemoryRequirement() {
     return MapReduceConstants.ASSUMED_BASE_MEMORY_PER_REQUEST;
   }
+
+  /**
+   * Indicate if a slice retry is allowed.
+   */
+  public boolean allowSliceRetry() {
+    return true;
+  }
 }

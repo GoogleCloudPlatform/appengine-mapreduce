@@ -12,7 +12,6 @@ import com.google.appengine.tools.mapreduce.Mapper;
 import com.google.appengine.tools.mapreduce.MapperContext;
 import com.google.appengine.tools.mapreduce.OutputWriter;
 import com.google.appengine.tools.mapreduce.Worker;
-import com.google.appengine.tools.mapreduce.impl.shardedjob.ShardFailureException;
 
 import java.io.IOException;
 import java.io.ObjectInputStream;
@@ -48,11 +47,7 @@ public class MapShardTask<I, K, V> extends WorkerShardTask<I, KeyValue<K, V>, Ma
 
   @Override
   protected void callWorker(I input) {
-    try {
-      mapper.map(input);
-    } catch (RuntimeException ex) {
-      throw new ShardFailureException(getContext().getShardNumber(), ex);
-    }
+    mapper.map(input);
   }
 
   @Override
@@ -88,7 +83,7 @@ public class MapShardTask<I, K, V> extends WorkerShardTask<I, KeyValue<K, V>, Ma
 
   @Override
   public boolean allowSliceRetry() {
-    return !context.emitCalled() || out.allowSliceRetry();
+    return (!context.emitCalled() || out.allowSliceRetry()) && mapper.allowSliceRetry();
   }
 
   private void readObject(ObjectInputStream stream) throws IOException, ClassNotFoundException {
