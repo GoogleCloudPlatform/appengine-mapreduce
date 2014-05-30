@@ -37,8 +37,8 @@ class EntityCreator extends MapOnlyMapper<Long, Entity> {
   }
 
   @Override
-  public void map(Long ignored) {
-    String name = String.valueOf(random.nextLong() & Long.MAX_VALUE);
+  public void map(Long value) {
+    String name = getContext().getShardNumber() + "_" + value;
     Entity entity = new Entity(kind, name);
     entity.setProperty("payload", new Text(randomString(payloadBytesPerEntity)));
     emit(entity);
