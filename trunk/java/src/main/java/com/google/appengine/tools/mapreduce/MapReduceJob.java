@@ -110,29 +110,11 @@ public class MapReduceJob<I, K, V, O, R>
    */
   public static <I, K, V, O, R> String start(
       MapReduceSpecification<I, K, V, O, R> specification, MapReduceSettings settings) {
-    checkQueueSettings(settings.getWorkerQueueName());
     settings = settings.clone();
-    verifyAndSetBucketName(settings);
+    verifyMapReduceSettings(settings);
     PipelineService pipelineService = PipelineServiceFactory.newPipelineService();
     return pipelineService.startNewPipeline(new MapReduceJob<I, K, V, O, R>(), specification,
         settings, makeJobSettings(settings));
-  }
-
-  private static void checkQueueSettings(String queueName) {
-    final Queue queue = QueueFactory.getQueue(queueName);
-    try {
-      RetryHelper.runWithRetries(
-          new Callable<QueueStatistics>() {
-            @Override public QueueStatistics call() {
-              return queue.fetchStatistics();
-            }
-          }, RetryParams.getDefaultInstance(), QUEUE_EXCEPTION_HANDLER);
-    } catch (RetryHelperException ex) {
-      if (ex.getCause() instanceof IllegalStateException) {
-        throw new RuntimeException("Queue '" + queueName + "' does not exists");
-      }
-      throw new RuntimeException("Could not check if queue exists", ex.getCause());
-    }
   }
 
   public MapReduceJob() {}
@@ -722,7 +704,16 @@ public class MapReduceJob<I, K, V, O, R>
   @Override
   public Value<MapReduceResult<R>> run(
       MapReduceSpecification<I, K, V, O, R> mrSpec, MapReduceSettings settings) {
-    verifyAndSetBucketName(settings);
+    if (settings.getWorkerQueueName() == null) {
+      String queue = getOnQueue();
+      if (queue == null) {
+        log.warning("workerQueueName is null and current queue is not available in the pipeline"
+            + " job, using 'default'");
+        queue = "default";
+      }
+      settings.setWorkerQueueName(queue);
+    }
+    verifyMapReduceSettings(settings);
     String mrJobId = getJobKey().getName();
     FutureValue<MapReduceResult<List<GoogleCloudStorageFileSet>>> mapResult = futureCall(
         new MapJob<>(mrJobId, mrSpec, settings), makeJobSettings(settings, maxAttempts(1)));
@@ -744,7 +735,30 @@ public class MapReduceJob<I, K, V, O, R>
     throw t;
   }
 
-  // TODO(user): Perhaps we should have some sort of generalized settings processing.
+  private static void verifyMapReduceSettings(MapReduceSettings settings) {
+    if (settings.getWorkerQueueName() != null) {
+      checkQueueSettings(settings.getWorkerQueueName());
+    }
+    verifyAndSetBucketName(settings);
+  }
+
+  private static void checkQueueSettings(String queueName) {
+    final Queue queue = QueueFactory.getQueue(queueName);
+    try {
+      RetryHelper.runWithRetries(
+          new Callable<QueueStatistics>() {
+            @Override public QueueStatistics call() {
+              return queue.fetchStatistics();
+            }
+          }, RetryParams.getDefaultInstance(), QUEUE_EXCEPTION_HANDLER);
+    } catch (RetryHelperException ex) {
+      if (ex.getCause() instanceof IllegalStateException) {
+        throw new RuntimeException("Queue '" + queueName + "' does not exists");
+      }
+      throw new RuntimeException("Could not check if queue exists", ex.getCause());
+    }
+  }
+
   private static void verifyAndSetBucketName(MapReduceSettings settings) {
     String bucket = settings.getBucketName();
     if (Strings.isNullOrEmpty(bucket)) {

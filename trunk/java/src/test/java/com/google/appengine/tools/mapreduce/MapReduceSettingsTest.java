@@ -18,7 +18,7 @@ public class MapReduceSettingsTest extends TestCase {
     assertNull(mrSettings.getBackend());
     assertNull(mrSettings.getModule());
     assertNull(mrSettings.getBucketName());
-    assertEquals("default", mrSettings.getWorkerQueueName());
+    assertNull(mrSettings.getWorkerQueueName());
     assertEquals(DEFAULT_BASE_URL, mrSettings.getBaseUrl());
     assertEquals(DEFAULT_MILLIS_PER_SLICE, mrSettings.getMillisPerSlice());
     assertEquals(DEFAULT_SHARD_RETREIES, mrSettings.getMaxShardRetries());

@@ -65,7 +65,10 @@ public class CollisionFindingServlet extends HttpServlet {
           + "Final integer to test: <input value='3000000' name='limit' />"
           + "(Must be greater than starting integer and less than 2^31-1) <br />"
           + "Number of shards <input value='10' name='shards' />"
-          + "(Must be between 1 and 100) <br /> <input type='submit' value='Start MapReduce' />"
+          + "(Must be between 1 and 100) <br />"
+          + "<input name='queue' value='mapreduce-workers'/><br />"
+          + "<input name='module' value='mapreduce'/><br />"
+          + "<input type='submit' value='Start MapReduce' />"
           + "</div> </form> </body></html>");
     }
   }
@@ -92,6 +95,8 @@ public class CollisionFindingServlet extends HttpServlet {
           + xsrfToken);
     }
 
+    String queue = getStringParam(req, "queue", "mapreduce-workers");
+    String module = getStringParam(req, "module", "mapreduce");
     String bucket = getBucketParam(req);
     long start = getLongParam(req, "start", 0);
     long limit = getLongParam(req, "limit", 3 * 1000 * 1000);
@@ -99,10 +104,8 @@ public class CollisionFindingServlet extends HttpServlet {
     // [START start_mapreduce]
     MapReduceSpecification<Long, Integer, Integer, ArrayList<Integer>, GoogleCloudStorageFileSet>
         mapReduceSpec = createMapReduceSpec(bucket, start, limit, shards);
-    MapReduceSettings settings = getSettings(bucket);
-    // [START startMapReduceJob]
+    MapReduceSettings settings = getSettings(bucket, queue, module);
     String id = MapReduceJob.start(mapReduceSpec, settings);
-    // [END startMapReduceJob]
     // [END start_mapreduce]
     resp.sendRedirect("/_ah/pipeline/status.html?root=" + id);
   }
@@ -122,7 +125,7 @@ public class CollisionFindingServlet extends HttpServlet {
   // [START createMapReduceSpec]
   public static MapReduceSpecification<Long, Integer, Integer, ArrayList<Integer>,
       GoogleCloudStorageFileSet> createMapReduceSpec(String bucket, long start, long limit,
-      int shards) {
+          int shards) {
     ConsecutiveLongInput input = new ConsecutiveLongInput(start, limit, shards);
     Mapper<Long, Integer, Integer> mapper = new SeedToRandomMapper();
     Marshaller<Integer> intermediateKeyMarshaller = Marshallers.getIntegerMarshaller();
@@ -134,33 +137,39 @@ public class CollisionFindingServlet extends HttpServlet {
         new GoogleCloudStorageFileOutput(bucket, "CollidingSeeds-%04d", "integers", shards),
         outputMarshaller);
     // [START mapReduceSpec]
-    MapReduceSpecification spec = MapReduceSpecification.of("DemoMapreduce",
-        input, // must extend Input
-        mapper, // must extend Mapper
-        intermediateKeyMarshaller, // must extend Marshaller
-        intermediateValueMarshaller, // must extend Marshaller
-        reducer, // must extend Reducer
-        output); // must extend Output
+    MapReduceSpecification<Long, Integer, Integer, ArrayList<Integer>, GoogleCloudStorageFileSet>
+        spec = MapReduceSpecification.of("DemoMapreduce",
+            input, // must extend Input
+            mapper, // must extend Mapper
+            intermediateKeyMarshaller, // must extend Marshaller
+            intermediateValueMarshaller, // must extend Marshaller
+            reducer, // must extend Reducer
+            output); // must extend Output
     // [END mapReduceSpec]
     return spec;
   }
   // [END createMapReduceSpec]
 
   // [START getSettings]
-  public static MapReduceSettings getSettings(String bucket) {
+  public static MapReduceSettings getSettings(String bucket, String queue, String module) {
     // [START mapReduceSettings]
-    MapReduceSettings settings = new MapReduceSettings()
-        .setWorkerQueueName("mapreduce-workers")
-        .setBucketName(bucket)
-        .setModule("mapreduce");
+    MapReduceSettings settings = new MapReduceSettings().setBucketName(bucket);
+    // if queue is null it is going to use the current queue or "default" if none
+    settings.setWorkerQueueName(queue);
+    settings.setModule(module);
     // [END mapReduceSettings]
     return settings;
   }
   // [END getSettings]
 
+  static String getStringParam(HttpServletRequest req, String param, String defaultValue) {
+    String value = req.getParameter(param);
+    return (value == null || (value = value.trim()).isEmpty()) ? defaultValue : value;
+  }
+
   static long getLongParam(HttpServletRequest req, String param, long defaultValue) {
     String value = req.getParameter(param);
-    if (value == null || value.isEmpty()) {
+    if (value == null || (value = value.trim()).isEmpty()) {
       return defaultValue;
     }
     return Long.parseLong(value);

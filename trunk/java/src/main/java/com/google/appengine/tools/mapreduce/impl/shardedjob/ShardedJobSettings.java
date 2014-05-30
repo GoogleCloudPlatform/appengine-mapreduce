@@ -21,14 +21,7 @@ public final class ShardedJobSettings implements Serializable {
 
   public static final int DEFAULT_SLICE_TIMEOUT_MILLIS = 11 * 60000;
 
-  // TODO(user): remove fields and readObject once we no longer care about outstanding jobs
-  // before the rename/removal and make all other fields final.
-  private String controllerBackend;
-  private String workerBackend;
-  private String controllerQueueName;
-  private String workerQueueName;
-
-  /*Nullable*/ private String backend;
+  /*Nullable*/ private final String backend;
   /*Nullable*/ private final String module;
   /*Nullable*/ private final String version;
   // TODO(ohler): Integrate with pipeline and put this under /_ah/pipeline.
@@ -36,8 +29,8 @@ public final class ShardedJobSettings implements Serializable {
   /*Nullable*/ private final String mrStatusUrl;
   private final String controllerPath;
   private final String workerPath;
-  private String target;
-  private String queueName;
+  private final String target;
+  private final String queueName;
   private final int maxShardRetries;
   private final int maxSliceRetries;
   private final int sliceTimeoutMillis;
@@ -140,23 +133,6 @@ public final class ShardedJobSettings implements Serializable {
 
   private void readObject(java.io.ObjectInputStream in) throws IOException, ClassNotFoundException {
     in.defaultReadObject();
-    if (backend == null) {
-      backend = workerBackend == null ? controllerBackend : workerBackend;
-    }
-    if (queueName == null || queueName.equals("default")) {
-      queueName = workerQueueName == null ? controllerQueueName : workerQueueName;
-      if (queueName == null) {
-        queueName = "default";
-      }
-    }
-    if (target == null) {
-      target = resolveTaskQueueTarget();
-    }
-
-    controllerBackend = null;
-    workerBackend = null;
-    controllerQueueName = null;
-    workerQueueName = null;
   }
 
   private String resolveTaskQueueTarget() {
