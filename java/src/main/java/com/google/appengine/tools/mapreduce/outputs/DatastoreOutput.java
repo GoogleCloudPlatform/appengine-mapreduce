@@ -23,7 +23,7 @@ public class DatastoreOutput extends Output<Entity, Void> {
 
   private static final long serialVersionUID = 4310542840257857134L;
 
-  private static class DatastoreOutputWriter extends OutputWriter<Entity> {
+  public static class DatastoreOutputWriter extends OutputWriter<Entity> {
 
     private static final long serialVersionUID = -3329305174118090948L;
     private final DatastoreMutationPool.Params poolParams;
@@ -60,25 +60,18 @@ public class DatastoreOutput extends Output<Entity, Void> {
     }
   }
 
-  private final int numShards;
   private final DatastoreMutationPool.Params poolParams;
 
-  public DatastoreOutput(int numShards) {
-    this(numShards, DatastoreMutationPool.DEFAULT_PARAMS);
+  public DatastoreOutput() {
+    this(DatastoreMutationPool.DEFAULT_PARAMS);
   }
 
-  public DatastoreOutput(int numShards, DatastoreMutationPool.Params poolParams) {
-    this.numShards = numShards;
+  public DatastoreOutput(DatastoreMutationPool.Params poolParams) {
     this.poolParams = checkNotNull(poolParams);
   }
 
   @Override
-  public int getNumShards() {
-    return numShards;
-  }
-
-  @Override
-  public List<? extends OutputWriter<Entity>> createWriters() {
+  public List<DatastoreOutputWriter> createWriters(int numShards) {
     ImmutableList.Builder<DatastoreOutputWriter> out = ImmutableList.builder();
     for (int i = 0; i < numShards; i++) {
       out.add(new DatastoreOutputWriter(poolParams));

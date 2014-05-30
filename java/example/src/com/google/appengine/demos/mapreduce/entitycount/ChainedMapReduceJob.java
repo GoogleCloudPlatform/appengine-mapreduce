@@ -2,17 +2,18 @@ package com.google.appengine.demos.mapreduce.entitycount;
 
 import com.google.appengine.api.datastore.Entity;
 import com.google.appengine.tools.mapreduce.KeyValue;
+import com.google.appengine.tools.mapreduce.MapJob;
 import com.google.appengine.tools.mapreduce.MapReduceJob;
 import com.google.appengine.tools.mapreduce.MapReduceJobException;
 import com.google.appengine.tools.mapreduce.MapReduceResult;
 import com.google.appengine.tools.mapreduce.MapReduceSettings;
 import com.google.appengine.tools.mapreduce.MapReduceSpecification;
+import com.google.appengine.tools.mapreduce.MapSpecification;
 import com.google.appengine.tools.mapreduce.Marshallers;
 import com.google.appengine.tools.mapreduce.inputs.ConsecutiveLongInput;
 import com.google.appengine.tools.mapreduce.inputs.DatastoreInput;
+import com.google.appengine.tools.mapreduce.outputs.DatastoreOutput;
 import com.google.appengine.tools.mapreduce.outputs.InMemoryOutput;
-import com.google.appengine.tools.mapreduce.outputs.NoOutput;
-import com.google.appengine.tools.mapreduce.reducers.NoReducer;
 import com.google.appengine.tools.pipeline.FutureValue;
 import com.google.appengine.tools.pipeline.Job0;
 
@@ -21,10 +22,9 @@ import java.util.logging.Logger;
 
 // [START chain_job_example]
 /**
- * Runs three MapReduces in a row.
- * The first creates random MapReduceTest entities of the type {@link #datastoreType}
- * The second counts the number of each character in all entities of this type.
- * The third deletes all entities of the {@link #datastoreType}
+ * Runs three MapReduces in a row. The first creates random MapReduceTest entities of the type
+ * {@link #datastoreType} The second counts the number of each character in all entities of this
+ * type. The third deletes all entities of the {@link #datastoreType}
  */
 public class ChainedMapReduceJob extends Job0<MapReduceResult<List<List<KeyValue<String, Long>>>>> {
 
@@ -48,10 +48,10 @@ public class ChainedMapReduceJob extends Job0<MapReduceResult<List<List<KeyValue
 
   @Override
   public FutureValue<MapReduceResult<List<List<KeyValue<String, Long>>>>> run() throws Exception {
-    MapReduceJob<Long, Void, Void, Void, Void> createJob = new MapReduceJob<>();
+    MapJob<Long, Entity, Void> createJob = new MapJob<>();
     MapReduceJob<Entity, String, Long, KeyValue<String, Long>, List<List<KeyValue<String, Long>>>>
         countJob = new MapReduceJob<>();
-    MapReduceJob<Entity, Void, Void, Void, Void> deleteJob = new MapReduceJob<>();
+    MapJob<Entity, Void, Void> deleteJob = new MapJob<>();
 
     MapReduceSettings settings = getSettings(bucket);
 
@@ -76,43 +76,35 @@ public class ChainedMapReduceJob extends Job0<MapReduceResult<List<List<KeyValue
     throw exception;
   }
 
-  //...
+  // ...
   // [END chain_job_example]
 
   MapReduceSettings getSettings(String bucket) {
-    return new MapReduceSettings().setWorkerQueueName("mapreduce-workers").setBucketName(bucket)
-        .setModule("mapreduce");
+    return new MapReduceSettings.Builder().setWorkerQueueName("mapreduce-workers")
+        .setBucketName(bucket).setModule("mapreduce").build();
   }
 
-  MapReduceSpecification<Long, Void, Void, Void, Void> getCreationJobSpec(int bytesPerEntity,
-      int entities, int shardCount) {
-    return MapReduceSpecification.of("Create MapReduce entities",
-        new ConsecutiveLongInput(0, entities, shardCount),
-        new EntityCreator(datastoreType, bytesPerEntity),
-        Marshallers.getVoidMarshaller(),
-        Marshallers.getVoidMarshaller(),
-        NoReducer.<Void, Void, Void>create(),
-        NoOutput.<Void, Void>create(1));
+  MapSpecification<Long, Entity, Void> getCreationJobSpec(int bytesPerEntity, int entities,
+      int shardCount) {
+    return new MapSpecification.Builder<>(new ConsecutiveLongInput(0, entities, shardCount),
+        new EntityCreator(datastoreType, bytesPerEntity), new DatastoreOutput()).setJobName(
+        "Create MapReduce entities").build();
   }
 
   MapReduceSpecification<Entity, String, Long, KeyValue<String, Long>,
       List<List<KeyValue<String, Long>>>> getCountJobSpec(int mapShardCount, int reduceShardCount) {
-    return MapReduceSpecification.of("MapReduceTest count",
-        new DatastoreInput(datastoreType, mapShardCount),
-        new CountMapper(),
-        Marshallers.getStringMarshaller(),
-        Marshallers.getLongMarshaller(),
-        new CountReducer(),
-        new InMemoryOutput<KeyValue<String, Long>>(reduceShardCount));
+    return new MapReduceSpecification.Builder<>(new DatastoreInput(datastoreType, mapShardCount),
+        new CountMapper(), new CountReducer(), new InMemoryOutput<KeyValue<String, Long>>())
+        .setKeyMarshaller(Marshallers.getStringMarshaller())
+        .setValueMarshaller(Marshallers.getLongMarshaller())
+        .setJobName("MapReduceTest count")
+        .setNumReducers(reduceShardCount)
+        .build();
   }
 
-  MapReduceSpecification<Entity, Void, Void, Void, Void> getDeleteJobSpec(int mapShardCount) {
-    return MapReduceSpecification.of("Delete MapReduce entities",
-        new DatastoreInput(datastoreType, mapShardCount),
-        new DeleteEntityMapper(null),
-        Marshallers.getVoidMarshaller(),
-        Marshallers.getVoidMarshaller(),
-        NoReducer.<Void, Void, Void>create(),
-        NoOutput.<Void, Void>create(1));
+  MapSpecification<Entity, Void, Void> getDeleteJobSpec(int mapShardCount) {
+    return new MapSpecification.Builder<Entity, Void, Void>(
+        new DatastoreInput(datastoreType, mapShardCount), new DeleteEntityMapper(null)).setJobName(
+        "Delete MapReduce entities").build();
   }
 }

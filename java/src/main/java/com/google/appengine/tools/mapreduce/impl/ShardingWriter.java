@@ -35,7 +35,7 @@ final class ShardingWriter<K, V, R> extends OutputWriter<KeyValue<K, V>> {
     this.keyMarshaller = Preconditions.checkNotNull(keyMarshaller);
     this.sharder = Preconditions.checkNotNull(sharder);
     this.output = Preconditions.checkNotNull(output);
-    this.writers = output.createWriters();
+    this.writers = output.createWriters(sharder.getNumShards());
   }
 
   @Override

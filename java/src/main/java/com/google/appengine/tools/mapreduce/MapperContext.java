@@ -6,13 +6,13 @@ package com.google.appengine.tools.mapreduce;
  * A context for mapper execution. Provides everything that might be needed by a mapper function.
  *
  *
- * @param <K> type of intermediate keys produced by the mapper
- * @param <V> type of intermediate values produced by the mapper
+ * @param <K> type of keys produced by the mapper
+ * @param <V> type of values produced by the mapper
  */
 public interface MapperContext<K, V> extends WorkerContext<KeyValue<K, V>> {
 
   /**
-   * Emits a value for the given key to the reduce stage.
+   * Emits a key and a value to the output.
    */
   void emit(K key, V value);
 }

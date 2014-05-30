@@ -24,8 +24,8 @@ public class MarshallingOutputWriterUnmarshallingInputReaderTest extends TestCas
   public void testReaderWriter() throws IOException {
     Marshaller<String> stringMarshaller = Marshallers.getStringMarshaller();
     MarshallingOutput<String, List<List<ByteBuffer>>> output =
-        new MarshallingOutput<>(new InMemoryOutput<ByteBuffer>(1), stringMarshaller);
-    Collection<MarshallingOutputWriter<String>> writers = output.createWriters();
+        new MarshallingOutput<>(new InMemoryOutput<ByteBuffer>(), stringMarshaller);
+    Collection<MarshallingOutputWriter<String>> writers = output.createWriters(1);
     assertEquals(1, writers.size());
     MarshallingOutputWriter<String> writer = writers.iterator().next();
     writer.beginShard();
@@ -63,9 +63,8 @@ public class MarshallingOutputWriterUnmarshallingInputReaderTest extends TestCas
     int numShards = 10;
     Marshaller<String> stringMarshaller = Marshallers.getStringMarshaller();
     MarshallingOutput<String, List<List<ByteBuffer>>> output =
-        new MarshallingOutput<>(new InMemoryOutput<ByteBuffer>(numShards), stringMarshaller);
-    assertEquals(numShards, output.getNumShards());
-    Collection<MarshallingOutputWriter<String>> writers = output.createWriters();
+        new MarshallingOutput<>(new InMemoryOutput<ByteBuffer>(), stringMarshaller);
+    Collection<MarshallingOutputWriter<String>> writers = output.createWriters(numShards);
     assertEquals(numShards, writers.size());
     List<List<ByteBuffer>> data = output.finish(writers);
     UnmarshallingInput<String> input =

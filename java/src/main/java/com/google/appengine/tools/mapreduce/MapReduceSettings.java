@@ -2,11 +2,22 @@
 
 package com.google.appengine.tools.mapreduce;
 
-import static com.google.common.base.Preconditions.checkNotNull;
+import com.google.appengine.api.appidentity.AppIdentityServiceFactory;
+import com.google.appengine.api.appidentity.AppIdentityServiceFailureException;
+import com.google.appengine.tools.cloudstorage.GcsFileOptions;
+import com.google.appengine.tools.cloudstorage.GcsFilename;
+import com.google.appengine.tools.cloudstorage.GcsOutputChannel;
+import com.google.appengine.tools.cloudstorage.GcsService;
+import com.google.appengine.tools.cloudstorage.GcsServiceFactory;
+import com.google.common.base.Strings;
 
-import com.google.common.base.Preconditions;
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+import java.util.UUID;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
-import java.io.Serializable;
 
 /**
  * Settings that affect how a MapReduce is executed.  May affect performance and
@@ -16,174 +27,104 @@ import java.io.Serializable;
  *
  * @author ohler@google.com (Christian Ohler)
  */
-public class MapReduceSettings implements Serializable, Cloneable {
+public class MapReduceSettings extends MapSettings {
 
   private static final long serialVersionUID = 610088354289299175L;
+  private static final Logger log = Logger.getLogger(MapReduceSettings.class.getName());
 
-  public static final String DEFAULT_BASE_URL = "/mapreduce/";
-  public static final int DEFAULT_MILLIS_PER_SLICE = 30_000;
-  public static final int DEFAULT_SHARD_RETREIES = 4;
-  public static final int DEFAULT_SLICE_RETREIES = 20;
+  private final String bucketName;
 
-  private String baseUrl = DEFAULT_BASE_URL;
-  private String backend;
-  private String module;
-  private String controllerQueueName;
-  private String workerQueueName;
-  private String bucketName;
-  private int millisPerSlice = DEFAULT_MILLIS_PER_SLICE;
-  private int maxShardRetries = DEFAULT_SHARD_RETREIES;
-  private int maxSliceRetries = DEFAULT_SLICE_RETREIES;
+  public static class Builder extends BaseBuilder<Builder> {
 
-  public String getBaseUrl() {
-    return baseUrl;
-  }
+    private String bucketName;
 
-  /**
-   * Sets the base URL that will be used for all requests related to the MapReduce.
-   * Defaults to '/mapreduce/'
-   */
-  public MapReduceSettings setBaseUrl(String baseUrl) {
-    this.baseUrl = checkNotNull(baseUrl, "Null baseUrl");
-    return this;
-  }
-
-  /*Nullable*/ public String getModule() {
-    return module;
-  }
-
-  /**
-   * Specifies the Module that the MapReduce will run on.
-   * If this is not set, it will run on the current module.
-   */
-  public MapReduceSettings setModule(/*Nullable*/ String module) {
-    Preconditions.checkArgument(
-        module == null || backend == null, "Module and Backend cannot be combined");
-    this.module = module;
-    return this;
-  }
-
-  /**
-   * @deprecated Use modules instead.
-   */
-  @Deprecated
-  /*Nullable*/ public String getBackend() {
-    return backend;
-  }
-
-  /**
-   * @deprecated Use modules instead.
-   */
-  @Deprecated
-  public MapReduceSettings setBackend(/*Nullable*/ String backend) {
-    Preconditions.checkArgument(
-        module == null || backend == null, "Module and Backend cannot be combined");
-    this.backend = backend;
-    return this;
-  }
-
-  /**
-   * @deprecated Controller queue is not used.
-   */
-  @Deprecated
-  public String getControllerQueueName() {
-    return controllerQueueName;
-  }
-
-  /**
-   * @deprecated Controller queue is not used.
-   */
-  @Deprecated
-  public MapReduceSettings setControllerQueueName(String controllerQueueName) {
-    this.controllerQueueName = controllerQueueName;
-    return this;
-  }
-
-  public String getWorkerQueueName() {
-    return workerQueueName;
-  }
-
-  /**
-   * Sets the TaskQueue that will be used to queue MapReduce jobs.
-   */
-  public MapReduceSettings setWorkerQueueName(String workerQueueName) {
-    this.workerQueueName = workerQueueName;
-    return this;
-  }
-
-  /*Nullable*/ public String getBucketName() {
-    return bucketName;
-  }
-
-  /**
-   * Sets the GCS bucket that will be used for temporary files.
-   * If this is not set the app's default bucket will be used.
-   */
-  public MapReduceSettings setBucketName(/*Nullable*/ String bucketName) {
-    this.bucketName = bucketName;
-    return this;
-  }
-
-  public int getMillisPerSlice() {
-    return millisPerSlice;
-  }
-
-  /**
-   * Sets how long a worker will process items before endSlice is called and progress is
-   * checkpointed to datastore.
-   */
-  public MapReduceSettings setMillisPerSlice(int millisPerSlice) {
-    Preconditions.checkArgument(millisPerSlice >= 0);
-    this.millisPerSlice = millisPerSlice;
-    return this;
-  }
-
-  public int getMaxShardRetries() {
-    return maxShardRetries;
-  }
-
-  /**
-   * The number of times a Shard can fail before it gives up and fails the whole MapReduce.
-   */
-  public MapReduceSettings setMaxShardRetries(int maxShardRetries) {
-    Preconditions.checkArgument(maxShardRetries >= 0);
-    this.maxShardRetries = maxShardRetries;
-    return this;
-  }
-
-  public int getMaxSliceRetries() {
-    return maxSliceRetries;
-  }
-
-  /**
-   * The number of times a Slice can fail before triggering a shard retry.
-   */
-  public MapReduceSettings setMaxSliceRetries(int maxSliceRetries) {
-    Preconditions.checkArgument(maxSliceRetries >= 0);
-    this.maxSliceRetries = maxSliceRetries;
-    return this;
-  }
-
-  @Override
-  public MapReduceSettings clone() {
-    try {
-      return (MapReduceSettings) super.clone();
-    } catch (CloneNotSupportedException e) {
-      throw new RuntimeException("Unexpected CloneNotSupportedException", e);
+    public Builder() {
     }
+
+    public Builder(MapReduceSettings settings) {
+      super(settings);
+      bucketName = settings.bucketName;
+    }
+
+    @Override
+    protected Builder self() {
+      return this;
+    }
+
+    /**
+     * Sets the GCS bucket that will be used for temporary files.
+     * If this is not set or {@code null} the app's default bucket will be used.
+     */
+    public Builder setBucketName(String bucketName) {
+      this.bucketName = bucketName;
+      return this;
+    }
+
+    public MapReduceSettings build() {
+      return new MapReduceSettings(this);
+    }
+  }
+
+  private MapReduceSettings(Builder builder) {
+    super(builder);
+    bucketName = verifyAndSetBucketName(builder.bucketName);
+  }
+
+  String getBucketName() {
+    return bucketName;
   }
 
   @Override
   public String toString() {
     return getClass().getSimpleName() + "("
-        + baseUrl + ", "
-        + backend + ", "
-        + module + ", "
-        + controllerQueueName + ", "
-        + workerQueueName + ", "
+        + getBaseUrl() + ", "
+        + getBackend() + ", "
+        + getModule() + ", "
+        + getWorkerQueueName() + ", "
         + bucketName + ", "
-        + millisPerSlice + ", "
-        + maxSliceRetries + ", "
-        + maxShardRetries + ")";
+        + getMillisPerSlice() + ", "
+        + getMaxSliceRetries() + ", "
+        + getMaxShardRetries() + ")";
+  }
+
+  private static String verifyAndSetBucketName(String bucket) {
+    if (Strings.isNullOrEmpty(bucket)) {
+      try {
+        bucket = AppIdentityServiceFactory.getAppIdentityService().getDefaultGcsBucketName();
+        if (Strings.isNullOrEmpty(bucket)) {
+          String message = "The BucketName property was not set in the MapReduceSettings object, "
+              + "and this application does not have a default bucket configured to fall back on.";
+          log.log(Level.SEVERE, message);
+          throw new IllegalArgumentException(message);
+        }
+      } catch (AppIdentityServiceFailureException e) {
+        throw new RuntimeException(
+            "The BucketName property was not set in the MapReduceSettings object, "
+            + "and could not get the default bucket.", e);
+      }
+    }
+    try {
+      verifyBucketIsWritable(bucket);
+    } catch (Exception e) {
+      throw new RuntimeException("Writeable Bucket '" + bucket + "' test failed. See "
+          + "http://developers.google.com/appengine/docs/java/googlecloudstorageclient/activate"
+          + " for more information on how to setup Google Cloude storage.", e);
+    }
+    return bucket;
+  }
+
+  private static void verifyBucketIsWritable(String bucket) throws IOException {
+    GcsService gcsService = GcsServiceFactory.createGcsService();
+    GcsFilename filename = new GcsFilename(bucket, UUID.randomUUID().toString() + ".tmp");
+    if (gcsService.getMetadata(filename) != null) {
+      log.warning("File '" + filename.getObjectName() + "' exists. Skipping bucket write test.");
+      return;
+    }
+    try (GcsOutputChannel channel =
+        gcsService.createOrReplace(filename, GcsFileOptions.getDefaultInstance())) {
+      channel.write(ByteBuffer.wrap("Delete me!".getBytes(StandardCharsets.UTF_8)));
+    } finally {
+      gcsService.delete(filename);
+    }
   }
 }

@@ -20,21 +20,19 @@ public class GoogleCloudStorageLevelDbOutput extends Output<ByteBuffer, GoogleCl
   private final GoogleCloudStorageFileOutput output;
 
   /**
-   * Creates {@code shardCount} number of LevelDb output files who's names follow the provided
-   * pattern in the specified bucket.
+   * Creates LevelDb output files who's names follow the provided pattern in the specified bucket.
    *
    * @param fileNamePattern a Java format string {@link java.util.Formatter} containing one int
    *        argument for the shard number.
    * @param mimeType The string to be passed as the mimeType to GCS.
    */
-  public GoogleCloudStorageLevelDbOutput(String bucket, String fileNamePattern, String mimeType,
-      int shardCount) {
-    output = new GoogleCloudStorageFileOutput(bucket, fileNamePattern, mimeType, shardCount);
+  public GoogleCloudStorageLevelDbOutput(String bucket, String fileNamePattern, String mimeType) {
+    output = new GoogleCloudStorageFileOutput(bucket, fileNamePattern, mimeType);
   }
 
   @Override
-  public List<? extends OutputWriter<ByteBuffer>> createWriters() {
-    List<GoogleCloudStorageFileOutputWriter> writers = output.createWriters();
+  public List<GoogleCloudStorageLevelDbOutputWriter> createWriters(int numShards) {
+    List<GoogleCloudStorageFileOutputWriter> writers = output.createWriters(numShards);
     List<GoogleCloudStorageLevelDbOutputWriter> result = new ArrayList<>(writers.size());
     for (GoogleCloudStorageFileOutputWriter writer : writers) {
       result.add(new GoogleCloudStorageLevelDbOutputWriter(writer));
@@ -50,10 +48,5 @@ public class GoogleCloudStorageLevelDbOutput extends Output<ByteBuffer, GoogleCl
       wrapped.add(writer.getDelegate());
     }
     return output.finish(wrapped);
-  }
-
-  @Override
-  public int getNumShards() {
-    return output.getNumShards();
   }
 }

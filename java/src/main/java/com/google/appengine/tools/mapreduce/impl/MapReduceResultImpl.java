@@ -3,13 +3,13 @@
 package com.google.appengine.tools.mapreduce.impl;
 
 import static com.google.appengine.tools.mapreduce.impl.util.SerializationUtil.serializeToByteArray;
+import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.appengine.tools.mapreduce.Counters;
 import com.google.appengine.tools.mapreduce.MapReduceResult;
 import com.google.appengine.tools.mapreduce.impl.util.SerializationUtil;
 import com.google.appengine.tools.mapreduce.impl.util.SerializationUtil.CompressionType;
-import com.google.common.base.Preconditions;
 
 import java.io.Externalizable;
 import java.io.IOException;
@@ -28,25 +28,24 @@ public class MapReduceResultImpl<R> implements MapReduceResult<R>, Externalizabl
 
   private static final long serialVersionUID = 237070477689138395L;
 
-  /*Nullable*/ private  R outputResult;
+  private R outputResult; // can be null
   private Counters counters;
 
   public MapReduceResultImpl() {
     // Needed for serialization
   }
 
-  public MapReduceResultImpl(
-      /*Nullable*/ R outputResult, Counters counters) {
+  public MapReduceResultImpl(R outputResult, Counters counters) {
     if (outputResult != null) {
-      Preconditions.checkArgument(outputResult instanceof Serializable,
-        "outputResult(" +  outputResult.getClass() + ") should be serializable");
+      checkArgument(outputResult instanceof Serializable,
+          "outputResult(" +  outputResult.getClass() + ") should be serializable");
     }
     this.outputResult = outputResult;
     this.counters = checkNotNull(counters, "Null counters");
   }
 
   @Override
-  /*Nullable*/ public R getOutputResult() {
+  public R getOutputResult() {
     return outputResult;
   }
 

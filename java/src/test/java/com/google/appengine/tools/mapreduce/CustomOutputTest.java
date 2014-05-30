@@ -48,24 +48,22 @@ public class CustomOutputTest extends EndToEndTestCase {
   @SuppressWarnings("serial")
   static class CustomOutput extends Output<Long, Boolean> {
 
+    private static int numShards;
+
     @Override
-    public List<? extends OutputWriter<Long>> createWriters() {
-      List<CustomWriter> result = new ArrayList<>(getNumShards());
-      for (int i = 0; i < getNumShards(); i++) {
+    public List<? extends OutputWriter<Long>> createWriters(int numShards) {
+      CustomOutput.numShards = numShards;
+      List<CustomWriter> result = new ArrayList<>(numShards);
+      for (int i = 0; i < numShards; i++) {
         result.add(new CustomWriter(i));
       }
       return result;
     }
 
     @Override
-    public int getNumShards() {
-      return 17;
-    }
-
-    @Override
     public Boolean finish(Collection<? extends OutputWriter<Long>> writers) {
       Iterator<? extends OutputWriter<Long>> iter = writers.iterator();
-      for (int i = 0; i < getNumShards(); i++) {
+      for (int i = 0; i < CustomOutput.numShards; i++) {
         CustomWriter writer = (CustomWriter) iter.next();
         if (writer.id != i) {
           return false;
@@ -79,13 +77,17 @@ public class CustomOutputTest extends EndToEndTestCase {
   }
 
   public void testOutputInOrder() throws Exception {
-    MapReduceSpecification<Entity, String, Long, Long, Boolean> mrSpec =
-        MapReduceSpecification.of("Test MR", new DatastoreInput("Test", 2), new TestMapper(),
-        Marshallers.getStringMarshaller(), Marshallers.getLongMarshaller(),
-        ValueProjectionReducer.<String, Long>create(), new CustomOutput());
-    MapReduceSettings mrSettings = new MapReduceSettings();
+    MapReduceSpecification.Builder<Entity, String, Long, Long, Boolean> mrSpecBuilder =
+        new MapReduceSpecification.Builder<>();
+    mrSpecBuilder.setJobName("Test MR").setInput(new DatastoreInput("Test", 2))
+        .setMapper(new TestMapper()).setKeyMarshaller(Marshallers.getStringMarshaller())
+        .setValueMarshaller(Marshallers.getLongMarshaller())
+        .setReducer(ValueProjectionReducer.<String, Long>create())
+        .setOutput(new CustomOutput())
+        .setNumReducers(17);
+    MapReduceSettings mrSettings = new MapReduceSettings.Builder().build();
     String jobId = pipelineService.startNewPipeline(
-        new MapReduceJob<Entity, String, Long, Long, Boolean>(), mrSpec, mrSettings);
+        new MapReduceJob<Entity, String, Long, Long, Boolean>(), mrSpecBuilder.build(), mrSettings);
     assertFalse(jobId.isEmpty());
     executeTasksUntilEmpty("default");
     JobInfo info = pipelineService.getJobInfo(jobId);

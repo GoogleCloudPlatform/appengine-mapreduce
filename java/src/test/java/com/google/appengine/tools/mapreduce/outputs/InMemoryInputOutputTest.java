@@ -24,8 +24,8 @@ import java.util.NoSuchElementException;
 public class InMemoryInputOutputTest extends TestCase {
 
   public void testReaderWriter() throws IOException, ClassNotFoundException {
-    InMemoryOutput<Object> output = new InMemoryOutput<>(1);
-    Collection<? extends OutputWriter<Object>> writers = output.createWriters();
+    InMemoryOutput<Object> output = new InMemoryOutput<>();
+    Collection<? extends OutputWriter<Object>> writers = output.createWriters(1);
     assertEquals(1, writers.size());
     OutputWriter<Object> writer = writers.iterator().next();
     String one = "one";
@@ -70,10 +70,9 @@ public class InMemoryInputOutputTest extends TestCase {
 
   public void testManyShards() {
     int numShards = 10;
-    InMemoryOutput<Object> output = new InMemoryOutput<>(numShards);
-    assertEquals(numShards, output.getNumShards());
+    InMemoryOutput<Object> output = new InMemoryOutput<>();
 
-    Collection<? extends OutputWriter<Object>> writers = output.createWriters();
+    Collection<? extends OutputWriter<Object>> writers = output.createWriters(numShards);
     assertEquals(numShards, writers.size());
 
     List<List<Object>> data = output.finish(writers);

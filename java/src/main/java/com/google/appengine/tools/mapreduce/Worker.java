@@ -57,7 +57,7 @@ public abstract class Worker<C extends WorkerContext<?>> implements Serializable
   /**
    * Used internally to sets the context to be used for the processing that follows.
    */
-  public final void setContext(C context) {
+  public void setContext(C context) {
     this.context = context;
   }
 

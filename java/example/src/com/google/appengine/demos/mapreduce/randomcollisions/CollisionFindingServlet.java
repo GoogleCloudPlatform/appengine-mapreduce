@@ -34,13 +34,13 @@ import javax.servlet.http.HttpServletResponse;
 /**
  * This is an example Map Reduce that demos parallel computation.
  *
- *  For the purposes of illustration this MapReduce looks for collisions in Java's Random number
+ *  <p>For the purposes of illustration this MapReduce looks for collisions in Java's Random number
  * generator. (It does not find any.)
  *
- *  Here a collision is defined as multiple seed values that when next is called produce the same
+ *  <p>Here a collision is defined as multiple seed values that when next is called produce the same
  * output value.
  *
- * The input source is a range of numbers to test, and any collisions are logged and written out to
+ * <p>The input source is a range of numbers to test, and any collisions are logged and written out to
  * a file in Google Cloud Storage.
  */
 @SuppressWarnings("serial")
@@ -136,17 +136,16 @@ public class CollisionFindingServlet extends HttpServlet {
     Marshaller<ArrayList<Integer>> outputMarshaller = Marshallers.getSerializationMarshaller();
 
     Output<ArrayList<Integer>, GoogleCloudStorageFileSet> output = new MarshallingOutput<>(
-        new GoogleCloudStorageFileOutput(bucket, "CollidingSeeds-%04d", "integers", shards),
+        new GoogleCloudStorageFileOutput(bucket, "CollidingSeeds-%04d", "integers"),
         outputMarshaller);
     // [START mapReduceSpec]
     MapReduceSpecification<Long, Integer, Integer, ArrayList<Integer>, GoogleCloudStorageFileSet>
-        spec = MapReduceSpecification.of("DemoMapreduce",
-            input, // must extend Input
-            mapper, // must extend Mapper
-            intermediateKeyMarshaller, // must extend Marshaller
-            intermediateValueMarshaller, // must extend Marshaller
-            reducer, // must extend Reducer
-            output); // must extend Output
+        spec = new MapReduceSpecification.Builder<>(input, mapper, reducer, output)
+            .setKeyMarshaller(intermediateKeyMarshaller)
+            .setValueMarshaller(intermediateValueMarshaller)
+            .setJobName("DemoMapreduce")
+            .setNumReducers(shards)
+            .build();
     // [END mapReduceSpec]
     return spec;
   }
@@ -155,10 +154,11 @@ public class CollisionFindingServlet extends HttpServlet {
   // [START getSettings]
   public static MapReduceSettings getSettings(String bucket, String queue, String module) {
     // [START mapReduceSettings]
-    MapReduceSettings settings = new MapReduceSettings().setBucketName(bucket);
-    // if queue is null it is going to use the current queue or "default" if none
-    settings.setWorkerQueueName(queue);
-    settings.setModule(module);
+    MapReduceSettings settings = new MapReduceSettings.Builder()
+        .setBucketName(bucket)
+        .setWorkerQueueName(queue)
+        .setModule(module) // if queue is null will use the current queue or "default" if none
+        .build();
     // [END mapReduceSettings]
     return settings;
   }

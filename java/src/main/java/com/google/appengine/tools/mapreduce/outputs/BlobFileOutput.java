@@ -7,7 +7,6 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import com.google.appengine.api.files.AppEngineFile;
 import com.google.appengine.tools.mapreduce.Output;
 import com.google.appengine.tools.mapreduce.OutputWriter;
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 
@@ -25,21 +24,18 @@ public final class BlobFileOutput extends Output<ByteBuffer, List<AppEngineFile>
 
   private static final long serialVersionUID = 868276534742230776L;
 
-  private final int shardCount;
   private final String mimeType;
   private final String fileNamePattern;
 
-  public BlobFileOutput(String fileNamePattern, String mimeType, int shardCount) {
-    Preconditions.checkArgument(shardCount > 0, "Shard count not positive: %s", shardCount);
+  public BlobFileOutput(String fileNamePattern, String mimeType) {
     this.mimeType = checkNotNull(mimeType, "Null mimeType");
     this.fileNamePattern = checkNotNull(fileNamePattern, "Null fileNamePattern");
-    this.shardCount = shardCount;
   }
 
   @Override
-  public List<? extends OutputWriter<ByteBuffer>> createWriters() {
-    ImmutableList.Builder<OutputWriter<ByteBuffer>> out = ImmutableList.builder();
-    for (int i = 0; i < shardCount; i++) {
+  public List<BlobFileOutputWriter> createWriters(int numShards) {
+    ImmutableList.Builder<BlobFileOutputWriter> out = ImmutableList.builder();
+    for (int i = 0; i < numShards; i++) {
       out.add(new BlobFileOutputWriter(String.format(fileNamePattern, i), mimeType));
     }
     return out.build();
@@ -58,10 +54,5 @@ public final class BlobFileOutput extends Output<ByteBuffer, List<AppEngineFile>
       out.add(writer.getFile());
     }
     return out;
-  }
-
-  @Override
-  public int getNumShards() {
-    return shardCount;
   }
 }

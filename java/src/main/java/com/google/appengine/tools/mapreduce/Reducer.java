@@ -30,7 +30,7 @@ public abstract class Reducer<K, V, O> extends Worker<ReducerContext<O>> {
   public abstract void reduce(K key, ReducerInput<V> values);
 
   /**
-   * Syntactic sugar for {@code getContext().emit(value);}
+   * Syntactic sugar for {@code getContext().emit(value)}
    */
   protected void emit(O value) {
     getContext().emit(value);

@@ -34,21 +34,12 @@ public abstract class Output<O, R> implements Serializable {
   }
 
   /**
-   * Returns a list of writers for this output.  It is the {@code Output}'s
-   * responsibility to determine an appropriate number of writers to split into.
-   * This could be specified by the user or algorithmically determined.
+   * Returns a list of writers, one for each shard, for this output.
    *
-   * <p>The number of output writers returned is equal to the number of shards.
+   * @param numShards The number of shards which should be equal to the number of
+   *    {@link OutputWriter}s returned.
    */
-  public abstract List<? extends OutputWriter<O>> createWriters();
-
-  /**
-   * When this class is used for a reduce output, this method will determine the number of reduce
-   * shards.
-   *
-   * @return The number of writers that will be created if createWriters() is called.
-   */
-  public abstract int getNumShards();
+  public abstract List<? extends OutputWriter<O>> createWriters(int numShards);
 
   /**
    * Returns a result to be made available through {@link MapReduceResult#getOutputResult}.
