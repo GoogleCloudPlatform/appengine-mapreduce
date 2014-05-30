@@ -1347,6 +1347,24 @@ class KickOffJobHandler(base_handler.TaskQueueHandler):
     ControllerCallbackHandler.reschedule(
         state, state.mapreduce_spec, serial_id=0, queue_name=queue_name)
 
+  def _drop_gracefully(self):
+    """See parent."""
+    mr_id = self.request.get("mapreduce_id")
+    logging.error("Failed to kick off job %s", mr_id)
+
+    state = model.MapreduceState.get_by_job_id(mr_id)
+    if not self._check_mr_state(state, mr_id):
+      return
+
+    # Issue abort command just in case there are running tasks.
+    config = util.create_datastore_write_config(state.mapreduce_spec)
+    model.MapreduceControl.abort(mr_id, config=config)
+
+    # Finalize job and invoke callback.
+    state.active = False
+    state.result_status = model.MapreduceState.RESULT_FAILED
+    ControllerCallbackHandler._finalize_job(state.mapreduce_spec, state)
+
   def _get_input_readers(self, state):
     """Get input readers.
 

@@ -957,9 +957,11 @@ class KickOffJobHandlerTest(testutil.HandlerTestBase):
     TestHooks.reset()
     InputReader.reset()
     TestOutputWriter.reset()
+    self._original_reschedule = handlers.ControllerCallbackHandler.reschedule
 
   def tearDown(self):
     super(KickOffJobHandlerTest, self).tearDown()
+    handlers.ControllerCallbackHandler.reschedule = self._original_reschedule
 
   def createDummyHandler(self):
     self.handler = handlers.KickOffJobHandler()
@@ -1040,6 +1042,32 @@ class KickOffJobHandlerTest(testutil.HandlerTestBase):
         ["init_job", "create-0", "create-1", "create-2", "create-3",
          "create-4", "create-5", "create-6", "create-7", "create-8"],
         TestOutputWriter.events)
+
+  def testDropGracefully(self):
+    self.setUpValidState()
+    def always_fail(*args, **kwds):
+      raise Exception("Raise an exception for test.")
+    handlers.ControllerCallbackHandler.reschedule = always_fail
+
+    test_support.execute_until_empty(self.taskqueue, self.QUEUE)
+
+    # Final state is set correctly.
+    state = model.MapreduceState.get_by_job_id(self.mr_id)
+    self.assertFalse(state.active)
+    self.assertEqual(model.MapreduceState.RESULT_FAILED, state.result_status)
+
+    # Abort command is issued.
+    self.assertTrue(model.MapreduceControl.get_key_by_job_id(self.mr_id))
+
+    # If a shard was started, then it has been aborted.
+    shard_states = list(model.ShardState.find_all_by_mapreduce_state(state))
+    for ss in shard_states:
+      self.assertFalse(ss.active)
+      self.assertEqual(model.ShardState.RESULT_ABORTED, ss.result_status)
+
+    # Cleanup was called.
+    trash = list(model._HugeTaskPayload.all().ancestor(state).run())
+    self.assertFalse(trash)
 
   def testWithHooks(self):
     self.setUpValidState(self.HOOKS)
@@ -2138,7 +2166,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
 
     # Record calls
     context.Context._set(mox.IsA(context.Context))
-    context.Context.flush()
+    context.get().flush()
 
     m.ReplayAll()
     try: # test, verify
