@@ -24,6 +24,9 @@ class InputReader(shard_life_cycle._ShardLifeCycle, json_util.JsonMixin):
      slices.
   """
 
+  def __init__(self):
+    self._slice_ctx = None
+
   def __iter__(self):
     return self
 
@@ -95,3 +98,18 @@ class InputReader(shard_life_cycle._ShardLifeCycle, json_util.JsonMixin):
           "Expect input reader class %r, got %r." %
           (cls, job_config.input_reader_cls))
 
+  def begin_slice(self, slice_ctx):
+    """Keeps an internal reference to slice_ctx.
+
+    Args:
+      slice_ctx: SliceContext singleton instance for this slice.
+    """
+    self._slice_ctx = slice_ctx
+
+  def end_slice(self, slice_ctx):
+    """Drops the internal reference to slice_ctx.
+
+    Args:
+      slice_ctx: SliceContext singleton instance for this slice.
+    """
+    self._slice_ctx = None
