@@ -10,6 +10,8 @@
   <property name="test" value="test"/>
   <property name="sdk_version" value="[1.9.1,1.10)"/>
 
+  <property name="java_version" value="1.7" />
+
   <!-- Paths -->
   <property name="src" location="src/main/java"/>
   <property name="test_src" location="src/test/java"/>
@@ -81,7 +83,7 @@
 
   <target name="compile" depends="init,dependencies_thirdparty,dependencies_sdk">
     <javac srcdir="${src}" destdir="${build}" debug="on" debuglevel="lines,source"
-           includeantruntime="false">
+           source="${java_version}" target="${java_version}" includeantruntime="false">
       <compilerarg value="-Xlint:all"/>
       <classpath>
         <fileset dir="${lib_thirdparty}">
@@ -118,7 +120,7 @@
 
   <target name="test_compile" depends="test_init,dependencies_test,dependencies_sdk,dist">
     <javac srcdir="${test_src}" destdir="${test_build}" debug="on" debuglevel="lines,source"
-           includeantruntime="false">
+           source="${java_version}" target="${java_version}" includeantruntime="false">
       <classpath>
         <fileset dir="${dist}">
           <include name="*.jar"/>
@@ -242,7 +244,8 @@
   <target name="compile_example" depends="dependencies_test,dependencies_sdk,copy_libs_to_example">
     <mkdir dir="${example}/default/WEB-INF/classes"/>
     <javac srcdir="${example_src}" destdir="${example}/default/WEB-INF/classes" debug="on"
-           debuglevel="lines,source" includeantruntime="false">
+           source="${java_version}" target="${java_version}" debuglevel="lines,source"
+           includeantruntime="false">
       <compilerarg value="-Xlint:all"/>
       <classpath>
         <fileset dir="${example}/default/WEB-INF/lib"/>
