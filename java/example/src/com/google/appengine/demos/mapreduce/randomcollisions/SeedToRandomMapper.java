@@ -8,7 +8,7 @@ import java.util.Random;
 /**
  * Maps each incoming seed using Java's Random to the first generated number.
  */
-public final class SeedToRandomMapper extends Mapper<Long, Integer, Integer> {
+final class SeedToRandomMapper extends Mapper<Long, Integer, Integer> {
 
   private static final long serialVersionUID = -3070710020513042698L;
   @Override

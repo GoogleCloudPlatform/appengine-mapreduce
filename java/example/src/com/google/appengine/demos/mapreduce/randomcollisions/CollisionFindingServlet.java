@@ -118,7 +118,7 @@ public class CollisionFindingServlet extends HttpServlet {
   }
 
   // [START createMapReduceSpec]
-  public static MapReduceSpecification<Long, Integer, Integer, ArrayList<Integer>,
+  static MapReduceSpecification<Long, Integer, Integer, ArrayList<Integer>,
       GoogleCloudStorageFileSet> createMapReduceSpec(String bucket, long start, long limit,
       int shards) {
     ConsecutiveLongInput input = new ConsecutiveLongInput(start, limit, shards);
@@ -142,7 +142,7 @@ public class CollisionFindingServlet extends HttpServlet {
   // [END createMapReduceSpec]
 
   // [START getSettings]
-  public static MapReduceSettings getSettings(String bucket) {
+  static MapReduceSettings getSettings(String bucket) {
     return new MapReduceSettings().setWorkerQueueName("mapreduce-workers").setBucketName(bucket)
         .setModule("mapreduce");
   }
