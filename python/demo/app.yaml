@@ -6,7 +6,8 @@ threadsafe: no
 
 handlers:
 - url: /favicon.ico
-  static_dir: static/images
+  static_files: static/images/favicon.ico
+  upload: static/images/favicon.ico
 
 - url: /mapreduce/pipeline/images
   static_dir: mapreduce/lib/pipeline/ui/images
