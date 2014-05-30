@@ -33,6 +33,7 @@ public class MapReduceSettingsTest extends TestCase {
     assertEquals(DEFAULT_MILLIS_PER_SLICE, mrSettings.getMillisPerSlice());
     assertEquals(DEFAULT_SHARD_RETREIES, mrSettings.getMaxShardRetries());
     assertEquals(DEFAULT_SLICE_RETREIES, mrSettings.getMaxSliceRetries());
+    assertEquals(null, mrSettings.getMaxSortMemory());
   }
 
   public void testNonDefaultSettings() {
@@ -66,6 +67,12 @@ public class MapReduceSettingsTest extends TestCase {
     } catch (IllegalArgumentException ex) {
       // expected
     }
+    builder = builder.setMaxSortMemory(10L);
+    try {
+      builder.setMaxSortMemory(-1L);
+    } catch (IllegalArgumentException ex) {
+      // expected
+    }
     MapReduceSettings mrSettings = builder.build();
     assertNull(mrSettings.getModule());
     assertEquals("b1", mrSettings.getBackend());
@@ -75,7 +82,7 @@ public class MapReduceSettingsTest extends TestCase {
     assertEquals(10, mrSettings.getMillisPerSlice());
     assertEquals(1, mrSettings.getMaxShardRetries());
     assertEquals(0, mrSettings.getMaxSliceRetries());
-
+    assertEquals(10L, (long) mrSettings.getMaxSortMemory());
     builder = new MapReduceSettings.Builder().setModule("m1");
     try {
       builder.setBackend("b").build();

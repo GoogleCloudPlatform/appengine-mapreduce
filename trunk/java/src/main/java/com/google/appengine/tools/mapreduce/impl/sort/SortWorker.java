@@ -2,9 +2,11 @@ package com.google.appengine.tools.mapreduce.impl.sort;
 
 import com.google.appengine.tools.mapreduce.KeyValue;
 import com.google.appengine.tools.mapreduce.Worker;
+import com.google.appengine.tools.mapreduce.impl.MapReduceConstants;
 import com.google.appengine.tools.mapreduce.impl.handlers.MemoryLimiter;
 import com.google.appengine.tools.mapreduce.impl.shardedjob.RejectRequestException;
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Preconditions;
 import com.google.common.base.Stopwatch;
 import com.google.common.collect.ImmutableList;
 import com.google.common.primitives.Ints;
@@ -51,15 +53,18 @@ public class SortWorker extends Worker<SortContext> {
   private static final double[] TARGET_SORT_RAM_PROPORTIONS = {0.25, 0.15};
   private static final int MEMORY_ALLOCATION_ATTEMPTS = TARGET_SORT_RAM_PROPORTIONS.length;
 
-  // Items are batched to save storage cost, but not too big to limit memory use.
-  static final int BATCHED_ITEM_SIZE_PER_EMIT = 1024;
   static final int POINTER_SIZE_BYTES = 3 * 4; // 3 ints: KeyIndex, ValueIndex, Length
 
   private transient ByteBuffer memoryBuffer;
   private transient int valuesHeld;
   private transient KeyValue<ByteBuffer, ByteBuffer> leftover;
   private transient boolean isFull;
-  private transient LexicographicalComparator comparator;
+  private final int maxMemory;
+
+  public SortWorker(Long maxMemory) {
+    this.maxMemory = (maxMemory == null) ? Integer.MAX_VALUE : Ints.saturatedCast(maxMemory);
+    Preconditions.checkArgument(this.maxMemory >= 0);
+  }
 
   private final class IndexedComparator implements IntComparator {
 
@@ -100,7 +105,6 @@ public class SortWorker extends Worker<SortContext> {
 
   @Override
   public void beginSlice() {
-    comparator = new LexicographicalComparator();
     assert memoryBuffer != null;
     valuesHeld = 0;
     leftover = null;
@@ -149,20 +153,20 @@ public class SortWorker extends Worker<SortContext> {
 
     for (int i = 0; i < valuesHeld; i++) {
       KeyValue<ByteBuffer, ByteBuffer> keyValue = getKeyValueFromPointer(i);
-      int compare = comparator.compare(keyValue.getKey(), currentKey);
+      int compare = LexicographicalComparator.compareBuffers(keyValue.getKey(), currentKey);
 
       if (compare == 0) {
-        if (totalSize > BATCHED_ITEM_SIZE_PER_EMIT) {
+        if (totalSize > MapReduceConstants.BATCHED_ITEM_SIZE_PER_EMIT) {
           emitCurrentOrLeftover(currentKey, currentValues);
           totalSize = 0;
         }
         currentValues.add(keyValue.getValue());
-        totalSize += keyValue.getValue().remaining();
+        totalSize += Math.max(1, keyValue.getValue().remaining());
       } else if (compare > 0) {
         emitCurrentOrLeftover(currentKey, currentValues);
         currentKey = keyValue.getKey();
         currentValues.add(keyValue.getValue());
-        totalSize = keyValue.getValue().remaining();
+        totalSize = Math.max(1, keyValue.getValue().remaining());
       } else {
         throw new IllegalStateException("Sort failed to properly order output");
       }
@@ -185,7 +189,7 @@ public class SortWorker extends Worker<SortContext> {
    */
   private void emitCurrentOrLeftover(ByteBuffer key, List<ByteBuffer> values) {
     if (leftover != null) {
-      int leftOverCompare = comparator.compare(leftover.getKey(), key);
+      int leftOverCompare = LexicographicalComparator.compareBuffers(leftover.getKey(), key);
       if (leftOverCompare <= 0) {
         emit(leftover.getKey(), leftover.getValue());
         leftover = null;
@@ -396,11 +400,13 @@ public class SortWorker extends Worker<SortContext> {
         + MEMORY_ALLOCATION_ATTEMPTS + " attempts. Giving up.");
   }
 
-  private static int getMemoryForSort(int numRetries) {
+  private int getMemoryForSort(int numRetries) {
     long maxUsableMemory = MemoryLimiter.TOTAL_CLAIMABLE_MEMORY_SIZE_MB * 1024L * 1024L;
     int memIndex = Math.min(numRetries, MEMORY_ALLOCATION_ATTEMPTS - 1);
-    return Ints.saturatedCast((long) (maxUsableMemory * TARGET_SORT_RAM_PROPORTIONS[memIndex]));
+    return Math.min(maxMemory,
+        Ints.saturatedCast((long) (maxUsableMemory * TARGET_SORT_RAM_PROPORTIONS[memIndex])));
   }
+
 
   @Override
   public long estimateMemoryRequirement() {

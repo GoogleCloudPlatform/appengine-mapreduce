@@ -12,7 +12,7 @@ import java.io.IOException;
  * @param <WriterT> type of the output writer being written to
  *
  */
-public abstract class SlicingOutputWriter<O, WriterT extends OutputWriter<O>> extends
+public abstract class SliceSegmentingOutputWriter<O, WriterT extends OutputWriter<O>> extends
     OutputWriter<O> {
 
   private static final long serialVersionUID = -2846649020412508288L;

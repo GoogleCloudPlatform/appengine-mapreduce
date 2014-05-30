@@ -16,13 +16,18 @@ import java.util.Comparator;
  */
 public final class LexicographicalComparator implements Comparator<ByteBuffer> {
 
-  @Override
-  public int compare(ByteBuffer left, ByteBuffer right) {
+  public static int compareBuffers(ByteBuffer left, ByteBuffer right) {
     if (left == right) {
       return 0;
     }
     return compare(left, left.position(), left.remaining(), right, right.position(), right.limit());
   }
+
+  @Override
+  public int compare(ByteBuffer left, ByteBuffer right) {
+    return compareBuffers(left, right);
+  }
+
 
   static int compare(ByteBuffer a, int aPos, int aLen, ByteBuffer b, int bPos, int bLen) {
     int minLength = Math.min(aLen, bLen);

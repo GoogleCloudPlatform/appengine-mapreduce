@@ -26,10 +26,12 @@ import com.google.appengine.tools.development.testing.LocalServiceTestHelper;
 
 import junit.framework.TestCase;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
+import java.util.NoSuchElementException;
 
 /**
  */
@@ -102,6 +104,26 @@ public class DatastoreInputTest extends TestCase {
     assertStartAndEndKeys(splits.get(2), keys.get(131), keys.get(196));
     assertStartAndEndKeys(splits.get(3), keys.get(196), keys.get(248));
     assertStartAndEndKeys(splits.get(4), keys.get(248), null);
+    assertEquals(300, countEntities(splits));
+  }
+
+  private int countEntities(List<DatastoreInputReader> splits) throws IOException {
+    int result = 0;
+    for (DatastoreInputReader reader : splits) {
+      reader.beginShard();
+      reader.beginSlice();
+      try {
+        while (true) {
+          reader.next();
+          result++;
+        }
+      } catch (NoSuchElementException e) {
+        // Ignore
+      }
+      reader.endSlice();
+      reader.endShard();
+    }
+    return result;
   }
 
   public void testCreateReadersNotEnoughData() throws Exception {
@@ -112,6 +134,7 @@ public class DatastoreInputTest extends TestCase {
     assertStartAndEndKeys(splits.get(1), keys.get(6), keys.get(7));
     assertStartAndEndKeys(splits.get(2), keys.get(7), keys.get(8));
     assertStartAndEndKeys(splits.get(3), keys.get(8), null);
+    assertEquals(9, countEntities(splits));
   }
 
   public void testCreateReadersWithNoData() throws Exception {
