@@ -18,7 +18,7 @@ import com.google.common.primitives.Ints;
  *
  * @param <T> type of task
  */
-class ShardRetryState<T extends IncrementalTask> {
+public final class ShardRetryState<T extends IncrementalTask> {
 
   private final String taskId;
   private final T initialTask;
@@ -56,13 +56,16 @@ class ShardRetryState<T extends IncrementalTask> {
     return new ShardRetryState<>(taskState.getTaskId(), taskState.getTask(), 0);
   }
 
-  // ShardRetryState should be using the same transactions as IncrementalTaskState
-  static class Serializer {
+  /**
+   * Utility class to serialize/deserialize ShardRetryState.
+   * ShardRetryState should be using the same transactions as IncrementalTaskState
+   */
+  public static class Serializer {
     private static final String ENTITY_KIND = "MR-ShardRetryState";
     private static final String INITIAL_TASK_PROPERTY = "initialTask";
     private static final String RETRY_COUNT_PROPERTY = "retryCount";
 
-    static Key makeKey(String taskId) {
+    public static Key makeKey(String taskId) {
       Key parent = IncrementalTaskState.Serializer.makeKey(taskId);
       return KeyFactory.createKey(parent, ENTITY_KIND, 1);
     }

@@ -49,4 +49,11 @@ public interface IncrementalTask extends Serializable {
    * @return true if a slice retry after failure are permitted.
    */
   boolean allowSliceRetry(boolean abandon);
+
+  /**
+   * A job completed callback to allow resource cleanup and compaction of the finalized state.
+   *
+   * @param status the status of the job
+   */
+  void jobCompleted(Status status);
 }

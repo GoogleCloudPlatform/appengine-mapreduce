@@ -14,6 +14,7 @@ import com.google.appengine.tools.mapreduce.Worker;
 import com.google.appengine.tools.mapreduce.impl.IncrementalTaskContext;
 import com.google.appengine.tools.mapreduce.impl.WorkerShardTask;
 import com.google.appengine.tools.mapreduce.impl.shardedjob.RecoverableException;
+import com.google.appengine.tools.mapreduce.impl.shardedjob.Status;
 
 import java.io.IOException;
 import java.io.ObjectInputStream;
@@ -31,9 +32,10 @@ public class SortShardTask extends WorkerShardTask<KeyValue<ByteBuffer, ByteBuff
 
   private static final long serialVersionUID = -8041992113450564646L;
 
-  private final SortWorker inMemSorter;
-  private final InputReader<KeyValue<ByteBuffer, ByteBuffer>> in;
-  private final OutputWriter<KeyValue<ByteBuffer, List<ByteBuffer>>> out;
+  private SortWorker inMemSorter;
+  private InputReader<KeyValue<ByteBuffer, ByteBuffer>> in;
+  private OutputWriter<KeyValue<ByteBuffer, List<ByteBuffer>>> out;
+  private boolean finalized;
 
   public SortShardTask(String mrJobId, int shardNumber, int shardCount,
       InputReader<KeyValue<ByteBuffer, ByteBuffer>> in, SortWorker worker,
@@ -118,9 +120,20 @@ public class SortShardTask extends WorkerShardTask<KeyValue<ByteBuffer, ByteBuff
     return true;
   }
 
+  @Override
+  public void jobCompleted(Status status) {
+    inMemSorter = null;
+    in = null;
+    out = null;
+    finalized = true;
+  }
+
+
   private void readObject(ObjectInputStream stream) throws IOException, ClassNotFoundException {
     stream.defaultReadObject();
-    fillContext();
+    if (!finalized) {
+      fillContext();
+    }
   }
 
   private void fillContext() {

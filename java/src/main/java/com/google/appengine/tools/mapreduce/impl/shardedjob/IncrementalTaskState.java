@@ -165,7 +165,10 @@ public class IncrementalTaskState<T extends IncrementalTask> {
         + ")";
   }
 
-  static class Serializer {
+  /**
+   * Utility class to serialize/deserialize IncrementalTaskState.
+   */
+  public static class Serializer {
     static final String ENTITY_KIND = "MR-IncrementalTask";
     static final String SHARD_INFO_ENTITY_KIND = ENTITY_KIND + "-ShardInfo";
 
@@ -178,11 +181,11 @@ public class IncrementalTaskState<T extends IncrementalTask> {
     private static final String NEXT_TASK_PROPERTY = "nextTask";
     private static final String STATUS_PROPERTY = "status";
 
-    static Key makeKey(String taskId) {
+    public static Key makeKey(String taskId) {
       return KeyFactory.createKey(ENTITY_KIND, taskId);
     }
 
-    static Entity toEntity(Transaction tx, IncrementalTaskState<?> in) {
+    public static Entity toEntity(Transaction tx, IncrementalTaskState<?> in) {
       Key key = makeKey(in.getTaskId());
       Entity taskState = new Entity(key);
       taskState.setProperty(JOB_ID_PROPERTY, in.getJobId());
@@ -205,7 +208,7 @@ public class IncrementalTaskState<T extends IncrementalTask> {
       return fromEntity(in, false);
     }
 
-    static <T extends IncrementalTask> IncrementalTaskState<T> fromEntity(
+    public static <T extends IncrementalTask> IncrementalTaskState<T> fromEntity(
         Entity in, boolean lenient) {
       Preconditions.checkArgument(ENTITY_KIND.equals(in.getKind()), "Unexpected kind: %s", in);
       IncrementalTaskState<T> state = new IncrementalTaskState<>(in.getKey().getName(),

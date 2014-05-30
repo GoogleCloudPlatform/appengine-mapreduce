@@ -38,7 +38,7 @@ public interface ShardedJobService {
   /**
    * Returns the tasks associated with this ShardedJob.
    */
-  <T extends IncrementalTask> Iterator<IncrementalTaskState<T>> lookupTasks(ShardedJobState state);
+  Iterator<IncrementalTaskState<IncrementalTask>> lookupTasks(ShardedJobState state);
 
   /**
    * Aborts execution of the job with the given ID.  If the job has already

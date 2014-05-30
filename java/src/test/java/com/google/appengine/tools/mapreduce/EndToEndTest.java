@@ -81,7 +81,7 @@ public class EndToEndTest extends EndToEndTestCase {
   private PipelineService pipelineService;
 
   @Override
-  protected void setUp() throws Exception {
+  public void setUp() throws Exception {
     super.setUp();
     pipelineService = PipelineServiceFactory.newPipelineService();
   }

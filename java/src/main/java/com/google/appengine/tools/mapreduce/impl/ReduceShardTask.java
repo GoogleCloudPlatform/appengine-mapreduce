@@ -13,6 +13,7 @@ import com.google.appengine.tools.mapreduce.Reducer;
 import com.google.appengine.tools.mapreduce.ReducerContext;
 import com.google.appengine.tools.mapreduce.ReducerInput;
 import com.google.appengine.tools.mapreduce.Worker;
+import com.google.appengine.tools.mapreduce.impl.shardedjob.Status;
 
 import java.io.IOException;
 import java.io.ObjectInputStream;
@@ -30,10 +31,11 @@ public class ReduceShardTask<K, V, O>
 
   private static final long serialVersionUID = 874429568286446321L;
 
-  private final Reducer<K, V, O> reducer;
+  private Reducer<K, V, O> reducer;
   private final long millisPerSlice;
-  private final InputReader<KeyValue<K, Iterator<V>>> in;
-  private final OutputWriter<O> out;
+  private InputReader<KeyValue<K, Iterator<V>>> in;
+  private OutputWriter<O> out;
+  private boolean finalized;
 
   private transient ReducerContextImpl<O> context;
 
@@ -92,9 +94,19 @@ public class ReduceShardTask<K, V, O>
     return (skipWriterCheck || out.allowSliceRetry()) && reducer.allowSliceRetry();
   }
 
+  @Override
+  public void jobCompleted(Status status) {
+    reducer = null;
+    in = null;
+    out = null;
+    finalized = true;
+  }
+
   private void readObject(ObjectInputStream stream) throws IOException, ClassNotFoundException {
     stream.defaultReadObject();
-    fillContext();
+    if (!finalized) {
+      fillContext();
+    }
   }
 
   private void fillContext() {

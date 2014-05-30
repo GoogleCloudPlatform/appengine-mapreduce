@@ -3,11 +3,13 @@ package com.google.appengine.tools.mapreduce.impl.handlers;
 
 import static com.google.appengine.tools.mapreduce.MapSettings.CONTROLLER_PATH;
 import static com.google.appengine.tools.mapreduce.MapSettings.WORKER_PATH;
+import static com.google.appengine.tools.mapreduce.impl.shardedjob.ShardedJobHandler.JOB_ID_PARAM;
+import static com.google.appengine.tools.mapreduce.impl.shardedjob.ShardedJobHandler.SEQUENCE_NUMBER_PARAM;
+import static com.google.appengine.tools.mapreduce.impl.shardedjob.ShardedJobHandler.TASK_ID_PARAM;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.appengine.tools.mapreduce.MapReduceJob;
 import com.google.appengine.tools.mapreduce.MapReduceServlet;
-import com.google.appengine.tools.mapreduce.impl.shardedjob.ShardedJobHandler;
 import com.google.appengine.tools.mapreduce.impl.shardedjob.ShardedJobRunner;
 import com.google.common.collect.ImmutableMap;
 
@@ -98,16 +100,16 @@ public final class MapReduceServletImpl {
         return;
       }
       new ShardedJobRunner<>().completeShard(
-          checkNotNull(request.getParameter(ShardedJobHandler.JOB_ID_PARAM), "Null job id"),
-          checkNotNull(request.getParameter(ShardedJobHandler.TASK_ID_PARAM), "Null task id"));
+          checkNotNull(request.getParameter(JOB_ID_PARAM), "Null job id"),
+          checkNotNull(request.getParameter(TASK_ID_PARAM), "Null task id"));
     } else if (handler.startsWith(WORKER_PATH)) {
       if (!checkForTaskQueue(request, response)) {
         return;
       }
       new ShardedJobRunner<>().runTask(
-          checkNotNull(request.getParameter(ShardedJobHandler.JOB_ID_PARAM), "Null job id"),
-          checkNotNull(request.getParameter(ShardedJobHandler.TASK_ID_PARAM), "Null task id"),
-          Integer.parseInt(request.getParameter(ShardedJobHandler.SEQUENCE_NUMBER_PARAM)));
+          checkNotNull(request.getParameter(JOB_ID_PARAM), "Null job id"),
+          checkNotNull(request.getParameter(TASK_ID_PARAM), "Null task id"),
+          Integer.parseInt(request.getParameter(SEQUENCE_NUMBER_PARAM)));
     } else if (handler.startsWith(COMMAND_PATH)) {
       if (!checkForAjax(request, response)) {
         return;

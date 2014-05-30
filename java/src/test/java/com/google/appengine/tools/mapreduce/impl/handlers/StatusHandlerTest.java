@@ -18,7 +18,7 @@ import com.google.common.collect.ImmutableList;
 
 import org.json.JSONObject;
 
-import java.util.List;
+import java.util.Iterator;
 import java.util.Random;
 
 /**
@@ -38,7 +38,7 @@ public class StatusHandlerTest extends EndToEndTestCase {
     public void failed(Status status) {}
 
     @Override
-    public void completed(List<? extends TestTask> results) {}
+    public void completed(Iterator<TestTask> results) {}
   }
 
   public void testCleanupJob() throws Exception {
@@ -54,7 +54,7 @@ public class StatusHandlerTest extends EndToEndTestCase {
     assertFalse(jobService.cleanupJob("testCleanupJob"));
     executeTasksUntilEmpty();
     DatastoreService ds = DatastoreServiceFactory.getDatastoreService();
-    assertEquals(9, ds.prepare(new Query()).countEntities(FetchOptions.Builder.withDefaults()));
+    assertEquals(3, ds.prepare(new Query()).countEntities(FetchOptions.Builder.withDefaults()));
     assertTrue(jobService.cleanupJob("testCleanupJob"));
     executeTasksUntilEmpty();
     assertEquals(0, ds.prepare(new Query()).countEntities(FetchOptions.Builder.withDefaults()));

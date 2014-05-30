@@ -7,6 +7,7 @@ import com.google.appengine.tools.mapreduce.Counters;
 import com.google.appengine.tools.mapreduce.impl.CountersImpl;
 import com.google.appengine.tools.mapreduce.impl.IncrementalTaskContext;
 import com.google.appengine.tools.mapreduce.impl.IncrementalTaskWithContext;
+import com.google.appengine.tools.mapreduce.impl.shardedjob.IncrementalTask;
 import com.google.appengine.tools.mapreduce.impl.shardedjob.IncrementalTaskState;
 import com.google.appengine.tools.mapreduce.impl.shardedjob.ShardedJobService;
 import com.google.appengine.tools.mapreduce.impl.shardedjob.ShardedJobServiceFactory;
@@ -158,7 +159,7 @@ final class StatusHandler {
    * Handle the get_job_detail AJAX command.
    */
   @VisibleForTesting
-  static <T extends IncrementalTaskWithContext> JSONObject handleGetJobDetail(String jobId) {
+  static JSONObject handleGetJobDetail(String jobId) {
     ShardedJobService shardedJobService = ShardedJobServiceFactory.getShardedJobService();
     ShardedJobState state = shardedJobService.getJobState(jobId);
     if (state == null) {
@@ -194,9 +195,9 @@ final class StatusHandler {
       Counters totalCounters = new CountersImpl();
       int i = 0;
       long[] workerCallCounts = new long[state.getTotalTaskCount()];
-      Iterator<IncrementalTaskState<T>> tasksIter = shardedJobService.lookupTasks(state);
-      while (tasksIter.hasNext()) {
-        IncrementalTaskState<T> taskState = tasksIter.next();
+      Iterator<IncrementalTaskState<IncrementalTask>> tasks = shardedJobService.lookupTasks(state);
+      while (tasks.hasNext()) {
+        IncrementalTaskState<?> taskState = tasks.next();
         JSONObject shardObject = new JSONObject();
         shardObject.put("shard_number", i);
         shardObject.put("shard_description", taskState.getTaskId());
@@ -207,9 +208,9 @@ final class StatusHandler {
           shardObject.put("active", false);
           shardObject.put("result_status", taskState.getStatus().getStatusCode());
         }
-        T task = taskState.getTask();
-        if (task != null) {
-          IncrementalTaskContext context = task.getContext();
+        IncrementalTask task = taskState.getTask();
+        if (task instanceof IncrementalTaskWithContext) {
+          IncrementalTaskContext context = ((IncrementalTaskWithContext) task).getContext();
           totalCounters.addAll(context.getCounters());
           workerCallCounts[i] = context.getWorkerCallCount();
           shardObject.put("last_work_item", context.getLastWorkItemString());

@@ -11,6 +11,7 @@ import com.google.appengine.tools.mapreduce.MapOnlyMapper;
 import com.google.appengine.tools.mapreduce.MapOnlyMapperContext;
 import com.google.appengine.tools.mapreduce.OutputWriter;
 import com.google.appengine.tools.mapreduce.Worker;
+import com.google.appengine.tools.mapreduce.impl.shardedjob.Status;
 
 import java.io.IOException;
 import java.io.ObjectInputStream;
@@ -23,10 +24,11 @@ public class MapOnlyShardTask<I, O> extends WorkerShardTask<I, O, MapOnlyMapperC
 
   private static final long serialVersionUID = 7235772804361681386L;
 
-  private final MapOnlyMapper<I, O> mapper;
+  private MapOnlyMapper<I, O> mapper;
   private final long millisPerSlice;
-  private final InputReader<I> in;
-  private final OutputWriter<O> out;
+  private InputReader<I> in;
+  private OutputWriter<O> out;
+  private boolean finalized;
 
   private transient MapOnlyMapperContextImpl<O> context;
 
@@ -83,9 +85,19 @@ public class MapOnlyShardTask<I, O> extends WorkerShardTask<I, O, MapOnlyMapperC
     return (skipWriterCheck || out.allowSliceRetry()) && mapper.allowSliceRetry();
   }
 
+  @Override
+  public void jobCompleted(Status status) {
+    mapper = null;
+    in = null;
+    out = null;
+    finalized = true;
+  }
+
   private void readObject(ObjectInputStream stream) throws IOException, ClassNotFoundException {
     stream.defaultReadObject();
-    fillContext();
+    if (!finalized) {
+      fillContext();
+    }
   }
 
   private void fillContext() {
