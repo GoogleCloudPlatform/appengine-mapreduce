@@ -7,15 +7,16 @@ import com.google.appengine.tools.mapreduce.impl.shardedjob.RejectRequestExcepti
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Stopwatch;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Iterators;
 import com.google.common.primitives.Ints;
 
 import it.unimi.dsi.fastutil.Arrays;
 import it.unimi.dsi.fastutil.Swapper;
 import it.unimi.dsi.fastutil.ints.IntComparator;
 
-import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
@@ -45,7 +46,6 @@ public class SortWorker extends Worker<SortContext> {
   private static final String DISABLE_ALLOCATE_DIRECT_PROPERTY =
       SortWorker.class.getName() + ".disable_allocate_direct";
 
-
   /**
    * Fraction of system ram sort will allocate. There are multiple values in case the largest
    * proportion is unavailable. If the smallest is unavailable sort will fail.
@@ -55,7 +55,6 @@ public class SortWorker extends Worker<SortContext> {
 
   // Items are batched to save storage cost, but not too big to limit memory use.
   static final int BATCHED_ITEM_SIZE_PER_EMIT = 1024;
-
   static final int POINTER_SIZE_BYTES = 3 * 4; // 3 ints: KeyIndex, ValueIndex, Length
 
   private transient ByteBuffer memoryBuffer;
@@ -116,14 +115,10 @@ public class SortWorker extends Worker<SortContext> {
     sortData();
     log.info(
         "Sorted " + valuesHeld + " items in " + stopwatch.elapsed(TimeUnit.MILLISECONDS) + "ms");
-    try {
-      stopwatch.reset().start();
-      writeOutData();
-      log.info("Wrote " + getStoredSize() + " bytes of data in "
-          + stopwatch.elapsed(TimeUnit.MILLISECONDS) + "ms");
-    } catch (IOException e) {
-      throw new RuntimeException(e);
-    }
+    stopwatch.reset().start();
+    writeOutData();
+    log.info("Wrote " + getStoredSize() + " bytes of data in "
+        + stopwatch.elapsed(TimeUnit.MILLISECONDS) + "ms");
   }
 
   private int getStoredSize() {
@@ -146,12 +141,10 @@ public class SortWorker extends Worker<SortContext> {
    * and hence was not sorted. So a merge between this one item and the sorted list is done on the
    * way out.
    */
-  private void writeOutData() throws IOException {
+  private void writeOutData() {
     if (valuesHeld == 0) {
       return;
     }
-    SortContext localContext = getContext();
-
     ByteBuffer currentKey = getKeyValueFromPointer(0).getKey();
     List<ByteBuffer> currentValues = new ArrayList<>();
     int totalSize = 0;
@@ -162,13 +155,13 @@ public class SortWorker extends Worker<SortContext> {
 
       if (compare == 0) {
         if (totalSize > BATCHED_ITEM_SIZE_PER_EMIT) {
-          emitCurrentOrLeftover(localContext, currentKey, currentValues);
+          emitCurrentOrLeftover(currentKey, currentValues);
           totalSize = 0;
         }
         currentValues.add(keyValue.getValue());
         totalSize += keyValue.getValue().remaining();
       } else if (compare > 0) {
-        emitCurrentOrLeftover(localContext, currentKey, currentValues);
+        emitCurrentOrLeftover(currentKey, currentValues);
         currentKey = keyValue.getKey();
         currentValues.add(keyValue.getValue());
         totalSize = keyValue.getValue().remaining();
@@ -176,9 +169,9 @@ public class SortWorker extends Worker<SortContext> {
         throw new IllegalStateException("Sort failed to properly order output");
       }
     }
-    emitCurrentOrLeftover(localContext, currentKey, currentValues);
+    emitCurrentOrLeftover(currentKey, currentValues);
     if (leftover != null) {
-      localContext.emit(leftover.getKey(), ImmutableList.of(leftover.getValue()));
+      emit(leftover.getKey(), leftover.getValue());
     }
   }
 
@@ -192,19 +185,28 @@ public class SortWorker extends Worker<SortContext> {
    * @param key The key being asked to be emitted. (Will not be modified)
    * @param values the values associated with the key that should be emitted.
    */
-  private void emitCurrentOrLeftover(
-      SortContext localContext, ByteBuffer key, List<ByteBuffer> values) throws IOException {
+  private void emitCurrentOrLeftover(ByteBuffer key, List<ByteBuffer> values) {
     if (leftover != null) {
       int leftOverCompare = comparator.compare(leftover.getKey(), key);
       if (leftOverCompare <= 0) {
-        localContext.emit(leftover.getKey(), ImmutableList.of(leftover.getValue()));
+        emit(leftover.getKey(), leftover.getValue());
         leftover = null;
       }
     }
     if (!values.isEmpty()) {
-      localContext.emit(key, new ArrayList<>(values));
+      emit(key, values);
       values.clear();
     }
+  }
+
+  private void emit(ByteBuffer key, ByteBuffer value) {
+    getContext().emit(
+        KeyValue.<ByteBuffer, Iterator<ByteBuffer>>of(key, Iterators.forArray(value)));
+  }
+
+  private void emit(ByteBuffer key, List<ByteBuffer> values) {
+    List<ByteBuffer> copy = ImmutableList.copyOf(values);
+    getContext().emit(KeyValue.of(key, copy.iterator()));
   }
 
   /**

@@ -2,9 +2,6 @@
 
 package com.google.appengine.tools.mapreduce;
 
-import java.io.IOException;
-
-
 
 /**
  * Context for each worker (mapper or reducer) shard.
@@ -16,5 +13,5 @@ public interface WorkerContext<O> extends ShardContext {
   /**
    * Emits a value to the output.
    */
-  void emit(O value) throws IOException;
+  void emit(O value);
 }

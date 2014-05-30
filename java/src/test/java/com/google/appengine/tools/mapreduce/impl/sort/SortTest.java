@@ -6,10 +6,10 @@ import com.google.appengine.tools.mapreduce.KeyValue;
 import com.google.appengine.tools.mapreduce.OutputWriter;
 import com.google.appengine.tools.mapreduce.impl.IncrementalTaskContext;
 import com.google.common.collect.Iterators;
+import com.google.common.collect.Lists;
 
 import junit.framework.TestCase;
 
-import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -75,12 +75,12 @@ public class SortTest extends TestCase {
         new OutputWriter<KeyValue<ByteBuffer, Iterator<ByteBuffer>>>() {
 
         @Override
-        public void write(KeyValue<ByteBuffer, Iterator<ByteBuffer>> value) throws IOException {
+        public void write(KeyValue<ByteBuffer, Iterator<ByteBuffer>> value) {
           throw new UnsupportedOperationException();
         }
 
         @Override
-        public void endShard() throws IOException {
+        public void endShard() {
           throw new UnsupportedOperationException();
         }
       });
@@ -90,12 +90,13 @@ public class SortTest extends TestCase {
     int sameKeyCount = 0;
 
     @Override
-    public void emit(ByteBuffer key, List<ByteBuffer> values) throws IOException {
+    public void emit(KeyValue<ByteBuffer, Iterator<ByteBuffer>> keyValue) {
+      ByteBuffer key = keyValue.getKey();
       List<ByteBuffer> list = map.get(key);
       if (list == null) {
-        map.put(key, new ArrayList<>(values));
+        map.put(key, Lists.newArrayList(keyValue.getValue()));
       } else {
-        list.addAll(values);
+        Iterators.addAll(list, keyValue.getValue());
         sameKeyCount++;
       }
     }

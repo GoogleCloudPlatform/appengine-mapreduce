@@ -12,8 +12,8 @@ import java.io.IOException;
  * @param <CreatorT> type of the SlicingWriterCreator provided.
  *
  */
-public class SlicingOutputWriter<O, CreatorT extends SlicingWriterCreator<O>> extends
-    OutputWriter<O> {
+public class SlicingOutputWriter<O, CreatorT extends SlicingWriterCreator<O>>
+    extends OutputWriter<O> {
 
   private static final long serialVersionUID = 7374361726571559544L;
   private final CreatorT creator;
@@ -29,6 +29,7 @@ public class SlicingOutputWriter<O, CreatorT extends SlicingWriterCreator<O>> ex
   @Override
   public void beginSlice() throws IOException {
     writer = getCreator().createNextWriter();
+    writer.setContext(getContext());
     writer.beginShard();
     writer.beginSlice();
   }
@@ -50,5 +51,10 @@ public class SlicingOutputWriter<O, CreatorT extends SlicingWriterCreator<O>> ex
 
   public CreatorT getCreator() {
     return creator;
+  }
+
+  @Override
+  public boolean allowSliceRetry() {
+    return true;
   }
 }

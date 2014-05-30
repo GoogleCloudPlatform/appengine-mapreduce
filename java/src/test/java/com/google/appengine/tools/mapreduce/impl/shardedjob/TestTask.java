@@ -52,4 +52,9 @@ public class TestTask implements IncrementalTaskWithContext {
   public IncrementalTaskContext getContext() {
     return context;
   }
+
+  @Override
+  public boolean allowSliceRetry() {
+    return false;
+  }
 }

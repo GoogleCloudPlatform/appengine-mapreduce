@@ -34,6 +34,7 @@ public class InMemoryOutput<O> extends Output<O, List<List<O>>> {
 
     private boolean closed = false;
     private final List<O> accu = Lists.newArrayList();
+    private transient List<O> slice;
 
     @Override
     public String toString() {
@@ -48,14 +49,30 @@ public class InMemoryOutput<O> extends Output<O, List<List<O>>> {
     }
 
     @Override
+    public void beginSlice() {
+      slice = Lists.newArrayList();
+    }
+
+    @Override
     public void write(O value) {
       Preconditions.checkState(!closed, "%s: Already closed", this);
-      accu.add(value);
+      slice.add(value);
+    }
+
+    @Override
+    public void endSlice() {
+      accu.addAll(slice);
+      slice = null;
     }
 
     @Override
     public void endShard() {
       closed = true;
+    }
+
+    @Override
+    public boolean allowSliceRetry() {
+      return true;
     }
   }
 

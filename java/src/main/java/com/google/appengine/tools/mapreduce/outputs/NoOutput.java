@@ -40,8 +40,8 @@ public class NoOutput<O, R> extends Output<O, R> {
     }
 
     @Override
-    public void endShard() {
-      // nothing
+    public boolean allowSliceRetry() {
+      return true;
     }
   }
 

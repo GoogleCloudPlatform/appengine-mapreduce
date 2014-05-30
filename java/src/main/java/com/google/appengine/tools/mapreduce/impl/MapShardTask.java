@@ -33,6 +33,8 @@ public class MapShardTask<I, K, V> extends WorkerShardTask<I, KeyValue<K, V>, Ma
   private final InputReader<I> in;
   private final OutputWriter<KeyValue<K, V>> out;
 
+  private transient MapperContextImpl<K, V> context;
+
   public MapShardTask(String mrJobId, int shardNumber, int shardCount, InputReader<I> in,
       Mapper<I, K, V> mapper, OutputWriter<KeyValue<K, V>> out, long millisPerSlice) {
     super(new IncrementalTaskContext(mrJobId, shardNumber, shardCount, MAPPER_CALLS,
@@ -65,7 +67,7 @@ public class MapShardTask<I, K, V> extends WorkerShardTask<I, KeyValue<K, V>, Ma
 
   @Override
   protected long estimateMemoryRequirement() {
-    return in.estimateMemoryRequirement() + getOutputWriter().estimateMemoryRequirement()
+    return in.estimateMemoryRequirement() + out.estimateMemoryRequirement()
         + mapper.estimateMemoryRequirement();
   }
 
@@ -84,15 +86,20 @@ public class MapShardTask<I, K, V> extends WorkerShardTask<I, KeyValue<K, V>, Ma
     return in;
   }
 
+  @Override
+  public boolean allowSliceRetry() {
+    return !context.emitCalled() || out.allowSliceRetry();
+  }
+
   private void readObject(ObjectInputStream stream) throws IOException, ClassNotFoundException {
     stream.defaultReadObject();
     fillContext();
   }
 
   private void fillContext() {
-    MapperContext<K, V> ctx = new MapperContextImpl<>(getContext(), out);
-    in.setContext(ctx);
-    out.setContext(ctx);
-    mapper.setContext(ctx);
+    context = new MapperContextImpl<>(getContext(), out);
+    in.setContext(context);
+    out.setContext(context);
+    mapper.setContext(context);
   }
 }

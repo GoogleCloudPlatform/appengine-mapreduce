@@ -12,7 +12,6 @@ import com.google.appengine.tools.mapreduce.Output;
 import com.google.appengine.tools.mapreduce.OutputWriter;
 import com.google.common.collect.ImmutableList;
 
-import java.io.IOException;
 import java.util.Collection;
 import java.util.List;
 
@@ -35,8 +34,7 @@ public class DatastoreOutput extends Output<Entity, Void> {
     }
 
     @Override
-    public void beginSlice() throws IOException {
-      super.beginSlice();
+    public void beginSlice() {
       DatastoreService ds = DatastoreServiceFactory.getDatastoreService();
       pool = DatastoreMutationPool.create(ds, poolParams);
     }
@@ -47,19 +45,18 @@ public class DatastoreOutput extends Output<Entity, Void> {
     }
 
     @Override
-    public void endSlice() throws IOException {
+    public void endSlice() {
       pool.flush();
-      super.endSlice();
-    }
-
-    @Override
-    public void endShard() {
-      // Nothing to do
     }
 
     @Override
     public long estimateMemoryRequirement() {
       return poolParams.getBytesLimit();
+    }
+
+    @Override
+    public boolean allowSliceRetry() {
+      return true;
     }
   }
 

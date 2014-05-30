@@ -21,7 +21,7 @@ public class MapReduceSettings implements Serializable, Cloneable {
   private static final long serialVersionUID = 610088354289299175L;
 
   public static final String DEFAULT_BASE_URL = "/mapreduce/";
-  public static final int DEFAULT_MILLIS_PER_SLICE = 10000;
+  public static final int DEFAULT_MILLIS_PER_SLICE = 30_000;
   public static final int DEFAULT_SHARD_RETREIES = 4;
   public static final int DEFAULT_SLICE_RETREIES = 20;
 

@@ -102,7 +102,8 @@ public class StringOutput<O, R> extends Output<O, R> {
     this(terminator, "UTF-8", sink);
   }
 
-  @Override public List<? extends OutputWriter<O>> createWriters() {
+  @Override
+  public List<? extends OutputWriter<O>> createWriters() {
     List<? extends OutputWriter<ByteBuffer>> sinkWriters = sink.createWriters();
     ImmutableList.Builder<Writer<O>> out = ImmutableList.builder();
     for (OutputWriter<ByteBuffer> sinkWriter : sinkWriters) {

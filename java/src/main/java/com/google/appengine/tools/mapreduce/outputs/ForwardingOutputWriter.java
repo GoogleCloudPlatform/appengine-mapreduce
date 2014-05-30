@@ -51,4 +51,9 @@ public abstract class ForwardingOutputWriter<O> extends OutputWriter<O> {
   public ShardContext getContext() {
     return getDelegate().getContext();
   }
+
+  @Override
+  public boolean allowSliceRetry() {
+    return getDelegate().allowSliceRetry();
+  }
 }

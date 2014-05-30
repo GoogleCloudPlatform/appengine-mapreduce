@@ -1,4 +1,4 @@
-package com.google.appengine.tools.mapreduce.impl;
+package com.google.appengine.tools.mapreduce.impl.shardedjob;
 
 /**
  * An exception that indicates it is safe to restart a slice.

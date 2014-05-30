@@ -36,7 +36,7 @@ public class Marshallers {
 
     @Override
     public T fromBytes(ByteBuffer in) {
-      T value = (T) SerializationUtil.deserializeFromByteBuffer(in, true);
+      T value = SerializationUtil.deserializeFromByteBuffer(in, true);
       if (in.hasRemaining()) {
         throw new CorruptDataException("Trailing bytes after reading object");
       }
