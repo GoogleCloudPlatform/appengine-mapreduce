@@ -2503,7 +2503,7 @@ class _GoogleCloudStorageInputReader(InputReader):
       index: Index of the next filename to read.
       buffer_size: The size of the read buffer, None to use default.
       _account_id: Internal use only. See cloudstorage documentation.
-      delimiter: Delimiter used as path separator. See class doc.
+      delimiter: Delimiter used as path separator. See class doc for details.
     """
     self._filenames = filenames
     self._index = index
@@ -2579,7 +2579,7 @@ class _GoogleCloudStorageInputReader(InputReader):
             filename.__class__.__name__)
     if cls.DELIMITER_PARAM in reader_spec:
       delimiter = reader_spec[cls.DELIMITER_PARAM]
-      if not isinstance(delimiter, str):
+      if not isinstance(delimiter, basestring):
         raise errors.BadReaderParamsError(
             "%s is not a string but a %s" %
             (cls.DELIMITER_PARAM, type(delimiter)))
@@ -2635,8 +2635,12 @@ class _GoogleCloudStorageInputReader(InputReader):
     return obj
 
   def to_json(self):
+    before_iter = self._bucket_iter
     self._bucket_iter = None
-    return {self._JSON_PICKLE: pickle.dumps(self)}
+    try:
+      return {self._JSON_PICKLE: pickle.dumps(self)}
+    finally:
+      self._bucket_itr = before_iter
 
   def next(self):
     """Returns the next input from this input reader, a block of bytes.
