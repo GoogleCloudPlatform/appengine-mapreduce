@@ -25,10 +25,16 @@ public abstract class Output<O, R> implements Serializable {
 
   private transient Context context;
 
-  void setContext(Context context) {
+  /**
+   * Used internally to sets the context to be used for the processing that follows.
+   */
+  public void setContext(Context context) {
     this.context = context;
   }
 
+  /**
+   * Returns the current context, or null if none.
+   */
   public Context getContext() {
     return context;
   }

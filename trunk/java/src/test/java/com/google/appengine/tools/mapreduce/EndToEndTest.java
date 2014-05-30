@@ -835,7 +835,7 @@ public class EndToEndTest extends EndToEndTestCase {
     }
 
     @Override
-    void setContext(Context context) {
+    public void setContext(Context context) {
       delegate.setContext(context);
     }
 

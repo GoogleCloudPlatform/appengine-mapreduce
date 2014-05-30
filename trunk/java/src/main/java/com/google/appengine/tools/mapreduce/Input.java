@@ -25,6 +25,9 @@ public abstract class Input<I> implements Serializable {
     this.context = context;
   }
 
+  /**
+   * Returns the current context, or null if none.
+   */
   public Context getContext() {
     return context;
   }

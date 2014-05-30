@@ -11,10 +11,8 @@ package com.google.appengine.tools.mapreduce.impl.shardedjob;
  * getSettings()) are mutated.
  *
  * @author ohler@google.com (Christian Ohler)
- *
- * @param <T> type of the IncrementalTask
  */
-public interface ShardedJobState<T extends IncrementalTask> {
+public interface ShardedJobState {
 
   /**
    * Returns the ID of this job.
@@ -22,9 +20,9 @@ public interface ShardedJobState<T extends IncrementalTask> {
   String getJobId();
 
   /**
-   * Returns the controller for this job.
+   * Returns the job's name.
    */
-  ShardedJobController<T> getController();
+  String getJobName();
 
   /**
    * Returns the execution settings of this job.

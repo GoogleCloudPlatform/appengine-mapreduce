@@ -8,6 +8,7 @@ import com.google.appengine.api.datastore.Blob;
 import com.google.appengine.api.datastore.Entity;
 import com.google.appengine.api.datastore.Key;
 import com.google.appengine.api.datastore.KeyFactory;
+import com.google.appengine.tools.mapreduce.impl.shardedjob.Status.StatusCode;
 import com.google.appengine.tools.mapreduce.impl.util.SerializationUtil;
 import com.google.common.base.Preconditions;
 import com.google.common.primitives.Ints;
@@ -21,7 +22,7 @@ import java.util.BitSet;
  *
  * @param <T> type of the IncrementalTask
  */
-class ShardedJobStateImpl<T extends IncrementalTask> implements ShardedJobState<T> {
+class ShardedJobStateImpl<T extends IncrementalTask> implements ShardedJobState {
 
   private final String jobId;
   private final ShardedJobController<T> controller;
@@ -32,20 +33,25 @@ class ShardedJobStateImpl<T extends IncrementalTask> implements ShardedJobState<
   private BitSet shardsCompleted;
   private Status status;
 
-  public ShardedJobStateImpl(String jobId,
-      ShardedJobController<T> controller,
-      ShardedJobSettings settings,
-      int totalTaskCount,
-      long startTimeMillis,
-      Status status) {
-    this.jobId = checkNotNull(jobId, "Null jobId");
-    this.controller = checkNotNull(controller, "Null controller");
-    this.settings = checkNotNull(settings, "Null settings");
+
+  public static <T extends IncrementalTask> ShardedJobStateImpl<T> create(String jobId,
+      ShardedJobController<T> controller, ShardedJobSettings settings, int totalTaskCount,
+      long startTimeMillis) {
+    return new ShardedJobStateImpl<>(checkNotNull(jobId, "Null jobId"),
+        checkNotNull(controller, "Null controller"), checkNotNull(settings, "Null settings"),
+        totalTaskCount, startTimeMillis, new Status(StatusCode.RUNNING));
+  }
+
+  private ShardedJobStateImpl(String jobId, ShardedJobController<T> controller,
+      ShardedJobSettings settings, int totalTaskCount, long startTimeMillis, Status status) {
+    this.jobId = jobId;
+    this.controller = controller;
+    this.settings = settings;
     this.totalTaskCount = totalTaskCount;
     this.shardsCompleted = new BitSet(totalTaskCount);
     this.startTimeMillis = startTimeMillis;
     this.mostRecentUpdateTimeMillis = startTimeMillis;
-    this.status = checkNotNull(status, "Null status");
+    this.status = status;
   }
 
   @Override
@@ -54,7 +60,11 @@ class ShardedJobStateImpl<T extends IncrementalTask> implements ShardedJobState<
   }
 
   @Override
-  public ShardedJobController<T> getController() {
+  public String getJobName() {
+    return controller == null ? "" : controller.getName();
+  }
+
+  ShardedJobController<T> getController() {
     return controller;
   }
 
@@ -149,12 +159,17 @@ class ShardedJobStateImpl<T extends IncrementalTask> implements ShardedJobState<
     }
 
     static <T extends IncrementalTask> ShardedJobStateImpl<T> fromEntity(Entity in) {
+      return fromEntity(in, false);
+    }
+
+    static <T extends IncrementalTask> ShardedJobStateImpl<T> fromEntity(
+        Entity in, boolean lenient) {
       Preconditions.checkArgument(ENTITY_KIND.equals(in.getKind()), "Unexpected kind: %s", in);
       return new ShardedJobStateImpl<>(in.getKey().getName(),
           SerializationUtil.<ShardedJobController<T>>deserializeFromDatastoreProperty(in,
-              CONTROLLER_PROPERTY),
-          SerializationUtil.<ShardedJobSettings>deserializeFromDatastoreProperty(in,
-              SETTINGS_PROPERTY),
+              CONTROLLER_PROPERTY, lenient),
+          SerializationUtil.<ShardedJobSettings>deserializeFromDatastoreProperty(
+              in, SETTINGS_PROPERTY),
           Ints.checkedCast((Long) in.getProperty(TOTAL_TASK_COUNT_PROPERTY)),
           (Long) in.getProperty(START_TIME_PROPERTY),
           SerializationUtil.<Status>deserializeFromDatastoreProperty(in, STATUS_PROPERTY))
