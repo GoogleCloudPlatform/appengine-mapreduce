@@ -451,7 +451,7 @@ class AbstractDatastoreInputReader(InputReader):
 
     return model.QuerySpec(
         entity_kind=cls._get_raw_entity_kind(entity_kind),
-        keys_only=bool(params.get(cls.KEY_RANGE_PARAM, False)),
+        keys_only=bool(params.get(cls.KEYS_ONLY_PARAM, False)),
         filters=filters,
         batch_size=int(params.get(cls.BATCH_SIZE_PARAM, cls._BATCH_SIZE)),
         model_class_path=entity_kind,
@@ -2430,7 +2430,7 @@ class LogInputReader(InputReader):
 
 
 class _GoogleCloudStorageInputReader(InputReader):
-  """Input reader from Gloogle Cloud Storage using the cloudstorage library.
+  """Input reader from Google Cloud Storage using the cloudstorage library.
 
   This class is expected to be subclassed with a reader that understands
   user-level records.
