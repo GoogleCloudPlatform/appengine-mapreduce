@@ -20,7 +20,7 @@ from google.appengine.ext import db
 from google.appengine.ext import blobstore
 
 # Relative imports
-from mapreduce.lib import simplejson
+from mapreduce.third_party import simplejson
 import util
 
 

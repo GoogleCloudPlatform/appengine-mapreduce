@@ -10,7 +10,7 @@ import datetime
 import unittest
 
 
-from mapreduce.lib import pipeline
+from mapreduce.third_party import pipeline
 from google.appengine.api import files
 from google.appengine.ext import db
 from mapreduce import context

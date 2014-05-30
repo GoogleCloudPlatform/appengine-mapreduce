@@ -4,11 +4,11 @@
 import re
 
 try:
-    from mapreduce.lib.simplejson._speedups import encode_basestring_ascii as c_encode_basestring_ascii
+    from mapreduce.third_party.simplejson._speedups import encode_basestring_ascii as c_encode_basestring_ascii
 except ImportError:
     c_encode_basestring_ascii = None
 try:
-    from mapreduce.lib.simplejson._speedups import make_encoder as c_make_encoder
+    from mapreduce.third_party.simplejson._speedups import make_encoder as c_make_encoder
 except ImportError:
     c_make_encoder = None
 

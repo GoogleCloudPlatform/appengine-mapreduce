@@ -14,7 +14,7 @@ import pickle
 # For the mapreduce in python 25 runtime, this import will fail.
 # TODO(user): Remove all pipeline import protections after 25 mr defunct.
 try:
-  from mapreduce.lib.pipeline import util as pipeline_util
+  from mapreduce.third_party.pipeline import util as pipeline_util
 except ImportError:
   pipeline_util = None
 
