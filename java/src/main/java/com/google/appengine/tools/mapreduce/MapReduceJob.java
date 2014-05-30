@@ -32,6 +32,7 @@ import com.google.appengine.tools.pipeline.PipelineService;
 import com.google.appengine.tools.pipeline.PipelineServiceFactory;
 import com.google.appengine.tools.pipeline.PromisedValue;
 import com.google.appengine.tools.pipeline.Value;
+import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 
@@ -56,11 +57,19 @@ import java.util.logging.Logger;
  * @param <O> type of output values
  * @param <R> type of final result
  */
-public class MapReduceJob<I, K, V, O, R>
-    extends Job2<MapReduceResult<R>, MapReduceSpecification<I, K, V, O, R>, MapReduceSettings> {
+public class MapReduceJob<I, K, V, O, R> extends Job0<MapReduceResult<R>> {
 
   private static final long serialVersionUID = 723635736794527552L;
-  static final Logger log = Logger.getLogger(MapReduceJob.class.getName());
+  private static final Logger log = Logger.getLogger(MapReduceJob.class.getName());
+
+  private final MapReduceSpecification<I, K, V, O, R> specification;
+  private final MapReduceSettings settings;
+
+  public MapReduceJob(MapReduceSpecification<I, K, V, O, R> specification,
+      MapReduceSettings settings) {
+    this.specification = specification;
+    this.settings = settings;
+  }
 
   /**
    * Starts a {@link MapReduceJob} with the given parameters in a new Pipeline.
@@ -72,8 +81,8 @@ public class MapReduceJob<I, K, V, O, R>
       settings = new MapReduceSettings.Builder(settings).setWorkerQueueName("default").build();
     }
     PipelineService pipelineService = PipelineServiceFactory.newPipelineService();
-    return pipelineService.startNewPipeline(new MapReduceJob<I, K, V, O, R>(), specification,
-        settings, settings.toJobSettings());
+    return pipelineService.startNewPipeline(
+        new MapReduceJob<>(specification, settings), settings.toJobSettings());
   }
 
   /**
@@ -351,8 +360,8 @@ public class MapReduceJob<I, K, V, O, R>
   }
 
   @Override
-  public Value<MapReduceResult<R>> run(
-      MapReduceSpecification<I, K, V, O, R> mrSpec, MapReduceSettings settings) {
+  public Value<MapReduceResult<R>> run() {
+    MapReduceSettings settings = this.settings;
     if (settings.getWorkerQueueName() == null) {
       String queue = getOnQueue();
       if (queue == null) {
@@ -364,13 +373,13 @@ public class MapReduceJob<I, K, V, O, R>
     }
     String mrJobId = getJobKey().getName();
     FutureValue<MapReduceResult<List<GoogleCloudStorageFileSet>>> mapResult = futureCall(
-        new MapJob<>(mrJobId, mrSpec, settings), settings.toJobSettings(maxAttempts(1)));
+        new MapJob<>(mrJobId, specification, settings), settings.toJobSettings(maxAttempts(1)));
     FutureValue<MapReduceResult<List<GoogleCloudStorageFileSet>>> sortResult = futureCall(
-        new SortJob(mrJobId, mrSpec, settings), mapResult,
+        new SortJob(mrJobId, specification, settings), mapResult,
         settings.toJobSettings(maxAttempts(1)));
     futureCall(new Cleanup(settings), mapResult, waitFor(sortResult));
     FutureValue<MapReduceResult<R>> reduceResult = futureCall(
-        new ReduceJob<>(mrJobId, mrSpec, settings), mapResult, sortResult,
+        new ReduceJob<>(mrJobId, specification, settings), mapResult, sortResult,
         settings.toJobSettings(maxAttempts(1)));
     futureCall(new Cleanup(settings), sortResult, waitFor(reduceResult));
     return reduceResult;
@@ -379,5 +388,10 @@ public class MapReduceJob<I, K, V, O, R>
   public Value<MapReduceResult<R>> handleException(Throwable t) throws Throwable {
     log.log(Level.SEVERE, "MapReduce job failed because of: ", t);
     throw t;
+  }
+
+  @Override
+  public String getJobDisplayName() {
+    return Optional.fromNullable(specification.getJobName()).or(super.getJobDisplayName());
   }
 }

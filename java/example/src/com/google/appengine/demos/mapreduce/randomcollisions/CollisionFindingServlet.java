@@ -40,8 +40,8 @@ import javax.servlet.http.HttpServletResponse;
  *  <p>Here a collision is defined as multiple seed values that when next is called produce the same
  * output value.
  *
- * <p>The input source is a range of numbers to test, and any collisions are logged and written out to
- * a file in Google Cloud Storage.
+ *  <p>The input source is a range of numbers to test, and any collisions are logged and written out
+ * to a file in Google Cloud Storage.
  */
 @SuppressWarnings("serial")
 public class CollisionFindingServlet extends HttpServlet {

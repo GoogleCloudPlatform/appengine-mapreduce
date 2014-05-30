@@ -87,7 +87,7 @@ public class CustomOutputTest extends EndToEndTestCase {
         .setNumReducers(17);
     MapReduceSettings mrSettings = new MapReduceSettings.Builder().build();
     String jobId = pipelineService.startNewPipeline(
-        new MapReduceJob<Entity, String, Long, Long, Boolean>(), mrSpecBuilder.build(), mrSettings);
+        new MapReduceJob<>(mrSpecBuilder.build(), mrSettings));
     assertFalse(jobId.isEmpty());
     executeTasksUntilEmpty("default");
     JobInfo info = pipelineService.getJobInfo(jobId);
