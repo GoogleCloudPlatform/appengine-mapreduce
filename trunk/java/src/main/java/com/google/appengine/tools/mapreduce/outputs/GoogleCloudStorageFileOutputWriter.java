@@ -12,6 +12,7 @@ import com.google.appengine.tools.mapreduce.OutputWriter;
 import com.google.appengine.tools.mapreduce.Worker;
 import com.google.appengine.tools.mapreduce.impl.MapReduceConstants;
 import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableMap;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -28,6 +29,11 @@ public class GoogleCloudStorageFileOutputWriter extends OutputWriter<ByteBuffer>
 
   private static final GcsService GCS_SERVICE =
       GcsServiceFactory.createGcsService(MapReduceConstants.GCS_RETRY_PARAMETERS);
+
+  static {
+    // TODO(user): include version once b/12689661 is fixed
+    GCS_SERVICE.setHttpHeaders(ImmutableMap.of("User-Agent", "App Engine MR"));
+  }
 
   private final GcsFilename file;
   private boolean closed = false;

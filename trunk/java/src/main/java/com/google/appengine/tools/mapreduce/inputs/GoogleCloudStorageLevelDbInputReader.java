@@ -9,6 +9,7 @@ import com.google.appengine.tools.cloudstorage.GcsService;
 import com.google.appengine.tools.cloudstorage.GcsServiceFactory;
 import com.google.appengine.tools.mapreduce.impl.MapReduceConstants;
 import com.google.appengine.tools.mapreduce.impl.util.LevelDbConstants;
+import com.google.common.collect.ImmutableMap;
 
 import java.io.IOException;
 import java.nio.channels.ReadableByteChannel;
@@ -21,6 +22,11 @@ public final class GoogleCloudStorageLevelDbInputReader extends LevelDbInputRead
   private static final GcsService gcsService =
       GcsServiceFactory.createGcsService(MapReduceConstants.GCS_RETRY_PARAMETERS);
   private static final long serialVersionUID = 1014960525070958327L;
+
+  static {
+    // TODO(user): include version once b/12689661 is fixed
+    gcsService.setHttpHeaders(ImmutableMap.of("User-Agent", "App Engine MR"));
+  }
 
   private final GcsFilename file;
   private final int bufferSize;
