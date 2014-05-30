@@ -1446,6 +1446,8 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
     MapreduceHandlerTestBase.setUp(self)
     self.original_task_add = taskqueue.Task.add
     self.original_slice_duration = parameters.config._SLICE_DURATION_SEC
+    self.original_task_max_data_processing_attempts = (
+        parameters.config.TASK_MAX_DATA_PROCESSING_ATTEMPTS)
     self.original_supports_slice_recovery = (
         TestOutputWriter._supports_slice_recovery)
     self.init()
@@ -1454,6 +1456,8 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
     handlers._TEST_INJECTED_FAULTS.clear()
     taskqueue.Task.add = self.original_task_add
     parameters.config._SLICE_DURATION_SEC = self.original_slice_duration
+    parameters.config.TASK_MAX_DATA_PROCESSING_ATTEMPTS = (
+        self.original_task_max_data_processing_attempts)
     TestOutputWriter._supports_slice_recovery = (
         self.original_supports_slice_recovery)
     MapreduceHandlerTestBase.tearDown(self)
@@ -2001,6 +2005,29 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
         processed=1,
         slice_retries=parameters.config.TASK_MAX_DATA_PROCESSING_ATTEMPTS,
         retries=parameters.config.SHARD_MAX_ATTEMPTS)
+
+  def testShardRetryInitiatedAtBeginning(self):
+    """Test shard retry can be initiated at the beginning of a slice."""
+    self.init(__name__ + ".test_handler_yield_keys")
+    TestEntity().put()
+
+    # Slice has been attempted before.
+    shard_state = model.ShardState.get_by_shard_id(self.shard_id)
+    shard_state.acquired_once = True
+    shard_state.put()
+
+    # Disable slice retry.
+    parameters.config.TASK_MAX_DATA_PROCESSING_ATTEMPTS = 1
+
+    self.handler.post()
+    self.verify_shard_state(
+        model.ShardState.get_by_shard_id(self.shard_id),
+        active=True,
+        result_status=None,
+        processed=0,
+        slice_retries=0,
+        # Retried once.
+        retries=1)
 
   def testSuccessfulSliceRetryClearsSliceRetriesCount(self):
     self.init(__name__ + ".test_handler_yield_op")
