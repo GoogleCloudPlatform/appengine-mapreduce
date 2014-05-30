@@ -413,7 +413,7 @@ public class ShardedJobRunner<T extends IncrementalTask> implements ShardedJobHa
       log.log(Level.WARNING, "Slice exceeded its max attempts.");
       return handleShardFailure(jobState, taskState, ex);
     } else {
-      log.log(Level.WARNING, "Slice attempt #" + attempts + " failed. Going to retry.", ex);
+      log.log(Level.INFO, "Slice attempt #" + attempts + " failed. Going to retry.", ex);
     }
     return null;
   }
@@ -426,7 +426,7 @@ public class ShardedJobRunner<T extends IncrementalTask> implements ShardedJobHa
       log.log(Level.SEVERE, "Shard exceeded its max attempts, setting job state to ERROR.", ex);
       handleJobFailure(taskState, ex);
     } else {
-      log.log(Level.WARNING,
+      log.log(Level.INFO,
           "Shard attempt #" + retryState.getRetryCount() + " failed. Going to retry.", ex);
       taskState.setTask(retryState.getInitialTask());
       taskState.clearRetryCount();
