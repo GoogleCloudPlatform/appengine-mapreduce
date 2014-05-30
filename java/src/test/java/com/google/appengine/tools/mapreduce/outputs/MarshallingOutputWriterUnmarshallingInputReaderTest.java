@@ -35,6 +35,7 @@ public class MarshallingOutputWriterUnmarshallingInputReaderTest extends TestCas
     writer.endSlice();
     writer.beginSlice();
     writer.write("Baz");
+    writer.endSlice();
     writer.endShard();
     List<List<ByteBuffer>> data = output.finish(writers);
     UnmarshallingInput<String> input =
@@ -42,6 +43,7 @@ public class MarshallingOutputWriterUnmarshallingInputReaderTest extends TestCas
     List<InputReader<String>> readers = input.createReaders();
     assertEquals(1, readers.size());
     InputReader<String> reader = readers.get(0);
+    reader.beginShard();
     reader.beginSlice();
     assertEquals(0.0, reader.getProgress());
     assertEquals("Foo", reader.next());
@@ -54,6 +56,7 @@ public class MarshallingOutputWriterUnmarshallingInputReaderTest extends TestCas
       // expected
     }
     reader.endSlice();
+    reader.endShard();
   }
 
   public void testInputOutput() throws IOException {
