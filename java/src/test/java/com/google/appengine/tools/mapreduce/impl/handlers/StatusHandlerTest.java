@@ -19,6 +19,7 @@ import com.google.common.collect.ImmutableList;
 import org.json.JSONObject;
 
 import java.util.List;
+import java.util.Random;
 
 /**
  *
@@ -45,14 +46,17 @@ public class StatusHandlerTest extends EndToEndTestCase {
     assertTrue(jobService.cleanupJob("testCleanupJob")); // No such job yet
     ShardedJobSettings settings = new ShardedJobSettings.Builder().build();
     ShardedJobController<TestTask> controller = new DummyWorkerController("testCleanupJob");
-    TestTask s1 = new TestTask(0, 2, 2, 2);
+    byte[] bytes = new byte[1024 * 1024];
+    new Random().nextBytes(bytes);
+    TestTask s1 = new TestTask(0, 2, 2, 2, bytes);
     TestTask s2 = new TestTask(1, 2, 2, 1);
     jobService.startJob("testCleanupJob", ImmutableList.of(s1, s2), controller, settings);
     assertFalse(jobService.cleanupJob("testCleanupJob"));
     executeTasksUntilEmpty();
     DatastoreService ds = DatastoreServiceFactory.getDatastoreService();
-    assertEquals(5, ds.prepare(new Query()).countEntities(FetchOptions.Builder.withDefaults()));
+    assertEquals(9, ds.prepare(new Query()).countEntities(FetchOptions.Builder.withDefaults()));
     assertTrue(jobService.cleanupJob("testCleanupJob"));
+    executeTasksUntilEmpty();
     assertEquals(0, ds.prepare(new Query()).countEntities(FetchOptions.Builder.withDefaults()));
   }
 

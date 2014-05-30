@@ -14,14 +14,17 @@ public class TestTask implements IncrementalTaskWithContext {
   private static final long serialVersionUID = 1L;
   private final IncrementalTaskContext context;
   private final int valueToYield;
+  @SuppressWarnings("unused")
+  private final byte[] initialPayload;
   private int total = 0;
   private int slicesRemaining;
 
-  public TestTask(int shardId, int shardCount, int valueToYield, int numSlices) {
+  public TestTask(int shardId, int shardCount, int valueToYield, int numSlices, byte... payload) {
     this.context =
         new IncrementalTaskContext("TestMR", shardId, shardCount, "testCalls", "testCallsMillis");
     this.valueToYield = valueToYield;
     slicesRemaining = numSlices;
+    this.initialPayload = payload;
   }
 
   @Override

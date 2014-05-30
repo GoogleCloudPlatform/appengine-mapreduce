@@ -2,13 +2,14 @@
 
 package com.google.appengine.tools.mapreduce.impl.shardedjob;
 
+import static com.google.appengine.tools.mapreduce.impl.util.SerializationUtil.deserializeFromDatastoreProperty;
+import static com.google.appengine.tools.mapreduce.impl.util.SerializationUtil.serializeToDatastoreProperty;
 import static com.google.common.base.Preconditions.checkNotNull;
 
-import com.google.appengine.api.datastore.Blob;
 import com.google.appengine.api.datastore.Entity;
 import com.google.appengine.api.datastore.Key;
 import com.google.appengine.api.datastore.KeyFactory;
-import com.google.appengine.tools.mapreduce.impl.util.SerializationUtil;
+import com.google.appengine.api.datastore.Transaction;
 import com.google.common.primitives.Ints;
 
 /**
@@ -66,16 +67,15 @@ class ShardRetryState<T extends IncrementalTask> {
       return KeyFactory.createKey(parent, ENTITY_KIND, 1);
     }
 
-    static Entity toEntity(ShardRetryState<?> in) {
+    static Entity toEntity(Transaction tx, ShardRetryState<?> in) {
       Entity shardInfo = new Entity(makeKey(in.getTaskId()));
-      shardInfo.setUnindexedProperty(INITIAL_TASK_PROPERTY,
-          new Blob(SerializationUtil.serializeToByteArray(in.initialTask)));
+      serializeToDatastoreProperty(tx, shardInfo, INITIAL_TASK_PROPERTY, in.initialTask);
       shardInfo.setUnindexedProperty(RETRY_COUNT_PROPERTY, in.retryCount);
       return shardInfo;
     }
 
     static <T extends IncrementalTask> ShardRetryState<T> fromEntity(Entity in) {
-      T initialTask = SerializationUtil.deserializeFromDatastoreProperty(in, INITIAL_TASK_PROPERTY);
+      T initialTask = deserializeFromDatastoreProperty(in, INITIAL_TASK_PROPERTY);
       int retryCount = Ints.checkedCast((Long) in.getProperty(RETRY_COUNT_PROPERTY));
       return new ShardRetryState<>(in.getKey().getParent().getName(), initialTask, retryCount);
     }

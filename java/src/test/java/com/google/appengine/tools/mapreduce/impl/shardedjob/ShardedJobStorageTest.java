@@ -29,7 +29,7 @@ public class ShardedJobStorageTest extends EndToEndTestCase {
   @Test
   public void testRoundTripJob() throws EntityNotFoundException {
     ShardedJobStateImpl<TestTask> job = createGenericJobState();
-    Entity entity = ShardedJobStateImpl.ShardedJobSerializer.toEntity(job);
+    Entity entity = ShardedJobStateImpl.ShardedJobSerializer.toEntity(null, job);
     DATASTORE.put(entity);
     Entity readEntity = DATASTORE.get(entity.getKey());
     assertEquals(entity, readEntity);
@@ -48,7 +48,7 @@ public class ShardedJobStorageTest extends EndToEndTestCase {
   @Test
   public void testExpectedFields() {
     ShardedJobStateImpl<TestTask> job = createGenericJobState();
-    Entity entity = ShardedJobStateImpl.ShardedJobSerializer.toEntity(job);
+    Entity entity = ShardedJobStateImpl.ShardedJobSerializer.toEntity(null, job);
     Map<String, Object> properties = entity.getProperties();
     assertEquals(10, properties.get("taskCount"));
     assertTrue(properties.containsKey("activeShards"));
@@ -61,7 +61,7 @@ public class ShardedJobStorageTest extends EndToEndTestCase {
   @Test
   public void testFetchJobById() throws EntityNotFoundException {
     ShardedJobStateImpl<TestTask> job = createGenericJobState();
-    Entity entity = ShardedJobStateImpl.ShardedJobSerializer.toEntity(job);
+    Entity entity = ShardedJobStateImpl.ShardedJobSerializer.toEntity(null, job);
     DATASTORE.put(entity);
     Entity readEntity = DATASTORE.get(ShardedJobStateImpl.ShardedJobSerializer.makeKey("jobId"));
     assertEquals(entity, readEntity);
@@ -79,7 +79,7 @@ public class ShardedJobStorageTest extends EndToEndTestCase {
     assertEquals(false, iterable.hasNext());
 
     ShardedJobStateImpl<TestTask> job = createGenericJobState();
-    Entity entity = ShardedJobStateImpl.ShardedJobSerializer.toEntity(job);
+    Entity entity = ShardedJobStateImpl.ShardedJobSerializer.toEntity(null, job);
     DATASTORE.put(entity);
 
     Entity singleEntity = DATASTORE.prepare(query).asSingleEntity();

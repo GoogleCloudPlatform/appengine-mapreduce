@@ -53,7 +53,7 @@ public class ChainedMapReduceJob extends Job0<Void> {
         throws Exception {
       List<String> mostPopulars = new ArrayList<>();
       long mostPopularCount = -1;
-      for (List<KeyValue<String, Long>> countList: mrResult.getOutputResult()) {
+      for (List<KeyValue<String, Long>> countList : mrResult.getOutputResult()) {
         for (KeyValue<String, Long> count : countList) {
           log.info("Character '" + count.getKey() + "' appeared " + count.getValue() + " times");
           if (count.getValue() < mostPopularCount) {

@@ -2,15 +2,16 @@
 
 package com.google.appengine.tools.mapreduce.impl.shardedjob;
 
+import static com.google.appengine.tools.mapreduce.impl.util.SerializationUtil.CompressionType.GZIP;
 import static com.google.appengine.tools.mapreduce.impl.util.SerializationUtil.serializeToDatastoreProperty;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.appengine.api.datastore.Entity;
 import com.google.appengine.api.datastore.Key;
 import com.google.appengine.api.datastore.KeyFactory;
+import com.google.appengine.api.datastore.Transaction;
 import com.google.appengine.tools.mapreduce.impl.shardedjob.Status.StatusCode;
 import com.google.appengine.tools.mapreduce.impl.util.SerializationUtil;
-import com.google.appengine.tools.mapreduce.impl.util.SerializationUtil.CompressionType;
 import com.google.apphosting.api.ApiProxy;
 import com.google.common.base.Preconditions;
 import com.google.common.primitives.Ints;
@@ -181,8 +182,9 @@ public class IncrementalTaskState<T extends IncrementalTask> {
       return KeyFactory.createKey(ENTITY_KIND, taskId);
     }
 
-    static Entity toEntity(IncrementalTaskState<?> in) {
-      Entity taskState = new Entity(makeKey(in.getTaskId()));
+    static Entity toEntity(Transaction tx, IncrementalTaskState<?> in) {
+      Key key = makeKey(in.getTaskId());
+      Entity taskState = new Entity(key);
       taskState.setProperty(JOB_ID_PROPERTY, in.getJobId());
       taskState.setUnindexedProperty(MOST_RECENT_UPDATE_MILLIS_PROPERTY,
           in.getMostRecentUpdateMillis());
@@ -194,10 +196,8 @@ public class IncrementalTaskState<T extends IncrementalTask> {
       }
       taskState.setProperty(SEQUENCE_NUMBER_PROPERTY, in.getSequenceNumber());
       taskState.setProperty(RETRY_COUNT_PROPERTY, in.getRetryCount());
-      taskState.setUnindexedProperty(NEXT_TASK_PROPERTY,
-          serializeToDatastoreProperty(in.getTask(), CompressionType.GZIP));
-      taskState.setUnindexedProperty(STATUS_PROPERTY,
-          SerializationUtil.serializeToDatastoreProperty(in.getStatus()));
+      serializeToDatastoreProperty(tx, taskState, NEXT_TASK_PROPERTY, in.getTask(), GZIP);
+      serializeToDatastoreProperty(tx, taskState, STATUS_PROPERTY, in.getStatus());
       return taskState;
     }
 
