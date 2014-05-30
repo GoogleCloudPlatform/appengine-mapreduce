@@ -24,6 +24,12 @@ class InputReader(shard_life_cycle._ShardLifeCycle, json_util.JsonMixin):
      slices.
   """
 
+  # Counters.
+  # Bytes read.
+  COUNTER_IO_READ_BYTE = "io-read-byte"
+  # Milliseconds spent reading data.
+  COUNTER_IO_READ_MSEC = "io-read-msec"
+
   def __init__(self):
     self._slice_ctx = None
 
@@ -113,3 +119,22 @@ class InputReader(shard_life_cycle._ShardLifeCycle, json_util.JsonMixin):
       slice_ctx: SliceContext singleton instance for this slice.
     """
     self._slice_ctx = None
+
+  @classmethod
+  def params_to_json(cls, params):
+    """Translates JobConfig.input_reader_params to json serializable format.
+
+    For most reader, this may be an identity transformation.
+
+    Args:
+      params: JobConfig.input_reader_params.
+
+    Returns:
+      The json serializable format of params.
+    """
+    return params
+
+  @classmethod
+  def params_from_json(cls, json_params):
+    """Reverse function of params_to_json."""
+    return json_params
