@@ -202,7 +202,10 @@ class _ConfigDefaults(object):
 
   SHARD_COUNT = 8
 
-  # Make this high because too many people are confused when mapper is too slow.
+  # Maximum number of mapper calls per second.
+  # This parameter is useful for testing to force short slices.
+  # Maybe make this a private constant instead.
+  # If people want to rate limit their jobs, they can reduce shard count.
   PROCESSING_RATE_PER_SEC = 1000000
 
   # This path will be changed by build process when this is a part of SDK.
@@ -212,12 +215,6 @@ class _ConfigDefaults(object):
   # The amount of time to perform scanning in one slice. New slice will be
   # scheduled as soon as current one takes this long.
   _SLICE_DURATION_SEC = 15
-
-  # See model.ShardState doc on slice_start_time. In second.
-  _LEASE_GRACE_PERIOD = 1
-
-  # See model.ShardState doc on slice_start_time. In second.
-  _REQUEST_EVENTUAL_TIMEOUT = 10 * 60 + 30
 
   # Delay between consecutive controller callback invocations.
   _CONTROLLER_PERIOD_SEC = 2
@@ -233,3 +230,11 @@ config = lib_config.register(CONFIG_NAMESPACE, _ConfigDefaults.__dict__)
 _DEFAULT_PIPELINE_BASE_PATH = config.BASE_PATH + "/pipeline"
 # See b/11341023 for context.
 _GCS_URLFETCH_TIMEOUT_SEC = 30
+# If a lock has been held longer than this value, mapreduce will start to use
+# logs API to check if the request has ended.
+_LEASE_DURATION_SEC = config._SLICE_DURATION_SEC * 1.1
+# In rare occasions, Logs API misses log entries. Thus
+# if a lock has been held longer than this timeout, mapreduce assumes the
+# request holding the lock has died, regardless of Logs API.
+# 10 mins is taskqueue task timeout on a frontend.
+_MAX_LEASE_DURATION_SEC = max(10 * 60 + 30, config._SLICE_DURATION_SEC * 1.5)

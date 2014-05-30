@@ -32,6 +32,7 @@ from testlib import testutil
 import base64
 import datetime
 import httplib
+import math
 import os
 import time
 import unittest
@@ -1283,11 +1284,9 @@ class MapperWorkerCallbackHandlerLeaseTest(testutil.HandlerTestBase):
       dt.now.return_value = (self.shard_state.slice_start_time +
                              datetime.timedelta(milliseconds=1))
       self.assertEqual(
-          parameters.config._LEASE_GRACE_PERIOD +
-          parameters.config._SLICE_DURATION_SEC,
+          math.ceil(parameters._LEASE_DURATION_SEC),
           handler._wait_time(self.shard_state,
-                             parameters.config._LEASE_GRACE_PERIOD +
-                             parameters.config._SLICE_DURATION_SEC))
+                             parameters._LEASE_DURATION_SEC))
       handler.post()
       self.assertEqual(httplib.SERVICE_UNAVAILABLE, handler.response.status)
 
@@ -1295,9 +1294,7 @@ class MapperWorkerCallbackHandlerLeaseTest(testutil.HandlerTestBase):
     # Previous request's lease has timed out but the request has not.
     now = datetime.datetime.now()
     old = (now -
-           datetime.timedelta(seconds=parameters.config._LEASE_GRACE_PERIOD +
-                              parameters.config._SLICE_DURATION_SEC +
-                              1))
+           datetime.timedelta(seconds=parameters._LEASE_DURATION_SEC + 1))
     self.shard_state.slice_start_time = old
     self.shard_state.slice_request_id = self.PREVIOUS_REQUEST_ID
     self.shard_state.put()
@@ -1305,15 +1302,14 @@ class MapperWorkerCallbackHandlerLeaseTest(testutil.HandlerTestBase):
     # Lease has ended.
     self.assertEqual(0,
                      handler._wait_time(self.shard_state,
-                                        parameters.config._LEASE_GRACE_PERIOD +
-                                        parameters.config._SLICE_DURATION_SEC),
+                                        parameters._LEASE_DURATION_SEC),
                      lambda: now)
     # Logs API doesn't think the request has ended.
     self.assertFalse(handler._has_old_request_ended(self.shard_state))
     # Request has not timed out.
     self.assertTrue(handler._wait_time(
         self.shard_state,
-        parameters.config._REQUEST_EVENTUAL_TIMEOUT,
+        parameters._MAX_LEASE_DURATION_SEC,
         lambda: now))
     handler.post()
     self.assertEqual(httplib.SERVICE_UNAVAILABLE, handler.response.status)
@@ -1327,13 +1323,12 @@ class MapperWorkerCallbackHandlerLeaseTest(testutil.HandlerTestBase):
     # Lease has ended.
     self.assertEqual(0,
                      handler._wait_time(self.shard_state,
-                                        parameters.config._LEASE_GRACE_PERIOD +
-                                        parameters.config._SLICE_DURATION_SEC))
+                                        parameters._LEASE_DURATION_SEC))
     # Logs API doesn't think the request has ended.
     self.assertFalse(handler._has_old_request_ended(self.shard_state))
     # But request has timed out.
     self.assertEqual(0, handler._wait_time(
-        self.shard_state, parameters.config._REQUEST_EVENTUAL_TIMEOUT))
+        self.shard_state, parameters._MAX_LEASE_DURATION_SEC))
 
     # acquire lease should succeed.
     handler._try_acquire_lease(self.shard_state, tstate)

@@ -112,13 +112,14 @@ class UserParametersTest(unittest.TestCase):
     self.assertEqual(11, parameters.config.TASK_MAX_DATA_PROCESSING_ATTEMPTS)
     self.assertEqual(31, parameters.config.TASK_MAX_ATTEMPTS)
     self.assertEqual(15, parameters.config._SLICE_DURATION_SEC)
-    self.assertEqual(1, parameters.config._LEASE_GRACE_PERIOD)
-    self.assertEqual(10 * 60 + 30, parameters.config._REQUEST_EVENTUAL_TIMEOUT)
     self.assertEqual(2, parameters.config._CONTROLLER_PERIOD_SEC)
 
     # Other constant that depends on _config.
     self.assertEqual('/my-mapreduce/pipeline',
                      parameters._DEFAULT_PIPELINE_BASE_PATH)
+    self.assertEqual(parameters.config._SLICE_DURATION_SEC*1.1,
+                     parameters._LEASE_DURATION_SEC)
+    self.assertEqual(10*60+30, parameters._MAX_LEASE_DURATION_SEC)
 
 
 if __name__ == '__main__':
