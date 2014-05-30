@@ -8,7 +8,7 @@
 
 import unittest
 
-from mapreduce.lib import pipeline
+from mapreduce.third_party import pipeline
 from google.appengine.api import files
 from google.appengine.api.files import file_service_pb
 from google.appengine.ext import db

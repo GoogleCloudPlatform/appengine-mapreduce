@@ -39,7 +39,7 @@ import unittest
 
 import mock
 from testlib import mox
-from mapreduce.lib import simplejson
+from mapreduce.third_party import simplejson
 
 from google.appengine.api import apiproxy_stub_map
 from google.appengine.api import datastore

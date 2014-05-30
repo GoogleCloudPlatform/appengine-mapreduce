@@ -3,7 +3,7 @@
 import copy
 import datetime
 import logging
-from mapreduce.lib import simplejson
+from mapreduce.third_party import simplejson
 
 from google.appengine.api import datastore_errors
 from google.appengine.api import datastore_types

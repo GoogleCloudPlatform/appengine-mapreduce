@@ -397,7 +397,7 @@ class EndToEndTest(testutil.HandlerTestBase):
     self.assertEquals([], model._HugeTaskPayload.all().fetch(100))
 
 
-class GCSOutputWriterTestBase(testutil.HandlerTestBase):
+class GCSOutputWriterTestBase(testutil.CloudStorageTestBase):
   """Base class for all GCS output writer tests."""
 
   def setUp(self):

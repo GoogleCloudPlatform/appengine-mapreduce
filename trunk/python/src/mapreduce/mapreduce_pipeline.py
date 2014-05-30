@@ -30,8 +30,8 @@ __all__ = [
     ]
 
 
-from mapreduce.lib import pipeline
-from mapreduce.lib.pipeline import common as pipeline_common
+from mapreduce.third_party import pipeline
+from mapreduce.third_party.pipeline import common as pipeline_common
 from google.appengine.api import files
 from mapreduce import input_readers
 from mapreduce import mapper_pipeline

@@ -48,7 +48,7 @@ from google.appengine.ext import webapp
 
 # Relative imports
 import models
-from mapreduce.lib import simplejson
+from mapreduce.third_party import simplejson
 import status_ui
 import util as mr_util
 

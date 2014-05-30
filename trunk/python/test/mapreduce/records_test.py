@@ -6,7 +6,7 @@ from __future__ import with_statement
 import array
 import unittest
 
-from mapreduce.lib import crc32c
+from mapreduce.third_party import crc32c
 from mapreduce import records
 
 

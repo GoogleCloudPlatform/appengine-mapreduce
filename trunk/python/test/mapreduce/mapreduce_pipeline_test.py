@@ -11,7 +11,7 @@ import re
 import unittest
 
 
-from mapreduce.lib import pipeline
+from mapreduce.third_party import pipeline
 from google.appengine.api import files
 from google.appengine.ext import blobstore
 from google.appengine.ext import db

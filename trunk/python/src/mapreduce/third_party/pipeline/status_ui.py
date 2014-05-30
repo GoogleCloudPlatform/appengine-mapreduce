@@ -25,7 +25,7 @@ from google.appengine.api import users
 from google.appengine.ext import webapp
 
 # Relative imports
-from mapreduce.lib import simplejson
+from mapreduce.third_party import simplejson
 import util
 
 
