@@ -24,7 +24,7 @@ import com.google.appengine.tools.cloudstorage.GcsService;
 import com.google.appengine.tools.cloudstorage.GcsServiceFactory;
 import com.google.appengine.tools.mapreduce.impl.HashingSharder;
 import com.google.appengine.tools.mapreduce.impl.InProcessMapReduce;
-import com.google.appengine.tools.mapreduce.impl.RecoverableException;
+import com.google.appengine.tools.mapreduce.impl.shardedjob.RecoverableException;
 import com.google.appengine.tools.mapreduce.inputs.ConsecutiveLongInput;
 import com.google.appengine.tools.mapreduce.inputs.DatastoreInput;
 import com.google.appengine.tools.mapreduce.inputs.ForwardingInputReader;

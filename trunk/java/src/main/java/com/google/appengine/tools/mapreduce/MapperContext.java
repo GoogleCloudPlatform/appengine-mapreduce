@@ -15,7 +15,4 @@ public interface MapperContext<K, V> extends WorkerContext<KeyValue<K, V>> {
    * Emits a value for the given key to the reduce stage.
    */
   void emit(K key, V value);
-
-  @Override
-  void emit(KeyValue<K, V> value);
 }

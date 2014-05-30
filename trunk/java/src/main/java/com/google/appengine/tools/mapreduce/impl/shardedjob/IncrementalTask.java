@@ -43,4 +43,9 @@ public interface IncrementalTask extends Serializable {
    * @return true iff this task is done and run should no longer be invoked.
    */
   boolean isDone();
+
+  /**
+   * @return true if slice retries are permitted.
+   */
+  boolean allowSliceRetry();
 }

@@ -331,7 +331,7 @@ public class ShardedJobRunner<T extends IncrementalTask> implements ShardedJobHa
       locked = true;
     } catch (ConcurrentModificationException ex) {
       // TODO(user): would be nice to have a test for it. b/12822091 can help with that.
-      log.warning("Failed to aquire the lock, Will reschedule task for: " + taskState.getJobId()
+      log.warning("Failed to acquire the lock, Will reschedule task for: " + taskState.getJobId()
           + " on slice " + taskState.getSequenceNumber());
       long eta = System.currentTimeMillis() + new Random().nextInt(5000) + 5000;
       scheduleWorkerTask(null, jobState.getSettings(), taskState, eta);
@@ -383,6 +383,10 @@ public class ShardedJobRunner<T extends IncrementalTask> implements ShardedJobHa
       taskState.setMostRecentUpdateMillis(System.currentTimeMillis());
     } catch (ShardFailureException ex) {
       retryState = handleShardFailure(jobState, taskState, ex);
+    } catch (JobFailureException ex) {
+      log.log(Level.WARNING,
+          "Shard " + taskState.getTaskId() + " triggered job failure", ex);
+      handleJobFailure(taskState, ex);
     } catch (RuntimeException ex) {
       retryState = handleSliceFailure(jobState, taskState, ex);
     } catch (Throwable ex) {
@@ -401,6 +405,9 @@ public class ShardedJobRunner<T extends IncrementalTask> implements ShardedJobHa
 
   private ShardRetryState<T> handleSliceFailure(ShardedJobState<T> jobState,
       IncrementalTaskState<T> taskState, RuntimeException ex) {
+    if (!(ex instanceof RecoverableException) && !taskState.getTask().allowSliceRetry()) {
+      return handleShardFailure(jobState, taskState, ex);
+    }
     int attempts = taskState.incrementAndGetRetryCount();
     if (attempts > jobState.getSettings().getMaxSliceRetries()){
       log.log(Level.WARNING, "Slice exceeded its max attempts.");
@@ -411,15 +418,13 @@ public class ShardedJobRunner<T extends IncrementalTask> implements ShardedJobHa
     return null;
   }
 
-  private ShardRetryState<T> handleShardFailure(final ShardedJobState<T> jobState,
-      final IncrementalTaskState<T> taskState, Exception ex) {
+  private ShardRetryState<T> handleShardFailure(ShardedJobState<T> jobState,
+      IncrementalTaskState<T> taskState, Exception ex) {
     ShardRetryState<T> retryState = lookupShardRetryState(taskState.getTaskId());
     if (retryState == null
         || retryState.incrementAndGet() > jobState.getSettings().getMaxShardRetries()) {
       log.log(Level.SEVERE, "Shard exceeded its max attempts, setting job state to ERROR.", ex);
-      changeJobStatus(jobState.getJobId(), new Status(ERROR, ex));
-      taskState.setStatus(new Status(StatusCode.ERROR));
-      taskState.incrementAndGetRetryCount(); // trigger saving the last task instead of current
+      handleJobFailure(taskState, ex);
     } else {
       log.log(Level.WARNING,
           "Shard attempt #" + retryState.getRetryCount() + " failed. Going to retry.", ex);
@@ -427,6 +432,12 @@ public class ShardedJobRunner<T extends IncrementalTask> implements ShardedJobHa
       taskState.clearRetryCount();
     }
     return retryState;
+  }
+
+  private void handleJobFailure(IncrementalTaskState<T> taskState, Exception ex) {
+    changeJobStatus(taskState.getJobId(), new Status(ERROR, ex));
+    taskState.setStatus(new Status(StatusCode.ERROR, ex));
+    taskState.incrementAndGetRetryCount(); // trigger saving the last task instead of current
   }
 
   private void updateTask(final ShardedJobState<T> jobState,

@@ -36,6 +36,8 @@ public class ReduceShardTask<K, V, O>
   private final InputReader<KeyValue<K, Iterator<V>>> in;
   private final OutputWriter<O> out;
 
+  private transient ReducerContextImpl<O> context;
+
   public ReduceShardTask(String mrJobId, int shardNumber, int shardCount,
       InputReader<KeyValue<K, Iterator<V>>> in, Reducer<K, V, O> reducer, OutputWriter<O> out,
       long millisPerSlice) {
@@ -89,15 +91,20 @@ public class ReduceShardTask<K, V, O>
     return in;
   }
 
+  @Override
+  public boolean allowSliceRetry() {
+    return !context.emitCalled() || out.allowSliceRetry();
+  }
+
   private void readObject(ObjectInputStream stream) throws IOException, ClassNotFoundException {
     stream.defaultReadObject();
     fillContext();
   }
 
   private void fillContext() {
-    ReducerContext<O> ctx = new ReducerContextImpl<>(getContext(), out);
-    in.setContext(ctx);
-    out.setContext(ctx);
-    reducer.setContext(ctx);
+    context = new ReducerContextImpl<>(getContext(), out);
+    in.setContext(context);
+    out.setContext(context);
+    reducer.setContext(context);
   }
 }

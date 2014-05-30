@@ -11,10 +11,4 @@ package com.google.appengine.tools.mapreduce;
  * @param <O> type of output values produced by the reducer
  */
 public interface ReducerContext<O> extends WorkerContext<O> {
-
-  /**
-   * Emits a value to the MapReduce output.
-   */
-  @Override
-  public abstract void emit(O value);
 }

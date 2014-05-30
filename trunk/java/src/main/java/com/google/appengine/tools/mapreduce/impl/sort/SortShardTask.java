@@ -12,8 +12,8 @@ import com.google.appengine.tools.mapreduce.KeyValue;
 import com.google.appengine.tools.mapreduce.OutputWriter;
 import com.google.appengine.tools.mapreduce.Worker;
 import com.google.appengine.tools.mapreduce.impl.IncrementalTaskContext;
-import com.google.appengine.tools.mapreduce.impl.RecoverableException;
 import com.google.appengine.tools.mapreduce.impl.WorkerShardTask;
+import com.google.appengine.tools.mapreduce.impl.shardedjob.RecoverableException;
 
 import java.io.IOException;
 import java.io.ObjectInputStream;
@@ -111,6 +111,11 @@ public class SortShardTask extends WorkerShardTask<
   @Override
   public InputReader<KeyValue<ByteBuffer, ByteBuffer>> getInputReader() {
     return in;
+  }
+
+  @Override
+  public boolean allowSliceRetry() {
+    return true;
   }
 
   private void readObject(ObjectInputStream stream) throws IOException, ClassNotFoundException {

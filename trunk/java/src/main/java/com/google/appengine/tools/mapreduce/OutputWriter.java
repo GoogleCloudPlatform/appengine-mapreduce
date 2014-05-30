@@ -110,4 +110,8 @@ public abstract class OutputWriter<O> implements Serializable {
   public void endShard() throws IOException {
     close();
   }
+
+  public boolean allowSliceRetry() {
+    return false;
+  }
 }

@@ -22,8 +22,7 @@ import java.util.List;
  * @param <R> The result type of the provide output object. See:
  *        {@link Output#finish(java.util.Collection)}
  */
-final class ShardingWriter<K, V, R> extends
-    OutputWriter<KeyValue<K, V>> {
+final class ShardingWriter<K, V, R> extends OutputWriter<KeyValue<K, V>> {
 
   private static final long serialVersionUID = 4472397467516370717L;
   private final Sharder sharder;
@@ -90,5 +89,15 @@ final class ShardingWriter<K, V, R> extends
       total += writer.estimateMemoryRequirement();
     }
     return total;
+  }
+
+  @Override
+  public boolean allowSliceRetry() {
+    for (OutputWriter<KeyValue<K, V>> writer : writers) {
+      if (!writer.allowSliceRetry()) {
+        return false;
+      }
+    }
+    return true;
   }
 }

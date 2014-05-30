@@ -9,6 +9,8 @@ import com.google.appengine.tools.mapreduce.OutputWriter;
 import com.google.appengine.tools.mapreduce.Worker;
 import com.google.appengine.tools.mapreduce.WorkerContext;
 import com.google.appengine.tools.mapreduce.impl.handlers.MemoryLimiter;
+import com.google.appengine.tools.mapreduce.impl.shardedjob.JobFailureException;
+import com.google.appengine.tools.mapreduce.impl.shardedjob.RecoverableException;
 import com.google.appengine.tools.mapreduce.impl.shardedjob.ShardFailureException;
 import com.google.common.base.Stopwatch;
 
@@ -59,17 +61,6 @@ public abstract class WorkerShardTask<I, O, C extends WorkerContext<O>> implemen
   }
 
   @Override
-  public void run() {
-    try {
-      doWork();
-    } catch (RecoverableException | ShardFailureException ex) {
-      throw ex;
-    } catch (RuntimeException ex) {
-      throw new ShardFailureException(context.getShardNumber(), ex);
-    }
-  }
-
-  @Override
   public void cleanup() {
     if (claimedMemory != null) {
       LIMITER.release(claimedMemory);
@@ -81,10 +72,11 @@ public abstract class WorkerShardTask<I, O, C extends WorkerContext<O>> implemen
     claimedMemory = LIMITER.claim(estimateMemoryRequirement() / 1024 / 1024);
   }
 
-  public void doWork() {
+  @Override
+  public void run() {
     try {
       beginSlice();
-    } catch (RecoverableException | ShardFailureException ex) {
+    } catch (JobFailureException | RecoverableException | ShardFailureException ex) {
       throw ex;
     } catch (IOException | RuntimeException ex) {
       throw new RecoverableException("Failed on beginSlice/beginShard", ex);
@@ -142,14 +134,10 @@ public abstract class WorkerShardTask<I, O, C extends WorkerContext<O>> implemen
 
     context.incrementWorkerCalls(workerCalls);
     context.incrementWorkerMillis(workerStopwatch.elapsed(MILLISECONDS));
-
     try {
       endSlice(inputExhausted);
-    } catch (IOException | RuntimeException ex) {
-      // TODO(user): similar to callWorker, if writer has a way to indicate that a slice-retry
-      // is OK we should consider a broader catch and possibly throwing RecoverableException
-      throw new ShardFailureException(
-          context.getShardNumber(), "Failed on endSlice/endShard", ex);
+    } catch (IOException ex) {
+      throw new RuntimeException("IOException during endSlice", ex);
     }
     context.setLastWorkItemString(formatLastWorkItem(next));
   }
