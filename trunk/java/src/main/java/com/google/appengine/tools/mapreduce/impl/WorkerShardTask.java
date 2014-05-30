@@ -5,14 +5,12 @@ package com.google.appengine.tools.mapreduce.impl;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 
 import com.google.appengine.tools.mapreduce.InputReader;
-import com.google.appengine.tools.mapreduce.LifecycleListener;
 import com.google.appengine.tools.mapreduce.OutputWriter;
 import com.google.appengine.tools.mapreduce.Worker;
 import com.google.appengine.tools.mapreduce.WorkerContext;
 import com.google.appengine.tools.mapreduce.impl.handlers.MemoryLimiter;
 import com.google.appengine.tools.mapreduce.impl.shardedjob.ShardFailureException;
 import com.google.common.base.Stopwatch;
-import com.google.common.collect.Lists;
 
 import java.io.IOException;
 import java.util.NoSuchElementException;
@@ -163,9 +161,6 @@ public abstract class WorkerShardTask<I, O, C extends WorkerContext<O>> implemen
     if (isFirstSlice) {
       getWorker().beginShard();
     }
-    for (LifecycleListener listener : getWorker().getLifecycleListenerRegistry().getListeners()) {
-      listener.beginSlice();
-    }
     getWorker().beginSlice();
     isFirstSlice = false;
   }
@@ -174,10 +169,6 @@ public abstract class WorkerShardTask<I, O, C extends WorkerContext<O>> implemen
     getWorker().endSlice();
     if (inputExhausted) {
       getWorker().endShard();
-    }
-    for (LifecycleListener listener :
-        Lists.reverse(getWorker().getLifecycleListenerRegistry().getListeners())) {
-      listener.endSlice();
     }
     getOutputWriter().endSlice();
     getInputReader().endSlice();

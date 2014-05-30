@@ -47,7 +47,7 @@ public final class BlobFileOutput extends Output<ByteBuffer, List<AppEngineFile>
 
   /**
    * Returns a list of AppEngineFiles that has one element for each reduce
-   * shard.  Each element is either an {@link AppEngineFile} or null (if that
+   * shard.  Each element is either an {@code AppEngineFile} or null (if that
    * reduce shard emitted no data).
    */
   @Override
