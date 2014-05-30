@@ -1,6 +1,5 @@
 #!/usr/bin/env python
-#
-# Copyright 2010 Google Inc.
+# Copyright 2010 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -130,6 +129,8 @@ def key(entity_id, namespace=None, kind="TestEntity"):
 
   Args:
     entity_id: entity id
+    namespace: the namespace
+    kind: the kind
   Returns:
     db.Key instance with specified id for TestEntity.
   """
@@ -1167,11 +1168,13 @@ class BlobstoreLineInputReaderBlobstoreStubTest(unittest.TestCase):
 
 
 class MockBlobInfo(object):
+
   def __init__(self, size):
     self.size = size
 
 
 class BlobstoreLineInputReaderTest(unittest.TestCase):
+
   def setUp(self):
     unittest.TestCase.setUp(self)
 
@@ -1184,6 +1187,7 @@ class BlobstoreLineInputReaderTest(unittest.TestCase):
     self.mox.UnsetStubs()
     self.mox.ResetAll()
 
+  # pylint: disable=unused-argument
   def initMockedBlobstoreLineReader(self,
                                     initial_position,
                                     num_blocks_read,
@@ -1399,6 +1403,7 @@ class BlobstoreZipInputReaderTest(unittest.TestCase):
       archive.writestr("%d.txt" % i, "%d: %s" % (i, "*"*i))
     archive.close()
 
+  # pylint: disable=unused-argument
   def mockZipReader(self, blob_key):
     """Mocked out reader function that returns our in-memory zipfile."""
     return self.zipdata
@@ -1895,40 +1900,40 @@ class RecordsReaderTest(testutil.HandlerTestBase):
     self.mapper_spec.params["files"] = test_files[:1]
     readers = input_readers.RecordsReader.split_input(self.mapper_spec)
     self.assertEquals(
-        [{'position': 0, 'filenames': ['testfile0']},
-         {'position': 0, 'filenames': []},
-         {'position': 0, 'filenames': []},
-         {'position': 0, 'filenames': []}],
+        [{"position": 0, "filenames": ["testfile0"]},
+         {"position": 0, "filenames": []},
+         {"position": 0, "filenames": []},
+         {"position": 0, "filenames": []}],
         [r.to_json() for r in readers])
 
     # Number of files equal to number of shards
     self.mapper_spec.params["files"] = test_files[:4]
     readers = input_readers.RecordsReader.split_input(self.mapper_spec)
     self.assertEquals(
-        [{'position': 0, 'filenames': ['testfile0']},
-         {'position': 0, 'filenames': ['testfile1']},
-         {'position': 0, 'filenames': ['testfile2']},
-         {'position': 0, 'filenames': ['testfile3']}],
+        [{"position": 0, "filenames": ["testfile0"]},
+         {"position": 0, "filenames": ["testfile1"]},
+         {"position": 0, "filenames": ["testfile2"]},
+         {"position": 0, "filenames": ["testfile3"]}],
         [r.to_json() for r in readers])
 
     # Number of files less than 2x the number of shards
     self.mapper_spec.params["files"] = test_files[:7]
     readers = input_readers.RecordsReader.split_input(self.mapper_spec)
     self.assertEquals(
-        [{'position': 0, 'filenames': ['testfile0', 'testfile4']},
-         {'position': 0, 'filenames': ['testfile1', 'testfile5']},
-         {'position': 0, 'filenames': ['testfile2', 'testfile6']},
-         {'position': 0, 'filenames': ['testfile3']}],
+        [{"position": 0, "filenames": ["testfile0", "testfile4"]},
+         {"position": 0, "filenames": ["testfile1", "testfile5"]},
+         {"position": 0, "filenames": ["testfile2", "testfile6"]},
+         {"position": 0, "filenames": ["testfile3"]}],
         [r.to_json() for r in readers])
 
     # Number of files more than 2x the number of shards
     self.mapper_spec.params["files"] = test_files[:10]
     readers = input_readers.RecordsReader.split_input(self.mapper_spec)
     self.assertEquals(
-        [{'position': 0, 'filenames': ['testfile0', 'testfile4', 'testfile8']},
-         {'position': 0, 'filenames': ['testfile1', 'testfile5', 'testfile9']},
-         {'position': 0, 'filenames': ['testfile2', 'testfile6']},
-         {'position': 0, 'filenames': ['testfile3', 'testfile7']}],
+        [{"position": 0, "filenames": ["testfile0", "testfile4", "testfile8"]},
+         {"position": 0, "filenames": ["testfile1", "testfile5", "testfile9"]},
+         {"position": 0, "filenames": ["testfile2", "testfile6"]},
+         {"position": 0, "filenames": ["testfile3", "testfile7"]}],
         [r.to_json() for r in readers])
 
     # Multiple files but only one shard requested
@@ -1936,7 +1941,7 @@ class RecordsReaderTest(testutil.HandlerTestBase):
     self.mapper_spec.params["files"] = test_files[:3]
     readers = input_readers.RecordsReader.split_input(self.mapper_spec)
     self.assertEquals(
-        [{'position': 0, 'filenames': ['testfile0', 'testfile1', 'testfile2']}],
+        [{"position": 0, "filenames": ["testfile0", "testfile1", "testfile2"]}],
         [r.to_json() for r in readers])
 
   def testToJsonFromJson(self):
@@ -2025,16 +2030,16 @@ class LogInputReaderTest(unittest.TestCase):
         "test_handler",
         input_readers.__name__ + ".LogInputReader",
         {
-          "input_reader": {
-            "start_time": 0,
-            "end_time": 128,
-            "offset": self.offset,
-            "version_ids": ["1"],
-            "minimum_log_level": logservice.LOG_LEVEL_INFO,
-            "include_incomplete": True,
-            "include_app_logs": True,
-            "prototype_request": prototype_request.Encode()
-          },
+            "input_reader": {
+                "start_time": 0,
+                "end_time": 128,
+                "offset": self.offset,
+                "version_ids": ["1"],
+                "minimum_log_level": logservice.LOG_LEVEL_INFO,
+                "include_incomplete": True,
+                "include_app_logs": True,
+                "prototype_request": prototype_request.Encode()
+            },
         },
         self.num_shards)
 
@@ -2118,8 +2123,8 @@ class LogInputReaderTest(unittest.TestCase):
     input_readers.LogInputReader.validate(self.mapper_spec)
 
     # start_time must be less than end time.
-    self.mapper_spec.params["input_reader"]["start_time"] = \
-        self.mapper_spec.params["input_reader"]["end_time"]
+    self.mapper_spec.params["input_reader"]["start_time"] = (
+        self.mapper_spec.params["input_reader"]["end_time"])
     self.assertRaises(errors.BadReaderParamsError,
                       input_readers.LogInputReader.validate,
                       self.mapper_spec)
@@ -2353,9 +2358,8 @@ class ReducerReaderTest(testutil.HandlerTestBase):
             "DummyInputReader",
             dict(combiner_spec=combiner_spec),
             1).to_json())
-    ctx = context.Context(
-        mapreduce_spec,
-        model.ShardState.create_new("DummyMapReduceJobId", 0))
+    shard_state = self.create_shard_state(0)
+    ctx = context.Context(mapreduce_spec, shard_state)
     context.Context._set(ctx)
 
     # Now read the records in two attempts, serializing and recreating the
@@ -2955,10 +2959,22 @@ class GoogleCloudStorageInputReaderTest(GoogleCloudStorageInputTestBase):
     self.assertEqual(0, len(readers))
 
   def testNext(self):
-    readers = self.READER_CLS.split_input(
-        self.create_mapper_spec(num_shards=1,
-                                input_params={"bucket_name": self.test_bucket,
-                                              "objects": ["file-*"]}))
+    mapper_spec = self.create_mapper_spec(num_shards=1,
+                                          input_params={"bucket_name":
+                                                        self.test_bucket,
+                                                        "objects": ["file-*"]})
+    mapreduce_spec = model.MapreduceSpec(
+        "DummyMapReduceJobName",
+        "DummyMapReduceJobId",
+        mapper_spec.to_json())
+    shard_state = self.create_shard_state(0)
+    ctx = context.Context(mapreduce_spec, shard_state)
+    context.Context._set(ctx)
+
+    # Counter should be 0.
+    self.assertEqual(0, shard_state.counters_map.get(
+        input_readers.COUNTER_IO_READ_MSEC))
+    readers = self.READER_CLS.split_input(mapper_spec)
     self.assertEqual(1, len(readers))
     reader_files = list(readers[0])
     self.assertEqual(self.test_num_files, len(reader_files))
@@ -2968,6 +2984,9 @@ class GoogleCloudStorageInputReaderTest(GoogleCloudStorageInputTestBase):
     self.assertEqual(len(self.test_content), len(found_content))
     for content in self.test_content:
       self.assertTrue(content in found_content)
+    # Check that the counter was incremented.
+    self.assertTrue(shard_state.counters_map.get(
+        input_readers.COUNTER_IO_READ_MSEC) > 0)
 
   def testNextWithMissingFiles(self):
     readers = self.READER_CLS.split_input(
@@ -3120,6 +3139,51 @@ class GoogleCloudStorageRecordInputReaderTest(GoogleCloudStorageInputTestBase):
     # Serialize after StopIteration reached
     reader = self.READER_CLS.from_json(reader.to_json())
     self.assertRaises(StopIteration, reader.next)
+
+  def testCounters(self):
+    filenames = []
+    all_data = []
+    for file_num in range(10):  # Make 10 files
+      filename = "/%s/file-%03d" % (self.TEST_BUCKET, file_num)
+      data_set = []
+      for record_num in range(10):  # Make 10 records, each 30 chars long
+        data_set.append(("%03d" % record_num) * 10)
+      self.create_test_file(filename, data_set)
+      filenames.append(filename)
+      all_data.append(data_set)
+
+    mapper_spec = self.create_mapper_spec(num_shards=1,
+                                          input_params={"bucket_name":
+                                                        self.TEST_BUCKET,
+                                                        "objects": [filenames]})
+    mapreduce_spec = model.MapreduceSpec(
+        "DummyMapReduceJobName",
+        "DummyMapReduceJobId",
+        mapper_spec.to_json())
+    shard_state = self.create_shard_state(0)
+    ctx = context.Context(mapreduce_spec, shard_state)
+    context.Context._set(ctx)
+
+    # Counters should be 0.
+    self.assertEqual(0, shard_state.counters_map.get(
+        input_readers.COUNTER_IO_READ_MSEC))
+    self.assertEqual(0, shard_state.counters_map.get(
+        input_readers.COUNTER_IO_READ_BYTES))
+
+    reader = self.READER_CLS(filenames)
+
+    for data_set in all_data:
+      for record in data_set:
+        self.assertEqual(record, reader.next())
+    self.assertRaises(StopIteration, reader.next)
+
+    # Check counters.
+    self.assertTrue(shard_state.counters_map.get(
+        input_readers.COUNTER_IO_READ_MSEC) > 0)
+    # Check for 10 files each with 10 records each 30 chars long.
+    self.assertEqual(10 * 10 * 30, shard_state.counters_map.get(
+        input_readers.COUNTER_IO_READ_BYTES))
+
 
 if __name__ == "__main__":
   unittest.main()

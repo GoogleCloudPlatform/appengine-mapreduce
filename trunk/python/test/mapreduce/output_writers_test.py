@@ -1,15 +1,27 @@
 #!/usr/bin/env python
+# Copyright 2010 Google Inc. All Rights Reserved.
 #
-# Copyright 2011 Google Inc. All Rights Reserved.
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 
 
 
 # Using opensource naming conventions, pylint: disable=g-bad-name
 
+import unittest
+
 
 from testlib import mox
-import unittest
 
 from google.appengine.api import apiproxy_stub_map
 from google.appengine.api import files
@@ -184,10 +196,12 @@ class FileOutputWriterTest(testutil.HandlerTestBase):
 
   def testInitJob_GoogleStorage(self):
     mapreduce_state = self.create_mapreduce_state(
-        params={"filesystem": "gs", "gs_bucket_name": "foo", "gs_acl": "public"})
+        params={"filesystem": "gs",
+                "gs_bucket_name": "foo",
+                "gs_acl": "public"})
     m = mox.Mox()
     m.StubOutWithMock(files.gs, "create")
-    files.gs.create(mox.StrContains('/gs/foo'),
+    files.gs.create(mox.StrContains("/gs/foo"),
                     mox.IgnoreArg(),
                     acl="public")
     m.ReplayAll()
@@ -260,20 +274,6 @@ class GCSOutputTestBase(testutil.CloudStorageTestBase):
     mapreduce_state.mapreduce_spec = mapreduce_spec
     mapreduce_state.put()
     return mapreduce_state
-
-  def create_shard_state(self, shard_number):
-    """Create a model.ShardState.
-
-    Args:
-      shard_number: The index for this shard (zero-indexed).
-
-    Returns:
-      a model.ShardState for the given shard.
-    """
-    shard_state = model.ShardState.create_new("DummyMapReduceJobId",
-                                              shard_number)
-    shard_state.put()
-    return shard_state
 
 
 class GCSOutputWriterNoDupModeTest(GCSOutputTestBase):
