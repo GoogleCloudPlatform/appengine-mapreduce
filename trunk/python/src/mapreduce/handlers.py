@@ -213,8 +213,7 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
     # See model.ShardState doc.
     if shard_state.slice_start_time:
       countdown = self._wait_time(shard_state,
-                                  parameters.config._LEASE_GRACE_PERIOD +
-                                  parameters.config._SLICE_DURATION_SEC)
+                                  parameters._LEASE_DURATION_SEC)
       if countdown > 0:
         logging.warning(
             "Last retry of slice %s-%s may be still running."
@@ -228,7 +227,7 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
       # lease could have expired. Verify with logs API.
       else:
         if self._wait_time(shard_state,
-                           parameters.config._REQUEST_EVENTUAL_TIMEOUT):
+                           parameters._MAX_LEASE_DURATION_SEC):
           if not self._has_old_request_ended(shard_state):
             logging.warning(
                 "Last retry of slice %s-%s is still in flight with request_id "
@@ -240,7 +239,7 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
               "Last retry of slice %s-%s has no log entry and has"
               "timed out after %s seconds",
               tstate.shard_id, tstate.slice_id,
-              parameters.config._REQUEST_EVENTUAL_TIMEOUT)
+              parameters._MAX_LEASE_DURATION_SEC)
 
     # Lease expired or slice_start_time not set.
     config = util.create_datastore_write_config(tstate.mapreduce_spec)
