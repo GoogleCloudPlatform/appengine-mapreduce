@@ -11,6 +11,7 @@ import com.google.appengine.api.appidentity.AppIdentityServiceFailureException;
 import com.google.appengine.api.backends.BackendService;
 import com.google.appengine.api.backends.BackendServiceFactory;
 import com.google.appengine.api.datastore.Key;
+import com.google.appengine.api.modules.ModulesException;
 import com.google.appengine.api.modules.ModulesService;
 import com.google.appengine.api.modules.ModulesServiceFactory;
 import com.google.appengine.api.taskqueue.Queue;
@@ -96,6 +97,9 @@ public class MapReduceJob<I, K, V, O, R>
   private static final long serialVersionUID = 723635736794527552L;
   static final Logger log = Logger.getLogger(MapReduceJob.class.getName());
 
+  private static final ExceptionHandler MODULES_EXCEPTION_HANDLER =
+      new ExceptionHandler.Builder().retryOn(ModulesException.class).build();
+
   private static final ExceptionHandler QUEUE_EXCEPTION_HANDLER =
       new ExceptionHandler.Builder().retryOn(TransientFailureException.class).build();
 
@@ -120,47 +124,52 @@ public class MapReduceJob<I, K, V, O, R>
   }
 
   @VisibleForTesting
-  static ShardedJobSettings makeShardedJobSettings(
-      String shardedJobId, MapReduceSettings mrSettings, Key pipelineKey) {
-    String backend = mrSettings.getBackend();
-    String module = mrSettings.getModule();
-    String version = null;
-    if (backend == null) {
-      if (module == null) {
-        BackendService backendService = BackendServiceFactory.getBackendService();
-        String currentBackend = backendService.getCurrentBackend();
-        // If currentBackend contains ':' it is actually a B type module (see b/12893879)
-        if (currentBackend != null && currentBackend.indexOf(':') == -1) {
-          backend = currentBackend;
-        } else {
-          ModulesService modulesService = ModulesServiceFactory.getModulesService();
-          module = modulesService.getCurrentModule();
-          version = modulesService.getCurrentVersion();
+  static ShardedJobSettings makeShardedJobSettings(final String shardedJobId,
+      final MapReduceSettings mrSettings, final Key pipelineKey) {
+    return RetryHelper.runWithRetries(new Callable<ShardedJobSettings>() {
+      @Override
+      public ShardedJobSettings call() {
+        String backend = mrSettings.getBackend();
+        String module = mrSettings.getModule();
+        String version = null;
+        if (backend == null) {
+          if (module == null) {
+            BackendService backendService = BackendServiceFactory.getBackendService();
+            String currentBackend = backendService.getCurrentBackend();
+            // If currentBackend contains ':' it is actually a B type module (see b/12893879)
+            if (currentBackend != null && currentBackend.indexOf(':') == -1) {
+              backend = currentBackend;
+            } else {
+              ModulesService modulesService = ModulesServiceFactory.getModulesService();
+              module = modulesService.getCurrentModule();
+              version = modulesService.getCurrentVersion();
+            }
+          } else {
+            ModulesService modulesService = ModulesServiceFactory.getModulesService();
+            if (module.equals(modulesService.getCurrentModule())) {
+              version = modulesService.getCurrentVersion();
+            } else {
+              // TODO(user): we may want to support providing a version for a module
+              version = modulesService.getDefaultVersion(module);
+            }
+          }
         }
-      } else {
-        ModulesService modulesService = ModulesServiceFactory.getModulesService();
-        if (module.equals(modulesService.getCurrentModule())) {
-          version = modulesService.getCurrentVersion();
-        } else {
-          // TODO(user): we may want to support providing a version for a module
-          version = modulesService.getDefaultVersion(module);
-        }
+        return new ShardedJobSettings.Builder()
+            .setControllerPath(mrSettings.getBaseUrl() + CONTROLLER_PATH + "/" + shardedJobId)
+            .setWorkerPath(mrSettings.getBaseUrl() + WORKER_PATH + "/" + shardedJobId)
+            .setMapReduceStatusUrl(mrSettings.getBaseUrl() + "detail?mapreduce_id=" + shardedJobId)
+            .setPipelineStatusUrl(PipelineServlet.makeViewerUrl(pipelineKey, pipelineKey))
+            .setBackend(backend)
+            .setModule(module)
+            .setVersion(version)
+            .setQueueName(mrSettings.getWorkerQueueName())
+            .setMaxShardRetries(mrSettings.getMaxShardRetries())
+            .setMaxSliceRetries(mrSettings.getMaxSliceRetries())
+            .setSliceTimeoutMillis(Math.max(ShardedJobSettings.DEFAULT_SLICE_TIMEOUT_MILLIS,
+                (int) (mrSettings.getMillisPerSlice() * 1.1)))
+            .build();
       }
-    }
-    return new ShardedJobSettings.Builder()
-        .setControllerPath(mrSettings.getBaseUrl() + CONTROLLER_PATH + "/" + shardedJobId)
-        .setWorkerPath(mrSettings.getBaseUrl() + WORKER_PATH + "/" + shardedJobId)
-        .setMapReduceStatusUrl(mrSettings.getBaseUrl() + "detail?mapreduce_id=" + shardedJobId)
-        .setPipelineStatusUrl(PipelineServlet.makeViewerUrl(pipelineKey, pipelineKey))
-        .setBackend(backend)
-        .setModule(module)
-        .setVersion(version)
-        .setQueueName(mrSettings.getWorkerQueueName())
-        .setMaxShardRetries(mrSettings.getMaxShardRetries())
-        .setMaxSliceRetries(mrSettings.getMaxSliceRetries())
-        .setSliceTimeoutMillis(Math.max(ShardedJobSettings.DEFAULT_SLICE_TIMEOUT_MILLIS,
-            (int) (mrSettings.getMillisPerSlice() * 1.1)))
-        .build();
+    }, RetryParams.getDefaultInstance(), MODULES_EXCEPTION_HANDLER);
   }
 
   @VisibleForTesting

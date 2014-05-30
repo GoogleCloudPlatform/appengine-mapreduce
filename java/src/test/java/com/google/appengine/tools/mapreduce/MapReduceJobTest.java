@@ -80,7 +80,8 @@ public class MapReduceJobTest extends TestCase {
       MapReduceJob.start(specification, settings);
       fail("was expecting failure due to bad queue");
     } catch (RuntimeException ex) {
-      assertEquals("The specified queue is unknown : non-default", ex.getMessage());
+      assertTrue("Wrong error message: "+ ex.getMessage(),
+          ex.getMessage().contains("The specified queue is unknown : non-default"));
     }
   }
 
