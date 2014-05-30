@@ -7,9 +7,6 @@ import com.google.appengine.tools.mapreduce.MapReduceJob;
 import com.google.appengine.tools.mapreduce.MapReduceServlet;
 import com.google.appengine.tools.mapreduce.impl.shardedjob.ShardedJobHandler;
 import com.google.appengine.tools.mapreduce.impl.shardedjob.ShardedJobRunner;
-import com.google.appengine.tools.pipeline.NoSuchObjectException;
-import com.google.appengine.tools.pipeline.OrphanedObjectException;
-import com.google.appengine.tools.pipeline.PipelineServiceFactory;
 import com.google.common.collect.ImmutableMap;
 
 import java.io.IOException;
@@ -39,7 +36,6 @@ public final class MapReduceServletImpl {
 
   public static final String CONTROLLER_PATH = "controllerCallback";
   public static final String WORKER_PATH = "workerCallback";
-  public static final String SHUFFLE_CALLBACK_PATH = "shuffleCallback";
   static final String COMMAND_PATH = "command";
 
   private static class Resource {
@@ -86,11 +82,6 @@ public final class MapReduceServletImpl {
         return;
       }
       StatusHandler.handleCommand(handler.substring(COMMAND_PATH.length() + 1), request, response);
-    } else if (handler.startsWith(SHUFFLE_CALLBACK_PATH)) {
-      if (!checkForTaskQueue(request, response)) {
-        return;
-      }
-      handleShuffleCallback(request);
     } else {
       handleStaticResources(handler, response);
     }
@@ -122,30 +113,9 @@ public final class MapReduceServletImpl {
         return;
       }
       StatusHandler.handleCommand(handler.substring(COMMAND_PATH.length() + 1), request, response);
-    } else if (handler.startsWith(SHUFFLE_CALLBACK_PATH)) {
-      if (!checkForTaskQueue(request, response)) {
-        return;
-      }
-      handleShuffleCallback(request);
     } else {
       throw new RuntimeException(
           "Received an unknown MapReduce request handler. See logs for more detail.");
-    }
-  }
-
-  private static void handleShuffleCallback(HttpServletRequest request) {
-    String promiseHandle = request.getParameter("promiseHandle");
-    String errorCode = request.getParameter("error");
-    log.info("shuffle callback; promiseHandle=" + promiseHandle + ", error=" + errorCode);
-    try {
-      PipelineServiceFactory.newPipelineService().submitPromisedValue(promiseHandle, errorCode);
-    } catch (NoSuchObjectException e) {
-      // TODO(ohler): retry here rather than letting the task queue retry, to
-      // avoid false alarms in the logs.
-      throw new RuntimeException("NoSuchObjectException for promiseHandle " + promiseHandle, e);
-    } catch (OrphanedObjectException e) {
-      // Pipeline is aborted, don't retry.
-      log.log(Level.WARNING, "OrphanedObjectException for promiseHandle " + promiseHandle, e);
     }
   }
 
