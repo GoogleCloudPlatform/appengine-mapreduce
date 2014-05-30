@@ -6,9 +6,9 @@ import com.google.appengine.api.appidentity.AppIdentityServiceFactory;
 import com.google.appengine.api.appidentity.AppIdentityServiceFailureException;
 import com.google.appengine.tools.cloudstorage.GcsFileOptions;
 import com.google.appengine.tools.cloudstorage.GcsFilename;
-import com.google.appengine.tools.cloudstorage.GcsOutputChannel;
 import com.google.appengine.tools.cloudstorage.GcsService;
 import com.google.appengine.tools.cloudstorage.GcsServiceFactory;
+import com.google.appengine.tools.cloudstorage.RetryParams;
 import com.google.common.base.Strings;
 
 import java.io.IOException;
@@ -118,15 +118,20 @@ public class MapReduceSettings extends MapSettings {
   }
 
   private static void verifyBucketIsWritable(String bucket) throws IOException {
-    GcsService gcsService = GcsServiceFactory.createGcsService();
-    GcsFilename filename = new GcsFilename(bucket, UUID.randomUUID().toString() + ".tmp");
+    GcsService gcsService = GcsServiceFactory.createGcsService(new RetryParams.Builder()
+        .retryMinAttempts(2)
+        .retryMaxAttempts(3)
+        .totalRetryPeriodMillis(20000)
+        .requestTimeoutMillis(10000)
+        .build());
+  GcsFilename filename = new GcsFilename(bucket, UUID.randomUUID().toString() + ".tmp");
     if (gcsService.getMetadata(filename) != null) {
       log.warning("File '" + filename.getObjectName() + "' exists. Skipping bucket write test.");
       return;
     }
-    try (GcsOutputChannel channel =
-        gcsService.createOrReplace(filename, GcsFileOptions.getDefaultInstance())) {
-      channel.write(ByteBuffer.wrap("Delete me!".getBytes(StandardCharsets.UTF_8)));
+    try {
+      gcsService.createOrReplace(filename, GcsFileOptions.getDefaultInstance(),
+          ByteBuffer.wrap("Delete me!".getBytes(StandardCharsets.UTF_8)));
     } finally {
       gcsService.delete(filename);
     }
