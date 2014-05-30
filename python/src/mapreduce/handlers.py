@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2010 Google Inc.
+# Copyright 2010 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -251,6 +251,9 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
       If failed for any reason, raise error to retry the task (hence all
       the previous validation code). The task would die naturally eventually.
 
+      Raises:
+        Rollback: If the shard state is missing.
+
       Returns:
         A _TASK_DIRECTIVE enum.
       """
@@ -413,12 +416,6 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
     # TODO(user): Find a better way to set these per thread configs.
     # E.g. what if user change it?
     util._set_ndb_cache_policy()
-    if cloudstorage:
-      cloudstorage.set_default_retry_params(
-          cloudstorage.RetryParams(
-              min_retries=5,
-              max_retries=10,
-              urlfetch_timeout=parameters._GCS_URLFETCH_TIMEOUT_SEC))
 
     job_config = map_job.JobConfig._to_map_job_config(
         spec,
@@ -650,6 +647,9 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
       shard_state: model.ShardState for current shard.
       tstate: model.TransientShardState for current shard.
       task_directive: enum _TASK_DIRECTIVE.
+
+    Returns:
+      The task to retry if applicable.
     """
     spec = tstate.mapreduce_spec
 
@@ -690,6 +690,7 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
 
     @db.transactional(retries=5)
     def _tx():
+      """The Transaction helper."""
       fresh_shard_state = model.ShardState.get_by_shard_id(tstate.shard_id)
       if not fresh_shard_state:
         raise db.Rollback()
@@ -1128,6 +1129,7 @@ class ControllerCallbackHandler(base_handler.HugeTaskHandler):
     else:
       @db.transactional(retries=5)
       def _put_state():
+        """The helper for storing the state."""
         fresh_state = model.MapreduceState.get_by_job_id(spec.mapreduce_id)
         # We don't check anything other than active because we are only
         # updating stats. It's OK if they are briefly inconsistent.
@@ -1188,6 +1190,7 @@ class ControllerCallbackHandler(base_handler.HugeTaskHandler):
 
     @db.transactional(retries=5)
     def _put_state():
+      """Helper to store state."""
       fresh_state = model.MapreduceState.get_by_job_id(
           mapreduce_spec.mapreduce_id)
       if not fresh_state.active:
@@ -1218,7 +1221,8 @@ class ControllerCallbackHandler(base_handler.HugeTaskHandler):
     """Compute single controller task name.
 
     Args:
-      transient_shard_state: an instance of TransientShardState.
+      mapreduce_spec: specification of the mapreduce.
+      serial_id: id of the invocation as int.
 
     Returns:
       task name which should be used to process specified shard/slice.
@@ -1564,6 +1568,9 @@ class StartJobHandler(base_handler.PostJsonHandler):
     Raises:
       Any exception raised by the 'params_validator' request parameter if
       the params fail to validate.
+
+    Returns:
+      The user parameters.
     """
     params_validator = self.request.get(validator_parameter)
 
@@ -1695,6 +1702,7 @@ class StartJobHandler(base_handler.PostJsonHandler):
                         eta,
                         countdown,
                         queue_name):
+    """Enqueues a new kickoff task."""
     params = {"mapreduce_id": mapreduce_spec.mapreduce_id}
     # Task is not named so that it can be added within a transaction.
     kickoff_task = taskqueue.Task(
@@ -1720,7 +1728,8 @@ class FinalizeJobHandler(base_handler.TaskQueueHandler):
     mapreduce_id = self.request.get("mapreduce_id")
     mapreduce_state = model.MapreduceState.get_by_job_id(mapreduce_id)
     if mapreduce_state:
-      config=util.create_datastore_write_config(mapreduce_state.mapreduce_spec)
+      config = (
+          util.create_datastore_write_config(mapreduce_state.mapreduce_spec))
       keys = [model.MapreduceControl.get_key_by_job_id(mapreduce_id)]
       for ss in model.ShardState.find_all_by_mapreduce_state(mapreduce_state):
         keys.extend(list(
