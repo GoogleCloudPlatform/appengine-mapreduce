@@ -40,6 +40,9 @@ public class MapSettings implements Serializable {
       new ExceptionHandler.Builder().retryOn(ModulesException.class).build();
   private static final ExceptionHandler QUEUE_EXCEPTION_HANDLER =
       new ExceptionHandler.Builder().retryOn(TransientFailureException.class).build();
+  private static final RetryParams RETRY_PARAMS = new RetryParams.Builder()
+      .initialRetryDelayMillis(500).retryMinAttempts(7).retryMaxAttempts(8)
+      .retryDelayBackoffFactor(2).maxRetryDelayMillis(20_000).build();
 
   public static final String DEFAULT_BASE_URL = "/mapreduce/";
   public static final String CONTROLLER_PATH = "controllerCallback";
@@ -253,7 +256,7 @@ public class MapSettings implements Serializable {
             @Override public String call() {
               return modulesService.getDefaultVersion(requestedModule);
             }
-          },  RetryParams.getDefaultInstance(), MODULES_EXCEPTION_HANDLER);
+          },  RETRY_PARAMS, MODULES_EXCEPTION_HANDLER);
         }
       }
     }
@@ -274,7 +277,7 @@ public class MapSettings implements Serializable {
       @Override public ShardedJobSettings call() {
         return builder.build();
       }
-    },  RetryParams.getDefaultInstance(), MODULES_EXCEPTION_HANDLER);
+    },  RETRY_PARAMS, MODULES_EXCEPTION_HANDLER);
   }
 
   private static String checkQueueSettings(String queueName) {
@@ -291,12 +294,13 @@ public class MapSettings implements Serializable {
           queue.fetchStatistics();
           return null;
         }
-      }, RetryParams.getDefaultInstance(), QUEUE_EXCEPTION_HANDLER);
+      }, RETRY_PARAMS, QUEUE_EXCEPTION_HANDLER);
     } catch (RetryHelperException ex) {
       if (ex.getCause() instanceof IllegalStateException) {
         throw new RuntimeException("Queue '" + queueName + "' does not exists");
       }
-      throw new RuntimeException("Could not check if queue exists", ex.getCause());
+      throw new RuntimeException(
+          "Could not check if queue '" + queueName + "' exists", ex.getCause());
     }
     return queueName;
   }
