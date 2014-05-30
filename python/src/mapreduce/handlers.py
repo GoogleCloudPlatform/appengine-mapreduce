@@ -45,9 +45,11 @@ from mapreduce import errors
 from mapreduce import input_readers
 from mapreduce import model
 from mapreduce import operation
+from mapreduce import output_writers
 from mapreduce import parameters
 from mapreduce import util
 from mapreduce.api import map_job
+from mapreduce.api.map_job import shard_life_cycle
 from google.appengine.runtime import apiproxy_errors
 
 # pylint: disable=g-import-not-at-top
@@ -363,6 +365,34 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
           "Release lock for shard %s failed. Wait for lease to expire.",
           shard_state.shard_id)
 
+  def _maintain_LC(self, obj, slice_id, last_slice=False, begin_slice=True,
+                   shard_ctx=None, slice_ctx=None):
+    """Makes sure shard life cycle interface are respected.
+
+    Args:
+      obj: the obj that may have implemented _ShardLifeCycle.
+      slice_id: current slice_id
+      last_slice: whether this is the last slice.
+      begin_slice: whether this is the beginning or the end of a slice.
+      shard_ctx: shard ctx for dependency injection. If None, it will be read
+        from self.
+      slice_ctx: slice ctx for dependency injection. If None, it will be read
+        from self.
+    """
+    if obj is None or not isinstance(obj, shard_life_cycle._ShardLifeCycle):
+      return
+
+    shard_context = shard_ctx or self.shard_context
+    slice_context = slice_ctx or self.slice_context
+    if begin_slice:
+      if slice_id == 0:
+        obj.begin_shard(shard_context)
+      obj.begin_slice(slice_context)
+    else:
+      obj.end_slice(slice_context)
+      if last_slice:
+        obj.end_shard(shard_context)
+
   def handle(self):
     """Handle request.
 
@@ -425,22 +455,30 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
                                               shard_state,
                                               tstate)
     try:
+      slice_id = tstate.slice_id
+      self._maintain_LC(tstate.handler, slice_id)
+      self._maintain_LC(tstate.input_reader, slice_id)
+      self._maintain_LC(tstate.output_writer, slice_id)
+
       if is_this_a_retry:
         task_directive = self._attempt_slice_recovery(shard_state, tstate)
         if task_directive != self._TASK_DIRECTIVE.PROCEED_TASK:
           return self.__return(shard_state, tstate, task_directive)
 
-      if isinstance(tstate.handler, map_job.Mapper):
-        if tstate.slice_id == 0:
-          tstate.handler.begin_shard(self.shard_context)
-        tstate.handler.begin_slice(self.slice_context)
-
-      finished_shard = self._process_inputs(
+      last_slice = self._process_inputs(
           tstate.input_reader, shard_state, tstate, ctx)
-      if finished_shard:
+
+      self._maintain_LC(tstate.handler, slice_id, last_slice, False)
+      self._maintain_LC(tstate.input_reader, slice_id, last_slice, False)
+      self._maintain_LC(tstate.output_writer, slice_id, last_slice, False)
+
+      ctx.flush()
+
+      if last_slice:
         # Since there was no exception raised, we can finalize output writer
         # safely. Otherwise writer might be stuck in some bad state.
-        if tstate.output_writer:
+        if (tstate.output_writer and
+            isinstance(tstate.output_writer, output_writers.OutputWriter)):
           # It's possible that finalization is successful but
           # saving state failed. In this case this shard will retry upon
           # finalization error.
@@ -536,12 +574,6 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
     self.slice_context.incr(
         context.COUNTER_MAPPER_WALLTIME_MS,
         int((self._time() - self._start_time)*1000))
-
-    if isinstance(tstate.handler, map_job.Mapper):
-      tstate.handler.end_slice(self.slice_context)
-      if finished_shard:
-        tstate.handler.end_shard(self.shard_context)
-    ctx.flush()
 
     return finished_shard
 
