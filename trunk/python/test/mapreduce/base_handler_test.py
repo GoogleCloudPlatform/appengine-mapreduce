@@ -1,6 +1,5 @@
 #!/usr/bin/env python
-#
-# Copyright 2010 Google Inc.
+# Copyright 2010 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -56,6 +55,8 @@ class TaskQueueHandlerTest(unittest.TestCase):
     if not enable_cloudstorage_tests:
       return
     self.assertTrue(api_utils._get_default_retry_params().save_access_token)
+    self.assertEquals("App Engine Python MR",
+                      api_utils._get_default_retry_params()._user_agent)
 
   def testPostNoTaskQueueHeader(self):
     """Test calling post() without valid taskqueue header."""
@@ -128,11 +129,12 @@ class FaultyTaskQueueHandlerTest(unittest.TestCase):
 class JsonErrorHandler(base_handler.JsonHandler):
   """JsonHandler that raises an error when invoked."""
 
+  # pylint: disable=super-init-not-called
   def __init__(self, error):
     """Constructor.
 
     Args:
-      error The error to raise when handle() is called.
+      error: The error to raise when handle() is called.
     """
     self.error = error
     self.json_response = {}
@@ -180,7 +182,7 @@ class JsonHandlerTest(unittest.TestCase):
 
   def testError(self):
     """Test that an error sets the expected response fields."""
-    handler = JsonErrorHandler(Exception('bill hicks'))
+    handler = JsonErrorHandler(Exception("bill hicks"))
     request = mock_webapp.MockRequest()
     response = mock_webapp.MockResponse()
     request.headers["X-Requested-With"] = "XMLHttpRequest"
@@ -192,5 +194,5 @@ class JsonHandlerTest(unittest.TestCase):
                       handler.json_response["error_message"])
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
   unittest.main()
