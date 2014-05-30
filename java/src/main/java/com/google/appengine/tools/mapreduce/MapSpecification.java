@@ -57,7 +57,7 @@ public final class MapSpecification<I, O, R> extends BaseSpecification<I, O, R> 
     }
 
     /**
-     * A convenient method that wraps the given {@code mapper} using
+     * A convenience method that wraps the given {@code mapper} using
      * {@link MapOnlyMapper#forMapper(Mapper)}.
      */
     public Builder<I, O, R> setMapper(Mapper<? extends I, Void, O> mapper) {
