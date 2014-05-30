@@ -416,6 +416,8 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
     if cloudstorage:
       cloudstorage.set_default_retry_params(
           cloudstorage.RetryParams(
+              min_retries=5,
+              max_retries=10,
               urlfetch_timeout=parameters._GCS_URLFETCH_TIMEOUT_SEC))
 
     job_config = map_job.JobConfig._to_map_job_config(
