@@ -9,18 +9,19 @@ import java.io.IOException;
  * there can be multiple sorted files per reducer.
  *
  * @param <O> type of values accepted by this output
- * @param <CreatorT> type of the SlicingWriterCreator provided.
+ * @param <WriterT> type of the output writer being written to
  *
  */
-public class SlicingOutputWriter<O, CreatorT extends SlicingWriterCreator<O>>
-    extends OutputWriter<O> {
+public abstract class SlicingOutputWriter<O, WriterT extends OutputWriter<O>> extends
+    OutputWriter<O> {
 
-  private static final long serialVersionUID = 7374361726571559544L;
-  private final CreatorT creator;
+  private static final long serialVersionUID = -2846649020412508288L;
+  private int sliceCount;
   private transient OutputWriter<O> writer;
 
-  public SlicingOutputWriter(CreatorT creator) {
-    this.creator = creator;
+  @Override
+  public void beginShard() {
+    sliceCount = 0;
   }
 
   /**
@@ -28,11 +29,16 @@ public class SlicingOutputWriter<O, CreatorT extends SlicingWriterCreator<O>>
    */
   @Override
   public void beginSlice() throws IOException {
-    writer = getCreator().createNextWriter();
+    writer = createWriter(sliceCount++);
     writer.setContext(getContext());
     writer.beginShard();
     writer.beginSlice();
   }
+
+  /**
+   * Creates a new writer. This is called once per slice
+   */
+  protected abstract WriterT createWriter(int sliceNumber);
 
   /**
    * closes the current writer.
@@ -49,12 +55,11 @@ public class SlicingOutputWriter<O, CreatorT extends SlicingWriterCreator<O>>
     writer.write(value);
   }
 
-  public CreatorT getCreator() {
-    return creator;
-  }
-
   @Override
   public boolean allowSliceRetry() {
     return true;
   }
+
+  @Override
+  public abstract long estimateMemoryRequirement();
 }

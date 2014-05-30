@@ -28,6 +28,8 @@ public class GoogleCloudStorageFileOutputWriter extends OutputWriter<ByteBuffer>
   private static final GcsService GCS_SERVICE =
       GcsServiceFactory.createGcsService(MapReduceConstants.GCS_RETRY_PARAMETERS);
 
+  public static final long MEMORY_REQUIRED = MapReduceConstants.DEFAULT_IO_BUFFER_SIZE * 2;
+
   static {
     // TODO(user): include version once b/12689661 is fixed
     GCS_SERVICE.setHttpHeaders(ImmutableMap.of("User-Agent", "App Engine MR"));
@@ -82,6 +84,6 @@ public class GoogleCloudStorageFileOutputWriter extends OutputWriter<ByteBuffer>
 
   @Override
   public long estimateMemoryRequirement() {
-    return MapReduceConstants.DEFAULT_IO_BUFFER_SIZE * 2; // Double buffered
+    return MEMORY_REQUIRED;
   }
 }

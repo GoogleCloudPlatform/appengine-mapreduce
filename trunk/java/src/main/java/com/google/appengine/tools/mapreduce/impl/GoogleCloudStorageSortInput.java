@@ -6,7 +6,6 @@ import static com.google.appengine.tools.mapreduce.impl.MapReduceConstants.DEFAU
 import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.appengine.tools.cloudstorage.GcsFilename;
-import com.google.appengine.tools.mapreduce.GoogleCloudStorageFileSet;
 import com.google.appengine.tools.mapreduce.Input;
 import com.google.appengine.tools.mapreduce.InputReader;
 import com.google.appengine.tools.mapreduce.KeyValue;
@@ -32,13 +31,13 @@ public class GoogleCloudStorageSortInput extends Input<KeyValue<ByteBuffer, Byte
 
   private static final long serialVersionUID = -3995775161471778634L;
 
-  private final List<GoogleCloudStorageFileSet> filenames;
+  private final FilesByShard files;
 
   private static class ReaderImpl extends ForwardingInputReader<KeyValue<ByteBuffer, ByteBuffer>> {
 
     private static final long serialVersionUID = 3310058647644865812L;
 
-    private InputReader<KeyValue<ByteBuffer, ByteBuffer>> reader;
+    private final InputReader<KeyValue<ByteBuffer, ByteBuffer>> reader;
 
     private ReaderImpl(GcsFilename file) {
       Marshaller<ByteBuffer> identity = Marshallers.getByteBufferMarshaller();
@@ -55,17 +54,17 @@ public class GoogleCloudStorageSortInput extends Input<KeyValue<ByteBuffer, Byte
     }
   }
 
-  public GoogleCloudStorageSortInput(List<GoogleCloudStorageFileSet> filenames) {
-    this.filenames = checkNotNull(filenames, "Null filenames");
+  public GoogleCloudStorageSortInput(FilesByShard files) {
+    this.files = checkNotNull(files, "Null files");
   }
 
   @Override
   public List<? extends InputReader<KeyValue<ByteBuffer, ByteBuffer>>> createReaders() {
     ImmutableList.Builder<InputReader<KeyValue<ByteBuffer, ByteBuffer>>> out =
         ImmutableList.builder();
-    for (GoogleCloudStorageFileSet filesForShard : filenames) {
-      List<ReaderImpl> readersForShard = new ArrayList<>(filesForShard.getNumFiles());
-      for (GcsFilename file : filesForShard.getAllFiles()) {
+    for (int shard = 0; shard < files.getShardCount(); shard++) {
+      List<ReaderImpl> readersForShard = new ArrayList<>();
+      for (GcsFilename file : files.getFilesForShard(shard).getFiles()) {
         readersForShard.add(new ReaderImpl(file));
       }
       out.add(new ConcatenatingInputReader<>(readersForShard));

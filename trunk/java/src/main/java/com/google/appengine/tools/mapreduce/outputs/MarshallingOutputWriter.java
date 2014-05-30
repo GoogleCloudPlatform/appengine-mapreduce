@@ -18,10 +18,11 @@ public class MarshallingOutputWriter<O> extends ForwardingOutputWriter<O> {
 
   private static final long serialVersionUID = -1441650908652534613L;
 
-  private final Marshaller<O> marshaller;
+  private final Marshaller<? super O> marshaller;
   private final OutputWriter<ByteBuffer> writer;
 
-  public MarshallingOutputWriter(OutputWriter<ByteBuffer> writer, Marshaller<O> marshaller) {
+  public MarshallingOutputWriter(OutputWriter<ByteBuffer> writer,
+      Marshaller<? super O> marshaller) {
     this.writer = checkNotNull(writer, "No writer");
     this.marshaller = checkNotNull(marshaller, "No marshaller");
   }

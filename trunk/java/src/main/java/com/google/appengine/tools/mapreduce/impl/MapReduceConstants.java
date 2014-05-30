@@ -13,10 +13,10 @@ public class MapReduceConstants {
   private MapReduceConstants() {}
 
   public static final String MAP_OUTPUT_DIR_FORMAT =
-      "MapReduce/%s/MapOutput/Mapper-%04d/Reducer-%%04d";
+      "MapReduce/%s/MapOutput/Mapper-%04d/SortShard-%%04d";
 
   public static final String SORT_OUTPUT_DIR_FORMAT =
-      "MapReduce/%s/ReduceInput/Shard-%04d/slice-%%04d";
+      "MapReduce/%s/ReduceInput/Sorter-%04d/ReduceShard-%04d/slice-%%04d";
 
 
   public static final int ASSUMED_BASE_MEMORY_PER_REQUEST = 16 * 1024 * 1024;
@@ -48,10 +48,14 @@ public class MapReduceConstants {
   public static final String REDUCE_INPUT_MIME_TYPE =
       "application/vnd.appengine.mapreduce.reduce-input.records";
 
+  public static final int MAX_WRITER_FANOUT = 32;
+
   /**
    * Maximum display size of the lastItem in the UI.
    */
   public static final int MAX_LAST_ITEM_STRING_SIZE = 100;
+
+  public static final int MAX_REDUCE_SHARDS = 2048;
 
   public static final RetryParams GCS_RETRY_PARAMETERS = new RetryParams.Builder()
       .requestTimeoutMillis(30000)

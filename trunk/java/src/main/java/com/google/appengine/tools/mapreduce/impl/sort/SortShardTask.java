@@ -19,6 +19,7 @@ import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
+import java.util.List;
 
 /**
  * Keeps accepting inputs and passing them to a SortWorker until the worker's buffer is full. Once
@@ -26,17 +27,17 @@ import java.nio.CharBuffer;
  *
  */
 public class SortShardTask extends WorkerShardTask<KeyValue<ByteBuffer, ByteBuffer>,
-    KeyValue<ByteBuffer, ? extends Iterable<ByteBuffer>>, SortContext> {
+    KeyValue<ByteBuffer, List<ByteBuffer>>, SortContext> {
 
   private static final long serialVersionUID = -8041992113450564646L;
 
   private final SortWorker inMemSorter;
   private final InputReader<KeyValue<ByteBuffer, ByteBuffer>> in;
-  private final OutputWriter<KeyValue<ByteBuffer, ? extends Iterable<ByteBuffer>>> out;
+  private final OutputWriter<KeyValue<ByteBuffer, List<ByteBuffer>>> out;
 
   public SortShardTask(String mrJobId, int shardNumber, int shardCount,
       InputReader<KeyValue<ByteBuffer, ByteBuffer>> in, SortWorker worker,
-      OutputWriter<KeyValue<ByteBuffer, ? extends Iterable<ByteBuffer>>> out) {
+      OutputWriter<KeyValue<ByteBuffer, List<ByteBuffer>>> out) {
     super(new IncrementalTaskContext(mrJobId, shardNumber, shardCount, SORT_CALLS,
         SORT_WALLTIME_MILLIS));
     this.in = checkNotNull(in, "Null in");
@@ -103,7 +104,7 @@ public class SortShardTask extends WorkerShardTask<KeyValue<ByteBuffer, ByteBuff
   }
 
   @Override
-  public OutputWriter<KeyValue<ByteBuffer, ? extends Iterable<ByteBuffer>>> getOutputWriter() {
+  public OutputWriter<KeyValue<ByteBuffer, List<ByteBuffer>>> getOutputWriter() {
     return out;
   }
 
