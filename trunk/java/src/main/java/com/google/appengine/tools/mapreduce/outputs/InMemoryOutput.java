@@ -42,6 +42,12 @@ public class InMemoryOutput<O> extends Output<O, List<List<O>>> {
     }
 
     @Override
+    public void beginShard() {
+      closed = false;
+      accu.clear();
+    }
+
+    @Override
     public void write(O value) {
       Preconditions.checkState(!closed, "%s: Already closed", this);
       accu.add(value);
