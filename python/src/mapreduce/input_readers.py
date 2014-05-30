@@ -549,6 +549,8 @@ class AbstractDatastoreInputReader(InputReader):
                            app):
     """Split a namespace by scatter index into key_range.KeyRange.
 
+    TODO(user): Power this with key_range.KeyRange.compute_split_points.
+
     Args:
       shard_count: number of shards.
       namespace: namespace name to split. str.
