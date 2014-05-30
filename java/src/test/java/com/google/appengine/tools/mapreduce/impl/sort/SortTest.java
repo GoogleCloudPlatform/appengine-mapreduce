@@ -5,6 +5,7 @@ import static java.nio.charset.StandardCharsets.US_ASCII;
 import com.google.appengine.tools.mapreduce.KeyValue;
 import com.google.appengine.tools.mapreduce.OutputWriter;
 import com.google.appengine.tools.mapreduce.impl.IncrementalTaskContext;
+import com.google.common.collect.Iterables;
 import com.google.common.collect.Iterators;
 import com.google.common.collect.Lists;
 
@@ -72,10 +73,10 @@ public class SortTest extends TestCase {
     @SuppressWarnings("serial")
     public MapSortContext() {
       super(new IncrementalTaskContext("TestJob", 1, 1, "calls", "time"),
-        new OutputWriter<KeyValue<ByteBuffer, Iterator<ByteBuffer>>>() {
+        new OutputWriter<KeyValue<ByteBuffer, ? extends Iterable<ByteBuffer>>>() {
 
         @Override
-        public void write(KeyValue<ByteBuffer, Iterator<ByteBuffer>> value) {
+        public void write(KeyValue<ByteBuffer, ? extends Iterable<ByteBuffer>> value) {
           throw new UnsupportedOperationException();
         }
 
@@ -90,13 +91,13 @@ public class SortTest extends TestCase {
     int sameKeyCount = 0;
 
     @Override
-    public void emit(KeyValue<ByteBuffer, Iterator<ByteBuffer>> keyValue) {
+    public void emit(KeyValue<ByteBuffer, ? extends Iterable<ByteBuffer>> keyValue) {
       ByteBuffer key = keyValue.getKey();
       List<ByteBuffer> list = map.get(key);
       if (list == null) {
         map.put(key, Lists.newArrayList(keyValue.getValue()));
       } else {
-        Iterators.addAll(list, keyValue.getValue());
+        Iterables.addAll(list, keyValue.getValue());
         sameKeyCount++;
       }
     }

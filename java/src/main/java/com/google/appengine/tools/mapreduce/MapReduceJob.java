@@ -429,19 +429,18 @@ public class MapReduceJob<I, K, V, O, R>
       GoogleCloudStorageSortInput input = new GoogleCloudStorageSortInput(mapOutput);
       ((Input<?>) input).setContext(context);
       List<? extends InputReader<KeyValue<ByteBuffer, ByteBuffer>>> readers = input.createReaders();
-      Output<KeyValue<ByteBuffer, Iterator<ByteBuffer>>, List<GoogleCloudStorageFileSet>> output =
-          new GoogleCloudStorageSortOutput(settings.getBucketName(), mrJobId, reduceShards);
+      Output<KeyValue<ByteBuffer, ? extends Iterable<ByteBuffer>>, List<GoogleCloudStorageFileSet>>
+          output = new GoogleCloudStorageSortOutput(
+              settings.getBucketName(), mrJobId, reduceShards);
       output.setContext(context);
       String shardedJobName = mrSpec.getJobName() + " (sort phase)";
-      List<? extends OutputWriter<KeyValue<ByteBuffer, Iterator<ByteBuffer>>>> writers =
+      List<? extends OutputWriter<KeyValue<ByteBuffer, ? extends Iterable<ByteBuffer>>>> writers =
           output.createWriters();
-
       Preconditions.checkState(readers.size() == writers.size(), "%s: %s readers, %s writers",
           shardedJobName, readers.size(), writers.size());
-
-      ImmutableList.Builder<WorkerShardTask<
-          KeyValue<ByteBuffer, ByteBuffer>, KeyValue<ByteBuffer, Iterator<ByteBuffer>>,
-          SortContext>> sortTasks = ImmutableList.builder();
+      ImmutableList.Builder<WorkerShardTask<KeyValue<ByteBuffer, ByteBuffer>,
+          KeyValue<ByteBuffer, ? extends Iterable<ByteBuffer>>, SortContext>> sortTasks =
+              ImmutableList.builder();
       for (int i = 0; i < readers.size(); i++) {
         sortTasks.add(new SortShardTask(mrJobId, i, readers.size(), readers.get(i),
             new SortWorker(), writers.get(i)));
@@ -450,7 +449,8 @@ public class MapReduceJob<I, K, V, O, R>
           makeShardedJobSettings(shardedJobId, settings, getPipelineKey());
       PromisedValue<ResultAndStatus<List<GoogleCloudStorageFileSet>>> resultAndStatus =
           newPromise();
-      WorkerController<KeyValue<ByteBuffer, ByteBuffer>, KeyValue<ByteBuffer, Iterator<ByteBuffer>>,
+      WorkerController<KeyValue<ByteBuffer, ByteBuffer>,
+          KeyValue<ByteBuffer, ? extends Iterable<ByteBuffer>>,
           List<GoogleCloudStorageFileSet>, SortContext> workerController = new WorkerController<>(
               mrJobId, shardedJobName, new CountersImpl(), output, resultAndStatus.getHandle());
       ShardedJob<?> shardedJob =
@@ -514,7 +514,6 @@ public class MapReduceJob<I, K, V, O, R>
       List<? extends InputReader<KeyValue<K, Iterator<V>>>> readers = input.createReaders();
       String shardedJobName = mrSpec.getJobName() + " (reduce phase)";
       List<? extends OutputWriter<O>> writers = output.createWriters();
-
       Preconditions.checkArgument(readers.size() == writers.size(), "%s: %s readers, %s writers",
           shardedJobName, readers.size(), writers.size());
       ImmutableList.Builder<WorkerShardTask<KeyValue<K, Iterator<V>>, O, ReducerContext<O>>>

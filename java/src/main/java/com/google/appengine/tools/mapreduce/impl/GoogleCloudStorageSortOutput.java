@@ -18,7 +18,6 @@ import com.google.appengine.tools.mapreduce.outputs.SlicingWriterCreator;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Iterator;
 import java.util.List;
 
 /**
@@ -29,7 +28,7 @@ import java.util.List;
  *
  */
 public class GoogleCloudStorageSortOutput extends
-    Output<KeyValue<ByteBuffer, Iterator<ByteBuffer>>, List<GoogleCloudStorageFileSet>> {
+    Output<KeyValue<ByteBuffer, ? extends Iterable<ByteBuffer>>, List<GoogleCloudStorageFileSet>> {
 
   private static final long serialVersionUID = 8332978108336443982L;
 
@@ -38,7 +37,7 @@ public class GoogleCloudStorageSortOutput extends
   private final String mrJobId;
 
   private static class WriterCreatorImpl implements
-      SlicingWriterCreator<KeyValue<ByteBuffer, Iterator<ByteBuffer>>> {
+      SlicingWriterCreator<KeyValue<ByteBuffer, ? extends Iterable<ByteBuffer>>> {
 
     private static final long serialVersionUID = -6765187605013451624L;
 
@@ -60,7 +59,7 @@ public class GoogleCloudStorageSortOutput extends
 
 
     @Override
-    public OutputWriter<KeyValue<ByteBuffer, Iterator<ByteBuffer>>> createNextWriter() {
+    public OutputWriter<KeyValue<ByteBuffer, ? extends Iterable<ByteBuffer>>> createNextWriter() {
       String fileName = String.format(fileNamePattern, sliceNumber);
       fileNames.add(fileName);
       Marshaller<ByteBuffer> identity = Marshallers.getByteBufferMarshaller();
@@ -86,8 +85,9 @@ public class GoogleCloudStorageSortOutput extends
   }
 
   @Override
-  public List<? extends OutputWriter<KeyValue<ByteBuffer, Iterator<ByteBuffer>>>> createWriters() {
-    List<SlicingOutputWriter<KeyValue<ByteBuffer, Iterator<ByteBuffer>>, WriterCreatorImpl>>
+  public List<? extends OutputWriter<KeyValue<ByteBuffer, ? extends Iterable<ByteBuffer>>>>
+      createWriters() {
+    List<SlicingOutputWriter<KeyValue<ByteBuffer, ? extends Iterable<ByteBuffer>>, WriterCreatorImpl>>
         result = new ArrayList<>(shardCount);
     for (int i = 0; i < shardCount; i++) {
       String formatStringForShard =
@@ -98,14 +98,14 @@ public class GoogleCloudStorageSortOutput extends
   }
 
   @Override
-  public List<GoogleCloudStorageFileSet> finish(
-      Collection<? extends OutputWriter<KeyValue<ByteBuffer, Iterator<ByteBuffer>>>> writers) {
+  public List<GoogleCloudStorageFileSet> finish(Collection<? extends OutputWriter<
+      KeyValue<ByteBuffer, ? extends Iterable<ByteBuffer>>>> writers) {
     assert writers.size() == shardCount;
     List<GoogleCloudStorageFileSet> filesByShard = new ArrayList<>(shardCount);
-    for (OutputWriter<KeyValue<ByteBuffer, Iterator<ByteBuffer>>> w : writers) {
+    for (OutputWriter<?> w : writers) {
       @SuppressWarnings("unchecked")
-      SlicingOutputWriter<KeyValue<ByteBuffer, Iterator<ByteBuffer>>, WriterCreatorImpl> writer =
-          (SlicingOutputWriter<KeyValue<ByteBuffer, Iterator<ByteBuffer>>, WriterCreatorImpl>) w;
+      SlicingOutputWriter<?, WriterCreatorImpl> writer =
+          (SlicingOutputWriter<?, WriterCreatorImpl>) w;
       filesByShard.add(writer.getCreator().finish());
     }
     return filesByShard;

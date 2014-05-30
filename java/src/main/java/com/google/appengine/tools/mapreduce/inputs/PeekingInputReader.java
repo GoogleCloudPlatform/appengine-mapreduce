@@ -20,7 +20,7 @@ public class PeekingInputReader<T> extends UnmarshallingInputReader<T> implement
   // TODO(user): May be a problem if peeked values are large b/10294530
   private SerializableValue<T> peekedItem; // assigned in readObject & peek
 
-  public PeekingInputReader(InputReader<ByteBuffer> reader, Marshaller<T> marshaller){
+  public PeekingInputReader(InputReader<ByteBuffer> reader, Marshaller<T> marshaller) {
     super(reader, marshaller);
   }
 

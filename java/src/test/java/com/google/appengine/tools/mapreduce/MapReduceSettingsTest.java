@@ -11,6 +11,7 @@ import junit.framework.TestCase;
 
 /**
  */
+@SuppressWarnings("deprecation")
 public class MapReduceSettingsTest extends TestCase {
 
   public void testDefaultSettings() {

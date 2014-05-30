@@ -6,16 +6,16 @@ import com.google.appengine.tools.mapreduce.impl.BaseShardContext;
 import com.google.appengine.tools.mapreduce.impl.IncrementalTaskContext;
 
 import java.nio.ByteBuffer;
-import java.util.Iterator;
 
 /**
  * Provides a context for the in memory sort.
  *
  */
-public class SortContext extends BaseShardContext<KeyValue<ByteBuffer, Iterator<ByteBuffer>>> {
+public class SortContext extends
+    BaseShardContext<KeyValue<ByteBuffer, ? extends Iterable<ByteBuffer>>> {
 
   SortContext(IncrementalTaskContext c,
-      OutputWriter<KeyValue<ByteBuffer, Iterator<ByteBuffer>>> output) {
+      OutputWriter<KeyValue<ByteBuffer, ? extends Iterable<ByteBuffer>>> output) {
     super(c, output);
   }
 }
