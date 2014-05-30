@@ -37,7 +37,6 @@ import zipfile
 
 from testlib import mox
 
-from google.appengine.datastore import entity_pb
 from google.appengine.ext import ndb
 from google.appengine.api import apiproxy_stub_map
 from google.appengine.api import datastore
@@ -53,7 +52,6 @@ from google.appengine.api.logservice import log_service_pb
 from google.appengine.api.logservice import logservice_stub
 from google.appengine.datastore import datastore_stub_util
 from google.appengine.ext import blobstore
-from google.appengine.ext import db
 from google.appengine.ext import key_range
 from google.appengine.ext import testbed
 from google.appengine.ext.blobstore import blobstore as blobstore_internal
@@ -61,7 +59,6 @@ from mapreduce import context
 from mapreduce import errors
 from mapreduce import file_format_root
 from mapreduce import input_readers
-from mapreduce import json_util
 from mapreduce import model
 from mapreduce import namespace_range
 from mapreduce import records
@@ -75,116 +72,6 @@ try:
   enable_cloudstorage_tests = True
 except ImportError:
   enable_cloudstorage_tests = False
-
-
-class TestJsonType(object):
-  """Test class with to_json/from_json methods."""
-
-  def __init__(self, size=0):
-    self.size = size
-
-  def to_json(self):
-    return {"size": self.size}
-
-  @classmethod
-  def from_json(cls, json):
-    return cls(json["size"])
-
-
-class TestEntity(db.Model):
-  """Test entity class."""
-
-  json_property = json_util.JsonProperty(TestJsonType)
-  json_property_default_value = json_util.JsonProperty(
-      TestJsonType, default=TestJsonType())
-  int_property = db.IntegerProperty()
-  datetime_property = db.DateTimeProperty(auto_now=True)
-
-  a = db.IntegerProperty()
-  b = db.IntegerProperty()
-
-
-class NdbTestEntity(ndb.Model):
-  datetime_property = ndb.DateTimeProperty(auto_now=True)
-
-  a = ndb.IntegerProperty()
-  b = ndb.IntegerProperty()
-
-
-class TestEntityWithDot(db.Model):
-  """Test entity class with dot in its kind."""
-
-  @classmethod
-  def kind(cls):
-    return "Test.Entity.With.Dot"
-
-
-ENTITY_KIND = "__main__.TestEntity"
-
-
-def key(entity_id, namespace=None, kind="TestEntity"):
-  """Create a key for TestEntity with specified id.
-
-  Used to shorten expected data.
-
-  Args:
-    entity_id: entity id
-    namespace: the namespace
-    kind: the kind
-  Returns:
-    db.Key instance with specified id for TestEntity.
-  """
-  return db.Key.from_path(kind, entity_id, namespace=namespace)
-
-
-def set_scatter_setter(key_names_to_vals):
-  """Monkey patch the scatter property setter.
-
-  Args:
-    key_names_to_vals: a dict from key_name to scatter property value.
-      The value will be casted to str as the scatter property is. Entities
-      who key is in the map will have the corresponding scatter property.
-  """
-
-  def _get_scatter_property(entity_proto):
-    key_name = entity_proto.key().path().element_list()[-1].name()
-    if key_name in key_names_to_vals:
-      scatter_property = entity_pb.Property()
-      scatter_property.set_name(datastore_types.SCATTER_SPECIAL_PROPERTY)
-      scatter_property.set_meaning(entity_pb.Property.BYTESTRING)
-      scatter_property.set_multiple(False)
-      property_value = scatter_property.mutable_value()
-      property_value.set_stringvalue(str(key_names_to_vals[key_name]))
-      return scatter_property
-  datastore_stub_util._SPECIAL_PROPERTY_MAP[
-      datastore_types.SCATTER_SPECIAL_PROPERTY] = (
-          False, True, _get_scatter_property)
-
-
-def _create_entities(keys_itr,
-                     key_to_scatter_val,
-                     ns=None,
-                     entity_model_cls=TestEntity):
-  """Create entities for tests.
-
-  Args:
-    keys_itr: an iterator that contains all the key names.
-    key_to_scatter_val: a dict that maps key names to its scatter values.
-    ns: the namespace to create the entity at.
-    entity_model_cls: entity model class.
-
-  Returns:
-    A list of entities created.
-  """
-  namespace_manager.set_namespace(ns)
-  set_scatter_setter(key_to_scatter_val)
-  entities = []
-  for k in keys_itr:
-    entity = entity_model_cls(key_name=str(k))
-    entities.append(entity)
-    entity.put()
-  namespace_manager.set_namespace(None)
-  return entities
 
 
 class AbstractDatastoreInputReaderTest(unittest.TestCase):
@@ -209,7 +96,7 @@ class AbstractDatastoreInputReaderTest(unittest.TestCase):
   def testValidate_Passes(self):
     """Test validate function accepts valid parameters."""
     params = {
-        "entity_kind": ENTITY_KIND,
+        "entity_kind": testutil.ENTITY_KIND,
         }
     mapper_spec = model.MapperSpec(
         "FooHandler",
@@ -244,7 +131,7 @@ class AbstractDatastoreInputReaderTest(unittest.TestCase):
     """Test validate function rejects bad entity kind."""
     # Setting keys_only to true is an error.
     params = {
-        "entity_kind": ENTITY_KIND,
+        "entity_kind": testutil.ENTITY_KIND,
         "batch_size": "xxx"
         }
     mapper_spec = model.MapperSpec(
@@ -255,7 +142,7 @@ class AbstractDatastoreInputReaderTest(unittest.TestCase):
                       input_readers.AbstractDatastoreInputReader.validate,
                       mapper_spec)
     params = {
-        "entity_kind": ENTITY_KIND,
+        "entity_kind": testutil.ENTITY_KIND,
         "batch_size": "0"
         }
     mapper_spec = model.MapperSpec(
@@ -266,7 +153,7 @@ class AbstractDatastoreInputReaderTest(unittest.TestCase):
                       input_readers.AbstractDatastoreInputReader.validate,
                       mapper_spec)
     params = {
-        "entity_kind": ENTITY_KIND,
+        "entity_kind": testutil.ENTITY_KIND,
         "batch_size": "-1"
         }
     mapper_spec = model.MapperSpec(
@@ -280,7 +167,7 @@ class AbstractDatastoreInputReaderTest(unittest.TestCase):
   def testValidate_WrongTypeNamespace(self):
     """Tests validate function rejects namespace of incorrect type."""
     params = {
-        "entity_kind": ENTITY_KIND,
+        "entity_kind": testutil.ENTITY_KIND,
         "namespace": 5
         }
     mapper_spec = model.MapperSpec(
@@ -321,16 +208,16 @@ class AbstractDatastoreInputReaderTest(unittest.TestCase):
 
   def testSplitNSByScatter_NotEnoughData(self):
     """Splits should not intersect, if there's not enough data for each."""
-    _create_entities(range(2), {"1": 1})
+    testutil._create_entities(range(2), {"1": 1})
 
     expected = [key_range.KeyRange(key_start=None,
-                                   key_end=key("1"),
+                                   key_end=testutil.key("1"),
                                    direction="ASC",
                                    include_start=False,
                                    include_end=False,
                                    namespace="",
                                    _app=self.appid),
-                key_range.KeyRange(key_start=key("1"),
+                key_range.KeyRange(key_start=testutil.key("1"),
                                    key_end=None,
                                    direction="ASC",
                                    include_start=True,
@@ -342,22 +229,22 @@ class AbstractDatastoreInputReaderTest(unittest.TestCase):
 
   def testSplitNSByScatter_NotEnoughData2(self):
     """Splits should not intersect, if there's not enough data for each."""
-    _create_entities(range(10), {"2": 2, "4": 4})
+    testutil._create_entities(range(10), {"2": 2, "4": 4})
     expected = [key_range.KeyRange(key_start=None,
-                                   key_end=key("2"),
+                                   key_end=testutil.key("2"),
                                    direction="ASC",
                                    include_start=False,
                                    include_end=False,
                                    namespace="",
                                    _app=self.appid),
-                key_range.KeyRange(key_start=key("2"),
-                                   key_end=key("4"),
+                key_range.KeyRange(key_start=testutil.key("2"),
+                                   key_end=testutil.key("4"),
                                    direction="ASC",
                                    include_start=True,
                                    include_end=False,
                                    namespace="",
                                    _app=self.appid),
-                key_range.KeyRange(key_start=key("4"),
+                key_range.KeyRange(key_start=testutil.key("4"),
                                    key_end=None,
                                    direction="ASC",
                                    include_start=True,
@@ -369,24 +256,28 @@ class AbstractDatastoreInputReaderTest(unittest.TestCase):
 
   def testSplitNSByScatter_LotsOfData(self):
     """Split lots of data for each shard."""
-    _create_entities(range(100),
-                     {"80": 80, "50": 50, "30": 30, "10": 10},
-                     ns="google")
+    testutil._create_entities(range(100),
+                              {"80": 80, "50": 50, "30": 30, "10": 10},
+                              ns="google")
     expected = [key_range.KeyRange(key_start=None,
-                                   key_end=key("30", namespace="google"),
+                                   key_end=testutil.key("30",
+                                                        namespace="google"),
                                    direction="ASC",
                                    include_start=False,
                                    include_end=False,
                                    namespace="google",
                                    _app=self.appid),
-                key_range.KeyRange(key_start=key("30", namespace="google"),
-                                   key_end=key("80", namespace="google"),
+                key_range.KeyRange(key_start=testutil.key("30",
+                                                          namespace="google"),
+                                   key_end=testutil.key("80",
+                                                        namespace="google"),
                                    direction="ASC",
                                    include_start=True,
                                    include_end=False,
                                    namespace="google",
                                    _app=self.appid),
-                key_range.KeyRange(key_start=key("80", namespace="google"),
+                key_range.KeyRange(key_start=testutil.key("80",
+                                                          namespace="google"),
                                    key_end=None,
                                    direction="ASC",
                                    include_start=True,
@@ -399,47 +290,47 @@ class AbstractDatastoreInputReaderTest(unittest.TestCase):
   def testToKeyRangesByShard(self):
     namespaces = [str(i) for i in range(3)]
     for ns in namespaces:
-      _create_entities(range(10), {"5": 5}, ns)
+      testutil._create_entities(range(10), {"5": 5}, ns)
     shards = 2
 
     expected = [
         key_range.KeyRange(key_start=None,
-                           key_end=key("5", namespace="0"),
+                           key_end=testutil.key("5", namespace="0"),
                            direction="ASC",
                            include_start=False,
                            include_end=False,
                            namespace="0",
                            _app=self.appid),
         key_range.KeyRange(key_start=None,
-                           key_end=key("5", namespace="1"),
+                           key_end=testutil.key("5", namespace="1"),
                            direction="ASC",
                            include_start=False,
                            include_end=False,
                            namespace="1",
                            _app=self.appid),
         key_range.KeyRange(key_start=None,
-                           key_end=key("5", namespace="2"),
+                           key_end=testutil.key("5", namespace="2"),
                            direction="ASC",
                            include_start=False,
                            include_end=False,
                            namespace="2",
                            _app=self.appid),
 
-        key_range.KeyRange(key_start=key("5", namespace="0"),
+        key_range.KeyRange(key_start=testutil.key("5", namespace="0"),
                            key_end=None,
                            direction="ASC",
                            include_start=True,
                            include_end=False,
                            namespace="0",
                            _app=self.appid),
-        key_range.KeyRange(key_start=key("5", namespace="1"),
+        key_range.KeyRange(key_start=testutil.key("5", namespace="1"),
                            key_end=None,
                            direction="ASC",
                            include_start=True,
                            include_end=False,
                            namespace="1",
                            _app=self.appid),
-        key_range.KeyRange(key_start=key("5", namespace="2"),
+        key_range.KeyRange(key_start=testutil.key("5", namespace="2"),
                            key_end=None,
                            direction="ASC",
                            include_start=True,
@@ -463,65 +354,66 @@ class AbstractDatastoreInputReaderTest(unittest.TestCase):
 
   def testToKeyRangesByShard_UnevenNamespaces(self):
     namespaces = [str(i) for i in range(3)]
-    _create_entities(range(10), {"5": 5}, namespaces[0])
-    _create_entities(range(10), {"5": 5, "6": 6}, namespaces[1])
-    _create_entities(range(10), {"5": 5, "6": 6, "7": 7}, namespaces[2])
+    testutil._create_entities(range(10), {"5": 5}, namespaces[0])
+    testutil._create_entities(range(10), {"5": 5, "6": 6}, namespaces[1])
+    testutil._create_entities(range(10), {"5": 5, "6": 6, "7": 7},
+                              namespaces[2])
     shards = 3
 
     expected = [
         # shard 1
         key_range.KeyRange(key_start=None,
-                           key_end=key("5", namespace="0"),
+                           key_end=testutil.key("5", namespace="0"),
                            direction="ASC",
                            include_start=False,
                            include_end=False,
                            namespace="0",
                            _app=self.appid),
         key_range.KeyRange(key_start=None,
-                           key_end=key("5", namespace="1"),
+                           key_end=testutil.key("5", namespace="1"),
                            direction="ASC",
                            include_start=False,
                            include_end=False,
                            namespace="1",
                            _app=self.appid),
         key_range.KeyRange(key_start=None,
-                           key_end=key("6", namespace="2"),
+                           key_end=testutil.key("6", namespace="2"),
                            direction="ASC",
                            include_start=False,
                            include_end=False,
                            namespace="2",
                            _app=self.appid),
         # shard 2
-        key_range.KeyRange(key_start=key("5", namespace="0"),
+        key_range.KeyRange(key_start=testutil.key("5", namespace="0"),
                            key_end=None,
                            direction="ASC",
                            include_start=True,
                            include_end=False,
                            namespace="0",
                            _app=self.appid),
-        key_range.KeyRange(key_start=key("5", namespace="1"),
-                           key_end=key("6", namespace="1"),
+        key_range.KeyRange(key_start=testutil.key("5", namespace="1"),
+                           key_end=testutil.key("6", namespace="1"),
                            direction="ASC",
                            include_start=True,
                            include_end=False,
                            namespace="1",
                            _app=self.appid),
-        key_range.KeyRange(key_start=key("6", namespace="2"),
-                           key_end=key("7", namespace="2"),
+        key_range.KeyRange(key_start=testutil.key("6", namespace="2"),
+                           key_end=testutil.key("7", namespace="2"),
                            direction="ASC",
                            include_start=True,
                            include_end=False,
                            namespace="2",
                            _app=self.appid),
         # shard 3
-        key_range.KeyRange(key_start=key("6", namespace="1"),
+        key_range.KeyRange(key_start=testutil.key("6", namespace="1"),
                            key_end=None,
                            direction="ASC",
                            include_start=True,
                            include_end=False,
                            namespace="1",
                            _app=self.appid),
-        key_range.KeyRange(key_start=key("7", namespace="2"),
+        key_range.KeyRange(key_start=testutil.key("7", namespace="2"),
                            key_end=None,
                            direction="ASC",
                            include_start=True,
@@ -549,7 +441,7 @@ class DatastoreInputReaderTestCommon(unittest.TestCase):
   # Subclass should override with its own create entities function.
   @property
   def _create_entities(self):
-    return _create_entities
+    return testutil._create_entities
 
   # Subclass should override with its own entity kind or model class path
   @property
@@ -786,10 +678,10 @@ class RawDatastoreInputReaderTest(DatastoreInputReaderTestCommon):
                       mapper_spec)
 
   def testEntityKindWithDot(self):
-    self._create_entities(range(3), {"1": 1}, "", TestEntityWithDot)
+    self._create_entities(range(3), {"1": 1}, "", testutil.TestEntityWithDot)
 
     params = {
-        "entity_kind": TestEntityWithDot.kind(),
+        "entity_kind": testutil.TestEntityWithDot.kind(),
         "namespace": "",
         }
     mapper_spec = model.MapperSpec(
@@ -855,7 +747,7 @@ class DatastoreInputReaderTest(DatastoreInputReaderTestCommon):
 
   @property
   def entity_kind(self):
-    return "__main__.TestEntity"
+    return testutil.ENTITY_KIND
 
   def testValidate_EntityKindWithNoModel(self):
     """Test validate function with no model."""
@@ -1015,13 +907,13 @@ class DatastoreInputReaderNdbTest(DatastoreInputReaderTest):
 
   @property
   def entity_kind(self):
-    return "__main__.NdbTestEntity"
+    return testutil.NDB_ENTITY_KIND
 
   def _create_entities(self,
                        keys_itr,
                        key_to_scatter_val,
                        ns=None,
-                       entity_model_cls=NdbTestEntity):
+                       entity_model_cls=testutil.NdbTestEntity):
     """Create ndb entities for tests.
 
     Args:
@@ -1034,7 +926,7 @@ class DatastoreInputReaderNdbTest(DatastoreInputReaderTest):
     Returns:
       A list of entities created.
     """
-    set_scatter_setter(key_to_scatter_val)
+    testutil.set_scatter_setter(key_to_scatter_val)
     entities = []
     for i in keys_itr:
       k = ndb.Key(entity_model_cls._get_kind(), str(i), namespace=ns)
@@ -1764,7 +1656,7 @@ class NamespaceInputReaderTest(unittest.TestCase):
 
   def testSplitDefaultNamespaceOnly(self):
     """Test reader with only default namespace populated."""
-    TestEntity().put()
+    testutil.TestEntity().put()
     readers = input_readers.NamespaceInputReader.split_input(self.mapper_spec)
     self.assertEquals(10, len(readers))
 
@@ -1775,10 +1667,10 @@ class NamespaceInputReaderTest(unittest.TestCase):
 
   def testSplitNamespacesPresent(self):
     """Test reader with multiple namespaces present."""
-    TestEntity().put()
+    testutil.TestEntity().put()
     for i in string.letters + string.digits:
       namespace_manager.set_namespace(i)
-      TestEntity().put()
+      testutil.TestEntity().put()
     namespace_manager.set_namespace(None)
 
     readers = input_readers.NamespaceInputReader.split_input(self.mapper_spec)
@@ -1838,7 +1730,7 @@ class NamespaceInputReaderTest(unittest.TestCase):
          "batch_size": 10},
         reader.to_json())
 
-    TestEntity().put()
+    testutil.TestEntity().put()
     iter(reader).next()
     json = reader.to_json()
     self.assertEquals(

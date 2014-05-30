@@ -34,9 +34,15 @@ import unittest
 
 from testlib import mox
 
+from google.appengine.datastore import entity_pb
+from google.appengine.ext import ndb
+from google.appengine.api import datastore_types
+from google.appengine.api import namespace_manager
 from google.appengine.api import queueinfo
 from google.appengine.datastore import datastore_stub_util
+from google.appengine.ext import db
 from google.appengine.ext import testbed
+from mapreduce import json_util
 from mapreduce import model
 
 # TODO(user): Cleanup imports if/when cloudstorage becomes part of runtime.
@@ -59,6 +65,117 @@ except ImportError, e:
   mod = sys.modules.setdefault(_NAME, imp.new_module(_NAME))
   mod.__path__ = [os.environ["ROOT_PACKAGE_PATH"]]
   import mock
+
+
+class TestJsonType(object):
+  """Test class with to_json/from_json methods."""
+
+  def __init__(self, size=0):
+    self.size = size
+
+  def to_json(self):
+    return {"size": self.size}
+
+  @classmethod
+  def from_json(cls, json):
+    return cls(json["size"])
+
+
+class TestEntity(db.Model):
+  """Test entity class."""
+
+  json_property = json_util.JsonProperty(TestJsonType)
+  json_property_default_value = json_util.JsonProperty(
+      TestJsonType, default=TestJsonType())
+  int_property = db.IntegerProperty()
+  datetime_property = db.DateTimeProperty(auto_now=True)
+
+  a = db.IntegerProperty()
+  b = db.IntegerProperty()
+
+
+class NdbTestEntity(ndb.Model):
+  datetime_property = ndb.DateTimeProperty(auto_now=True)
+
+  a = ndb.IntegerProperty()
+  b = ndb.IntegerProperty()
+
+
+class TestEntityWithDot(db.Model):
+  """Test entity class with dot in its kind."""
+
+  @classmethod
+  def kind(cls):
+    return "Test.Entity.With.Dot"
+
+
+ENTITY_KIND = "testlib.testutil.TestEntity"
+NDB_ENTITY_KIND = "testlib.testutil.NdbTestEntity"
+
+
+def key(entity_id, namespace=None, kind="TestEntity"):
+  """Create a key for TestEntity with specified id.
+
+  Used to shorten expected data.
+
+  Args:
+    entity_id: entity id
+    namespace: the namespace
+    kind: the kind
+  Returns:
+    db.Key instance with specified id for TestEntity.
+  """
+  return db.Key.from_path(kind, entity_id, namespace=namespace)
+
+
+def set_scatter_setter(key_names_to_vals):
+  """Monkey patch the scatter property setter.
+
+  Args:
+    key_names_to_vals: a dict from key_name to scatter property value.
+      The value will be casted to str as the scatter property is. Entities
+      who key is in the map will have the corresponding scatter property.
+  """
+
+  def _get_scatter_property(entity_proto):
+    key_name = entity_proto.key().path().element_list()[-1].name()
+    if key_name in key_names_to_vals:
+      scatter_property = entity_pb.Property()
+      scatter_property.set_name(datastore_types.SCATTER_SPECIAL_PROPERTY)
+      scatter_property.set_meaning(entity_pb.Property.BYTESTRING)
+      scatter_property.set_multiple(False)
+      property_value = scatter_property.mutable_value()
+      property_value.set_stringvalue(str(key_names_to_vals[key_name]))
+      return scatter_property
+  datastore_stub_util._SPECIAL_PROPERTY_MAP[
+      datastore_types.SCATTER_SPECIAL_PROPERTY] = (
+          False, True, _get_scatter_property)
+
+
+def _create_entities(keys_itr,
+                     key_to_scatter_val,
+                     ns=None,
+                     entity_model_cls=TestEntity):
+  """Create entities for tests.
+
+  Args:
+    keys_itr: an iterator that contains all the key names.
+    key_to_scatter_val: a dict that maps key names to its scatter values.
+    ns: the namespace to create the entity at.
+    entity_model_cls: entity model class.
+
+  Returns:
+    A list of entities created.
+  """
+  namespace_manager.set_namespace(ns)
+  set_scatter_setter(key_to_scatter_val)
+  entities = []
+  for k in keys_itr:
+    entity = entity_model_cls(key_name=str(k))
+    entities.append(entity)
+    entity.put()
+  namespace_manager.set_namespace(None)
+  return entities
 
 
 class MatchesUserRPC(mox.Comparator):
