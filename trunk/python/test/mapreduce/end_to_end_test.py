@@ -431,6 +431,7 @@ class GCSOutputWriterNoDupModeTest(GCSOutputWriterTestBase):
   def testSliceRecoveryWithForcedFlushing(self):
     # Force a flush to GCS on every character wrote.
     storage_api.StreamingBuffer._blocksize = 1
+    storage_api.StreamingBuffer._flushsize = 1
 
     mr_id = control.start_map(
         "test_map",
@@ -476,6 +477,7 @@ class GCSOutputWriterNoDupModeTest(GCSOutputWriterTestBase):
   def testSliceRecoveryWithFrequentFlushing(self):
     # Force a flush to GCS on every 8 chars.
     storage_api.StreamingBuffer._blocksize = 8
+    storage_api.StreamingBuffer._flushsize = 8
 
     mr_id = control.start_map(
         "test_map",
