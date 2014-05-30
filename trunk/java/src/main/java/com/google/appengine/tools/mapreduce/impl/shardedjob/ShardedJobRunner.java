@@ -27,7 +27,9 @@ import com.google.appengine.tools.cloudstorage.RetryHelperException;
 import com.google.appengine.tools.cloudstorage.RetryParams;
 import com.google.appengine.tools.mapreduce.impl.shardedjob.Status.StatusCode;
 import com.google.apphosting.api.ApiProxy.ApiProxyException;
+import com.google.apphosting.api.ApiProxy.ArgumentException;
 import com.google.apphosting.api.ApiProxy.RequestTooLargeException;
+import com.google.apphosting.api.ApiProxy.ResponseTooLargeException;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Predicates;
@@ -122,10 +124,13 @@ public class ShardedJobRunner<T extends IncrementalTask> implements ShardedJobHa
       ApiProxyException.class, ConcurrentModificationException.class,
       DatastoreFailureException.class, CommittedButStillApplyingException.class,
       DatastoreTimeoutException.class, TransientFailureException.class,
-      TransactionalTaskException.class).abortOn(RequestTooLargeException.class).build();
+      TransactionalTaskException.class).abortOn(RequestTooLargeException.class,
+      ResponseTooLargeException.class, ArgumentException.class).build();
 
   private static final ExceptionHandler AGGRESIVE_EXCEPTION_HANDLER =
-      new ExceptionHandler.Builder().retryOn(Exception.class).build();
+      new ExceptionHandler.Builder().retryOn(Exception.class).abortOn(
+      IllegalArgumentException.class, RequestTooLargeException.class,
+      ResponseTooLargeException.class, ArgumentException.class).build();
 
   private ShardedJobStateImpl<T> lookupJobState(Transaction tx, String jobId) {
     try {
@@ -136,7 +141,8 @@ public class ShardedJobRunner<T extends IncrementalTask> implements ShardedJobHa
     }
   }
 
-  @VisibleForTesting IncrementalTaskState<T> lookupTaskState(Transaction tx, String taskId) {
+  @VisibleForTesting
+  IncrementalTaskState<T> lookupTaskState(Transaction tx, String taskId) {
     try {
       Entity entity = DATASTORE.get(tx, IncrementalTaskState.Serializer.makeKey(taskId));
       return IncrementalTaskState.Serializer.fromEntity(entity);
@@ -405,6 +411,24 @@ public class ShardedJobRunner<T extends IncrementalTask> implements ShardedJobHa
     return null;
   }
 
+  private ShardRetryState<T> handleShardFailure(final ShardedJobState<T> jobState,
+      final IncrementalTaskState<T> taskState, Exception ex) {
+    ShardRetryState<T> retryState = lookupShardRetryState(taskState.getTaskId());
+    if (retryState == null
+        || retryState.incrementAndGet() > jobState.getSettings().getMaxShardRetries()) {
+      log.log(Level.SEVERE, "Shard exceeded its max attempts, setting job state to ERROR.", ex);
+      changeJobStatus(jobState.getJobId(), new Status(ERROR, ex));
+      taskState.setStatus(new Status(StatusCode.ERROR));
+      taskState.incrementAndGetRetryCount(); // trigger saving the last task instead of current
+    } else {
+      log.log(Level.WARNING,
+          "Shard attempt #" + retryState.getRetryCount() + " failed. Going to retry.", ex);
+      taskState.setTask(retryState.getInitialTask());
+      taskState.clearRetryCount();
+    }
+    return retryState;
+  }
+
   private void updateTask(final ShardedJobState<T> jobState,
       final IncrementalTaskState<T> taskState, /* Nullable */
       final ShardRetryState<T> shardRetryState, boolean aggresiveRetry) {
@@ -459,23 +483,6 @@ public class ShardedJobRunner<T extends IncrementalTask> implements ShardedJobHa
         }
       }
     }), DATASTORE_RETRY_FOREVER_PARAMS, exceptionHandler);
-  }
-
-  private ShardRetryState<T> handleShardFailure(final ShardedJobState<T> jobState,
-      final IncrementalTaskState<T> taskState, Exception ex) {
-    ShardRetryState<T> retryState = lookupShardRetryState(taskState.getTaskId());
-    if (retryState == null
-        || retryState.incrementAndGet() > jobState.getSettings().getMaxShardRetries()) {
-      log.log(Level.SEVERE, "Shard exceeded its max attempts, setting job state to ERROR.", ex);
-      changeJobStatus(jobState.getJobId(), new Status(ERROR, ex));
-      taskState.setStatus(new Status(StatusCode.ERROR));
-    } else {
-      log.log(Level.WARNING,
-          "Shard attempt #" + retryState.getRetryCount() + " failed. Going to retry.", ex);
-      taskState.setTask(retryState.getInitialTask());
-      taskState.clearRetryCount();
-    }
-    return retryState;
   }
 
   private static String getTaskId(String jobId, int taskNumber) {
