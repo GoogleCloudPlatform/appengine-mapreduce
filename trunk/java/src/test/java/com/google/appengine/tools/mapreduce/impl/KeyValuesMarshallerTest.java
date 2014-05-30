@@ -23,17 +23,16 @@ public class KeyValuesMarshallerTest extends TestCase {
 
   private <K, V> void assertRoundTripEquality(KeyValuesMarshaller<K, V> marshaller, K key,
       List<V> values) {
-    ByteBuffer bytes = marshaller.toBytes(new KeyValue<>(key, values.iterator()));
-    KeyValue<K, Iterator<V>> reconstructed = marshaller.fromBytes(bytes.slice());
+    ByteBuffer bytes = marshaller.toBytes(new KeyValue<>(key, values));
+    KeyValue<K, Iterable<V>> reconstructed = marshaller.fromBytes(bytes.slice());
     validateEqual(key, values, reconstructed);
-
     reconstructed = marshaller.fromBytes(bytes.slice());
     assertEquals(bytes, marshaller.toBytes(reconstructed));
   }
 
-  private <K, V> void validateEqual(K key, List<V> values, KeyValue<K, Iterator<V>> reconstructed) {
+  private <K, V> void validateEqual(K key, List<V> values, KeyValue<K, ? extends Iterable<V>> reconstructed) {
     assertEquals(key, reconstructed.getKey());
-    Iterator<V> reconValues = reconstructed.getValue();
+    Iterator<V> reconValues = reconstructed.getValue().iterator();
     for (V value : values) {
       assertEquals(value, reconValues.next());
     }
@@ -88,34 +87,37 @@ public class KeyValuesMarshallerTest extends TestCase {
     Marshaller<String> stringMarshaller = Marshallers.getStringMarshaller();
     KeyValuesMarshaller<Integer, String> nestedMarshaller =
         new KeyValuesMarshaller<>(intMarshaller, stringMarshaller);
-    KeyValuesMarshaller<KeyValue<Integer, Iterator<String>>, KeyValue<Integer, Iterator<String>>>
-        m = new KeyValuesMarshaller<>(nestedMarshaller, nestedMarshaller);
+    KeyValuesMarshaller<KeyValue<Integer, ? extends Iterable<String>>,
+        KeyValue<Integer, ? extends Iterable<String>>> m =
+            new KeyValuesMarshaller<>(nestedMarshaller, nestedMarshaller);
 
-    ArrayList<String> keyStrings = new ArrayList<>();
-    ArrayList<String> valueStrings = new ArrayList<>();
+    List<String> keyStrings = new ArrayList<>();
+    List<String> valueStrings = new ArrayList<>();
     for (int k = 0; k < 10; k++) {
       keyStrings.add("KeyString-" + k);
       valueStrings.add("ValueString-" + k);
     }
 
     for (int i = 0; i < 10; i++) {
-      KeyValue<Integer, Iterator<String>> key = new KeyValue<>(i, keyStrings.iterator());
-      List<KeyValue<Integer, Iterator<String>>> valueValues = new ArrayList<>();
+      KeyValue<Integer, List<String>> key = new KeyValue<>(i, keyStrings);
+      List<KeyValue<Integer, List<String>>> valueValues = new ArrayList<>();
       for (int j = 0; j < 10000; j++) {
-        valueValues.add(new KeyValue<>(-i, valueStrings.iterator()));
+        valueValues.add(new KeyValue<>(-i, valueStrings));
       }
 
-      ByteBuffer bytes = m.toBytes(new KeyValue<>(key, valueValues.iterator()));
-      KeyValue<KeyValue<Integer, Iterator<String>>, Iterator<KeyValue<Integer, Iterator<String>>>>
-          reconstructed = m.fromBytes(bytes.slice());
+      @SuppressWarnings({"unchecked", "rawtypes"})
+      ByteBuffer bytes = m.toBytes(new KeyValue(key, valueValues));
+      KeyValue<KeyValue<Integer, ? extends Iterable<String>>,
+          Iterable<KeyValue<Integer, ? extends Iterable<String>>>> reconstructed =
+              m.fromBytes(bytes.slice());
       validateEqual(key.getKey(), keyStrings, reconstructed.getKey());
 
-      Iterator<KeyValue<Integer, Iterator<String>>> reconValues = reconstructed.getValue();
-      for (KeyValue<Integer, Iterator<String>> value : valueValues) {
+      Iterator<KeyValue<Integer, ? extends Iterable<String>>> reconValues =
+          reconstructed.getValue().iterator();
+      for (KeyValue<Integer, ? extends List<String>> value : valueValues) {
         validateEqual(value.getKey(), valueStrings, reconValues.next());
       }
       assertFalse(reconValues.hasNext());
-
     }
   }
 

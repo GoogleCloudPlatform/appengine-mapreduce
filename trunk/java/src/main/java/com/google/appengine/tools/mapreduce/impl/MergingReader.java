@@ -34,13 +34,13 @@ final class MergingReader<K, V> extends InputReader<KeyValue<K, Iterator<V>>> {
 
   private static final long serialVersionUID = 4731927175388671578L;
   private static final LexicographicalComparator comparator = new LexicographicalComparator();
-  private final List<PeekingInputReader<KeyValue<ByteBuffer, Iterator<V>>>> readers;
+  private final List<PeekingInputReader<KeyValue<ByteBuffer, ? extends Iterable<V>>>> readers;
   private final Marshaller<K> keyMarshaller;
   private SerializableValue<ByteBuffer> lastKey;
-  private transient PriorityQueue<PeekingInputReader<KeyValue<ByteBuffer, Iterator<V>>>>
+  private transient PriorityQueue<PeekingInputReader<KeyValue<ByteBuffer, ? extends Iterable<V>>>>
       lowestReaderQueue;
 
-  MergingReader(List<PeekingInputReader<KeyValue<ByteBuffer, Iterator<V>>>> readers,
+  MergingReader(List<PeekingInputReader<KeyValue<ByteBuffer, ? extends Iterable<V>>>> readers,
       Marshaller<K> keyMarshaller) {
     this.readers = Preconditions.checkNotNull(readers);
     this.keyMarshaller = Preconditions.checkNotNull(keyMarshaller);
@@ -48,23 +48,23 @@ final class MergingReader<K, V> extends InputReader<KeyValue<K, Iterator<V>>> {
 
   @Override
   public void beginShard() throws IOException {
-    for (PeekingInputReader<KeyValue<ByteBuffer, Iterator<V>>> reader : readers) {
+    for (PeekingInputReader<?> reader : readers) {
       reader.beginShard();
     }
   }
 
   @Override
   public void beginSlice() throws IOException {
-    Comparator<PeekingInputReader<KeyValue<ByteBuffer, Iterator<V>>>> nextReaderComparator =
-        new Comparator<PeekingInputReader<KeyValue<ByteBuffer, Iterator<V>>>>() {
+    Comparator<PeekingInputReader<KeyValue<ByteBuffer, ? extends Iterable<V>>>> pqComparator =
+        new Comparator<PeekingInputReader<KeyValue<ByteBuffer, ? extends Iterable<V>>>>() {
           @Override
-          public int compare(PeekingInputReader<KeyValue<ByteBuffer, Iterator<V>>> r1,
-              PeekingInputReader<KeyValue<ByteBuffer, Iterator<V>>> r2) {
+          public int compare(PeekingInputReader<KeyValue<ByteBuffer, ? extends Iterable<V>>> r1,
+              PeekingInputReader<KeyValue<ByteBuffer, ? extends Iterable<V>>> r2) {
             return comparator.compare(r1.peek().getKey(), r2.peek().getKey());
           }
         };
-    lowestReaderQueue = new PriorityQueue<>(Math.max(1, readers.size()), nextReaderComparator);
-    for (PeekingInputReader<KeyValue<ByteBuffer, Iterator<V>>> reader : readers) {
+    lowestReaderQueue = new PriorityQueue<>(Math.max(1, readers.size()), pqComparator);
+    for (PeekingInputReader<KeyValue<ByteBuffer, ? extends Iterable<V>>> reader : readers) {
       reader.beginSlice();
       addReaderToQueueIfNotEmpty(reader);
     }
@@ -72,7 +72,7 @@ final class MergingReader<K, V> extends InputReader<KeyValue<K, Iterator<V>>> {
 
   @Override
   public void endSlice() throws IOException {
-    for (PeekingInputReader<KeyValue<ByteBuffer, Iterator<V>>> reader : readers) {
+    for (PeekingInputReader<?> reader : readers) {
       reader.endSlice();
     }
   }
@@ -84,9 +84,10 @@ final class MergingReader<K, V> extends InputReader<KeyValue<K, Iterator<V>>> {
     private final ByteBuffer key;
     private Iterator<V> currentValues;
 
-    CombiningReader(ByteBuffer key, Iterator<V> currentValues) {
+    CombiningReader(ByteBuffer key, Iterable<V> currentValues) {
       this.key = Preconditions.checkNotNull(key);
-      this.currentValues = Preconditions.checkNotNull(currentValues);
+      Preconditions.checkNotNull(currentValues);
+      this.currentValues = currentValues.iterator();
     }
 
     /**
@@ -98,12 +99,13 @@ final class MergingReader<K, V> extends InputReader<KeyValue<K, Iterator<V>>> {
         return true;
       }
       while (!lowestReaderQueue.isEmpty()) {
-        PeekingInputReader<KeyValue<ByteBuffer, Iterator<V>>> reader = lowestReaderQueue.peek();
-        KeyValue<ByteBuffer, Iterator<V>> kv = reader.peek();
+        PeekingInputReader<KeyValue<ByteBuffer, ? extends Iterable<V>>> reader =
+            lowestReaderQueue.peek();
+        KeyValue<ByteBuffer, ? extends Iterable<V>> kv = reader.peek();
         if (comparator.compare(kv.getKey(), key) != 0) {
           break;
         }
-        if (kv.getValue().hasNext()) {
+        if (kv.getValue().iterator().hasNext()) {
           return true;
         }
         consumePeekedValue(kv);
@@ -119,21 +121,22 @@ final class MergingReader<K, V> extends InputReader<KeyValue<K, Iterator<V>>> {
       if (currentValues.hasNext()) {
         return currentValues.next();
       }
-      KeyValue<ByteBuffer, Iterator<V>> keyValue =
+      KeyValue<ByteBuffer, ? extends Iterable<V>> keyValue =
           (lowestReaderQueue.isEmpty()) ? null : lowestReaderQueue.peek().peek();
       if (keyValue == null || comparator.compare(keyValue.getKey(), key) != 0) {
         throw new NoSuchElementException();
       }
       consumePeekedValue(keyValue);
-      currentValues = keyValue.getValue();
+      currentValues = keyValue.getValue().iterator();
       return next();
     }
 
     /**
      * Helper to consume the value that was just peeked.
      */
-    private void consumePeekedValue(KeyValue<ByteBuffer, Iterator<V>> peekedKeyValue) {
-      PeekingInputReader<KeyValue<ByteBuffer, Iterator<V>>> reader = lowestReaderQueue.poll();
+    private void consumePeekedValue(KeyValue<ByteBuffer, ? extends Iterable<V>> peekedKeyValue) {
+      PeekingInputReader<KeyValue<ByteBuffer, ? extends Iterable<V>>> reader =
+          lowestReaderQueue.poll();
       consumePeekedValueFromReader(peekedKeyValue, reader);
       addReaderToQueueIfNotEmpty(reader);
     }
@@ -144,8 +147,8 @@ final class MergingReader<K, V> extends InputReader<KeyValue<K, Iterator<V>>> {
    * @param reader Where the value came from
    */
   private static <V> void consumePeekedValueFromReader(
-      KeyValue<ByteBuffer, Iterator<V>> peekedKeyValue,
-      PeekingInputReader<KeyValue<ByteBuffer, Iterator<V>>> reader) {
+      KeyValue<ByteBuffer, ? extends Iterable<V>> peekedKeyValue,
+      PeekingInputReader<KeyValue<ByteBuffer, ? extends Iterable<V>>> reader) {
     if (reader == null || !peekedKeyValue.equals(reader.next())) {
       throw new ConcurrentModificationException("Reading from values is not threadsafe.");
     }
@@ -158,8 +161,9 @@ final class MergingReader<K, V> extends InputReader<KeyValue<K, Iterator<V>>> {
   @Override
   public KeyValue<K, Iterator<V>> next() throws NoSuchElementException {
     skipLeftoverItems();
-    PeekingInputReader<KeyValue<ByteBuffer, Iterator<V>>> reader = lowestReaderQueue.remove();
-    KeyValue<ByteBuffer, Iterator<V>> lowest = reader.next();
+    PeekingInputReader<KeyValue<ByteBuffer, ? extends Iterable<V>>> reader =
+        lowestReaderQueue.remove();
+    KeyValue<ByteBuffer, ? extends Iterable<V>> lowest = reader.next();
     ByteBuffer lowestKey = lowest.getKey();
     CombiningReader values = new CombiningReader(lowestKey, lowest.getValue());
     addReaderToQueueIfNotEmpty(reader);
@@ -168,7 +172,7 @@ final class MergingReader<K, V> extends InputReader<KeyValue<K, Iterator<V>>> {
   }
 
   private void addReaderToQueueIfNotEmpty(
-      PeekingInputReader<KeyValue<ByteBuffer, Iterator<V>>> reader) {
+      PeekingInputReader<KeyValue<ByteBuffer, ? extends Iterable<V>>> reader) {
     if (reader.hasNext()) {
       lowestReaderQueue.add(reader);
     }
@@ -185,7 +189,8 @@ final class MergingReader<K, V> extends InputReader<KeyValue<K, Iterator<V>>> {
     }
     boolean itemSkiped;
     do {
-      PeekingInputReader<KeyValue<ByteBuffer, Iterator<V>>> reader = lowestReaderQueue.remove();
+      PeekingInputReader<KeyValue<ByteBuffer, ? extends Iterable<V>>> reader =
+          lowestReaderQueue.remove();
       itemSkiped = skipItemsOnReader(reader);
       addReaderToQueueIfNotEmpty(reader);
     } while (itemSkiped);
@@ -194,9 +199,10 @@ final class MergingReader<K, V> extends InputReader<KeyValue<K, Iterator<V>>> {
   /**
    * Helper function for skipLeftoverItems to skip items matching last key on a single reader.
    */
-  private boolean skipItemsOnReader(PeekingInputReader<KeyValue<ByteBuffer, Iterator<V>>> reader) {
+  private boolean skipItemsOnReader(
+      PeekingInputReader<KeyValue<ByteBuffer, ? extends Iterable<V>>> reader) {
     boolean itemSkipped = false;
-    KeyValue<ByteBuffer, Iterator<V>> keyValue = reader.peek();
+    KeyValue<ByteBuffer, ? extends Iterable<V>> keyValue = reader.peek();
     while (keyValue != null && comparator.compare(keyValue.getKey(), lastKey.getValue()) == 0) {
       consumePeekedValueFromReader(keyValue, reader);
       itemSkipped = true;
@@ -208,7 +214,7 @@ final class MergingReader<K, V> extends InputReader<KeyValue<K, Iterator<V>>> {
   @Override
   public Double getProgress() {
     double total = 0;
-    for (PeekingInputReader<KeyValue<ByteBuffer, Iterator<V>>> reader : readers) {
+    for (PeekingInputReader<?> reader : readers) {
       Double progress = reader.getProgress();
       if (progress != null) {
         total += progress;
@@ -219,7 +225,7 @@ final class MergingReader<K, V> extends InputReader<KeyValue<K, Iterator<V>>> {
 
   @Override
   public void endShard() throws IOException {
-    for (PeekingInputReader<KeyValue<ByteBuffer, Iterator<V>>> reader : readers) {
+    for (PeekingInputReader<?> reader : readers) {
       reader.endShard();
     }
   }
@@ -227,7 +233,7 @@ final class MergingReader<K, V> extends InputReader<KeyValue<K, Iterator<V>>> {
   @Override
   public long estimateMemoryRequirement() {
     long total = 0;
-    for (PeekingInputReader<KeyValue<ByteBuffer, Iterator<V>>> reader : readers) {
+    for (PeekingInputReader<?> reader : readers) {
       total += reader.estimateMemoryRequirement();
     }
     return total;

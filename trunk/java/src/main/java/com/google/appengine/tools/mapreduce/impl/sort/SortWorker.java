@@ -7,7 +7,6 @@ import com.google.appengine.tools.mapreduce.impl.shardedjob.RejectRequestExcepti
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Stopwatch;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Iterators;
 import com.google.common.primitives.Ints;
 
 import it.unimi.dsi.fastutil.Arrays;
@@ -16,7 +15,6 @@ import it.unimi.dsi.fastutil.ints.IntComparator;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
@@ -200,13 +198,11 @@ public class SortWorker extends Worker<SortContext> {
   }
 
   private void emit(ByteBuffer key, ByteBuffer value) {
-    getContext().emit(
-        KeyValue.<ByteBuffer, Iterator<ByteBuffer>>of(key, Iterators.forArray(value)));
+    getContext().emit(KeyValue.of(key, ImmutableList.of(value)));
   }
 
   private void emit(ByteBuffer key, List<ByteBuffer> values) {
-    List<ByteBuffer> copy = ImmutableList.copyOf(values);
-    getContext().emit(KeyValue.of(key, copy.iterator()));
+    getContext().emit(KeyValue.of(key, ImmutableList.copyOf(values)));
   }
 
   /**

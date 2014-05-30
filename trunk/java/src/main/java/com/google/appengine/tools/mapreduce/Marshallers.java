@@ -12,7 +12,6 @@ import java.io.Serializable;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.CharacterCodingException;
-import java.util.Iterator;
 
 /**
  * Some {@link Marshaller}s and related utilities.
@@ -205,7 +204,7 @@ public class Marshallers {
    * Returns a {@code Marshaller} for key-values pairs based on
    * {@code keyMarshaller} and {@code valueMarshaller}.
    */
-  public static <K, V> Marshaller<KeyValue<K, Iterator<V>>> getKeyValuesMarshaller(
+  public static <K, V> Marshaller<KeyValue<K, ? extends Iterable<V>>> getKeyValuesMarshaller(
       Marshaller<K> keyMarshaller, Marshaller<V> valueMarshaller) {
     return new KeyValuesMarshaller<>(keyMarshaller, valueMarshaller);
   }

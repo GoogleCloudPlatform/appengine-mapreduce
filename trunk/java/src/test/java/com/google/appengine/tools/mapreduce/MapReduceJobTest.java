@@ -211,6 +211,7 @@ public class MapReduceJobTest extends TestCase {
     }
   }
 
+  @SuppressWarnings("deprecation")
   public void testPipelineSettings() {
     MapReduceSettings mrSettings = new MapReduceSettings().setWorkerQueueName("queue1");
     verifyPipelineSettings(MapReduceJob.makeJobSettings(mrSettings),

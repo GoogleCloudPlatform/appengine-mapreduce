@@ -548,7 +548,7 @@ public class EndToEndTest extends EndToEndTestCase {
     }
   }
 
-  @SuppressWarnings({"serial", "rawtypes", "unchecked"})
+  @SuppressWarnings({"serial", "rawtypes"})
   static class TestOutputWriter<T> extends ForwardingOutputWriter<T> {
 
     static OutputWriter delegate;

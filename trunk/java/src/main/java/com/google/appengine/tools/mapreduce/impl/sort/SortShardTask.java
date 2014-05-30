@@ -19,25 +19,24 @@ import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
-import java.util.Iterator;
 
 /**
  * Keeps accepting inputs and passing them to a SortWorker until the worker's buffer is full. Once
  * this occurs endSlice is called which causes the data to be written out in sorted order.
  *
  */
-public class SortShardTask extends WorkerShardTask<
-    KeyValue<ByteBuffer, ByteBuffer>, KeyValue<ByteBuffer, Iterator<ByteBuffer>>, SortContext> {
+public class SortShardTask extends WorkerShardTask<KeyValue<ByteBuffer, ByteBuffer>,
+    KeyValue<ByteBuffer, ? extends Iterable<ByteBuffer>>, SortContext> {
 
   private static final long serialVersionUID = -8041992113450564646L;
 
   private final SortWorker inMemSorter;
   private final InputReader<KeyValue<ByteBuffer, ByteBuffer>> in;
-  private final OutputWriter<KeyValue<ByteBuffer, Iterator<ByteBuffer>>> out;
+  private final OutputWriter<KeyValue<ByteBuffer, ? extends Iterable<ByteBuffer>>> out;
 
   public SortShardTask(String mrJobId, int shardNumber, int shardCount,
       InputReader<KeyValue<ByteBuffer, ByteBuffer>> in, SortWorker worker,
-      OutputWriter<KeyValue<ByteBuffer, Iterator<ByteBuffer>>> out) {
+      OutputWriter<KeyValue<ByteBuffer, ? extends Iterable<ByteBuffer>>> out) {
     super(new IncrementalTaskContext(mrJobId, shardNumber, shardCount, SORT_CALLS,
         SORT_WALLTIME_MILLIS));
     this.in = checkNotNull(in, "Null in");
@@ -104,7 +103,7 @@ public class SortShardTask extends WorkerShardTask<
   }
 
   @Override
-  public OutputWriter<KeyValue<ByteBuffer, Iterator<ByteBuffer>>> getOutputWriter() {
+  public OutputWriter<KeyValue<ByteBuffer, ? extends Iterable<ByteBuffer>>> getOutputWriter() {
     return out;
   }
 

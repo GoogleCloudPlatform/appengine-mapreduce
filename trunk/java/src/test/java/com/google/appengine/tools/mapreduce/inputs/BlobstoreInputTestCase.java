@@ -23,6 +23,7 @@ import java.nio.ByteBuffer;
 
 /**
  */
+@SuppressWarnings("deprecation")
 abstract class BlobstoreInputTestCase extends TestCase {
 
   BlobKey blobKey;

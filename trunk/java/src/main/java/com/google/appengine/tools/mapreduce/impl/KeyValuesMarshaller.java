@@ -8,7 +8,9 @@ import com.google.appengine.repackaged.com.google.protobuf.InvalidProtocolBuffer
 import com.google.appengine.tools.mapreduce.CorruptDataException;
 import com.google.appengine.tools.mapreduce.KeyValue;
 import com.google.appengine.tools.mapreduce.Marshaller;
+import com.google.common.collect.AbstractIterator;
 
+import java.io.Serializable;
 import java.nio.ByteBuffer;
 import java.util.Iterator;
 import java.util.List;
@@ -22,7 +24,7 @@ import java.util.List;
  * @param <K> key type
  * @param <V> value type
  */
-public class KeyValuesMarshaller<K, V> extends Marshaller<KeyValue<K, Iterator<V>>> {
+public class KeyValuesMarshaller<K, V> extends Marshaller<KeyValue<K, ? extends Iterable<V>>> {
   private static final long serialVersionUID = -469910411827845614L;
   private final Marshaller<K> keyMarshaller;
   private final Marshaller<V> valueMarshaller;
@@ -33,42 +35,44 @@ public class KeyValuesMarshaller<K, V> extends Marshaller<KeyValue<K, Iterator<V
   }
 
   @Override
-  public ByteBuffer toBytes(KeyValue<K, Iterator<V>> keyValues) {
+  public ByteBuffer toBytes(KeyValue<K, ? extends Iterable<V>> keyValues) {
     FileServicePb.KeyValues.Builder b = FileServicePb.KeyValues.newBuilder();
     b.setKey(ByteString.copyFrom(keyMarshaller.toBytes(keyValues.getKey())));
-    Iterator<V> values = keyValues.getValue();
-    while (values.hasNext()) {
-      b.addValue(ByteString.copyFrom(valueMarshaller.toBytes(values.next())));
+    Iterable<V> values = keyValues.getValue();
+    for (V value : values) {
+      b.addValue(ByteString.copyFrom(valueMarshaller.toBytes(value)));
     }
     return ByteBuffer.wrap(b.build().toByteArray());
   }
 
-  private final class ByteStringTranslatingIterator implements Iterator<V> {
-    private final Iterator<ByteString> iter;
+  private final class ByteStringTranslatingIterator implements Iterable<V>, Serializable {
 
-    private ByteStringTranslatingIterator(Iterator<ByteString> iter) {
-      this.iter = iter;
+    private static final long serialVersionUID = 4745545835439721881L;
+
+    private final Iterable<ByteString> source;
+
+    private ByteStringTranslatingIterator(Iterable<ByteString> source) {
+      this.source = source;
     }
 
     @Override
-    public boolean hasNext() {
-      return iter.hasNext();
-    }
-
-    @Override
-    public V next() {
-      ByteString next = iter.next();
-      return valueMarshaller.fromBytes(next.asReadOnlyByteBuffer());
-    }
-
-    @Override
-    public void remove() {
-      throw new UnsupportedOperationException();
+    public Iterator<V> iterator() {
+      final Iterator<ByteString> iter = source.iterator();
+      return new AbstractIterator<V>() {
+        @Override
+        protected V computeNext() {
+          if (!iter.hasNext()) {
+            return endOfData();
+          }
+          ByteString next = iter.next();
+          return valueMarshaller.fromBytes(next.asReadOnlyByteBuffer());
+        }
+      };
     }
   }
 
   @Override
-  public KeyValue<K, Iterator<V>> fromBytes(ByteBuffer input) {
+  public KeyValue<K, Iterable<V>> fromBytes(ByteBuffer input) {
     FileServicePb.KeyValues proto;
     try {
       proto = FileServicePb.KeyValues.parseFrom(ByteString.copyFrom(input));
@@ -77,8 +81,6 @@ public class KeyValuesMarshaller<K, V> extends Marshaller<KeyValue<K, Iterator<V
     }
     K key = keyMarshaller.fromBytes(proto.getKey().asReadOnlyByteBuffer());
     List<ByteString> values = proto.getValueList();
-
-    return new KeyValue<K, Iterator<V>>(
-        key, new ByteStringTranslatingIterator(values.iterator()));
+    return KeyValue.<K, Iterable<V>>of(key, new ByteStringTranslatingIterator(values));
   }
 }
