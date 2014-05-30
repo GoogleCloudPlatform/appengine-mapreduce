@@ -69,16 +69,18 @@ class _StatusUiHandler(webapp.RequestHandler):
     import pipeline  # Break circular dependency
     if pipeline._ENFORCE_AUTH:
       if users.get_current_user() is None:
+        logging.debug('User is not logged in')
         self.redirect(users.create_login_url(self.request.url))
         return
 
       if not users.is_current_user_admin():
+        logging.debug('User is not admin: %r', users.get_current_user())
         self.response.out.write('Forbidden')
         self.response.set_status(403)
         return
 
     if resource not in self._RESOURCE_MAP:
-      logging.info('Could not find: %s', resource)
+      logging.debug('Could not find: %s', resource)
       self.response.set_status(404)
       self.response.out.write("Resource not found.")
       self.response.headers['Content-Type'] = 'text/plain'
@@ -107,6 +109,7 @@ class _BaseRpcHandler(webapp.RequestHandler):
     import pipeline  # Break circular dependency
     if pipeline._ENFORCE_AUTH:
       if not users.is_current_user_admin():
+        logging.debug('User is not admin: %r', users.get_current_user())
         self.response.out.write('Forbidden')
         self.response.set_status(403)
         return
@@ -114,6 +117,7 @@ class _BaseRpcHandler(webapp.RequestHandler):
     # XSRF protection
     if (not pipeline._DEBUG and
         self.request.headers.get('X-Requested-With') != 'XMLHttpRequest'):
+      logging.debug('Request missing X-Requested-With header')
       self.response.out.write('Request missing X-Requested-With header')
       self.response.set_status(403)
       return
