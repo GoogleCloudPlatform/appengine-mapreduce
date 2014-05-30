@@ -75,8 +75,8 @@ public class IncrementalTaskState<T extends IncrementalTask> {
   /**
    * Returns a new running IncrementalTaskState.
    */
-  static <T extends IncrementalTask> IncrementalTaskState<T> create(String taskId, String jobId,
-      long createTime, T initialTask) {
+  static <T extends IncrementalTask> IncrementalTaskState<T> create(
+      String taskId, String jobId, long createTime, T initialTask) {
     return new IncrementalTaskState<>(taskId, jobId, createTime, new LockInfo(null, null),
         checkNotNull(initialTask), new Status(StatusCode.RUNNING));
   }
@@ -146,7 +146,7 @@ public class IncrementalTaskState<T extends IncrementalTask> {
     return status;
   }
 
-  public IncrementalTaskState<T> setStatus(Status status) {
+  IncrementalTaskState<T> setStatus(Status status) {
     this.status = status;
     return this;
   }
@@ -201,16 +201,20 @@ public class IncrementalTaskState<T extends IncrementalTask> {
       return taskState;
     }
 
-    @SuppressWarnings({"rawtypes", "unchecked"})
     static <T extends IncrementalTask> IncrementalTaskState<T> fromEntity(Entity in) {
+      return fromEntity(in, false);
+    }
+
+    static <T extends IncrementalTask> IncrementalTaskState<T> fromEntity(
+        Entity in, boolean lenient) {
       Preconditions.checkArgument(ENTITY_KIND.equals(in.getKind()), "Unexpected kind: %s", in);
-      IncrementalTaskState state = new IncrementalTaskState(in.getKey().getName(),
+      IncrementalTaskState<T> state = new IncrementalTaskState<>(in.getKey().getName(),
           (String) in.getProperty(JOB_ID_PROPERTY),
           (Long) in.getProperty(MOST_RECENT_UPDATE_MILLIS_PROPERTY),
           new LockInfo((Long) in.getProperty(SLICE_START_TIME),
               (String) in.getProperty(SLICE_REQUEST_ID)),
           in.hasProperty(NEXT_TASK_PROPERTY) ? SerializationUtil
-              .<IncrementalTask>deserializeFromDatastoreProperty(in, NEXT_TASK_PROPERTY)
+              .<T>deserializeFromDatastoreProperty(in, NEXT_TASK_PROPERTY, lenient)
               : null,
           SerializationUtil.<Status>deserializeFromDatastoreProperty(in, STATUS_PROPERTY));
       state.setSequenceNumber(

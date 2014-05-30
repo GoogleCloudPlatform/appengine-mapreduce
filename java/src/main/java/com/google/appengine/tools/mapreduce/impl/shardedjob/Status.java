@@ -4,16 +4,16 @@ package com.google.appengine.tools.mapreduce.impl.shardedjob;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
-import com.google.common.base.Objects;
 import com.google.common.base.Preconditions;
 
 import java.io.Serializable;
+import java.util.Objects;
 
 /**
  * Possible job statuses.
  *
  */
-public class Status implements Serializable {
+public final class Status implements Serializable {
 
   private static final long serialVersionUID = 8387217197847622711L;
 
@@ -71,7 +71,7 @@ public class Status implements Serializable {
 
   @Override
   public int hashCode() {
-    return Objects.hashCode(statusCode, exception);
+    return Objects.hash(statusCode, exception);
   }
 
   @Override
@@ -86,7 +86,8 @@ public class Status implements Serializable {
       return false;
     }
     Status other = (Status) obj;
-    return Objects.equal(statusCode, other.statusCode) && Objects.equal(exception, other.exception);
+    return Objects.equals(statusCode, other.statusCode)
+        && Objects.equals(exception, other.exception);
   }
 
   @Override

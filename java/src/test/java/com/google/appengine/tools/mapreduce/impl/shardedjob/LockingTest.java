@@ -82,7 +82,7 @@ public class LockingTest extends EndToEndTestCase {
     assertEquals(1, StaticBlockingTask.timesRun.get());
     StaticBlockingTask.finishRun.release();
     result.get();
-    ShardedJobState<?> state = service.getJobState(jobId);
+    ShardedJobState state = service.getJobState(jobId);
     assertEquals(new Status(RUNNING), state.getStatus());
     assertEquals(1, state.getActiveTaskCount());
     assertEquals(1, state.getTotalTaskCount());
@@ -113,7 +113,7 @@ public class LockingTest extends EndToEndTestCase {
     assertNull(service.getJobState(jobId));
     StaticBlockingTask task = new StaticBlockingTask(1);
     service.startJob(jobId, ImmutableList.<TestTask>of(task), new TestController(1), settings);
-    ShardedJobState<?> state = service.getJobState(jobId);
+    ShardedJobState state = service.getJobState(jobId);
     assertEquals(new Status(RUNNING), state.getStatus());
     assertEquals(1, state.getActiveTaskCount());
     assertEquals(1, state.getTotalTaskCount());
@@ -122,7 +122,7 @@ public class LockingTest extends EndToEndTestCase {
   }
 
   private void assertDone(final String jobId) {
-    ShardedJobState<?> state = service.getJobState(jobId);
+    ShardedJobState state = service.getJobState(jobId);
     assertEquals(new Status(DONE), state.getStatus());
     assertEquals(0, state.getActiveTaskCount());
     assertEquals(1, state.getTotalTaskCount());
@@ -141,7 +141,7 @@ public class LockingTest extends EndToEndTestCase {
     //Start task
     SettableFuture<Void> result = runInNewThread(taskFromQueue);
     assertEquals(1, StaticBlockingTask.timesRun.get());
-    ShardedJobState<?> state = service.getJobState(jobId);
+    ShardedJobState state = service.getJobState(jobId);
     assertEquals(new Status(RUNNING), state.getStatus());
     assertEquals(1, state.getActiveTaskCount());
     assertEquals(1, state.getTotalTaskCount());
@@ -186,7 +186,7 @@ public class LockingTest extends EndToEndTestCase {
     assertEquals(0, getShardRetryCount(taskFromQueue));
     SettableFuture<Void> result = runInNewThread(taskFromQueue);
     assertEquals(1, StaticBlockingTask.timesRun.get());
-    ShardedJobState<?> state = service.getJobState(jobId);
+    ShardedJobState state = service.getJobState(jobId);
     assertEquals(new Status(RUNNING), state.getStatus());
     assertEquals(1, state.getActiveTaskCount());
     assertEquals(1, state.getTotalTaskCount());

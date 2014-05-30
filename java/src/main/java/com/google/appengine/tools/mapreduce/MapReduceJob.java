@@ -7,7 +7,6 @@ package com.google.appengine.tools.mapreduce;
 import static com.google.appengine.tools.mapreduce.impl.MapReduceConstants.MAX_WRITER_FANOUT;
 import static com.google.common.base.Preconditions.checkNotNull;
 
-import com.google.appengine.tools.mapreduce.MapJob.WorkerController;
 import com.google.appengine.tools.mapreduce.impl.BaseContext;
 import com.google.appengine.tools.mapreduce.impl.CountersImpl;
 import com.google.appengine.tools.mapreduce.impl.FilesByShard;
@@ -18,6 +17,7 @@ import com.google.appengine.tools.mapreduce.impl.GoogleCloudStorageSortOutput;
 import com.google.appengine.tools.mapreduce.impl.HashingSharder;
 import com.google.appengine.tools.mapreduce.impl.MapShardTask;
 import com.google.appengine.tools.mapreduce.impl.ReduceShardTask;
+import com.google.appengine.tools.mapreduce.impl.WorkerController;
 import com.google.appengine.tools.mapreduce.impl.WorkerShardTask;
 import com.google.appengine.tools.mapreduce.impl.pipeline.CleanupPipelineJob;
 import com.google.appengine.tools.mapreduce.impl.pipeline.ExamineStatusAndReturnResult;

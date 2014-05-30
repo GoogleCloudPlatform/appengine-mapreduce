@@ -37,6 +37,7 @@ import java.io.StreamCorruptedException;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.logging.Logger;
 import java.util.zip.Deflater;
 import java.util.zip.DeflaterOutputStream;
 import java.util.zip.Inflater;
@@ -47,6 +48,8 @@ import java.util.zip.InflaterInputStream;
  *
  */
 public class SerializationUtil {
+
+  private static final Logger log = Logger.getLogger(SerializationUtil.class.getName());
 
   /**
    * Type of compression to optionally use when serializing/deserializing objects.
@@ -286,9 +289,22 @@ public class SerializationUtil {
 
   public static <T extends Serializable> T deserializeFromDatastoreProperty(
       Entity entity, String propertyName) {
-    @SuppressWarnings("unchecked")
-    T obj = (T) deserializeFromByteArray(((Blob) entity.getProperty(propertyName)).getBytes());
-    return obj;
+    return deserializeFromDatastoreProperty(entity, propertyName, false);
+  }
+
+  @SuppressWarnings("unchecked")
+  public static <T extends Serializable> T deserializeFromDatastoreProperty(
+      Entity entity, String propertyName, boolean lenient) {
+    try {
+      return (T) deserializeFromByteArray(((Blob) entity.getProperty(propertyName)).getBytes());
+    } catch (RuntimeException ex) {
+      if (lenient) {
+        log.info("Deserialization of " + entity.getKey() + "#" + propertyName + " failed: "
+            + ex.getMessage() + ", returning null instead.");
+        return null;
+      }
+      throw ex;
+    }
   }
 
   public static Blob serializeToDatastoreProperty(Serializable o) {

@@ -5,6 +5,7 @@ package com.google.appengine.tools.mapreduce.impl.handlers;
 import com.google.appengine.tools.mapreduce.Counter;
 import com.google.appengine.tools.mapreduce.Counters;
 import com.google.appengine.tools.mapreduce.impl.CountersImpl;
+import com.google.appengine.tools.mapreduce.impl.IncrementalTaskContext;
 import com.google.appengine.tools.mapreduce.impl.IncrementalTaskWithContext;
 import com.google.appengine.tools.mapreduce.impl.shardedjob.IncrementalTaskState;
 import com.google.appengine.tools.mapreduce.impl.shardedjob.ShardedJobService;
@@ -159,13 +160,13 @@ final class StatusHandler {
   @VisibleForTesting
   static <T extends IncrementalTaskWithContext> JSONObject handleGetJobDetail(String jobId) {
     ShardedJobService shardedJobService = ShardedJobServiceFactory.getShardedJobService();
-    ShardedJobState<T> state = shardedJobService.getJobState(jobId);
+    ShardedJobState state = shardedJobService.getJobState(jobId);
     if (state == null) {
       return null;
     }
     JSONObject jobObject = new JSONObject();
     try {
-      jobObject.put("name", state.getController().getName());
+      jobObject.put("name", state.getJobName());
       jobObject.put("mapreduce_id", jobId);
       jobObject.put("start_timestamp_ms", state.getStartTimeMillis());
 
@@ -180,11 +181,6 @@ final class StatusHandler {
       jobObject.put("shards", state.getTotalTaskCount());
       jobObject.put("active_shards", state.getActiveTaskCount());
 
-      // HACK(ohler): We don't put the actual mapper parameters in here since
-      // the Pipeline UI already shows them (in the toString() of the
-      // MapReduceSpecification -- just need to make sure all Inputs and
-      // Outputs have useful toString()s).  Instead, we put some other useful
-      // info in here.
       JSONObject mapperParams = new JSONObject();
       mapperParams.put("Shards completed",
           state.getTotalTaskCount() - state.getActiveTaskCount());
@@ -198,26 +194,26 @@ final class StatusHandler {
       Counters totalCounters = new CountersImpl();
       int i = 0;
       long[] workerCallCounts = new long[state.getTotalTaskCount()];
-      for (Iterator<IncrementalTaskState<T>> iter = shardedJobService.lookupTasks(state);
-          iter.hasNext();) {
-        IncrementalTaskState<T> taskState = iter.next();
-        T task = taskState.getTask();
+      Iterator<IncrementalTaskState<T>> tasksIter = shardedJobService.lookupTasks(state);
+      while (tasksIter.hasNext()) {
+        IncrementalTaskState<T> taskState = tasksIter.next();
         JSONObject shardObject = new JSONObject();
-        shardObject.put("shard_description", taskState.getTaskId());
-
-        totalCounters.addAll(task.getContext().getCounters());
         shardObject.put("shard_number", i);
-        workerCallCounts[i] = task.getContext().getWorkerCallCount();
-        if (task.isDone()) {
-          shardObject.put("active", false);
-          // result_status is only displayed if active is false.
-          shardObject.put("result_status", "done");
-        } else {
-          shardObject.put("active", true);
-        }
+        shardObject.put("shard_description", taskState.getTaskId());
         shardObject.put("updated_timestamp_ms", taskState.getMostRecentUpdateMillis());
-        shardObject.put("last_work_item", task.getContext().getLastWorkItemString());
-
+        if (taskState.getStatus().isActive()) {
+          shardObject.put("active", true);
+        } else {
+          shardObject.put("active", false);
+          shardObject.put("result_status", taskState.getStatus().getStatusCode());
+        }
+        T task = taskState.getTask();
+        if (task != null) {
+          IncrementalTaskContext context = task.getContext();
+          totalCounters.addAll(context.getCounters());
+          workerCallCounts[i] = context.getWorkerCallCount();
+          shardObject.put("last_work_item", context.getLastWorkItemString());
+        }
         shardArray.put(shardObject);
         i++;
       }

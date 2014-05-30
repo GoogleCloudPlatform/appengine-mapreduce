@@ -53,7 +53,7 @@ public class EndToEndTest extends EndToEndTestCase {
 
     executeTasksUntilEmpty();
 
-    ShardedJobState<?> state = service.getJobState(jobId);
+    ShardedJobState state = service.getJobState(jobId);
     assertEquals(new Status(DONE), state.getStatus());
     assertEquals(0, state.getActiveTaskCount());
     assertEquals(5, state.getTotalTaskCount());
@@ -67,7 +67,7 @@ public class EndToEndTest extends EndToEndTestCase {
     assertNull(service.getJobState(jobId));
     TestController controller = new TestController(0);
     service.startJob(jobId, ImmutableList.<TestTask>of(), controller, settings);
-    ShardedJobState<?> state = service.getJobState(jobId);
+    ShardedJobState state = service.getJobState(jobId);
     assertEquals(new Status(DONE), state.getStatus());
     assertEquals(0, state.getActiveTaskCount());
     assertEquals(0, state.getTotalTaskCount());

@@ -7,7 +7,6 @@ import com.google.appengine.api.datastore.DatastoreServiceFactory;
 import com.google.appengine.api.datastore.FetchOptions;
 import com.google.appengine.api.datastore.Query;
 import com.google.appengine.tools.mapreduce.EndToEndTestCase;
-import com.google.appengine.tools.mapreduce.impl.shardedjob.IncrementalTask;
 import com.google.appengine.tools.mapreduce.impl.shardedjob.ShardedJobController;
 import com.google.appengine.tools.mapreduce.impl.shardedjob.ShardedJobService;
 import com.google.appengine.tools.mapreduce.impl.shardedjob.ShardedJobServiceFactory;
@@ -82,8 +81,7 @@ public class StatusHandlerTest extends EndToEndTestCase {
     TestTask s2 = new TestTask(1, 2, 2, 1);
     jobService.startJob(
         "testGetJobDetail_populated", ImmutableList.of(s1, s2), controller, settings);
-    ShardedJobState<? extends IncrementalTask> state =
-        jobService.getJobState("testGetJobDetail_populated");
+    ShardedJobState state = jobService.getJobState("testGetJobDetail_populated");
     assertEquals(2, state.getActiveTaskCount());
     assertEquals(2, state.getTotalTaskCount());
     assertEquals(new Status(Status.StatusCode.RUNNING), state.getStatus());
@@ -133,12 +131,12 @@ public class StatusHandlerTest extends EndToEndTestCase {
                 "\"shard_description\":\"[^\"]*\"," +
                 "\"active\":false," +
                 "\"updated_timestamp_ms\":[0-9]*," +
-                "\"result_status\":\"done\"," +
+                "\"result_status\":\"DONE\"," +
                 "\"shard_number\":0\\}," +
                 "\\{\"shard_description\":\"[^\"]*\"," +
                 "\"active\":false," +
                 "\"updated_timestamp_ms\":[0-9]*," +
-                "\"result_status\":\"done\"," +
+                "\"result_status\":\"DONE\"," +
                 "\"shard_number\":1\\}\\]," +
                 "\"mapper_spec\":\\{\"mapper_params\":\\{\"Shards total\":2," +
                 "\"Shards active\":0," +

@@ -33,13 +33,12 @@ public interface ShardedJobService {
    * Returns the state of the job with the given ID.  Returns null if no such
    * job exists.
    */
-  <T extends IncrementalTask> ShardedJobState<T> getJobState(String jobId);
+  ShardedJobState getJobState(String jobId);
 
   /**
    * Returns the tasks associated with this ShardedJob.
    */
-  <T extends IncrementalTask> Iterator<IncrementalTaskState<T>> lookupTasks(
-      ShardedJobState<T> state);
+  <T extends IncrementalTask> Iterator<IncrementalTaskState<T>> lookupTasks(ShardedJobState state);
 
   /**
    * Aborts execution of the job with the given ID.  If the job has already
