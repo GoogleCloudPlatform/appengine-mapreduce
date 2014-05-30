@@ -1,6 +1,5 @@
 #!/usr/bin/env python
-#
-# Copyright 2010 Google Inc.
+# Copyright 2010 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -150,7 +149,7 @@ class NamespaceRangeIterationTest(unittest.TestCase):
 
 
 class NamespaceRangeSplitTest(unittest.TestCase):
-  """Tests namespace_range.NamespaceRange.split() with contiguous=False"""
+  """Tests namespace_range.NamespaceRange.split()."""
 
   def setUp(self):
     unittest.TestCase.setUp(self)
@@ -258,14 +257,64 @@ class NamespaceRangeSplitTest(unittest.TestCase):
 
     self.assertEqual(
         [namespace_range.NamespaceRange(namespace_start='',
-                                        namespace_end='',
+                                        namespace_end='ccc',
                                         _app=self.app_id)],
         namespace_range.NamespaceRange.split(10,
-                                             contiguous=False,
+                                             contiguous=True,
                                              can_query=lambda: True,
                                              _app=self.app_id))
 
-  def testSplitWithInfiniteQueries(self):
+  def testSplitWithInfiniteQueriesSmallerSplitThanNamespaces(self):
+    # Create 6 namespaces and split by 3 ranges. Use contiguous data for this
+    # test (although we are not testing contiguous) and since the mid-point is
+    # rounded down, skip 'aa' and 'aba' so that start and end of each range
+    # will match exactly and contain 2 items.
+    self.CreateInNamespace('a')
+    self.CreateInNamespace('aaa')
+    self.CreateInNamespace('aab')
+    self.CreateInNamespace('aac')
+    self.CreateInNamespace('ab')
+    self.CreateInNamespace('abb')
+
+    self.assertEqual(
+        [namespace_range.NamespaceRange(namespace_start='a',
+                                        namespace_end='aaa'),
+         namespace_range.NamespaceRange(namespace_start='aab',
+                                        namespace_end='aac'),
+         namespace_range.NamespaceRange(namespace_start='ab',
+                                        namespace_end='abb')],
+        namespace_range.NamespaceRange.split(3,
+                                             contiguous=False,
+                                             can_query=lambda: True))
+
+  def testSplitWithInfiniteQueriesEqualSplitToNamespaces(self):
+    # Create 6 namespaces and split by 6 ranges.
+    self.CreateInNamespace('a')
+    self.CreateInNamespace('aa')
+    self.CreateInNamespace('aab')
+    self.CreateInNamespace('b')
+    self.CreateInNamespace('bac')
+    self.CreateInNamespace('cca')
+
+    self.assertEqual(
+        [namespace_range.NamespaceRange(namespace_start='a',
+                                        namespace_end='a'),
+         namespace_range.NamespaceRange(namespace_start='aa',
+                                        namespace_end='aa'),
+         namespace_range.NamespaceRange(namespace_start='aab',
+                                        namespace_end='aab'),
+         namespace_range.NamespaceRange(namespace_start='b',
+                                        namespace_end='b'),
+         namespace_range.NamespaceRange(namespace_start='bac',
+                                        namespace_end='bac'),
+         namespace_range.NamespaceRange(namespace_start='cca',
+                                        namespace_end='cca')],
+        namespace_range.NamespaceRange.split(6,
+                                             contiguous=False,
+                                             can_query=lambda: True))
+
+  def testSplitWithInfiniteQueriesLargerSplitThanNamespaces(self):
+    # Create 6 namespaces and split by 10 ranges.
     self.CreateInNamespace('a')
     self.CreateInNamespace('aa')
     self.CreateInNamespace('aab')
