@@ -52,9 +52,6 @@ import java.io.Serializable;
 public abstract class Worker<C extends WorkerContext<?>> implements Serializable {
   private static final long serialVersionUID = 261775900734965853L;
 
-  private final LifecycleListenerRegistry lifecycleListenerRegistry =
-      LifecycleListenerRegistry.create();
-
   private transient C context;
 
   /**
@@ -72,13 +69,6 @@ public abstract class Worker<C extends WorkerContext<?>> implements Serializable
   }
 
   /**
-   * Returns this worker's lifecycle listener registry.
-   */
-  public LifecycleListenerRegistry getLifecycleListenerRegistry() {
-    return lifecycleListenerRegistry;
-  }
-
-  /**
    * Prepares the worker for processing a new shard, after possibly having gone
    * through serialization and deserialization.
    */
@@ -93,16 +83,12 @@ public abstract class Worker<C extends WorkerContext<?>> implements Serializable
   /**
    * Prepares the worker for processing a new slice, after possibly having gone
    * through serialization and deserialization.
-   *
-   * <p>This does not send the event to the lifecycle listeners.
    */
   public void beginSlice() {}
 
   /**
    * Notifies the worker that there is no more data to process in the current
    * slice, and prepares it for possible serialization.
-   *
-   * <p>This does not send the event to the lifecycle listeners.
    */
   public void endSlice() {}
 

@@ -63,6 +63,7 @@ import java.util.logging.Logger;
 /**
  * @author ohler@google.com (Christian Ohler)
  */
+@SuppressWarnings("deprecation")
 public class EndToEndTest extends EndToEndTestCase {
 
   private static final Logger log = Logger.getLogger(EndToEndTest.class.getName());
@@ -434,7 +435,6 @@ public class EndToEndTest extends EndToEndTestCase {
     assertEquals("Bad state", info.getException().getCause().getCause().getMessage());
   }
 
-  @SuppressWarnings("deprecation")
   public void testPassThroughToString() throws Exception {
     final RandomLongInput input = new RandomLongInput(10, 1);
     input.setSeed(0L);
@@ -785,7 +785,13 @@ public class EndToEndTest extends EndToEndTestCase {
 
     @Override
     public void beginSlice() {
-      sideOutput = BlobFileOutputWriter.forWorker(this, "test file", "application/octet-stream");
+      sideOutput = new BlobFileOutputWriter("test file", "application/octet-stream");
+      try {
+        sideOutput.beginShard();
+        sideOutput.beginSlice();
+      } catch (IOException ex) {
+        throw new RuntimeException(ex);
+      }
     }
 
     @Override
@@ -798,11 +804,11 @@ public class EndToEndTest extends EndToEndTestCase {
       }
     }
 
-    @SuppressWarnings("deprecation")
     @Override
     public void endSlice() {
       log.info("endShard() in shard " + getContext().getShardNumber());
       try {
+        sideOutput.endSlice();
         sideOutput.endShard();
       } catch (IOException e) {
         throw new RuntimeException(e);
@@ -833,9 +839,8 @@ public class EndToEndTest extends EndToEndTestCase {
               assertEquals(6, files.size());
               for (String file : files) {
                 ByteBuffer buf = ByteBuffer.allocate(8);
-                try (@SuppressWarnings("deprecation") FileReadChannel ch =
-                    FileServiceFactory.getFileService().openReadChannel(
-                        new AppEngineFile(file), false)) {
+                try (FileReadChannel ch = FileServiceFactory.getFileService().openReadChannel(
+                    new AppEngineFile(file), false)) {
                   assertEquals(8, ch.read(buf));
                   assertEquals(-1, ch.read(ByteBuffer.allocate(1)));
                 }

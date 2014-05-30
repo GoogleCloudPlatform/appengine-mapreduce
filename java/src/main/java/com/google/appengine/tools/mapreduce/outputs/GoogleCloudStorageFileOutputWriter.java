@@ -7,9 +7,7 @@ import com.google.appengine.tools.cloudstorage.GcsFilename;
 import com.google.appengine.tools.cloudstorage.GcsOutputChannel;
 import com.google.appengine.tools.cloudstorage.GcsService;
 import com.google.appengine.tools.cloudstorage.GcsServiceFactory;
-import com.google.appengine.tools.mapreduce.LifecycleListenerRegistry;
 import com.google.appengine.tools.mapreduce.OutputWriter;
-import com.google.appengine.tools.mapreduce.Worker;
 import com.google.appengine.tools.mapreduce.impl.MapReduceConstants;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
@@ -36,35 +34,18 @@ public class GoogleCloudStorageFileOutputWriter extends OutputWriter<ByteBuffer>
   }
 
   private final GcsFilename file;
-  private boolean closed = false;
-  private GcsOutputChannel channel;
   private final String mimeType;
+  private GcsOutputChannel channel;
 
 
   public GoogleCloudStorageFileOutputWriter(GcsFilename file, String mimeType) {
-    this.mimeType = checkNotNull(mimeType, "Null mimeType");
     this.file = checkNotNull(file, "Null file");
-  }
-
-  public static GoogleCloudStorageFileOutputWriter forWorker(Worker<?> worker,
-      String bucket, String fileName, String mimeType) {
-    return forRegistry(worker.getLifecycleListenerRegistry(), bucket, fileName, mimeType);
-  }
-
-  @SuppressWarnings("unused")
-  public static GoogleCloudStorageFileOutputWriter forRegistry(LifecycleListenerRegistry registry,
-      String bucket, String fileName, String mimeType) {
-    GcsFilename file = new GcsFilename(bucket, fileName);
-    GoogleCloudStorageFileOutputWriter writer =
-        new GoogleCloudStorageFileOutputWriter(file, mimeType);
-    // We could now add a listener to registry but it so happens that we don't
-    // currently care about {begin,end}{Slice,Shard}.
-    return writer;
+    this.mimeType = checkNotNull(mimeType, "Null mimeType");
   }
 
   @Override
   public void write(ByteBuffer bytes) throws IOException {
-    Preconditions.checkState(!closed, "%s: already closed", this);
+    Preconditions.checkState(channel != null, "%s: channel was not created", this);
     while (bytes.hasRemaining()) {
       channel.write(bytes);
     }
@@ -72,8 +53,8 @@ public class GoogleCloudStorageFileOutputWriter extends OutputWriter<ByteBuffer>
 
   @Override
   public void beginShard() throws IOException {
-    channel =
-        GCS_SERVICE.createOrReplace(file, new GcsFileOptions.Builder().mimeType(mimeType).build());
+    GcsFileOptions fileOptions = new GcsFileOptions.Builder().mimeType(mimeType).build();
+    channel = GCS_SERVICE.createOrReplace(file, fileOptions);
   }
 
   @Override
@@ -83,13 +64,9 @@ public class GoogleCloudStorageFileOutputWriter extends OutputWriter<ByteBuffer>
 
   @Override
   public void endShard() throws IOException {
-    if (closed) {
-      return;
-    }
     if (channel != null) {
       channel.close();
     }
-    closed = true;
   }
 
   public GcsFilename getFile() {
@@ -98,7 +75,7 @@ public class GoogleCloudStorageFileOutputWriter extends OutputWriter<ByteBuffer>
 
   @Override
   public String toString() {
-    return "CloudFileOutputWriter [file=" + file + ", closed=" + closed + "]";
+    return "CloudFileOutputWriter [file=" + file + ", channel=" + channel + "]";
   }
 
   @Override
