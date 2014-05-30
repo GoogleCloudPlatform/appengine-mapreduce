@@ -15,6 +15,8 @@ import com.google.appengine.tools.mapreduce.impl.IncrementalTaskContext;
 import com.google.appengine.tools.mapreduce.impl.RecoverableException;
 import com.google.appengine.tools.mapreduce.impl.WorkerShardTask;
 
+import java.io.IOException;
+import java.io.ObjectInputStream;
 import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
 import java.util.Iterator;
@@ -32,19 +34,16 @@ public class SortShardTask extends WorkerShardTask<
   private final SortWorker inMemSorter;
   private final InputReader<KeyValue<ByteBuffer, ByteBuffer>> in;
   private final OutputWriter<KeyValue<ByteBuffer, Iterator<ByteBuffer>>> out;
-  private final IncrementalTaskContext context;
 
-  public SortShardTask(String mrJobId,
-      int shardNumber,
-      int shardCount,
-      InputReader<KeyValue<ByteBuffer, ByteBuffer>> in,
-      SortWorker worker,
+  public SortShardTask(String mrJobId, int shardNumber, int shardCount,
+      InputReader<KeyValue<ByteBuffer, ByteBuffer>> in, SortWorker worker,
       OutputWriter<KeyValue<ByteBuffer, Iterator<ByteBuffer>>> out) {
+    super(new IncrementalTaskContext(mrJobId, shardNumber, shardCount, SORT_CALLS,
+        SORT_WALLTIME_MILLIS));
     this.in = checkNotNull(in, "Null in");
     this.out = checkNotNull(out, "Null out");
     this.inMemSorter = worker;
-    this.context = new IncrementalTaskContext(mrJobId, shardNumber, shardCount, SORT_CALLS,
-        SORT_WALLTIME_MILLIS);
+    fillContext();
   }
 
   @Override
@@ -56,15 +55,15 @@ public class SortShardTask extends WorkerShardTask<
       success = true;
     } finally {
       if (!success) {
-        super.release();
+        super.cleanup();
       }
     }
   }
 
   @Override
-  public void release() {
-    super.release();
-    inMemSorter.release();
+  public void cleanup() {
+    super.cleanup();
+    inMemSorter.cleanup();
   }
 
   @Override
@@ -110,17 +109,19 @@ public class SortShardTask extends WorkerShardTask<
   }
 
   @Override
-  protected void setContextOnWorker() {
-    inMemSorter.setContext(new SortContext(context, out));
-  }
-
-  @Override
   public InputReader<KeyValue<ByteBuffer, ByteBuffer>> getInputReader() {
     return in;
   }
 
-  @Override
-  public IncrementalTaskContext getContext() {
-    return context;
+  private void readObject(ObjectInputStream stream) throws IOException, ClassNotFoundException {
+    stream.defaultReadObject();
+    fillContext();
+  }
+
+  private void fillContext() {
+    SortContext ctx = new SortContext(getContext(), out);
+    in.setContext(ctx);
+    out.setContext(ctx);
+    inMemSorter.setContext(ctx);
   }
 }

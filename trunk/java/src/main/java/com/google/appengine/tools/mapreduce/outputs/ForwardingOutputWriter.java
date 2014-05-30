@@ -3,6 +3,7 @@
 package com.google.appengine.tools.mapreduce.outputs;
 
 import com.google.appengine.tools.mapreduce.OutputWriter;
+import com.google.appengine.tools.mapreduce.ShardContext;
 
 import java.io.IOException;
 
@@ -39,5 +40,15 @@ public abstract class ForwardingOutputWriter<O> extends OutputWriter<O> {
   @Override
   public long estimateMemoryRequirement() {
     return getDelegate().estimateMemoryRequirement();
+  }
+
+  @Override
+  public void setContext(ShardContext context) {
+    getDelegate().setContext(context);
+  }
+
+  @Override
+  public ShardContext getContext() {
+    return getDelegate().getContext();
   }
 }

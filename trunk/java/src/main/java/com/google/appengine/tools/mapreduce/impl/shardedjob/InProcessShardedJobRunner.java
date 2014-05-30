@@ -26,9 +26,11 @@ public class InProcessShardedJobRunner {
     List<T> results = new ArrayList<>();
     for (T task : initialTasks) {
       Preconditions.checkNotNull(task, "Null initial task: %s", initialTasks);
+      task.prepare();
       do {
         task.run();
       } while (!task.isDone());
+      task.cleanup();
       results.add(task);
     }
     controller.completed(results);

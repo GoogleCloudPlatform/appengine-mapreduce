@@ -67,6 +67,7 @@ public class GoogleCloudStorageFileOutputWriter extends OutputWriter<ByteBuffer>
     if (channel != null) {
       channel.close();
     }
+    channel = null;
   }
 
   public GcsFilename getFile() {
@@ -75,7 +76,8 @@ public class GoogleCloudStorageFileOutputWriter extends OutputWriter<ByteBuffer>
 
   @Override
   public String toString() {
-    return "CloudFileOutputWriter [file=" + file + ", channel=" + channel + "]";
+    return "CloudFileOutputWriter [file=" + file + ", mimeType=" + mimeType + ", channel="
+        + channel + "]";
   }
 
   @Override

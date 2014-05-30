@@ -2,10 +2,13 @@
 package com.google.appengine.tools.mapreduce;
 
 import static java.nio.charset.StandardCharsets.US_ASCII;
+import static org.easymock.EasyMock.anyObject;
 import static org.easymock.EasyMock.createStrictMock;
 import static org.easymock.EasyMock.expect;
+import static org.easymock.EasyMock.expectLastCall;
 import static org.easymock.EasyMock.isA;
 import static org.easymock.EasyMock.replay;
+import static org.easymock.EasyMock.verify;
 
 import com.google.appengine.api.datastore.DatastoreService;
 import com.google.appengine.api.datastore.DatastoreServiceFactory;
@@ -24,10 +27,12 @@ import com.google.appengine.tools.mapreduce.impl.InProcessMapReduce;
 import com.google.appengine.tools.mapreduce.impl.RecoverableException;
 import com.google.appengine.tools.mapreduce.inputs.ConsecutiveLongInput;
 import com.google.appengine.tools.mapreduce.inputs.DatastoreInput;
+import com.google.appengine.tools.mapreduce.inputs.ForwardingInputReader;
 import com.google.appengine.tools.mapreduce.inputs.NoInput;
 import com.google.appengine.tools.mapreduce.inputs.RandomLongInput;
 import com.google.appengine.tools.mapreduce.outputs.BlobFileOutput;
 import com.google.appengine.tools.mapreduce.outputs.BlobFileOutputWriter;
+import com.google.appengine.tools.mapreduce.outputs.ForwardingOutputWriter;
 import com.google.appengine.tools.mapreduce.outputs.GoogleCloudStorageFileOutput;
 import com.google.appengine.tools.mapreduce.outputs.InMemoryOutput;
 import com.google.appengine.tools.mapreduce.outputs.NoOutput;
@@ -42,6 +47,8 @@ import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
+
+import org.easymock.EasyMock;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -108,6 +115,7 @@ public class EndToEndTest extends EndToEndTestCase {
     assertFalse(jobId.isEmpty());
     executeTasksUntilEmpty("default");
     JobInfo info = pipelineService.getJobInfo(jobId);
+    @SuppressWarnings("unchecked")
     MapReduceResult<R> result = (MapReduceResult<R>) info.getOutput();
     assertEquals(JobInfo.State.COMPLETED_SUCCESSFULLY, info.getJobState());
     assertNotNull(result);
@@ -191,14 +199,6 @@ public class EndToEndTest extends EndToEndTestCase {
       }
     }
 
-    @Override
-    public void setContext(MapperContext<String, Long> context) {
-      super.setContext(context);
-      if (context != null) {
-        shardNum = context.getShardNumber();
-      }
-    }
-
     private void incrementCounter(String name) {
       getContext().incrementCounter(name + "[" + shardNum + "]");
     }
@@ -213,6 +213,7 @@ public class EndToEndTest extends EndToEndTestCase {
 
     @Override
     public void beginShard() {
+      shardNum = getContext().getShardNumber();
       // We expect this to be one (as counter should be reset upon beginShard)
       incrementCounter("beginShard");
       sliceAttemptsPerShardRetry[shardNum].put(++beginShardCount[shardNum], new AtomicInteger());
@@ -221,6 +222,7 @@ public class EndToEndTest extends EndToEndTestCase {
 
     @Override
     public void beginSlice() {
+      shardNum = getContext().getShardNumber();
       sliceAttemptsPerShardRetry[shardNum].get(beginShardCount[shardNum]).getAndIncrement();
       // We expect only beginSlice[last_successful_attempt] to be available
 
@@ -511,43 +513,143 @@ public class EndToEndTest extends EndToEndTestCase {
         });
   }
 
-  @SuppressWarnings({"unchecked"})
+  @SuppressWarnings({"serial", "rawtypes", "unchecked"})
+  static class TestInputReader<T> extends ForwardingInputReader<T> {
+
+    static InputReader delegate;
+
+    public TestInputReader(InputReader<T> delegate) {
+      TestInputReader.delegate = delegate;
+    }
+
+    @Override
+    protected InputReader<T> getDelegate() {
+      return delegate;
+    }
+  }
+
+  @SuppressWarnings({"serial", "rawtypes", "unchecked"})
+  static class TestInput<T> extends Input<T> {
+
+    static Input delegate;
+
+    public TestInput(Input<T> delegate) {
+      TestInput.delegate = delegate;
+    }
+
+    @Override
+    void setContext(Context context) {
+      delegate.setContext(context);
+    }
+
+    @Override
+    public List<? extends InputReader<T>> createReaders() throws IOException {
+      return delegate.createReaders();
+    }
+  }
+
+  @SuppressWarnings({"serial", "rawtypes", "unchecked"})
+  static class TestOutputWriter<T> extends ForwardingOutputWriter<T> {
+
+    static OutputWriter delegate;
+
+    public TestOutputWriter(OutputWriter<T> delegate) {
+      TestOutputWriter.delegate = delegate;
+    }
+
+    @Override
+    protected OutputWriter<T> getDelegate() {
+      return delegate;
+    }
+
+    @Override
+    public void write(T value) throws IOException {
+      delegate.write(value);
+    }
+  }
+
+  @SuppressWarnings({"serial", "rawtypes", "unchecked"})
+  static class TestOutput<O, R> extends Output<O, R> {
+
+    static Output delegate;
+
+    public TestOutput(Output<O, R> delegate) {
+      TestOutput.delegate = delegate;
+    }
+
+    @Override
+    void setContext(Context context) {
+      delegate.setContext(context);
+    }
+
+    @Override
+    public List<? extends OutputWriter<O>> createWriters() {
+      return delegate.createWriters();
+    }
+
+    @Override
+    public int getNumShards() {
+      return delegate.getNumShards();
+    }
+
+    @Override
+    public R finish(Collection<? extends OutputWriter<O>> writers) throws IOException {
+      return (R) delegate.finish(writers);
+    }
+  }
+
+  @SuppressWarnings("unchecked")
   public void testLifeCycleMethodsCalled() throws Exception {
-    Input<Long> mockInput = createStrictMock(Input.class);
+    Input<Long> input = createStrictMock(Input.class);
     InputReader<Long> inputReader = createStrictMock(InputReader.class);
-    Output<ByteBuffer, Void> mockOutput = createStrictMock(Output.class);
+    Output<ByteBuffer, Void> output = createStrictMock(Output.class);
     OutputWriter<ByteBuffer> outputWriter = createStrictMock(OutputWriter.class);
 
-    @SuppressWarnings("rawtypes")
-    List readers = ImmutableList.of(inputReader);
-    expect(mockInput.createReaders()).andReturn(readers);
-    expect(inputReader.estimateMemoryRequirement()).andReturn(0L).anyTimes();
+    input.setContext(anyObject(Context.class));
+    EasyMock.<List<? extends InputReader<Long>>>expect(input.createReaders())
+        .andReturn(ImmutableList.of(new TestInputReader<>(inputReader)));
+    inputReader.setContext(anyObject(ShardContext.class));
+    expectLastCall().atLeastOnce();
+    expect(inputReader.estimateMemoryRequirement()).andReturn(0L).atLeastOnce();
     inputReader.beginShard();
     inputReader.beginSlice();
     expect(inputReader.next()).andThrow(new NoSuchElementException());
     inputReader.endSlice();
     inputReader.endShard();
+    inputReader.setContext(anyObject(ShardContext.class));
+    expectLastCall().anyTimes();
 
-    expect(mockOutput.getNumShards()).andReturn(1).times(0, Integer.MAX_VALUE);
-    @SuppressWarnings("rawtypes")
-    List writers = ImmutableList.of(outputWriter);
-    expect(mockOutput.createWriters()).andReturn(writers);
-    expect(outputWriter.estimateMemoryRequirement()).andReturn(0L).anyTimes();
+    expect(output.getNumShards()).andReturn(1);
+    output.setContext(anyObject(Context.class));
+    expect(output.getNumShards()).andReturn(1);
+    output.setContext(anyObject(Context.class));
+    expect(output.getNumShards()).andReturn(1);
+    output.setContext(anyObject(Context.class));
+    EasyMock.<List<? extends OutputWriter<ByteBuffer>>>expect(output.createWriters())
+        .andReturn(ImmutableList.of(new TestOutputWriter<>(outputWriter)));
+    outputWriter.setContext(anyObject(ShardContext.class));
+    expectLastCall().atLeastOnce();
+    expect(outputWriter.estimateMemoryRequirement()).andReturn(0L).atLeastOnce();
     outputWriter.beginShard();
     outputWriter.beginSlice();
     outputWriter.endSlice();
     outputWriter.endShard();
-    expect(mockOutput.finish(isA(Collection.class))).andReturn(null);
-    replay(mockInput, inputReader, mockOutput, outputWriter);
+    outputWriter.setContext(anyObject(ShardContext.class));
+    expectLastCall().anyTimes();
+
+    output.setContext(anyObject(Context.class));
+    expect(output.finish(isA(Collection.class))).andReturn(null);
+    replay(input, inputReader, output, outputWriter);
     runWithPipeline(new Preparer(),
         MapReduceSpecification.of("testLifeCycleMethodsCalled",
-            mockInput,
+            new TestInput<>(input),
             new LongToBytesMapper(),
             Marshallers.getByteBufferMarshaller(),
             Marshallers.getByteBufferMarshaller(),
             ValueProjectionReducer.<ByteBuffer, ByteBuffer>create(),
-            mockOutput),
+            new TestOutput<>(output)),
         new NopVerifier<Void>());
+    verify(input, inputReader, output, outputWriter);
   }
 
   public void testDatastoreData() throws Exception {

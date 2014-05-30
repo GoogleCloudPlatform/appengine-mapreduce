@@ -97,7 +97,7 @@ public class SortWorker extends Worker<SortContext> {
     memoryBuffer = allocateMemory();
   }
 
-  void release() {
+  void cleanup() {
     memoryBuffer = null;
   }
 

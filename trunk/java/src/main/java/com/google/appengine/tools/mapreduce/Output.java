@@ -20,7 +20,18 @@ import java.util.List;
  * @param <R> type returned by {@link #finish}
  */
 public abstract class Output<O, R> implements Serializable {
+
   private static final long serialVersionUID = 496243337289553392L;
+
+  private transient Context context;
+
+  void setContext(Context context) {
+    this.context = context;
+  }
+
+  public Context getContext() {
+    return context;
+  }
 
   /**
    * Returns a list of writers for this output.  It is the {@code Output}'s

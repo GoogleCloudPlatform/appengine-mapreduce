@@ -16,7 +16,18 @@ import java.util.List;
  * @param <I> type of values produced by this input
  */
 public abstract class Input<I> implements Serializable {
+
   private static final long serialVersionUID = 8796820298129705263L;
+
+  private transient Context context;
+
+  void setContext(Context context) {
+    this.context = context;
+  }
+
+  public Context getContext() {
+    return context;
+  }
 
   /**
    * Returns a list of readers for this input.  It is the {@code Input}'s

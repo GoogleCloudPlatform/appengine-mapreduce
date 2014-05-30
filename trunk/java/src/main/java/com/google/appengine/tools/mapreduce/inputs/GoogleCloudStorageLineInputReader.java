@@ -74,6 +74,7 @@ class GoogleCloudStorageLineInputReader extends InputReader<byte[]> {
   @Override
   public void beginSlice() {
     Preconditions.checkState(in == null, "%s: Already initialized: %s", this, in);
+    @SuppressWarnings("resource")
     InputStream inputStream = Channels.newInputStream(
         GCS_SERVICE.openPrefetchingReadChannel(file, startOffset + offset, bufferSize));
     in = new LineInputStream(inputStream, endOffset - startOffset - offset, separator);

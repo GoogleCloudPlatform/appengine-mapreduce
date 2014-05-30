@@ -47,19 +47,6 @@ public class SerializationUtilTest extends TestCase {
     bytes = SerializationUtil.serializeToByteArray(original, true, CompressionType.NONE);
     assertEquals(49, bytes.length);
 
-    /*
-    StringBuilder stBuilder = new StringBuilder();
-    for (byte b : bytes) {
-      char c = (char) b;
-      if (Character.isLetterOrDigit(c) || (c >= 32 && c <= 126)) {
-        stBuilder.append(c);
-      } else {
-        stBuilder.append('#');
-      }
-    }
-    System.out.println(stBuilder);
-    */
-
     bytes = SerializationUtil.serializeToByteArray(original, true, CompressionType.GZIP);
     assertEquals(57, bytes.length);
     bytes = SerializationUtil.serializeToByteArray(original);

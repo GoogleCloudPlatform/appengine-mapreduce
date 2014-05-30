@@ -73,7 +73,7 @@ public final class BlobFileOutputWriter extends OutputWriter<ByteBuffer> {
   }
 
   @Override
-  public void endShard() throws IOException {
+  public void endShard() {
     file = FileUtil.ensureFinalized(file);
   }
 

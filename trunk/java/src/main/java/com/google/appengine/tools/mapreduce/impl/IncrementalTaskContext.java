@@ -71,4 +71,11 @@ public class IncrementalTaskContext implements Serializable {
   void incrementWorkerMillis(long millis) {
     getCounters().getCounter(workerMillisCounterName).increment(millis);
   }
+
+  @Override
+  public String toString() {
+    return getClass().getSimpleName() + "[jobId=" + jobId + ", shardNumber=" + shardNumber
+        + ", shardCount=" + shardCount + ", lastWorkItem=" + lastWorkItem + ", workerCallCount="
+        + getWorkerCallCount() + ", workerTimeMillis=" + getWorkerTimeMillis() + "]";
+  }
 }

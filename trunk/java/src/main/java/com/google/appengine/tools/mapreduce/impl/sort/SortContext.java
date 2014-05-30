@@ -2,8 +2,9 @@ package com.google.appengine.tools.mapreduce.impl.sort;
 
 import com.google.appengine.tools.mapreduce.KeyValue;
 import com.google.appengine.tools.mapreduce.OutputWriter;
-import com.google.appengine.tools.mapreduce.impl.AbstractWorkerContext;
+import com.google.appengine.tools.mapreduce.WorkerContext;
 import com.google.appengine.tools.mapreduce.impl.IncrementalTaskContext;
+import com.google.appengine.tools.mapreduce.impl.BaseShardContext;
 import com.google.common.base.Preconditions;
 
 import java.io.IOException;
@@ -15,7 +16,8 @@ import java.util.List;
  * Provides a context for the in memory sort.
  *
  */
-public class SortContext extends AbstractWorkerContext<KeyValue<ByteBuffer, Iterator<ByteBuffer>>> {
+public class SortContext extends BaseShardContext
+    implements WorkerContext<KeyValue<ByteBuffer, Iterator<ByteBuffer>>> {
 
   private final OutputWriter<KeyValue<ByteBuffer, Iterator<ByteBuffer>>> output;
 

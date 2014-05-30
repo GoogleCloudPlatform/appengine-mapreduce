@@ -14,6 +14,9 @@ import com.google.appengine.tools.mapreduce.OutputWriter;
 import com.google.appengine.tools.mapreduce.Worker;
 import com.google.appengine.tools.mapreduce.impl.shardedjob.ShardFailureException;
 
+import java.io.IOException;
+import java.io.ObjectInputStream;
+
 /**
  * @author ohler@google.com (Christian Ohler)
  *
@@ -29,16 +32,16 @@ public class MapShardTask<I, K, V> extends WorkerShardTask<I, KeyValue<K, V>, Ma
   private final long millisPerSlice;
   private final InputReader<I> in;
   private final OutputWriter<KeyValue<K, V>> out;
-  private final IncrementalTaskContext context;
 
   public MapShardTask(String mrJobId, int shardNumber, int shardCount, InputReader<I> in,
       Mapper<I, K, V> mapper, OutputWriter<KeyValue<K, V>> out, long millisPerSlice) {
+    super(new IncrementalTaskContext(mrJobId, shardNumber, shardCount, MAPPER_CALLS,
+        MAPPER_WALLTIME_MILLIS));
     this.in = checkNotNull(in, "Null in");
     this.out = checkNotNull(out, "Null out");
     this.mapper = checkNotNull(mapper, "Null mapper");
     this.millisPerSlice = millisPerSlice;
-    this.context = new IncrementalTaskContext(mrJobId, shardNumber, shardCount, MAPPER_CALLS,
-        MAPPER_WALLTIME_MILLIS);
+    fillContext();
   }
 
   @Override
@@ -46,7 +49,7 @@ public class MapShardTask<I, K, V> extends WorkerShardTask<I, KeyValue<K, V>, Ma
     try {
       mapper.map(input);
     } catch (RuntimeException ex) {
-      throw new ShardFailureException(context.getShardNumber(), ex);
+      throw new ShardFailureException(getContext().getShardNumber(), ex);
     }
   }
 
@@ -81,13 +84,15 @@ public class MapShardTask<I, K, V> extends WorkerShardTask<I, KeyValue<K, V>, Ma
     return in;
   }
 
-  @Override
-  protected void setContextOnWorker() {
-    mapper.setContext(new MapperContextImpl<>(out, context));
+  private void readObject(ObjectInputStream stream) throws IOException, ClassNotFoundException {
+    stream.defaultReadObject();
+    fillContext();
   }
 
-  @Override
-  public IncrementalTaskContext getContext() {
-    return context;
+  private void fillContext() {
+    MapperContext<K, V> ctx = new MapperContextImpl<>(getContext(), out);
+    in.setContext(ctx);
+    out.setContext(ctx);
+    mapper.setContext(ctx);
   }
 }
