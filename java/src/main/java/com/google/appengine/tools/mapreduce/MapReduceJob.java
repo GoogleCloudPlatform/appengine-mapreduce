@@ -7,14 +7,18 @@ package com.google.appengine.tools.mapreduce;
 import static com.google.appengine.tools.mapreduce.impl.MapReduceConstants.MAX_WRITER_FANOUT;
 import static com.google.common.base.Preconditions.checkNotNull;
 
+import com.google.appengine.tools.cloudstorage.GcsFilename;
 import com.google.appengine.tools.mapreduce.impl.BaseContext;
 import com.google.appengine.tools.mapreduce.impl.CountersImpl;
 import com.google.appengine.tools.mapreduce.impl.FilesByShard;
 import com.google.appengine.tools.mapreduce.impl.GoogleCloudStorageMapOutput;
+import com.google.appengine.tools.mapreduce.impl.GoogleCloudStorageMergeInput;
+import com.google.appengine.tools.mapreduce.impl.GoogleCloudStorageMergeOutput;
 import com.google.appengine.tools.mapreduce.impl.GoogleCloudStorageReduceInput;
 import com.google.appengine.tools.mapreduce.impl.GoogleCloudStorageSortInput;
 import com.google.appengine.tools.mapreduce.impl.GoogleCloudStorageSortOutput;
 import com.google.appengine.tools.mapreduce.impl.HashingSharder;
+import com.google.appengine.tools.mapreduce.impl.MapReduceConstants;
 import com.google.appengine.tools.mapreduce.impl.MapShardTask;
 import com.google.appengine.tools.mapreduce.impl.ReduceShardTask;
 import com.google.appengine.tools.mapreduce.impl.WorkerController;
@@ -25,13 +29,14 @@ import com.google.appengine.tools.mapreduce.impl.pipeline.ResultAndStatus;
 import com.google.appengine.tools.mapreduce.impl.pipeline.ShardedJob;
 import com.google.appengine.tools.mapreduce.impl.shardedjob.ShardedJobServiceFactory;
 import com.google.appengine.tools.mapreduce.impl.shardedjob.ShardedJobSettings;
+import com.google.appengine.tools.mapreduce.impl.sort.MergeContext;
+import com.google.appengine.tools.mapreduce.impl.sort.MergeShardTask;
 import com.google.appengine.tools.mapreduce.impl.sort.SortContext;
 import com.google.appengine.tools.mapreduce.impl.sort.SortShardTask;
 import com.google.appengine.tools.mapreduce.impl.sort.SortWorker;
 import com.google.appengine.tools.pipeline.FutureValue;
 import com.google.appengine.tools.pipeline.Job0;
 import com.google.appengine.tools.pipeline.Job1;
-import com.google.appengine.tools.pipeline.Job2;
 import com.google.appengine.tools.pipeline.PipelineService;
 import com.google.appengine.tools.pipeline.PipelineServiceFactory;
 import com.google.appengine.tools.pipeline.PromisedValue;
@@ -42,8 +47,11 @@ import com.google.common.collect.ImmutableList;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.CancellationException;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -89,7 +97,7 @@ public class MapReduceJob<I, K, V, O, R> extends Job0<MapReduceResult<R>> {
   }
 
   /**
-   * The pipeline job to execute the Map phase of the MapReduce. (For all shards)
+   * The pipeline job to execute the Map stage of the MapReduce. (For all shards)
    */
   private static class MapJob<I, K, V> extends Job0<MapReduceResult<FilesByShard>> {
     private static final long serialVersionUID = 274712180795282822L;
@@ -136,7 +144,7 @@ public class MapReduceJob<I, K, V, O, R> extends Job0<MapReduceResult<R>> {
               mrSpec.getValueMarshaller(),
               new HashingSharder(getNumOutputFiles(readers.size())));
       output.setContext(context);
-      String shardedJobName = mrSpec.getJobName() + " (map phase)";
+      String shardedJobName = mrSpec.getJobName() + " (map stage)";
       List<? extends OutputWriter<KeyValue<K, V>>> writers = output.createWriters(readers.size());
       Preconditions.checkState(readers.size() == writers.size(), "%s: %s readers, %s writers",
           shardedJobName, readers.size(), writers.size());
@@ -156,11 +164,9 @@ public class MapReduceJob<I, K, V, O, R> extends Job0<MapReduceResult<R>> {
       ShardedJob<?> shardedJob =
           new ShardedJob<>(shardedJobId, mapTasks.build(), workerController, shardedJobSettings);
       FutureValue<Void> shardedJobResult = futureCall(shardedJob, settings.toJobSettings());
-      return futureCall(
-          new ExamineStatusAndReturnResult<FilesByShard>(shardedJobId),
-
+      return futureCall(new ExamineStatusAndReturnResult<FilesByShard>(shardedJobId),
           resultAndStatus, settings.toJobSettings(waitFor(shardedJobResult),
-              statusConsoleUrl(shardedJobSettings.getMapReduceStatusUrl()), maxAttempts(1)));
+              statusConsoleUrl(shardedJobSettings.getMapReduceStatusUrl())));
     }
 
     private int getNumOutputFiles(int mapShards) {
@@ -176,12 +182,11 @@ public class MapReduceJob<I, K, V, O, R> extends Job0<MapReduceResult<R>> {
   }
 
   /**
-   * The pipeline job to execute the Sort phase of the MapReduce. (For all shards)
+   * The pipeline job to execute the Sort stage of the MapReduce. (For all shards)
    */
   private static class SortJob extends Job1<
       MapReduceResult<FilesByShard>,
       MapReduceResult<FilesByShard>> {
-
     private static final long serialVersionUID = 8761355950012542309L;
     // We don't need the CountersImpl part of the MapResult input here but we
     // accept it to avoid needing an adapter job to connect this job to MapJob's result.
@@ -204,12 +209,13 @@ public class MapReduceJob<I, K, V, O, R> extends Job0<MapReduceResult<R>> {
     }
 
     /**
-     * Takes in the the result of the map phase. (FilesByShard indexed by sortShard) These files are
+     * Takes in the the result of the map stage. (FilesByShard indexed by sortShard) These files are
      * then read, and written out in sorted order. The result is a set of files for each reducer.
      * The format for how the data is written out is defined by {@link GoogleCloudStorageSortOutput}
      */
     @Override
     public Value<MapReduceResult<FilesByShard>> run(MapReduceResult<FilesByShard> mapResult) {
+
       Context context = new BaseContext(mrJobId);
       int mapShards = findMaxFilesPerShard(mapResult.getOutputResult());
       int reduceShards = mrSpec.getNumReducers();
@@ -222,7 +228,7 @@ public class MapReduceJob<I, K, V, O, R> extends Job0<MapReduceResult<R>> {
           new GoogleCloudStorageSortOutput(settings.getBucketName(), mrJobId,
               new HashingSharder(reduceShards));
       output.setContext(context);
-      String shardedJobName = mrSpec.getJobName() + " (sort phase)";
+      String shardedJobName = mrSpec.getJobName() + " (sort stage)";
       List<? extends OutputWriter<KeyValue<ByteBuffer, List<ByteBuffer>>>> writers =
           output.createWriters(readers.size());
       Preconditions.checkState(readers.size() == writers.size(), "%s: %s readers, %s writers",
@@ -232,7 +238,7 @@ public class MapReduceJob<I, K, V, O, R> extends Job0<MapReduceResult<R>> {
               ImmutableList.builder();
       for (int i = 0; i < readers.size(); i++) {
         sortTasks.add(new SortShardTask(mrJobId, i, readers.size(), readers.get(i),
-            new SortWorker(), writers.get(i)));
+            new SortWorker(settings.getMaxSortMemory()), writers.get(i)));
       }
       ShardedJobSettings shardedJobSettings =
           settings.toShardedJobSettings(shardedJobId, getPipelineKey());
@@ -240,15 +246,100 @@ public class MapReduceJob<I, K, V, O, R> extends Job0<MapReduceResult<R>> {
       PromisedValue<ResultAndStatus<FilesByShard>> resultAndStatus = newPromise();
       WorkerController<KeyValue<ByteBuffer, ByteBuffer>, KeyValue<ByteBuffer, List<ByteBuffer>>,
           FilesByShard, SortContext> workerController = new WorkerController<>(mrJobId,
-          shardedJobName, new CountersImpl(), output, resultAndStatus.getHandle());
+          shardedJobName, mapResult.getCounters(), output, resultAndStatus.getHandle());
+
       ShardedJob<?> shardedJob =
           new ShardedJob<>(shardedJobId, sortTasks.build(), workerController, shardedJobSettings);
       FutureValue<Void> shardedJobResult = futureCall(shardedJob, settings.toJobSettings());
 
       return futureCall(new ExamineStatusAndReturnResult<FilesByShard>(shardedJobId),
-
           resultAndStatus, settings.toJobSettings(waitFor(shardedJobResult),
-              statusConsoleUrl(shardedJobSettings.getMapReduceStatusUrl()), maxAttempts(1)));
+              statusConsoleUrl(shardedJobSettings.getMapReduceStatusUrl())));
+    }
+
+    @SuppressWarnings("unused")
+    public Value<FilesByShard> handleException(CancellationException ex) {
+      ShardedJobServiceFactory.getShardedJobService().abortJob(shardedJobId);
+      return null;
+    }
+  }
+
+  /**
+   * The pipeline job to execute the optional Merge stage of the MapReduce. (For all shards)
+   */
+  private static class MergeJob extends Job1<
+      MapReduceResult<FilesByShard>,
+      MapReduceResult<FilesByShard>> {
+
+    private static final long serialVersionUID = 6206131608067499939L;
+    // We don't need the CountersImpl part of the MapResult input here but we
+    // accept it to avoid needing an adapter job to connect this job to MapJob's result.
+    private final String mrJobId;
+    private final MapReduceSpecification<?, ?, ?, ?, ?> mrSpec;
+    private final MapReduceSettings settings;
+    private final String shardedJobId;
+
+    private MergeJob(
+        String mrJobId, MapReduceSpecification<?, ?, ?, ?, ?> mrSpec, MapReduceSettings settings) {
+      this.mrJobId = checkNotNull(mrJobId, "Null mrJobId");
+      this.mrSpec = checkNotNull(mrSpec, "Null mrSpec");
+      this.settings = checkNotNull(settings, "Null settings");
+      shardedJobId = "merge-" + mrJobId;
+    }
+
+    @Override
+    public String toString() {
+      return getClass().getSimpleName() + "(" + mrJobId + ")";
+    }
+
+    /**
+     * Takes in the the result of the sort stage, the files are read and re-written, merging
+     * multiple files into one in the process.
+     */
+    @Override
+    public Value<MapReduceResult<FilesByShard>> run(MapReduceResult<FilesByShard> sortResult) {
+      Context context = new BaseContext(mrJobId);
+      FilesByShard sortFiles = sortResult.getOutputResult();
+      int maxFilesPerShard = findMaxFilesPerShard(sortFiles);
+      if (maxFilesPerShard <= MapReduceConstants.MERGE_FANIN) {
+        return immediate(sortResult);
+      }
+
+      GoogleCloudStorageMergeInput input = new GoogleCloudStorageMergeInput(sortFiles);
+      ((Input<?>) input).setContext(context);
+      List<? extends InputReader<KeyValue<ByteBuffer, Iterator<ByteBuffer>>>> readers =
+          input.createReaders();
+
+      Output<KeyValue<ByteBuffer, List<ByteBuffer>>, FilesByShard> output =
+          new GoogleCloudStorageMergeOutput(settings.getBucketName(), mrJobId);
+      output.setContext(context);
+      String shardedJobName = mrSpec.getJobName() + " (merge stage)";
+      List<? extends OutputWriter<KeyValue<ByteBuffer, List<ByteBuffer>>>> writers =
+          output.createWriters(readers.size());
+      Preconditions.checkState(readers.size() == writers.size(), "%s: %s readers, %s writers",
+          shardedJobName, readers.size(), writers.size());
+      ImmutableList.Builder<WorkerShardTask<KeyValue<ByteBuffer, Iterator<ByteBuffer>>,
+          KeyValue<ByteBuffer, List<ByteBuffer>>, MergeContext>> mergeTasks =
+          ImmutableList.builder();
+      for (int i = 0; i < readers.size(); i++) {
+        mergeTasks.add(
+            new MergeShardTask(mrJobId, i, readers.size(), readers.get(i), writers.get(i)));
+      }
+      ShardedJobSettings shardedJobSettings =
+          settings.toShardedJobSettings(shardedJobId, getPipelineKey());
+
+      PromisedValue<ResultAndStatus<FilesByShard>> resultAndStatus = newPromise();
+      WorkerController<KeyValue<ByteBuffer, Iterator<ByteBuffer>>,
+          KeyValue<ByteBuffer, List<ByteBuffer>>, FilesByShard, MergeContext> workerController =
+          new WorkerController<>(mrJobId, shardedJobName, sortResult.getCounters(), output,
+              resultAndStatus.getHandle());
+      ShardedJob<?> shardedJob =
+          new ShardedJob<>(shardedJobId, mergeTasks.build(), workerController, shardedJobSettings);
+      FutureValue<Void> shardedJobResult = futureCall(shardedJob, settings.toJobSettings());
+
+      return futureCall(new ExamineStatusAndReturnResult<FilesByShard>(shardedJobId),
+          resultAndStatus, settings.toJobSettings(waitFor(shardedJobResult),
+              statusConsoleUrl(shardedJobSettings.getMapReduceStatusUrl())));
     }
 
     @SuppressWarnings("unused")
@@ -267,10 +358,9 @@ public class MapReduceJob<I, K, V, O, R> extends Job0<MapReduceResult<R>> {
   }
 
   /**
-   * The pipeline job to execute the Reduce phase of the MapReduce. (For all shards)
+   * The pipeline job to execute the Reduce stage of the MapReduce. (For all shards)
    */
-  private static class ReduceJob<K, V, O, R> extends Job2<MapReduceResult<R>,
-      MapReduceResult<FilesByShard>,
+  private static class ReduceJob<K, V, O, R> extends Job1<MapReduceResult<R>,
       MapReduceResult<FilesByShard>> {
 
     private static final long serialVersionUID = 590237832617368335L;
@@ -294,21 +384,20 @@ public class MapReduceJob<I, K, V, O, R> extends Job0<MapReduceResult<R>> {
     }
 
     /**
-     * Takes in the output from sort, and creates a sharded task to call the reducer with the
+     * Takes in the output from merge, and creates a sharded task to call the reducer with the
      * ordered input.
      * The way the data is read in is defined by {@link GoogleCloudStorageReduceInput}
      */
     @Override
-    public Value<MapReduceResult<R>> run(MapReduceResult<FilesByShard> mapResult,
-        MapReduceResult<FilesByShard> sortResult) {
+    public Value<MapReduceResult<R>> run(MapReduceResult<FilesByShard> mergeResult) {
       Context context = new BaseContext(mrJobId);
       Output<O, R> output = mrSpec.getOutput();
       output.setContext(context);
       GoogleCloudStorageReduceInput<K, V> input = new GoogleCloudStorageReduceInput<>(
-          sortResult.getOutputResult(), mrSpec.getKeyMarshaller(), mrSpec.getValueMarshaller());
+          mergeResult.getOutputResult(), mrSpec.getKeyMarshaller(), mrSpec.getValueMarshaller());
       ((Input<?>) input).setContext(context);
       List<? extends InputReader<KeyValue<K, Iterator<V>>>> readers = input.createReaders();
-      String shardedJobName = mrSpec.getJobName() + " (reduce phase)";
+      String shardedJobName = mrSpec.getJobName() + " (reduce stage)";
       List<? extends OutputWriter<O>> writers = output.createWriters(mrSpec.getNumReducers());
       Preconditions.checkArgument(readers.size() == writers.size(), "%s: %s readers, %s writers",
           shardedJobName, readers.size(), writers.size());
@@ -322,13 +411,13 @@ public class MapReduceJob<I, K, V, O, R> extends Job0<MapReduceResult<R>> {
           settings.toShardedJobSettings(shardedJobId, getPipelineKey());
       PromisedValue<ResultAndStatus<R>> resultAndStatus = newPromise();
       WorkerController<KeyValue<K, Iterator<V>>, O, R, ReducerContext<O>> workerController =
-          new WorkerController<>(mrJobId, shardedJobName, mapResult.getCounters(), output,
+          new WorkerController<>(mrJobId, shardedJobName, mergeResult.getCounters(), output,
               resultAndStatus.getHandle());
       ShardedJob<?> shardedJob =
           new ShardedJob<>(shardedJobId, reduceTasks.build(), workerController, shardedJobSettings);
       FutureValue<Void> shardedJobResult = futureCall(shardedJob, settings.toJobSettings());
       return futureCall(new ExamineStatusAndReturnResult<R>(shardedJobId), resultAndStatus,
-          settings.toJobSettings(waitFor(shardedJobResult), maxAttempts(1),
+          settings.toJobSettings(waitFor(shardedJobResult),
               statusConsoleUrl(shardedJobSettings.getMapReduceStatusUrl())));
     }
 
@@ -339,8 +428,7 @@ public class MapReduceJob<I, K, V, O, R> extends Job0<MapReduceResult<R>> {
     }
   }
 
-  private static class Cleanup extends
-      Job1<Void, MapReduceResult<FilesByShard>> {
+  private static class Cleanup extends Job1<Void, List<MapReduceResult<FilesByShard>>> {
 
     private static final long serialVersionUID = 4559443543355672948L;
 
@@ -351,9 +439,15 @@ public class MapReduceJob<I, K, V, O, R> extends Job0<MapReduceResult<R>> {
     }
 
     @Override
-    public Value<Void> run(MapReduceResult<FilesByShard> result) {
-
-      CleanupPipelineJob.cleanup(result.getOutputResult(), settings.toJobSettings());
+    public Value<Void> run(List<MapReduceResult<FilesByShard>> results) {
+      Set<GcsFilename> toDelete = new HashSet<>();
+      for (MapReduceResult<FilesByShard> result : results) {
+        FilesByShard filesByShard = result.getOutputResult();
+        for (int i = 0; i < filesByShard.getShardCount(); i++) {
+          toDelete.addAll(filesByShard.getFilesForShard(i).getFiles());
+        }
+      }
+      CleanupPipelineJob.cleanup(new ArrayList<>(toDelete), settings.toJobSettings());
       return null;
     }
   }
@@ -372,17 +466,20 @@ public class MapReduceJob<I, K, V, O, R> extends Job0<MapReduceResult<R>> {
     }
     String mrJobId = getJobKey().getName();
     FutureValue<MapReduceResult<FilesByShard>> mapResult = futureCall(
-
         new MapJob<>(mrJobId, specification, settings), settings.toJobSettings(maxAttempts(1)));
 
     FutureValue<MapReduceResult<FilesByShard>> sortResult = futureCall(
         new SortJob(mrJobId, specification, settings), mapResult,
         settings.toJobSettings(maxAttempts(1)));
-    futureCall(new Cleanup(settings), mapResult, waitFor(sortResult));
-    FutureValue<MapReduceResult<R>> reduceResult = futureCall(
-        new ReduceJob<>(mrJobId, specification, settings), mapResult, sortResult,
+    FutureValue<MapReduceResult<FilesByShard>> mergeResult = futureCall(
+        new MergeJob(mrJobId, specification, settings), sortResult,
         settings.toJobSettings(maxAttempts(1)));
-    futureCall(new Cleanup(settings), sortResult, waitFor(reduceResult));
+    FutureValue<MapReduceResult<R>> reduceResult = futureCall(
+        new ReduceJob<>(mrJobId, specification, settings), mergeResult,
+        settings.toJobSettings(maxAttempts(1)));
+    futureCall(new Cleanup(settings), futureList(ImmutableList.of(mapResult)), waitFor(sortResult));
+    futureCall(new Cleanup(settings), futureList(ImmutableList.of(sortResult, mergeResult)),
+        waitFor(reduceResult));
     return reduceResult;
   }
 
@@ -396,4 +493,3 @@ public class MapReduceJob<I, K, V, O, R> extends Job0<MapReduceResult<R>> {
     return Optional.fromNullable(specification.getJobName()).or(super.getJobDisplayName());
   }
 }
-

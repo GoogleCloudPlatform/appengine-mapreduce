@@ -1,12 +1,12 @@
 package com.google.appengine.tools.mapreduce.impl;
 
 import static com.google.appengine.tools.mapreduce.Marshallers.getByteBufferMarshaller;
+import static com.google.appengine.tools.mapreduce.impl.sort.LexicographicalComparator.compareBuffers;
 
 import com.google.appengine.tools.mapreduce.InputReader;
 import com.google.appengine.tools.mapreduce.KeyValue;
 import com.google.appengine.tools.mapreduce.Marshaller;
 import com.google.appengine.tools.mapreduce.ReducerInput;
-import com.google.appengine.tools.mapreduce.impl.sort.LexicographicalComparator;
 import com.google.appengine.tools.mapreduce.impl.util.SerializableValue;
 import com.google.appengine.tools.mapreduce.inputs.PeekingInputReader;
 import com.google.common.base.Preconditions;
@@ -21,11 +21,15 @@ import java.util.NoSuchElementException;
 import java.util.PriorityQueue;
 
 /**
- * A reader class that performs merging of multiple different inputs.
- * This is done to combine the contents of multiple sorted files while preserving the sort order.
- * In order to do this it operates on a peeking input reader that returns KeyValue pairs.
- * It uses the lexicographicalComparator to compare the serialized keys and returns the lowest one
- * first.
+ * A reader class that performs merging of multiple different inputs. This is done to combine the
+ * contents of multiple sorted files while preserving the sort order. In order to do this it
+ * operates on a peeking input reader that returns KeyValue pairs. It uses the
+ * lexicographicalComparator to compare the serialized keys and returns the lowest one first.
+ *
+ *  This class takes a boolean to indicate if sets of input values that share the same key should be
+ * combined into a single key-values object. This is enabled for the reducer which expects to receive
+ * all values for a given key, but may be useful to disable for internal cases (Merge for instance)
+ * where this processing is not needed.
  *
  * @param <K> The type of the key to be returned in the key Value pair.
  * @param <V> The type of the value
@@ -33,15 +37,17 @@ import java.util.PriorityQueue;
 final class MergingReader<K, V> extends InputReader<KeyValue<K, Iterator<V>>> {
 
   private static final long serialVersionUID = 4731927175388671578L;
-  private static final LexicographicalComparator comparator = new LexicographicalComparator();
+
   private final List<PeekingInputReader<KeyValue<ByteBuffer, ? extends Iterable<V>>>> readers;
   private final Marshaller<K> keyMarshaller;
   private SerializableValue<ByteBuffer> lastKey;
   private transient PriorityQueue<PeekingInputReader<KeyValue<ByteBuffer, ? extends Iterable<V>>>>
       lowestReaderQueue;
+  private final boolean combineValues;
 
   MergingReader(List<PeekingInputReader<KeyValue<ByteBuffer, ? extends Iterable<V>>>> readers,
-      Marshaller<K> keyMarshaller) {
+      Marshaller<K> keyMarshaller, boolean combineValues) {
+    this.combineValues = combineValues;
     this.readers = Preconditions.checkNotNull(readers);
     this.keyMarshaller = Preconditions.checkNotNull(keyMarshaller);
   }
@@ -60,7 +66,7 @@ final class MergingReader<K, V> extends InputReader<KeyValue<K, Iterator<V>>> {
           @Override
           public int compare(PeekingInputReader<KeyValue<ByteBuffer, ? extends Iterable<V>>> r1,
               PeekingInputReader<KeyValue<ByteBuffer, ? extends Iterable<V>>> r2) {
-            return comparator.compare(r1.peek().getKey(), r2.peek().getKey());
+            return compareBuffers(r1.peek().getKey(), r2.peek().getKey());
           }
         };
     lowestReaderQueue = new PriorityQueue<>(Math.max(1, readers.size()), pqComparator);
@@ -102,7 +108,7 @@ final class MergingReader<K, V> extends InputReader<KeyValue<K, Iterator<V>>> {
         PeekingInputReader<KeyValue<ByteBuffer, ? extends Iterable<V>>> reader =
             lowestReaderQueue.peek();
         KeyValue<ByteBuffer, ? extends Iterable<V>> kv = reader.peek();
-        if (comparator.compare(kv.getKey(), key) != 0) {
+        if (compareBuffers(kv.getKey(), key) != 0) {
           break;
         }
         if (kv.getValue().iterator().hasNext()) {
@@ -123,7 +129,7 @@ final class MergingReader<K, V> extends InputReader<KeyValue<K, Iterator<V>>> {
       }
       KeyValue<ByteBuffer, ? extends Iterable<V>> keyValue =
           (lowestReaderQueue.isEmpty()) ? null : lowestReaderQueue.peek().peek();
-      if (keyValue == null || comparator.compare(keyValue.getKey(), key) != 0) {
+      if (keyValue == null || compareBuffers(keyValue.getKey(), key) != 0) {
         throw new NoSuchElementException();
       }
       consumePeekedValue(keyValue);
@@ -160,15 +166,22 @@ final class MergingReader<K, V> extends InputReader<KeyValue<K, Iterator<V>>> {
    */
   @Override
   public KeyValue<K, Iterator<V>> next() throws NoSuchElementException {
-    skipLeftoverItems();
+    if (combineValues) {
+      skipLeftoverItems();
+    }
     PeekingInputReader<KeyValue<ByteBuffer, ? extends Iterable<V>>> reader =
         lowestReaderQueue.remove();
     KeyValue<ByteBuffer, ? extends Iterable<V>> lowest = reader.next();
     ByteBuffer lowestKey = lowest.getKey();
-    CombiningReader values = new CombiningReader(lowestKey, lowest.getValue());
     addReaderToQueueIfNotEmpty(reader);
     lastKey = SerializableValue.of(getByteBufferMarshaller(), lowestKey);
-    return new KeyValue<K, Iterator<V>>(keyMarshaller.fromBytes(lowestKey.slice()), values);
+    if (combineValues) {
+      CombiningReader values = new CombiningReader(lowestKey, lowest.getValue());
+      return new KeyValue<K, Iterator<V>>(keyMarshaller.fromBytes(lowestKey.slice()), values);
+    } else {
+      return new KeyValue<>(keyMarshaller.fromBytes(lowestKey.slice()),
+          lowest.getValue().iterator());
+    }
   }
 
   private void addReaderToQueueIfNotEmpty(
@@ -203,7 +216,7 @@ final class MergingReader<K, V> extends InputReader<KeyValue<K, Iterator<V>>> {
       PeekingInputReader<KeyValue<ByteBuffer, ? extends Iterable<V>>> reader) {
     boolean itemSkipped = false;
     KeyValue<ByteBuffer, ? extends Iterable<V>> keyValue = reader.peek();
-    while (keyValue != null && comparator.compare(keyValue.getKey(), lastKey.getValue()) == 0) {
+    while (keyValue != null && compareBuffers(keyValue.getKey(), lastKey.getValue()) == 0) {
       consumePeekedValueFromReader(keyValue, reader);
       itemSkipped = true;
       keyValue = reader.peek();

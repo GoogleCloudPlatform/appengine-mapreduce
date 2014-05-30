@@ -78,6 +78,6 @@ public class GoogleCloudStorageReduceInput<K, V> extends Input<KeyValue<K, Itera
     for (InputReader<ByteBuffer> in : reducerInput.createReaders()) {
       inputFiles.add(new PeekingInputReader<>(in, marshaller));
     }
-    return new MergingReader<>(inputFiles, keyMarshaller);
+    return new MergingReader<>(inputFiles, keyMarshaller, true);
   }
 }

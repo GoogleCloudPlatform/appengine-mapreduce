@@ -14,7 +14,7 @@ import com.google.appengine.tools.mapreduce.outputs.GoogleCloudStorageFileOutput
 import com.google.appengine.tools.mapreduce.outputs.LevelDbOutputWriter;
 import com.google.appengine.tools.mapreduce.outputs.MarshallingOutputWriter;
 import com.google.appengine.tools.mapreduce.outputs.ShardingOutputWriter;
-import com.google.appengine.tools.mapreduce.outputs.SlicingOutputWriter;
+import com.google.appengine.tools.mapreduce.outputs.SliceSegmentingOutputWriter;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -73,7 +73,7 @@ public class GoogleCloudStorageSortOutput extends
     }
   }
 
-  private static class SlicingOutputWriterImpl extends SlicingOutputWriter<
+  private static class SlicingOutputWriterImpl extends SliceSegmentingOutputWriter<
       KeyValue<ByteBuffer, List<ByteBuffer>>,
       MarshallingOutputWriter<KeyValue<ByteBuffer, List<ByteBuffer>>>> {
 

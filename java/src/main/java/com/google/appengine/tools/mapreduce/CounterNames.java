@@ -34,6 +34,16 @@ public final class CounterNames {
   public static final String SORT_WALLTIME_MILLIS = "sort-walltime-msec";
 
   /**
+   * Number of times merge function was called.
+   */
+  public static final String MERGE_CALLS = "merge-calls";
+
+  /**
+   * Total time in milliseconds spent in merge function.
+   */
+  public static final String MERGE_WALLTIME_MILLIS = "merge-walltime-msec";
+
+  /**
    * Number of times reduce function was called.
    */
   public static final String REDUCER_CALLS = "reducer-calls";

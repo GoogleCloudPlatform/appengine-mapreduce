@@ -18,6 +18,8 @@ public class MapReduceConstants {
   public static final String SORT_OUTPUT_DIR_FORMAT =
       "MapReduce/%s/ReduceInput/Sorter-%04d/ReduceShard-%04d/slice-%%04d";
 
+  public static final String MERGE_OUTPUT_DIR_FORMAT =
+      "MapReduce/%s/MergedOutput/ReduceShard-%04d/file-%%04d";
 
   public static final int ASSUMED_BASE_MEMORY_PER_REQUEST = 16 * 1024 * 1024;
 
@@ -49,6 +51,18 @@ public class MapReduceConstants {
       "application/vnd.appengine.mapreduce.reduce-input.records";
 
   public static final int MAX_WRITER_FANOUT = 32;
+
+  /**
+   * Number of files the merge stage will read at the same time.
+   */
+  public static final int MERGE_FANIN = 32;
+
+  /**
+   * Size (in bytes) of items to batch together in the output of the sort.
+   * (A higher value saves storage cost, but needs to be small enough to not impact memory use.)
+   */
+  public static final int BATCHED_ITEM_SIZE_PER_EMIT = 32 * 1024;
+
 
   /**
    * Maximum display size of the lastItem in the UI.

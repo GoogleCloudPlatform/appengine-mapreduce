@@ -9,6 +9,7 @@ import com.google.appengine.tools.cloudstorage.GcsFilename;
 import com.google.appengine.tools.cloudstorage.GcsService;
 import com.google.appengine.tools.cloudstorage.GcsServiceFactory;
 import com.google.appengine.tools.cloudstorage.RetryParams;
+import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
 
 import java.io.IOException;
@@ -33,10 +34,12 @@ public class MapReduceSettings extends MapSettings {
   private static final Logger log = Logger.getLogger(MapReduceSettings.class.getName());
 
   private final String bucketName;
+  private final Long maxSortMemory;
 
   public static class Builder extends BaseBuilder<Builder> {
 
     private String bucketName;
+    private Long maxSortMemory;
 
     public Builder() {
     }
@@ -44,6 +47,7 @@ public class MapReduceSettings extends MapSettings {
     public Builder(MapReduceSettings settings) {
       super(settings);
       this.bucketName = settings.bucketName;
+      this.maxSortMemory = settings.maxSortMemory;
     }
 
     public Builder(MapSettings settings) {
@@ -64,6 +68,17 @@ public class MapReduceSettings extends MapSettings {
       return this;
     }
 
+    /**
+     * @param maxMemory The maximum memory the sort stage should allocate (in bytes). This is used
+     *        to lower the amount of memory it will use. Regardless of this setting it will not
+     *        exhaust available memory. (Null or unset is interpreted as no maximum)
+     */
+    public Builder setMaxSortMemory(Long maxMemory) {
+      Preconditions.checkArgument(maxMemory == null || maxMemory >= 0);
+      this.maxSortMemory = maxMemory;
+      return this;
+    }
+
     public MapReduceSettings build() {
       return new MapReduceSettings(this);
     }
@@ -72,10 +87,15 @@ public class MapReduceSettings extends MapSettings {
   private MapReduceSettings(Builder builder) {
     super(builder);
     bucketName = verifyAndSetBucketName(builder.bucketName);
+    maxSortMemory = builder.maxSortMemory;
   }
 
   String getBucketName() {
     return bucketName;
+  }
+
+  Long getMaxSortMemory() {
+    return maxSortMemory;
   }
 
   @Override
@@ -86,6 +106,7 @@ public class MapReduceSettings extends MapSettings {
         + getModule() + ", "
         + getWorkerQueueName() + ", "
         + bucketName + ", "
+        + maxSortMemory + ", "
         + getMillisPerSlice() + ", "
         + getMaxSliceRetries() + ", "
         + getMaxShardRetries() + ")";
