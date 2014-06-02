@@ -9,6 +9,11 @@ import static org.easymock.EasyMock.expectLastCall;
 import static org.easymock.EasyMock.isA;
 import static org.easymock.EasyMock.replay;
 import static org.easymock.EasyMock.verify;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 import com.google.appengine.api.datastore.DatastoreService;
 import com.google.appengine.api.datastore.DatastoreServiceFactory;
@@ -51,6 +56,10 @@ import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 
 import org.easymock.EasyMock;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.BlockJUnit4ClassRunner;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -74,12 +83,14 @@ import java.util.logging.Logger;
  * @author ohler@google.com (Christian Ohler)
  */
 @SuppressWarnings("deprecation")
+@RunWith(BlockJUnit4ClassRunner.class)
 public class EndToEndTest extends EndToEndTestCase {
 
   private static final Logger log = Logger.getLogger(EndToEndTest.class.getName());
 
   private PipelineService pipelineService;
 
+  @Before
   @Override
   public void setUp() throws Exception {
     super.setUp();
@@ -155,6 +166,7 @@ public class EndToEndTest extends EndToEndTestCase {
     }
   }
 
+  @Test
   public void testMapOnlyJob() throws Exception {
       RandomLongInput input = new RandomLongInput(100, 2);
       InMemoryOutput<String> output = new InMemoryOutput<>();
@@ -247,6 +259,7 @@ public class EndToEndTest extends EndToEndTestCase {
     }
   }
 
+  @Test
   public void testAdaptedMapOnlyJob() throws Exception {
       RandomLongInput input = new RandomLongInput(100, 2);
       InMemoryOutput<String> output = new InMemoryOutput<>();
@@ -270,6 +283,7 @@ public class EndToEndTest extends EndToEndTestCase {
       });
   }
 
+  @Test
   public void testSomeShardsEmpty() throws Exception {
     runTest(new MapReduceSpecification.Builder<>(
         new ConsecutiveLongInput(0, 5, 10), new Mod37Mapper(),
@@ -293,6 +307,7 @@ public class EndToEndTest extends EndToEndTestCase {
     });
   }
 
+  @Test
   public void testManyReduceShards() throws Exception {
     runTest(new MapReduceSpecification.Builder<>(
         new ConsecutiveLongInput(0, 50000, 10), new Mod37Mapper(),
@@ -316,6 +331,7 @@ public class EndToEndTest extends EndToEndTestCase {
     });
   }
 
+  @Test
   public void testDoNothingWithEmptyReadersList() throws Exception {
     runTest(
         new MapReduceSpecification.Builder<>(
@@ -337,6 +353,7 @@ public class EndToEndTest extends EndToEndTestCase {
         });
   }
 
+  @Test
   public void testDoNothing() throws Exception {
     runTest(
         new MapReduceSpecification.Builder<>(
@@ -569,6 +586,7 @@ public class EndToEndTest extends EndToEndTestCase {
     }
   }
 
+  @Test
   public void testShardAndSliceRetriesSuccess() throws Exception {
     int shardsCount = 1;
     // {input-size, shard-failure, slice-failure}
@@ -620,6 +638,7 @@ public class EndToEndTest extends EndToEndTestCase {
     }
   }
 
+  @Test
   public void testShardAndSliceRetriesFailure() throws Exception {
     int shardsCount = 1;
     // {shard-failure, slice-failure}
@@ -664,6 +683,8 @@ public class EndToEndTest extends EndToEndTestCase {
           "Stage map-.* was not completed successfuly \\(status=ERROR, message=.*\\)"));
     }
   }
+
+  @Test
   public void testPassThroughToString() throws Exception {
     final RandomLongInput input = new RandomLongInput(10, 1);
     input.setSeed(0L);
@@ -699,6 +720,7 @@ public class EndToEndTest extends EndToEndTestCase {
         });
   }
 
+  @Test
   public void testPassByteBufferToGcs() throws Exception {
     final RandomLongInput input = new RandomLongInput(10, 1);
     input.setSeed(0L);
@@ -825,6 +847,7 @@ public class EndToEndTest extends EndToEndTestCase {
     }
   }
 
+  @Test
   @SuppressWarnings("unchecked")
   public void testLifeCycleMethodsCalled() throws Exception {
     Input<Long> input = createStrictMock(Input.class);
@@ -876,6 +899,7 @@ public class EndToEndTest extends EndToEndTestCase {
     verify(input, inputReader, output, outputWriter);
   }
 
+  @Test
   public void testDatastoreData() throws Exception {
     final DatastoreService datastoreService = DatastoreServiceFactory.getDatastoreService();
     // Datastore restriction: id cannot be zero.
@@ -942,6 +966,7 @@ public class EndToEndTest extends EndToEndTestCase {
         });
   }
 
+  @Test
   public void testNoData() throws Exception {
     runTest(
         new MapReduceSpecification.Builder<>(
@@ -1012,6 +1037,7 @@ public class EndToEndTest extends EndToEndTestCase {
     }
   }
 
+  @Test
   public void testSomeNumbers() throws Exception {
     MapReduceSpecification.Builder<Long, String, Long, KeyValue<String, List<Long>>,
         List<List<KeyValue<String, List<Long>>>>> mrSpecBuilder =
@@ -1063,6 +1089,7 @@ public class EndToEndTest extends EndToEndTestCase {
    * Makes sure the same key is not dupped, nor does the reduce go into an infinite loop if it
    * ignores the values.
    */
+  @Test
   public void testReduceOnlyLooksAtKeys() throws Exception {
     MapReduceSpecification.Builder<Long, String, Long, String, List<List<String>>>  builder =
         new MapReduceSpecification.Builder<>();
@@ -1097,6 +1124,7 @@ public class EndToEndTest extends EndToEndTestCase {
         });
   }
 
+  @Test
   public void testManySortOutputFiles() throws Exception {
     MapReduceSpecification.Builder<Long, Long, String, Long, List<List<Long>>> builder =
         new MapReduceSpecification.Builder<>();
@@ -1127,6 +1155,7 @@ public class EndToEndTest extends EndToEndTestCase {
         });
   }
 
+  @Test
   public void testSlicingJob() throws Exception {
     MapReduceSpecification.Builder<Long, String, Long, String, List<List<String>>> builder =
         new MapReduceSpecification.Builder<>();
@@ -1198,6 +1227,7 @@ public class EndToEndTest extends EndToEndTestCase {
     }
   }
 
+  @Test
   public void testSideOutput() throws Exception {
 
     runTest(
