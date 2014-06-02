@@ -2,6 +2,11 @@
 
 package com.google.appengine.tools.mapreduce.impl.handlers;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
+
 import com.google.appengine.api.datastore.DatastoreService;
 import com.google.appengine.api.datastore.DatastoreServiceFactory;
 import com.google.appengine.api.datastore.FetchOptions;
@@ -17,6 +22,9 @@ import com.google.appengine.tools.mapreduce.impl.shardedjob.TestTask;
 import com.google.common.collect.ImmutableList;
 
 import org.json.JSONObject;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.BlockJUnit4ClassRunner;
 
 import java.util.Iterator;
 import java.util.Random;
@@ -24,6 +32,7 @@ import java.util.Random;
 /**
  *
  */
+@RunWith(BlockJUnit4ClassRunner.class)
 public class StatusHandlerTest extends EndToEndTestCase {
 
   private static final class DummyWorkerController
@@ -41,6 +50,7 @@ public class StatusHandlerTest extends EndToEndTestCase {
     public void completed(Iterator<TestTask> results) {}
   }
 
+  @Test
   public void testCleanupJob() throws Exception {
     ShardedJobService jobService = ShardedJobServiceFactory.getShardedJobService();
     assertTrue(jobService.cleanupJob("testCleanupJob")); // No such job yet
@@ -61,6 +71,7 @@ public class StatusHandlerTest extends EndToEndTestCase {
   }
 
   // Tests that an job that has just been initialized returns a reasonable job detail.
+  @Test
   public void testGetJobDetail_empty() throws Exception {
     ShardedJobService jobService = ShardedJobServiceFactory.getShardedJobService();
     ShardedJobSettings settings = new ShardedJobSettings.Builder().build();
@@ -77,6 +88,7 @@ public class StatusHandlerTest extends EndToEndTestCase {
   }
 
   // Tests that a populated job (with a couple of shards) generates a reasonable job detail.
+  @Test
   public void testGetJobDetail_populated() throws Exception {
     ShardedJobService jobService = ShardedJobServiceFactory.getShardedJobService();
     ShardedJobSettings settings = new ShardedJobSettings.Builder().build();

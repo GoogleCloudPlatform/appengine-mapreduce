@@ -4,6 +4,7 @@ package com.google.appengine.tools.mapreduce;
 import static org.easymock.EasyMock.createMock;
 import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.replay;
+import static org.junit.Assert.assertFalse;
 
 import com.google.appengine.api.blobstore.dev.LocalBlobstoreService;
 import com.google.appengine.api.taskqueue.dev.LocalTaskQueue;
@@ -23,8 +24,6 @@ import com.google.appengine.tools.pipeline.impl.servlets.TaskHandler;
 import com.google.apphosting.api.ApiProxy;
 import com.google.common.base.CharMatcher;
 
-import junit.framework.TestCase;
-
 import org.junit.After;
 import org.junit.Before;
 
@@ -43,7 +42,7 @@ import javax.servlet.http.HttpServletResponse;
 
 /**
  */
-public abstract class EndToEndTestCase extends TestCase {
+public abstract class EndToEndTestCase {
 
   private static final Logger logger = Logger.getLogger(EndToEndTestCase.class.getName());
 
@@ -64,9 +63,7 @@ public abstract class EndToEndTestCase extends TestCase {
   }
 
   @Before
-  @Override
   public void setUp() throws Exception {
-    super.setUp();
     helper.setUp();
     Map<String, String> envAttributes = getEnvAttributes();
     if (envAttributes != null) {
@@ -79,10 +76,8 @@ public abstract class EndToEndTestCase extends TestCase {
   }
 
   @After
-  @Override
   public void tearDown() throws Exception {
     helper.tearDown();
-    super.tearDown();
   }
 
   protected List<QueueStateInfo.TaskStateInfo> getTasks() {

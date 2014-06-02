@@ -1,5 +1,9 @@
 package com.google.appengine.tools.mapreduce;
 
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
+
 import com.google.appengine.api.datastore.Entity;
 import com.google.appengine.tools.mapreduce.EndToEndTest.TestMapper;
 import com.google.appengine.tools.mapreduce.inputs.DatastoreInput;
@@ -7,6 +11,11 @@ import com.google.appengine.tools.mapreduce.reducers.ValueProjectionReducer;
 import com.google.appengine.tools.pipeline.JobInfo;
 import com.google.appengine.tools.pipeline.PipelineService;
 import com.google.appengine.tools.pipeline.PipelineServiceFactory;
+
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.BlockJUnit4ClassRunner;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -16,10 +25,12 @@ import java.util.List;
 /**
  * Tests that custom output classes work.
  */
+@RunWith(BlockJUnit4ClassRunner.class)
 public class CustomOutputTest extends EndToEndTestCase {
 
   private PipelineService pipelineService;
 
+  @Before
   @Override
   public void setUp() throws Exception {
     super.setUp();
@@ -76,6 +87,7 @@ public class CustomOutputTest extends EndToEndTestCase {
     }
   }
 
+  @Test
   public void testOutputInOrder() throws Exception {
     MapReduceSpecification.Builder<Entity, String, Long, Long, Boolean> mrSpecBuilder =
         new MapReduceSpecification.Builder<>();
