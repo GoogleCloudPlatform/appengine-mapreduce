@@ -136,7 +136,7 @@
   </target>
 
   <target name="test" depends="dependencies_test,dependencies_sdk,dist,test_compile">
-    <junit filtertrace="off" maxmemory="256m" fork="true" haltonfailure="yes">
+    <junit filtertrace="off" maxmemory="512m" fork="true" haltonfailure="yes">
       <batchtest>
         <fileset dir="${test_src}">
           <include name="**/*Test*.java" />
