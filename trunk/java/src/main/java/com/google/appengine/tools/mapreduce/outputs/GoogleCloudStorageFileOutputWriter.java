@@ -7,6 +7,7 @@ import com.google.appengine.tools.cloudstorage.GcsFilename;
 import com.google.appengine.tools.cloudstorage.GcsOutputChannel;
 import com.google.appengine.tools.cloudstorage.GcsService;
 import com.google.appengine.tools.cloudstorage.GcsServiceFactory;
+import com.google.appengine.tools.cloudstorage.GcsServiceOptions;
 import com.google.appengine.tools.mapreduce.OutputWriter;
 import com.google.appengine.tools.mapreduce.impl.MapReduceConstants;
 import com.google.common.base.Preconditions;
@@ -25,8 +26,10 @@ import java.nio.ByteBuffer;
 public class GoogleCloudStorageFileOutputWriter extends OutputWriter<ByteBuffer> {
   private static final long serialVersionUID = -4019473590179157706L;
 
-  private static final GcsService GCS_SERVICE =
-      GcsServiceFactory.createGcsService(MapReduceConstants.GCS_RETRY_PARAMETERS);
+  private static final
+      GcsService GCS_SERVICE = GcsServiceFactory.createGcsService(new GcsServiceOptions.Builder()
+          .withRetryParams(MapReduceConstants.GCS_RETRY_PARAMETERS).withDefaultWriteBufferSize(
+          MapReduceConstants.DEFAULT_IO_BUFFER_SIZE).build());
 
   public static final long MEMORY_REQUIRED = MapReduceConstants.DEFAULT_IO_BUFFER_SIZE * 2;
 
