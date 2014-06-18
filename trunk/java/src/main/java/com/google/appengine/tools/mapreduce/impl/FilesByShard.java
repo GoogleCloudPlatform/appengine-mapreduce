@@ -1,8 +1,8 @@
 package com.google.appengine.tools.mapreduce.impl;
 
 import com.google.appengine.tools.mapreduce.GoogleCloudStorageFileSet;
+import com.google.appengine.tools.mapreduce.impl.util.SplitUtil;
 import com.google.common.base.Preconditions;
-import com.google.common.collect.Lists;
 
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -98,8 +98,7 @@ public final class FilesByShard implements Serializable {
     int shard = 0;
     for (List<String> files : oldAllFiles) {
       if (!files.isEmpty()) {
-        for (List<String> forShard :
-            Lists.partition(files, (int) Math.ceil(files.size() / (float) splitFactor))) {
+        for (List<String> forShard : SplitUtil.split(files, splitFactor, false)) {
           addFilesToShard(shard++, forShard);
         }
       }

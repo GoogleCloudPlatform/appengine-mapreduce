@@ -97,4 +97,11 @@ abstract class BaseDatastoreInputReader<V> extends InputReader<V> {
     q.setFilter(filter);
     return q;
   }
+
+  @Override
+  public String toString() {
+    return getClass().getName() + " [entityKind=" + entityKind + ", startKey=" + startKey
+        + ", endKey=" + endKey + ", transformFunc=" + transformFunc + ", namespace=" + namespace
+        + "]";
+  }
 }
