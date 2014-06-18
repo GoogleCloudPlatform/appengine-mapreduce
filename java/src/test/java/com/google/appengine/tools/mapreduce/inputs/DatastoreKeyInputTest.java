@@ -23,6 +23,7 @@ import com.google.appengine.api.datastore.Entity;
 import com.google.appengine.api.datastore.Key;
 import com.google.appengine.tools.development.testing.LocalDatastoreServiceTestConfig;
 import com.google.appengine.tools.development.testing.LocalServiceTestHelper;
+import com.google.appengine.tools.mapreduce.InputReader;
 
 import junit.framework.TestCase;
 
@@ -76,18 +77,18 @@ public class DatastoreKeyInputTest extends TestCase {
   public void testCreateReadersWithNamespace() throws IOException {
     populateData(10, "namespace1");
     DatastoreKeyInput input = new DatastoreKeyInput(ENTITY_KIND_NAME, 1, "namespace1");
-    DatastoreKeyInputReader reader = input.createReaders().get(0);
+    InputReader<Key> reader = input.createReaders().get(0);
     verifyReader(reader, 10, "namespace1");
   }
 
-  private void verifyReader(DatastoreKeyInputReader reader, int size, String namespace)
+  private void verifyReader(InputReader<Key> reader, int size, String namespace)
       throws IOException {
     reader.beginShard();
     reader.beginSlice();
+    ArrayList<Key> read = new ArrayList<>();
     for (int i = 0; i < size; i++) {
       Key key = reader.next();
-      assertEquals("key_" + i, key.getName());
-      assertEquals(namespace, key.getNamespace());
+      read.add(key);
     }
     try {
       reader.next();
@@ -97,12 +98,18 @@ public class DatastoreKeyInputTest extends TestCase {
     }
     reader.endSlice();
     reader.endShard();
+    Collections.sort(read);
+    for (int i = 0; i < size; i++) {
+      Key key = read.get(i);
+      assertEquals("key_" + i, key.getName());
+      assertEquals(namespace, key.getNamespace());
+    }
   }
 
   public void testCreateReaders() throws Exception {
     populateData(10, null);
     DatastoreKeyInput input = new DatastoreKeyInput(ENTITY_KIND_NAME, 1);
-    DatastoreKeyInputReader reader = input.createReaders().get(0);
+    InputReader<Key> reader = input.createReaders().get(0);
     verifyReader(reader, 10, "");
   }
 }

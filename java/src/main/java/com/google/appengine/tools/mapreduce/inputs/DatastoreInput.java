@@ -26,7 +26,8 @@ public final class DatastoreInput extends BaseDatastoreInput<Entity, DatastoreIn
    * @param namespace the namespace of the entities (if null will use current).
    */
   public DatastoreInput(String entityKind, int shardCount, String namespace) {
-    super(entityKind, shardCount, namespace);
+    super(new ScatterDatastoreShardStrategy(entityKind, namespace), entityKind, shardCount,
+        namespace);
   }
 
   @Override
