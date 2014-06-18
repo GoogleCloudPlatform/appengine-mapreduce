@@ -136,10 +136,9 @@ public class ShardedJobRunner<T extends IncrementalTask> implements ShardedJobHa
       TransactionalTaskException.class).abortOn(RequestTooLargeException.class,
       ResponseTooLargeException.class, ArgumentException.class).build();
 
-  private static final ExceptionHandler AGGRESIVE_EXCEPTION_HANDLER =
-      new ExceptionHandler.Builder().retryOn(Exception.class).abortOn(
-      IllegalArgumentException.class, RequestTooLargeException.class,
-      ResponseTooLargeException.class, ArgumentException.class).build();
+  private static final ExceptionHandler AGGRESIVE_EXCEPTION_HANDLER = new ExceptionHandler.Builder()
+      .retryOn(Exception.class).abortOn(RequestTooLargeException.class,
+          ResponseTooLargeException.class, ArgumentException.class).build();
 
   private ShardedJobStateImpl<T> lookupJobState(Transaction tx, String jobId) {
     try {
