@@ -21,6 +21,7 @@
 var AUTO_REFRESH = true;
 var ROOT_PIPELINE_ID = null;
 var STATUS_MAP = null;
+var LANG = null;
 
 
 // Adjusts the height/width of the embedded status console iframe.
@@ -777,6 +778,54 @@ function handleRefreshClick(event) {
   return false;
 }
 
+function handleDeleteClick(event) {
+  var ajaxRequest = {
+    type: 'GET',
+    url: 'rpc/delete?root_pipeline_id=' + ROOT_PIPELINE_ID,
+    dataType: 'text',
+    error: function(request, textStatus) {
+      if (request.status == 404) {
+        setButter('Pipeline is already deleted');
+      } else {
+        setButter('Delete request failed: ' + textStatus);
+      }
+      window.setTimeout(function() {
+        clearButter();
+      }, 5000);
+    },
+    success: function(data, textStatus, request) {
+      setButter('Delete request was sent');
+      window.setTimeout(function() {
+        window.location.href = 'list';
+      }, 5000);
+    }
+  };
+  $.ajax(jQuery.extend({}, ajaxRequest));
+}
+
+function handleAbortClick(event) {
+  var ajaxRequest = {
+    type: 'GET',
+    url: 'rpc/abort?root_pipeline_id=' + ROOT_PIPELINE_ID,
+    dataType: 'text',
+    error: function(request, textStatus) {
+      setButter('Abort request failed: ' + textStatus);
+      window.setTimeout(function() {
+        clearButter();
+      }, 5000);
+    },
+    success: function(data, textStatus, request) {
+      setButter('Abort request was sent');
+      window.setTimeout(function() {
+        clearButter();
+        window.location.reload();
+      }, 5000);
+    }
+  };
+  if (confirm('Are you sure you want to abort the pipeline', 'Abort')) {
+    $.ajax(jQuery.extend({}, ajaxRequest));
+  }
+}
 
 /* Initialization. */
 function initStatus() {
@@ -838,6 +887,7 @@ function initStatus() {
       if (response) {
         clearButter();
         STATUS_MAP = response;
+        LANG = request.getResponseHeader('Pipeline-Lang');
         initStatusDone();
       }
     }
@@ -867,15 +917,15 @@ function initStatusDone() {
   });
   $('#sidebar').show();
 
-  // Init the control panel.
+  var rootStatus = STATUS_MAP.pipelines[STATUS_MAP.rootPipelineId].status;
+  var isFinalState = /^done$|^aborted$|^canceled$/.test(rootStatus);
+
+    // Init the control panel.
   $('#auto-refresh').click(handleAutoRefreshClick);
   if (!AUTO_REFRESH) {
     $('#auto-refresh').attr('checked', '');
   } else {
-    var rootStatus = STATUS_MAP.pipelines[STATUS_MAP.rootPipelineId].status;
-    if (!(rootStatus == 'done' ||
-          rootStatus == 'aborted' ||
-          rootStatus == 'canceled')) {
+    if (!isFinalState) {
       // Only do auto-refresh behavior if we're not in a terminal state.
       window.setTimeout(function() {
         var loc = window.location;
@@ -885,6 +935,15 @@ function initStatusDone() {
     }
   }
   $('.refresh-link').click(handleRefreshClick);
+  $('.abort-link').click(handleAbortClick);
+  $('.delete-link').click(handleDeleteClick);
+  if (LANG == 'Java') {
+    if (isFinalState) {
+      $('.delete-link').show();
+    } else {
+      $('.abort-link').show();
+    }
+  }
   $('#control').show();
 
   // Properly adjust the console iframe to match the window size.
