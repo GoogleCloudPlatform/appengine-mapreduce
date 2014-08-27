@@ -1,5 +1,7 @@
 package com.google.appengine.tools.mapreduce.outputs;
 
+import static com.google.appengine.tools.mapreduce.impl.MapReduceConstants.DEFAULT_IO_BUFFER_SIZE;
+import static com.google.appengine.tools.mapreduce.impl.MapReduceConstants.GCS_RETRY_PARAMETERS;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.appengine.tools.cloudstorage.GcsFileOptions;
@@ -26,17 +28,15 @@ import java.nio.ByteBuffer;
 public class GoogleCloudStorageFileOutputWriter extends OutputWriter<ByteBuffer> {
   private static final long serialVersionUID = -4019473590179157706L;
 
-  private static final
-      GcsService GCS_SERVICE = GcsServiceFactory.createGcsService(new GcsServiceOptions.Builder()
-          .withRetryParams(MapReduceConstants.GCS_RETRY_PARAMETERS).withDefaultWriteBufferSize(
-          MapReduceConstants.DEFAULT_IO_BUFFER_SIZE).build());
+  private static final GcsService GCS_SERVICE = GcsServiceFactory.createGcsService(
+      new GcsServiceOptions.Builder()
+          .setRetryParams(GCS_RETRY_PARAMETERS)
+          .setDefaultWriteBufferSize(DEFAULT_IO_BUFFER_SIZE)
+          // TODO(user): include version once b/12689661 is fixed
+          .setHttpHeaders(ImmutableMap.of("User-Agent", "App Engine MR"))
+          .build());
 
   public static final long MEMORY_REQUIRED = MapReduceConstants.DEFAULT_IO_BUFFER_SIZE * 2;
-
-  static {
-    // TODO(user): include version once b/12689661 is fixed
-    GCS_SERVICE.setHttpHeaders(ImmutableMap.of("User-Agent", "App Engine MR"));
-  }
 
   private final GcsFilename file;
   private final String mimeType;

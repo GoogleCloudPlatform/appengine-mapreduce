@@ -1,12 +1,13 @@
 package com.google.appengine.tools.mapreduce.inputs;
 
+import static com.google.appengine.tools.mapreduce.impl.MapReduceConstants.GCS_RETRY_PARAMETERS;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.appengine.tools.cloudstorage.GcsFilename;
 import com.google.appengine.tools.cloudstorage.GcsService;
 import com.google.appengine.tools.cloudstorage.GcsServiceFactory;
+import com.google.appengine.tools.cloudstorage.GcsServiceOptions;
 import com.google.appengine.tools.mapreduce.InputReader;
-import com.google.appengine.tools.mapreduce.impl.MapReduceConstants;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
@@ -23,14 +24,14 @@ import java.util.NoSuchElementException;
 class GoogleCloudStorageLineInputReader extends InputReader<byte[]> {
   private static final long serialVersionUID = -762091129798691745L;
 
-  private static final transient GcsService GCS_SERVICE =
-      GcsServiceFactory.createGcsService(MapReduceConstants.GCS_RETRY_PARAMETERS);
-  private static final int DEFAULT_BUFFER_SIZE = 1024 * 1024;
+  private static final GcsService GCS_SERVICE = GcsServiceFactory.createGcsService(
+      new GcsServiceOptions.Builder()
+          .setRetryParams(GCS_RETRY_PARAMETERS)
+          // TODO(user): include version once b/12689661 is fixed
+          .setHttpHeaders(ImmutableMap.of("User-Agent", "App Engine MR"))
+          .build());
 
-  static {
-    // TODO(user): include version once b/12689661 is fixed
-    GCS_SERVICE.setHttpHeaders(ImmutableMap.of("User-Agent", "App Engine MR"));
-  }
+  private static final int DEFAULT_BUFFER_SIZE = 1024 * 1024;
 
   @VisibleForTesting final long startOffset;
   @VisibleForTesting final long endOffset;
