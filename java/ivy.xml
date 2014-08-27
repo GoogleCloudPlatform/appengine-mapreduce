@@ -11,7 +11,7 @@
     <dependency org="javax.servlet" name="servlet-api" rev="2.5"
                 conf="${sdk}->default"/>
     <dependency org="com.google.appengine.tools" name="appengine-gcs-client"
-                rev="[0.3.13,0.4)" conf="${thirdparty}->default"/>
+                rev="[0.4,0.5)" conf="${thirdparty}->default"/>
     <dependency org="com.google.appengine.tools" name="appengine-pipeline"
                 rev="[0.2.8,0.3)" conf="${thirdparty}->default"/>
     <dependency org="com.googlecode.charts4j" name="charts4j" rev="1.3"
