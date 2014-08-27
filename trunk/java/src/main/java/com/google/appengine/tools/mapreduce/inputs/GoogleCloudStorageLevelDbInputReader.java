@@ -1,5 +1,6 @@
 package com.google.appengine.tools.mapreduce.inputs;
 
+import static com.google.appengine.tools.mapreduce.impl.MapReduceConstants.GCS_RETRY_PARAMETERS;
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 
@@ -7,7 +8,7 @@ import com.google.appengine.tools.cloudstorage.GcsFileMetadata;
 import com.google.appengine.tools.cloudstorage.GcsFilename;
 import com.google.appengine.tools.cloudstorage.GcsService;
 import com.google.appengine.tools.cloudstorage.GcsServiceFactory;
-import com.google.appengine.tools.mapreduce.impl.MapReduceConstants;
+import com.google.appengine.tools.cloudstorage.GcsServiceOptions;
 import com.google.appengine.tools.mapreduce.impl.util.LevelDbConstants;
 import com.google.common.collect.ImmutableMap;
 
@@ -19,14 +20,14 @@ import java.nio.channels.ReadableByteChannel;
  */
 public final class GoogleCloudStorageLevelDbInputReader extends LevelDbInputReader {
 
-  private static final GcsService gcsService =
-      GcsServiceFactory.createGcsService(MapReduceConstants.GCS_RETRY_PARAMETERS);
-  private static final long serialVersionUID = 1014960525070958327L;
+  private static final GcsService gcsService = GcsServiceFactory.createGcsService(
+      new GcsServiceOptions.Builder()
+          .setRetryParams(GCS_RETRY_PARAMETERS)
+          // TODO(user): include version once b/12689661 is fixed
+          .setHttpHeaders(ImmutableMap.of("User-Agent", "App Engine MR"))
+          .build());
 
-  static {
-    // TODO(user): include version once b/12689661 is fixed
-    gcsService.setHttpHeaders(ImmutableMap.of("User-Agent", "App Engine MR"));
-  }
+  private static final long serialVersionUID = 1014960525070958327L;
 
   private final GcsFilename file;
   private final int bufferSize;
