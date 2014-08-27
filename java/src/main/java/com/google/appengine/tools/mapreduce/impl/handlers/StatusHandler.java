@@ -222,7 +222,7 @@ final class StatusHandler {
       jobObject.put("shards", shardArray);
       jobObject.put("chart_width", getChartWidth(state.getTotalTaskCount()));
       jobObject.put("chart_url", getChartUrl(workerCallCounts));
-
+      jobObject.put("chart_data", workerCallCounts);
     } catch (JSONException e) {
       throw new RuntimeException("Hard coded string is null", e);
     }

@@ -21,13 +21,19 @@ import com.google.appengine.tools.mapreduce.impl.shardedjob.Status;
 import com.google.appengine.tools.mapreduce.impl.shardedjob.TestTask;
 import com.google.common.collect.ImmutableList;
 
+import org.json.JSONArray;
+import org.json.JSONException;
 import org.json.JSONObject;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.BlockJUnit4ClassRunner;
 
+import java.lang.reflect.Array;
+import java.util.HashMap;
 import java.util.Iterator;
+import java.util.Map;
 import java.util.Random;
+import java.util.regex.Pattern;
 
 /**
  *
@@ -95,8 +101,8 @@ public class StatusHandlerTest extends EndToEndTestCase {
     ShardedJobController<TestTask> controller = new DummyWorkerController("Namey");
     TestTask s1 = new TestTask(0, 2, 2, 2);
     TestTask s2 = new TestTask(1, 2, 2, 1);
-    jobService.startJob(
-        "testGetJobDetail_populated", ImmutableList.of(s1, s2), controller, settings);
+    jobService.startJob("testGetJobDetail_populated", ImmutableList.of(s1, s2), controller,
+        settings);
     ShardedJobState state = jobService.getJobState("testGetJobDetail_populated");
     assertEquals(2, state.getActiveTaskCount());
     assertEquals(2, state.getTotalTaskCount());
@@ -107,28 +113,23 @@ public class StatusHandlerTest extends EndToEndTestCase {
     assertEquals("Namey", jobDetail.getString("name"));
     assertEquals(true, jobDetail.getBoolean("active"));
     assertEquals(2, jobDetail.getInt("active_shards"));
-    assertTrue(jobDetail.toString(),
-        jobDetail.toString().matches(
-            "\\{\"mapreduce_id\":\"testGetJobDetail_populated\"," +
-                "\"chart_width\":300," +
-                "\"shards\":\\[\\{\"shard_description\":\"[^\"]*\"," +
-                "\"active\":true," +
-                "\"updated_timestamp_ms\":[0-9]*," +
-                "\"shard_number\":0\\}," +
-                "\\{\"shard_description\":\"[^\"]*\"," +
-                "\"active\":true," +
-                "\"updated_timestamp_ms\":[0-9]*," +
-                "\"shard_number\":1\\}\\]," +
-                "\"mapper_spec\":\\{\"mapper_params\":\\{\"Shards total\":2," +
-                "\"Shards active\":2," +
-                "\"Shards completed\":0\\}\\}," +
-                "\"name\":\"Namey\"," +
-                "\"active\":true," +
-                "\"active_shards\":2," +
-                "\"updated_timestamp_ms\":[0-9]*," +
-                "\"chart_url\":\"[^\"]*\"," +
-                "\"counters\":\\{\\}," +
-            "\"start_timestamp_ms\":[0-9]*\\}"));
+    verify(jobDetail, tuple("mapreduce_id", "testGetJobDetail_populated"),
+        tuple("chart_width", 300),
+        tuple("shards",
+            array(tuple("shard_description", pattern("[^\"]*")), tuple("active", true),
+                tuple("updated_timestamp_ms", pattern("[0-9]*")), tuple("shard_number", 0)),
+            array(tuple("shard_description", pattern("[^\"]*")), tuple("active", true),
+                tuple("updated_timestamp_ms", pattern("[0-9]*")), tuple("shard_number", 1))),
+        tuple("mapper_spec", tuple("mapper_params", tuple("Shards total", 2),
+            tuple("Shards active", 2), tuple("Shards completed", 0))),
+        tuple("name", "Namey"),
+        tuple("active", true),
+        tuple("active_shards", 2),
+        tuple("updated_timestamp_ms", pattern("[0-9]*")),
+        tuple("chart_url", pattern("[^\"]*")),
+        tuple("counters", pattern("\\{\\}")),
+        tuple("start_timestamp_ms", pattern("[0-9]*")),
+        tuple("chart_data", 0L, 0L));
 
 
     executeTasksUntilEmpty();
@@ -139,41 +140,104 @@ public class StatusHandlerTest extends EndToEndTestCase {
     assertEquals("Namey", jobDetail.getString("name"));
     assertEquals(false, jobDetail.getBoolean("active"));
     assertEquals(0, jobDetail.getInt("active_shards"));
-    assertTrue(jobDetail.toString(),
-        jobDetail.toString().matches(
-            "\\{\"mapreduce_id\":\"testGetJobDetail_populated\"," +
-                "\"chart_width\":300," +
-                "\"shards\":\\[\\{" +
-                "\"shard_description\":\"[^\"]*\"," +
-                "\"active\":false," +
-                "\"updated_timestamp_ms\":[0-9]*," +
-                "\"result_status\":\"DONE\"," +
-                "\"shard_number\":0\\}," +
-                "\\{\"shard_description\":\"[^\"]*\"," +
-                "\"active\":false," +
-                "\"updated_timestamp_ms\":[0-9]*," +
-                "\"result_status\":\"DONE\"," +
-                "\"shard_number\":1\\}\\]," +
-                "\"mapper_spec\":\\{\"mapper_params\":\\{\"Shards total\":2," +
-                "\"Shards active\":0," +
-                "\"Shards completed\":2\\}\\}," +
-                "\"name\":\"Namey\"," +
-                "\"active\":false," +
-                "\"active_shards\":0," +
-                "\"updated_timestamp_ms\":[0-9]*," +
-                "\"chart_url\":\"[^\"]*\"," +
-                "\"counters\":\\{\"TestTaskSum\":6\\}," +
-                "\"start_timestamp_ms\":[0-9]*\\," +
-                "\"result_status\":\"DONE\"}"));
+    verify(jobDetail, tuple("chart_width", 300), tuple("chart_url", pattern("[^\"]*")),
+        tuple("result_status", pattern("DONE")), tuple("chart_data", 0L, 0L),
+        tuple("counters", tuple("TestTaskSum", 6L)),
+        tuple("mapreduce_id", "testGetJobDetail_populated"),
+        tuple("shards",
+            array(tuple("shard_description", pattern("[^\"]*")),
+                tuple("active", false), tuple("updated_timestamp_ms", pattern("[0-9]*")),
+                tuple("result_status", pattern("DONE")), tuple("shard_number", 0)),
+            array(tuple("shard_description", pattern("[^\"]*")),
+                tuple("active", false), tuple("updated_timestamp_ms", pattern("[0-9]*")),
+                tuple("result_status", pattern("DONE")), tuple("shard_number", 1))),
+       tuple("mapper_spec", tuple("mapper_params", tuple("Shards total", 2),
+           tuple("Shards active", 0), tuple("Shards completed", 2))),
+        tuple("name", "Namey"),
+        tuple("active", false),
+        tuple("updated_timestamp_ms", pattern("[0-9]*")),
+        tuple("active_shards", 0),
+        tuple("start_timestamp_ms", pattern("[0-9]*")));
   }
 
-  /**
-   * Compares a string representation of the expected JSON object
-   * with the actual, ignoring white space and converting single quotes
-   * to double quotes.
-   */
-  public static void assertJsonEquals(String expected, JSONObject actual) {
-    assertEquals(expected.replace('\'', '"').replace(" ", ""),
-        actual.toString().replace(" ", "").replace("\\r\\n", "").replace("\\n", ""));
+  private static class Tuple<V> {
+
+    private final String key;
+    private final V value;
+
+    Tuple(String key, V value) {
+      this.key = key;
+      this.value = value;
+    }
+  }
+
+  @SafeVarargs
+  private static <T> T[] array(T... values) {
+    return values;
+  }
+
+  private static <V> Tuple<V> tuple(String key, V value) {
+    return new Tuple<>(key, value);
+  }
+
+  @SafeVarargs
+  private static <V> Tuple<V[]> tuple(String key, V... value) {
+    return new Tuple<>(key, value);
+  }
+
+  private static Pattern pattern(String pattern) {
+    return Pattern.compile(pattern);
+  }
+
+  @SuppressWarnings("unchecked")
+  private void verify(JSONObject jsonObj, Tuple<?>... expected) throws JSONException {
+    Map<String, Object> expectedMap = new HashMap<>();
+    for (Tuple<?> tuple : expected) {
+      expectedMap.put(tuple.key, tuple.value);
+    }
+    Iterator<String> keys = jsonObj.keys();
+    while (keys.hasNext()) {
+      String key = keys.next();
+      Object value = jsonObj.get(key);
+      Object expectedValue = expectedMap.remove(key);
+      assertNotNull("Missing " + key, expectedValue);
+      if (expectedValue instanceof Pattern) {
+        Pattern pattern = (Pattern) expectedValue;
+        assertTrue(value + " does not match " + pattern,
+            pattern.matcher(value.toString()).matches());
+      } else if (value instanceof JSONObject) {
+        if (!expectedValue.getClass().isArray()) {
+          expectedValue = new Tuple<?>[] {(Tuple<?>) expectedValue};
+        }
+        verify((JSONObject) value, (Tuple<?>[]) expectedValue);
+      } else if (value instanceof JSONArray || expectedValue.getClass().isArray()) {
+        if (!expectedValue.getClass().isArray()) {
+          expectedValue = new Object[] {expectedValue};
+        }
+        if (!(value instanceof JSONArray)) {
+          value = new JSONArray(value);
+        }
+        verify((JSONArray) value, expectedValue);
+      } else {
+        assertEquals(expectedValue, value);
+      }
+    }
+    assertTrue("Unexpected leftover: " + expectedMap, expectedMap.isEmpty());
+  }
+
+  private void verify(JSONArray jsonArray, Object array) throws JSONException {
+    int length = Array.getLength(array);
+    assertEquals(jsonArray + " length is not " + length, length, jsonArray.length());
+    for (int i = 0; i < length; i++) {
+      Object value = jsonArray.get(i);
+      Object expected = Array.get(array, i);
+      if (value instanceof JSONObject) {
+        verify((JSONObject) value, (Tuple<?>[]) expected);
+      } else if (value instanceof JSONArray) {
+        verify((JSONArray) value, expected);
+      } else {
+        assertEquals("mismatch array[" + i + "] " + value + " != " + expected, expected, value);
+      }
+    }
   }
 }
