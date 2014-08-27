@@ -2,9 +2,9 @@
 
 package com.google.appengine.tools.mapreduce;
 
-import com.google.common.base.Objects;
 
 import java.io.Serializable;
+import java.util.Objects;
 
 /**
  * Key-value pair.
@@ -47,12 +47,12 @@ public class KeyValue<K, V> implements Serializable {
       return false;
     }
     KeyValue<?, ?> other = (KeyValue<?, ?>) o;
-    return Objects.equal(key, other.key) && Objects.equal(value, other.value);
+    return Objects.equals(key, other.key) && Objects.equals(value, other.value);
   }
 
   @Override
   public final int hashCode() {
-    return Objects.hashCode(key, value);
+    return Objects.hash(key, value);
   }
 
   public static <K, V> KeyValue<K, V> of(K k, V v) {
