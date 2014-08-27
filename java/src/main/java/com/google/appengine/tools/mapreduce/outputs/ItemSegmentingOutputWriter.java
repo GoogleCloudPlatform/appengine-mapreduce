@@ -1,6 +1,7 @@
 package com.google.appengine.tools.mapreduce.outputs;
 
 import com.google.appengine.tools.mapreduce.OutputWriter;
+import com.google.appengine.tools.mapreduce.ShardContext;
 
 import java.io.IOException;
 
@@ -14,10 +15,13 @@ public abstract class ItemSegmentingOutputWriter<O> extends ForwardingOutputWrit
   private static final long serialVersionUID = 5180178926565317540L;
   private int fileCount = 0;
   private OutputWriter<O> writer;
+  private transient ShardContext context;
 
   @Override
   public void beginShard() throws IOException {
     fileCount = 0;
+    writer = createNextWriter(fileCount++);
+    writer.setContext(context);
     super.beginShard();
   }
 
@@ -31,7 +35,6 @@ public abstract class ItemSegmentingOutputWriter<O> extends ForwardingOutputWrit
       writer.beginShard();
       writer.beginSlice();
     }
-    // writer cannot be null because beginSlice and beginShard call getDelegate()
     writer.write(value);
   }
 
@@ -41,9 +44,6 @@ public abstract class ItemSegmentingOutputWriter<O> extends ForwardingOutputWrit
 
   @Override
   protected OutputWriter<O> getDelegate() {
-    if (writer == null) {
-      writer = createNextWriter(fileCount++);
-    }
     return writer;
   }
 
@@ -53,5 +53,15 @@ public abstract class ItemSegmentingOutputWriter<O> extends ForwardingOutputWrit
   @Override
   public boolean allowSliceRetry() {
     return false;
+  }
+
+  @Override
+  public void setContext(ShardContext context) {
+    this.context = context;
+  }
+
+  @Override
+  public ShardContext getContext() {
+    return context;
   }
 }
