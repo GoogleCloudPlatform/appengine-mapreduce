@@ -6,17 +6,22 @@ import com.google.appengine.tools.mapreduce.BigQueryIgnore;
 import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
 import com.google.common.base.Strings;
+import com.google.common.collect.Collections2;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Sets;
 
-import org.reflections.ReflectionUtils;
-
+import java.lang.annotation.Annotation;
+import java.lang.reflect.AnnotatedElement;
 import java.lang.reflect.Field;
 import java.lang.reflect.GenericArrayType;
+import java.lang.reflect.Member;
 import java.lang.reflect.Modifier;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.lang.reflect.TypeVariable;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
@@ -40,10 +45,8 @@ public final class BigQueryFieldUtil {
    */
   @SuppressWarnings("unchecked")
   private static Predicate<? super Field> ignoreFieldsFilter = Predicates.not(Predicates.or(
-      ReflectionUtils.withAnnotation(BigQueryIgnore.class),
-      ReflectionUtils.withModifier(Modifier.TRANSIENT),
-      ReflectionUtils.withModifier(Modifier.STATIC),
-      ReflectionUtils.withPrefix(THIS_FIELD_PREFIX)));
+      withAnnotation(BigQueryIgnore.class), withModifier(Modifier.TRANSIENT),
+      withModifier(Modifier.STATIC), withPrefix(THIS_FIELD_PREFIX)));
 
   /**
    * @param field - {@link Field} of a class.
@@ -135,7 +138,7 @@ public final class BigQueryFieldUtil {
    * {@link BigQueryIgnore}.
    */
   public static Set<Field> getFieldsToSerialize(Class<?> type) {
-    return ReflectionUtils.getAllFields(type, ignoreFieldsFilter);
+    return getAllFields(type, ignoreFieldsFilter);
 
   }
 
@@ -263,5 +266,53 @@ public final class BigQueryFieldUtil {
       marshaller = BigqueryFieldMarshallers.getMarshaller(field.getType());
     }
     return marshaller;
+  }
+
+  private static Set<Field> getAllFields(final Class<?> type, Predicate<? super Field> predicate) {
+    Set<Field> result = new HashSet<>();
+    for (Class<?> t : getAllSuperTypes(type))
+      Collections.addAll(result, t.getDeclaredFields());
+
+    return ImmutableSet.copyOf(Collections2.filter(result, predicate));
+  }
+
+  private static Set<Class<?>> getAllSuperTypes(final Class<?> type) {
+    Set<Class<?>> result = Sets.newHashSet();
+    if (type != null) {
+      result.add(type);
+      result.addAll(getAllSuperTypes(type.getSuperclass()));
+      for (Class<?> inter : type.getInterfaces()) {
+        result.addAll(getAllSuperTypes(inter));
+      }
+    }
+    return result;
+  }
+
+  private static <T extends AnnotatedElement> Predicate<T> withAnnotation(
+      final Class<? extends Annotation> annotation) {
+    return new Predicate<T>() {
+      @Override
+      public boolean apply(T input) {
+        return input != null && input.isAnnotationPresent(annotation);
+      }
+    };
+  }
+
+  private static <T extends Member> Predicate<T> withModifier(final int mod) {
+    return new Predicate<T>() {
+      @Override
+      public boolean apply(T input) {
+        return input != null && (input.getModifiers() & mod) != 0;
+      }
+    };
+  }
+
+  private static <T extends Member> Predicate<T> withPrefix(final String prefix) {
+    return new Predicate<T>() {
+      @Override
+      public boolean apply(T input) {
+        return input != null && input.getName().startsWith(prefix);
+      }
+    };
   }
 }
