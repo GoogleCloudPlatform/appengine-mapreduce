@@ -31,9 +31,8 @@ public class WorkerController<I, O, R, C extends WorkerContext<O>> extends
   private final Output<O, R> output;
   private final String resultPromiseHandle;
 
-  public WorkerController(String mrJobId, String shardedJobName, Counters initialCounters,
-      Output<O, R> output, String resultPromiseHandle) {
-    super(shardedJobName);
+  public WorkerController(String mrJobId, Counters initialCounters, Output<O, R> output,
+      String resultPromiseHandle) {
     this.mrJobId = checkNotNull(mrJobId, "Null jobId");
     this.totalCounters = checkNotNull(initialCounters, "Null counters");
     this.output = checkNotNull(output, "Null output");

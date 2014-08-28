@@ -1,8 +1,9 @@
 package com.google.appengine.tools.mapreduce.impl.sort;
 
+import static com.google.appengine.tools.mapreduce.MapReduceSettings.DEFAULT_SORT_BATCH_PER_EMIT_BYTES;
+
 import com.google.appengine.tools.mapreduce.KeyValue;
 import com.google.appengine.tools.mapreduce.Worker;
-import com.google.appengine.tools.mapreduce.impl.MapReduceConstants;
 import com.google.appengine.tools.mapreduce.impl.handlers.MemoryLimiter;
 import com.google.appengine.tools.mapreduce.impl.shardedjob.RejectRequestException;
 import com.google.common.annotations.VisibleForTesting;
@@ -60,10 +61,12 @@ public class SortWorker extends Worker<SortContext> {
   private transient KeyValue<ByteBuffer, ByteBuffer> leftover;
   private transient boolean isFull;
   private final int maxMemory;
+  private final Integer batchItemSizePerEmmit;  // Only null as a result of an old version.
 
-  public SortWorker(Long maxMemory) {
+  public SortWorker(Long maxMemory, int batchItemSizePerEmmit) {
     this.maxMemory = (maxMemory == null) ? Integer.MAX_VALUE : Ints.saturatedCast(maxMemory);
     Preconditions.checkArgument(this.maxMemory >= 0);
+    this.batchItemSizePerEmmit = batchItemSizePerEmmit;
   }
 
   private final class IndexedComparator implements IntComparator {
@@ -147,6 +150,8 @@ public class SortWorker extends Worker<SortContext> {
     if (valuesHeld == 0) {
       return;
     }
+    int batchSize = batchItemSizePerEmmit == null ? DEFAULT_SORT_BATCH_PER_EMIT_BYTES
+        : batchItemSizePerEmmit;
     ByteBuffer currentKey = getKeyValueFromPointer(0).getKey();
     List<ByteBuffer> currentValues = new ArrayList<>();
     int totalSize = 0;
@@ -156,7 +161,7 @@ public class SortWorker extends Worker<SortContext> {
       int compare = LexicographicalComparator.compareBuffers(keyValue.getKey(), currentKey);
 
       if (compare == 0) {
-        if (totalSize > MapReduceConstants.BATCHED_ITEM_SIZE_PER_EMIT) {
+        if (!currentValues.isEmpty() && totalSize >= batchSize) {
           emitCurrentOrLeftover(currentKey, currentValues);
           totalSize = 0;
         }

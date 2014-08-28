@@ -75,7 +75,6 @@ public class InProcessMapReduce<I, K, V, O, R> {
   }
 
   private final String id;
-  private final String jobName;
   private final Input<I> input;
   private final Mapper<I, K, V> mapper;
   private final Marshaller<K> keyMarshaller;
@@ -85,7 +84,6 @@ public class InProcessMapReduce<I, K, V, O, R> {
 
   public InProcessMapReduce(String id, MapReduceSpecification<I, K, V, O, R> mrSpec) {
     this.id = checkNotNull(id, "Null id");
-    jobName = InProcessUtil.getJobName(mrSpec);
     input = InProcessUtil.getInput(mrSpec);
     mapper = InProcessUtil.getMapper(mrSpec);
     keyMarshaller = InProcessUtil.getKeyMarshaller(mrSpec);
@@ -114,7 +112,7 @@ public class InProcessMapReduce<I, K, V, O, R> {
     }
     final Counters counters = new CountersImpl();
     InProcessShardedJobRunner.runJob(tasks.build(), new ShardedJobController<
-        WorkerShardTask<I, KeyValue<K, V>, MapperContext<K, V>>>(jobName + "-map") {
+        WorkerShardTask<I, KeyValue<K, V>, MapperContext<K, V>>>() {
           // Not really meant to be serialized, but avoid warning.
           private static final long serialVersionUID = 661198005749484951L;
 
@@ -197,7 +195,7 @@ public class InProcessMapReduce<I, K, V, O, R> {
     final Counters counters = new CountersImpl();
     counters.addAll(mapCounters);
     InProcessShardedJobRunner.runJob(tasks.build(), new ShardedJobController<
-        WorkerShardTask<KeyValue<K, Iterator<V>>, O, ReducerContext<O>>>(jobName + "-reduce") {
+        WorkerShardTask<KeyValue<K, Iterator<V>>, O, ReducerContext<O>>>() {
       // Not really meant to be serialized, but avoid warning.
       private static final long serialVersionUID = 575338448598450119L;
 

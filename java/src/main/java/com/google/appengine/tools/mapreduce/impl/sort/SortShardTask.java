@@ -2,8 +2,8 @@ package com.google.appengine.tools.mapreduce.impl.sort;
 
 import static com.google.appengine.tools.mapreduce.CounterNames.SORT_CALLS;
 import static com.google.appengine.tools.mapreduce.CounterNames.SORT_WALLTIME_MILLIS;
+import static com.google.appengine.tools.mapreduce.MapReduceSettings.DEFAULT_SORT_READ_TIME_MILLIS;
 import static com.google.appengine.tools.mapreduce.impl.MapReduceConstants.MAX_LAST_ITEM_STRING_SIZE;
-import static com.google.appengine.tools.mapreduce.impl.MapReduceConstants.MAX_SORT_READ_TIME_MILLIS;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static java.nio.charset.StandardCharsets.UTF_8;
 
@@ -36,12 +36,14 @@ public class SortShardTask extends WorkerShardTask<KeyValue<ByteBuffer, ByteBuff
   private InputReader<KeyValue<ByteBuffer, ByteBuffer>> in;
   private OutputWriter<KeyValue<ByteBuffer, List<ByteBuffer>>> out;
   private boolean finalized;
+  private final Integer sortReadTimeMillis;  // Only null as a result of an old version.
 
   public SortShardTask(String mrJobId, int shardNumber, int shardCount,
       InputReader<KeyValue<ByteBuffer, ByteBuffer>> in, SortWorker worker,
-      OutputWriter<KeyValue<ByteBuffer, List<ByteBuffer>>> out) {
+      OutputWriter<KeyValue<ByteBuffer, List<ByteBuffer>>> out, int sortReadTimeMillis) {
     super(new IncrementalTaskContext(mrJobId, shardNumber, shardCount, SORT_CALLS,
         SORT_WALLTIME_MILLIS));
+    this.sortReadTimeMillis = sortReadTimeMillis;
     this.in = checkNotNull(in, "Null in");
     this.out = checkNotNull(out, "Null out");
     this.inMemSorter = worker;
@@ -91,7 +93,9 @@ public class SortShardTask extends WorkerShardTask<KeyValue<ByteBuffer, ByteBuff
 
   @Override
   protected boolean shouldCheckpoint(long timeElapsed) {
-    return timeElapsed >= MAX_SORT_READ_TIME_MILLIS || inMemSorter.isFull();
+    int timeLimit =
+        (sortReadTimeMillis == null ? DEFAULT_SORT_READ_TIME_MILLIS : sortReadTimeMillis);
+    return timeElapsed >= timeLimit || inMemSorter.isFull();
   }
 
   @Override

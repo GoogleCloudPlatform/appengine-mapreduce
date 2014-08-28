@@ -2,10 +2,8 @@
 
 package com.google.appengine.tools.mapreduce;
 
-import static com.google.appengine.tools.mapreduce.MapSettings.DEFAULT_BASE_URL;
-import static com.google.appengine.tools.mapreduce.MapSettings.DEFAULT_MILLIS_PER_SLICE;
-import static com.google.appengine.tools.mapreduce.MapSettings.DEFAULT_SHARD_RETREIES;
-import static com.google.appengine.tools.mapreduce.MapSettings.DEFAULT_SLICE_RETREIES;
+import static com.google.appengine.tools.mapreduce.MapSettings.*;
+import static com.google.appengine.tools.mapreduce.MapReduceSettings.*;
 import static junit.framework.Assert.assertNull;
 
 import com.google.appengine.tools.development.testing.LocalServiceTestHelper;
@@ -27,14 +25,18 @@ public class MapReduceSettingsTest extends TestCase {
   public void testDefaultSettings() {
     MapReduceSettings mrSettings = new MapReduceSettings.Builder().build();
     assertNull(mrSettings.getBackend());
-    assertNull(mrSettings.getModule());
-    assertEquals("app_default_bucket", mrSettings.getBucketName());
-    assertNull(mrSettings.getWorkerQueueName());
     assertEquals(DEFAULT_BASE_URL, mrSettings.getBaseUrl());
-    assertEquals(DEFAULT_MILLIS_PER_SLICE, mrSettings.getMillisPerSlice());
+    assertEquals("app_default_bucket", mrSettings.getBucketName());
+    assertEquals(DEFAULT_MAP_FANOUT, mrSettings.getMapFanout());
     assertEquals(DEFAULT_SHARD_RETREIES, mrSettings.getMaxShardRetries());
     assertEquals(DEFAULT_SLICE_RETREIES, mrSettings.getMaxSliceRetries());
     assertNull(mrSettings.getMaxSortMemory());
+    assertEquals(DEFAULT_MERGE_FANIN, mrSettings.getMergeFanin());
+    assertEquals(DEFAULT_MILLIS_PER_SLICE, mrSettings.getMillisPerSlice());
+    assertEquals(null, mrSettings.getModule());
+    assertEquals(DEFAULT_SORT_BATCH_PER_EMIT_BYTES, mrSettings.getSortBatchPerEmitBytes());
+    assertEquals(DEFAULT_SORT_READ_TIME_MILLIS, mrSettings.getSortReadTimeMillis());
+    assertNull(mrSettings.getWorkerQueueName());
   }
 
   public void testNonDefaultSettings() {
@@ -47,43 +49,74 @@ public class MapReduceSettingsTest extends TestCase {
       // expected
       builder.setModule(null);
     }
-    builder = builder.setBucketName("bucket");
-    builder = builder.setWorkerQueueName("queue1");
     builder = builder.setBaseUrl("base-url");
-    builder = builder.setMillisPerSlice(10);
+    builder = builder.setBucketName("bucket");
     try {
-      builder.setMillisPerSlice(-1);
+      builder.setMapFanout(-1);
+    } catch (IllegalArgumentException ex) {
+      // expected
+    }
+    builder = builder.setMapFanout(3);
+    try {
+      builder.setMaxShardRetries(-1);
     } catch (IllegalArgumentException ex) {
       // expected
     }
     builder = builder.setMaxShardRetries(1);
     try {
-      builder.setMillisPerSlice(-1);
+      builder.setMaxSliceRetries(-1);
     } catch (IllegalArgumentException ex) {
       // expected
     }
     builder = builder.setMaxSliceRetries(0);
     try {
-      builder.setMillisPerSlice(-1);
+      builder.setMaxSortMemory(-1L);
     } catch (IllegalArgumentException ex) {
       // expected
     }
     builder = builder.setMaxSortMemory(10L);
     try {
-      builder.setMaxSortMemory(-1L);
+      builder.setMergeFanin(-1);
     } catch (IllegalArgumentException ex) {
       // expected
     }
+    builder = builder.setMergeFanin(4);
+    try {
+      builder.setMillisPerSlice(-1);
+    } catch (IllegalArgumentException ex) {
+      // expected
+    }
+    builder = builder.setMillisPerSlice(10);
+    try {
+      builder.setSortBatchPerEmitBytes(-1);
+    } catch (IllegalArgumentException ex) {
+      // expected
+    }
+    builder = builder.setSortBatchPerEmitBytes(5);
+    try {
+      builder.setSortReadTimeMillis(-1);
+    } catch (IllegalArgumentException ex) {
+      // expected
+    }
+    builder = builder.setSortReadTimeMillis(6);
+    builder = builder.setWorkerQueueName("queue1");
+
+
     MapReduceSettings mrSettings = builder.build();
-    assertNull(mrSettings.getModule());
     assertEquals("b1", mrSettings.getBackend());
+    assertNull(mrSettings.getModule());
     assertEquals("bucket", mrSettings.getBucketName());
-    assertEquals("queue1", mrSettings.getWorkerQueueName());
     assertEquals("base-url", mrSettings.getBaseUrl());
-    assertEquals(10, mrSettings.getMillisPerSlice());
+    assertEquals(3, mrSettings.getMapFanout());
     assertEquals(1, mrSettings.getMaxShardRetries());
     assertEquals(0, mrSettings.getMaxSliceRetries());
     assertEquals(10L, (long) mrSettings.getMaxSortMemory());
+    assertEquals(4, mrSettings.getMergeFanin());
+    assertEquals(10, mrSettings.getMillisPerSlice());
+    assertEquals(5, mrSettings.getSortBatchPerEmitBytes());
+    assertEquals(6, mrSettings.getSortReadTimeMillis());
+    assertEquals("queue1", mrSettings.getWorkerQueueName());
+
     builder = new MapReduceSettings.Builder().setModule("m1");
     try {
       builder.setBackend("b").build();

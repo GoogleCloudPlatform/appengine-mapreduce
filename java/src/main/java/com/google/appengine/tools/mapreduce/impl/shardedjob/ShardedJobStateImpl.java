@@ -60,11 +60,6 @@ class ShardedJobStateImpl<T extends IncrementalTask> implements ShardedJobState 
     return jobId;
   }
 
-  @Override
-  public String getJobName() {
-    return controller == null ? "" : controller.getName();
-  }
-
   ShardedJobController<T> getController() {
     return controller;
   }

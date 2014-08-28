@@ -165,8 +165,9 @@ final class StatusHandler {
     }
     JSONObject jobObject = new JSONObject();
     try {
-      jobObject.put("name", state.getJobName());
-      jobObject.put("mapreduce_id", jobId);
+      jobObject.put("name", jobId); // For display
+      jobObject.put("mapreduce_id", jobId); // This is the sharedJobId but it needs be be called
+                                            // mapreduce_id for python compatibility.
       jobObject.put("start_timestamp_ms", state.getStartTimeMillis());
 
       if (state.getStatus().isActive()) {

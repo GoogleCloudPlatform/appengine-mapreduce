@@ -34,8 +34,10 @@ public class GoogleCloudStorageMergeOutput extends
 
   private final String bucket;
   private final String mrJobId;
+  private final Integer tier;
 
-  public GoogleCloudStorageMergeOutput(String bucket, String mrJobId) {
+  public GoogleCloudStorageMergeOutput(String bucket, String mrJobId, Integer tier) {
+    this.tier = checkNotNull(tier, "Null tier");
     this.bucket = checkNotNull(bucket, "Null bucket");
     this.mrJobId = checkNotNull(mrJobId, "Null mrJobId");
   }
@@ -104,7 +106,7 @@ public class GoogleCloudStorageMergeOutput extends
         new ImmutableList.Builder<>();
     for (int i = 0; i < shards; i++) {
       result.add(new OrderSlicingOutputWriter(bucket,
-          String.format(MapReduceConstants.MERGE_OUTPUT_DIR_FORMAT, mrJobId, i)));
+          String.format(MapReduceConstants.MERGE_OUTPUT_DIR_FORMAT, mrJobId, tier, i)));
     }
     return result.build();
   }
