@@ -5,7 +5,11 @@ public final class BigQueryConstants {
   private BigQueryConstants() {}
 
   // Big query does not allow GCS files larger than 1 TB. Limiting the max size to 500GB
-  public static final Long MAX_GCS_FILE_SIZE = 500 * 1024 * 1024 * 1024L;
+  public static final Long MAX_BIG_QUERY_GCS_FILE_SIZE = 500 * 1024 * 1024 * 1024L;
+
+  // Big query limit for total size across files per load. Always keep it more than
+  // MAX_BIG_QUERY_GCS_FILE_SIZE
+  public static final Long BIGQUERY_LOAD_DATA_SIZE_LIMIT = 500 * 1024 * 1024 * 1024L;
 
   public static final String BQ_SCOPE = "https://www.googleapis.com/auth/bigquery";
 
@@ -23,4 +27,10 @@ public final class BigQueryConstants {
   public static final String NEWLINE_CHARACTER = "\n";
 
   public static final Integer MAX_RETRIES = 5;
+
+  public static final int DEFAULT_MILLIS_PER_SLICE = 30_000;
+
+  public static final int DEFAULT_SHARD_RETREIES = 4;
+
+  public static final int DEFAULT_SLICE_RETREIES = 20;
 }

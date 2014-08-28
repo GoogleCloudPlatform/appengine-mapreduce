@@ -8,6 +8,11 @@ import com.google.appengine.tools.mapreduce.impl.KeyValueMarshaller;
 import com.google.appengine.tools.mapreduce.impl.KeyValuesMarshaller;
 import com.google.appengine.tools.mapreduce.impl.util.SerializationUtil;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import java.io.IOException;
+import java.io.InputStream;
 import java.io.Serializable;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -44,9 +49,9 @@ public class Marshallers {
   }
 
   /**
-   * Returns a {@code Marshaller} that uses Java Serialization.  Works for any
-   * type that implements {@link Serializable}, but is not space-efficient for
-   * boxed primitives like {@link Long} or {@link Double}.
+   * Returns a {@code Marshaller} that uses Java Serialization. Works for any type that implements
+   * {@link Serializable}, but is not space-efficient for boxed primitives like {@link Long} or
+   * {@link Double}.
    */
   public static <T extends Serializable> Marshaller<T> getSerializationMarshaller() {
     return new SerializationMarshaller<>();
@@ -101,8 +106,8 @@ public class Marshallers {
   }
 
   /**
-   * Returns a {@code Marshaller} for {@code Long}s that uses a more efficient
-   * representation than {@link #getSerializationMarshaller}.
+   * Returns a {@code Marshaller} for {@code Long}s that uses a more efficient representation than
+   * {@link #getSerializationMarshaller}.
    */
   public static Marshaller<Long> getLongMarshaller() {
     return new LongMarshaller();
@@ -131,8 +136,8 @@ public class Marshallers {
   }
 
   /**
-   * Returns a {@code Marshaller} for {@code Integers}s that uses a more
-   * efficient representation than {@link #getSerializationMarshaller}.
+   * Returns a {@code Marshaller} for {@code Integers}s that uses a more efficient representation
+   * than {@link #getSerializationMarshaller}.
    */
   public static Marshaller<Integer> getIntegerMarshaller() {
     return new IntegerMarshaller();
@@ -178,7 +183,7 @@ public class Marshallers {
     }
 
     @Override
-    public ByteBuffer fromBytes(ByteBuffer b)  {
+    public ByteBuffer fromBytes(ByteBuffer b) {
       return b.slice();
     }
   }
@@ -192,20 +197,88 @@ public class Marshallers {
 
 
   /**
-   * Returns a {@code Marshaller} for key-value pairs based on
-   * {@code keyMarshaller} and {@code valueMarshaller}.
+   * Returns a {@code Marshaller} for key-value pairs based on {@code keyMarshaller} and
+   * {@code valueMarshaller}.
    */
-  public static <K, V> Marshaller<KeyValue<K, V>> getKeyValueMarshaller(
-      Marshaller<K> keyMarshaller, Marshaller<V> valueMarshaller) {
+  public static <K, V> Marshaller<KeyValue<K, V>> getKeyValueMarshaller(Marshaller<K> keyMarshaller,
+      Marshaller<V> valueMarshaller) {
     return new KeyValueMarshaller<>(keyMarshaller, valueMarshaller);
   }
 
   /**
-   * Returns a {@code Marshaller} for key-values pairs based on
-   * {@code keyMarshaller} and {@code valueMarshaller}.
+   * Returns a {@code Marshaller} for key-values pairs based on {@code keyMarshaller} and
+   * {@code valueMarshaller}.
    */
   public static <K, V> Marshaller<KeyValue<K, ? extends Iterable<V>>> getKeyValuesMarshaller(
       Marshaller<K> keyMarshaller, Marshaller<V> valueMarshaller) {
     return new KeyValuesMarshaller<>(keyMarshaller, valueMarshaller);
+  }
+
+  private static class GenericMarshaller<T> extends Marshaller<T> {
+
+    private static final long serialVersionUID = 2674085981901767084L;
+    private static final ObjectMapper mapper = new ObjectMapper();
+    private final Class<T> type;
+
+    public GenericMarshaller(Class<T> type) {
+      this.type = type;
+    }
+
+    @Override
+    public ByteBuffer toBytes(T object) {
+      try {
+        return ByteBuffer.wrap(mapper.writeValueAsBytes(object));
+      } catch (JsonProcessingException e) {
+        throw new RuntimeException("Error in marshalling TableSchema value " + object.toString(),
+            e);
+      }
+    }
+
+    @Override
+    public T fromBytes(ByteBuffer b) {
+      try {
+        T value = mapper.readValue(new ByteBufferInputStream(b), type);
+        if (b.hasRemaining()) {
+          throw new CorruptDataException("Trailing bytes after reading object");
+        }
+        return value;
+      } catch (IOException e) {
+        throw new RuntimeException("Error in deserializing to TableSchema " + b, e);
+      }
+    }
+  }
+  private static class ByteBufferInputStream extends InputStream {
+
+    private final ByteBuffer byteBuffer;
+
+    public ByteBufferInputStream(ByteBuffer byteBuffer) {
+      this.byteBuffer = byteBuffer;
+    }
+
+    @Override
+    public int read() {
+      if (!byteBuffer.hasRemaining()) {
+        return -1;
+      }
+      return byteBuffer.get() & 0xFF;
+    }
+
+    @Override
+    public int read(byte[] bytes, int offset, int length) {
+      if (!byteBuffer.hasRemaining()) {
+        return -1;
+      }
+
+      int toRead = Math.min(length, byteBuffer.remaining());
+      byteBuffer.get(bytes, offset, toRead);
+      return toRead;
+    }
+  }
+
+  /**
+   * Returns a {@code Marshaller} for the given type. Uses jackson to serialize/deserialize.
+   */
+  public static <T> Marshaller<T> getGenericJsonMarshaller(Class<T> type) {
+    return new GenericMarshaller<T>(type);
   }
 }
