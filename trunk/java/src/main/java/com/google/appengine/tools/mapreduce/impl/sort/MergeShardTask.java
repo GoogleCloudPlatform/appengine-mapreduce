@@ -69,11 +69,10 @@ public class MergeShardTask extends WorkerShardTask<KeyValue<ByteBuffer, Iterato
     if (item == null) {
       return "null";
     }
-    ByteBuffer value = item.getKey().slice();
-    value.limit(value.position() + Math.min(MAX_LAST_ITEM_STRING_SIZE, value.remaining()));
-    CharBuffer string = UTF_8.decode(value);
-    return "Key: " + UTF_8.decode(item.getKey()) + " Value: " + string.toString()
-        + (item.getKey().remaining() >= MAX_LAST_ITEM_STRING_SIZE ? " ..." : "");
+    ByteBuffer key = item.getKey().slice();
+    key.limit(key.position() + Math.min(MAX_LAST_ITEM_STRING_SIZE, key.remaining()));
+    CharBuffer string = UTF_8.decode(key);
+    return "Key: " + string + (string.length() >= MAX_LAST_ITEM_STRING_SIZE ? " ..." : "");
   }
 
   @Override
