@@ -18,7 +18,6 @@ import junit.framework.TestCase;
 
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.List;
 
 /**
@@ -185,7 +184,7 @@ public class BigQuerySchemaMarshallerTest extends TestCase {
       tester.testSchema(new TableSchema().setFields(Lists.newArrayList(new TableFieldSchema()
           .setName("id").setType("integer").setMode(BigQueryFieldMode.REQUIRED.getValue()),
           new TableFieldSchema().setName("name").setType("string"))));
-    } catch (RuntimeException e) {
+    } catch (IllegalArgumentException e) {
       assertEquals(
           "Cannot marshal " + ParameterizedClass.class.getSimpleName()
               + ". Parameterized type other than Collection<T> cannot be marshalled into consistent BigQuery data.",
@@ -202,7 +201,7 @@ public class BigQuerySchemaMarshallerTest extends TestCase {
       tester.testSchema(new TableSchema().setFields(Lists.newArrayList(new TableFieldSchema()
           .setName("id").setType("integer").setMode(BigQueryFieldMode.REQUIRED.getValue()),
           new TableFieldSchema().setName("name").setType("string"))));
-    } catch (RuntimeException e) {
+    } catch (IllegalArgumentException e) {
       assertEquals(
           "Cannot marshal a non-parameterized Collection field " + "l" + " into BigQuery data",
           e.getMessage());
@@ -227,19 +226,5 @@ public class BigQuerySchemaMarshallerTest extends TestCase {
     tester.testSchema(new TableSchema().setFields(Lists.newArrayList(new TableFieldSchema()
         .setName("id").setType("integer").setMode(BigQueryFieldMode.REQUIRED.getValue()),
         new TableFieldSchema().setName("name").setType("string"))));
-  }
-
-  public void testSchemaForClassWithMap() {
-
-  }
-
-  private static class ClassWithMap {
-    HashMap<String, String> map;
-    int id;
-
-    public ClassWithMap(HashMap<String, String> map, int id) {
-      this.map = map;
-      this.id = id;
-    }
   }
 }

@@ -20,6 +20,7 @@ import com.google.appengine.tools.mapreduce.impl.util.BigQueryDataTypeUtil;
 import java.io.Serializable;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -44,6 +45,7 @@ final class BigQuerySchemaMarshallerByType<T> implements Serializable {
   private static final long serialVersionUID = -775569328952911303L;
   private final Class<T> type;
   private final Map<Field, BigqueryFieldMarshaller> marshallers;
+  private final transient IdentityHashMap<Class<?>, Field> typeToField;
 
   /**
    * @param type of the object to be marshalled by this marshaller.
@@ -56,6 +58,7 @@ final class BigQuerySchemaMarshallerByType<T> implements Serializable {
       Map<Field, BigqueryFieldMarshaller> marshallers) {
     this.type = type;
     this.marshallers = marshallers;
+    this.typeToField = new IdentityHashMap<>();
     validateType(type, marshallers);
   }
 
@@ -126,13 +129,23 @@ final class BigQuerySchemaMarshallerByType<T> implements Serializable {
    * @param marshallers map of field to {@link BigqueryFieldMarshaller} for unsupported fields.
    */
   private void validateType(Class<?> type, Map<Field, BigqueryFieldMarshaller> marshallers) {
-    validateTypeForSchemaMarshalling(type);
-    Set<Field> fieldsToMap = getFieldsToSerialize(type);
-    for (Field field : fieldsToMap) {
-      if ((marshallers != null && !marshallers.containsKey(field))
-          || BigqueryFieldMarshallers.getMarshaller(field.getType()) == null) {
-        validateType(field.getType(), marshallers);
+    if (typeToField.containsKey(type)) {
+      throw new IllegalArgumentException(this.type
+          + " contains cyclic reference for the field with type "
+          + type + ". Hence cannot be resolved into bigquery schema.");
+    }
+    try {
+      typeToField.put(type, null);
+      validateTypeForSchemaMarshalling(type);
+      Set<Field> fieldsToMap = getFieldsToSerialize(type);
+      for (Field field : fieldsToMap) {
+        if ((marshallers != null && !marshallers.containsKey(field))
+            || BigqueryFieldMarshallers.getMarshaller(field.getType()) == null) {
+          validateType(field.getType(), marshallers);
+        }
       }
+    } finally {
+      typeToField.remove(type);
     }
   }
 

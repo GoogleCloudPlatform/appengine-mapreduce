@@ -80,7 +80,7 @@ final class BigQueryDataMarshallerByType implements Serializable {
    */
   private void assertFieldValue(Field field, Object fieldValue) {
     if (fieldValue == null && isFieldRequired(field)) {
-      throw new RuntimeException("Non-nullable field " + field.getName()
+      throw new IllegalArgumentException("Non-nullable field " + field.getName()
           + ". This field is either annotated as REQUIRED or is a primitive type.");
     }
   }

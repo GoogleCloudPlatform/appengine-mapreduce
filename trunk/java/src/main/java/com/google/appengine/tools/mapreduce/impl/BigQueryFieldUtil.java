@@ -146,23 +146,19 @@ public final class BigQueryFieldUtil {
    */
   static void validateTypeForSchemaMarshalling(Class<?> type) {
     if (isNonCollectionInterface(type) || isAbstract(type)) {
-      throw new RuntimeException("Cannot marshal " + type.getSimpleName()
+      throw new IllegalArgumentException("Cannot marshal " + type.getSimpleName()
           + ". Interfaces and abstract class cannot be cannot be marshalled into consistent BigQuery data.");
     }
     if (!isCollection(type) && isGenericType(type)) {
-      throw new RuntimeException("Cannot marshal " + type.getSimpleName()
+      throw new IllegalArgumentException("Cannot marshal " + type.getSimpleName()
           + ". Parameterized type other than Collection<T> cannot be marshalled into consistent BigQuery data.");
     }
     if (Map.class.isAssignableFrom(type)) {
-      throw new RuntimeException("Cannot marshal a map into BigQuery data " + type.getSimpleName());
-    }
-    if (hasReferenceToItself(type)) {
-      throw new RuntimeException(
-          "Cannot marshal a type that has a reference to itself as one of its fields. "
-          + type.getSimpleName());
+      throw new IllegalArgumentException(
+          "Cannot marshal a map into BigQuery data " + type.getSimpleName());
     }
     if (UNSUPPORTED_TYPES.contains(type)) {
-      throw new RuntimeException(
+      throw new IllegalArgumentException(
           "Type cannot be marshalled into bigquery schema. " + type.getSimpleName());
     }
   }
@@ -177,20 +173,13 @@ public final class BigQueryFieldUtil {
         && Modifier.isAbstract(type.getModifiers());
   }
 
-  private static boolean hasReferenceToItself(Class<?> type) {
-    return !ReflectionUtils.getAllFields(type, ReflectionUtils.withTypeAssignableTo(type))
-        .isEmpty();
-  }
-
   /**
    * A field of type {@link Collection} must be parameterized for marshalling it into bigquery data
    * as a raw field can lead to ambiguous bigquery table definitions.
-   *
-   * @param field
    */
   public static void validateCollection(Field field) {
     if (!isParameterized(field.getGenericType())) {
-      throw new RuntimeException("Cannot marshal a non-parameterized Collection field "
+      throw new IllegalArgumentException("Cannot marshal a non-parameterized Collection field "
           + field.getName() + " into BigQuery data");
     }
   }
@@ -202,7 +191,7 @@ public final class BigQueryFieldUtil {
    */
   public static void validateNestedRepeatedType(Class<?> parameterType, Field field) {
     if (isCollectionOrArray(parameterType)) {
-      throw new RuntimeException(
+      throw new IllegalArgumentException(
           " Cannot marshal a nested collection or array field " + field.getName());
     }
   }
@@ -214,15 +203,14 @@ public final class BigQueryFieldUtil {
   public static void validateNestedParameterizedType(Type parameterType) {
     if (isParameterized(parameterType)
         || GenericArrayType.class.isAssignableFrom(parameterType.getClass())) {
-      throw new RuntimeException(
+      throw new IllegalArgumentException(
           "Invalid field. Cannot marshal fields of type Collection<GenericType> or GenericType[].");
     }
   }
 
   /**
-   * @param field
-   * @return type of the parameter or component type for the repeated field depending on whether it
-   *         is a collection or an array
+   * Returns type of the parameter or component type for the repeated field depending on whether it
+   * is a collection or an array.
    */
   public static Class<?> getParameterTypeOfRepeatedField(Field field) {
     Class<?> componentType = null;
@@ -235,7 +223,7 @@ public final class BigQueryFieldUtil {
       componentType = field.getType().getComponentType();
       return componentType;
     } else {
-      throw new RuntimeException("Unsupported repeated type " + field.getType()
+      throw new IllegalArgumentException("Unsupported repeated type " + field.getType()
           + " Allowed repeated fields are Collection<T> and arrays");
     }
     validateNestedRepeatedType(componentType, field);
