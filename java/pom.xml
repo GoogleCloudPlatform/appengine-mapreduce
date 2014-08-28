@@ -4,7 +4,8 @@
   <groupId>com.google.appengine.tools</groupId>
   <artifactId>appengine-mapreduce</artifactId>
   <name>App Engine MapReduce Library</name>
-  <description>A user space MapReduce library for Google App Engine.</description>
+  <description>A user space MapReduce library for Google App Engine.
+  </description>
   <url>http://code.google.com/p/appengine-mapreduce/</url>
   <organization>
     <name>Google</name>
@@ -36,8 +37,10 @@
         <configuration>
           <archive>
             <manifest>
-              <addDefaultImplementationEntries>true</addDefaultImplementationEntries>
-              <addDefaultSpecificationEntries>true</addDefaultSpecificationEntries>
+              <addDefaultImplementationEntries>true
+              </addDefaultImplementationEntries>
+              <addDefaultSpecificationEntries>true
+              </addDefaultSpecificationEntries>
             </manifest>
           </archive>
         </configuration>
@@ -103,52 +106,22 @@
     <dependency>
       <groupId>com.google.apis</groupId>
       <artifactId>google-api-services-bigquery</artifactId>
-      <version>v2-rev42-1.12.0-beta</version>
+      <version>v2-rev154-1.19.0</version>
     </dependency>
     <dependency>
       <groupId>com.google.oauth-client</groupId>
       <artifactId>google-oauth-client</artifactId>
-      <version>1.12.0-beta</version>
+      <version>1.19.0</version>
     </dependency>
     <dependency>
       <groupId>com.google.http-client</groupId>
       <artifactId>google-http-client-jackson2</artifactId>
-      <version>1.12.0-beta</version>
-    </dependency>
-    <dependency>
-      <groupId>com.google.api.client</groupId>
-      <artifactId>google-api-client-googleapis-json</artifactId>
-      <version>1.2.3-alpha</version>
-    </dependency>
-    <dependency>
-      <groupId>com.google.api.client</groupId>
-      <artifactId>google-api-client-googleapis</artifactId>
-      <version>1.4.1-beta</version>
-    </dependency>
-    <dependency>
-      <groupId>com.google.api.client</groupId>
-      <artifactId>google-api-client-http</artifactId>
-      <version>1.2.3-alpha</version>
-    </dependency>
-    <dependency>
-      <groupId>com.google.http-client</groupId>
-      <artifactId>google-http-client</artifactId>
-      <version>1.14.1-beta</version>
-    </dependency>
-    <dependency>
-      <groupId>com.google.api-client</groupId>
-      <artifactId>google-api-client</artifactId>
-      <version>1.14.1-beta</version>
+      <version>1.19.0</version>
     </dependency>
     <dependency>
       <groupId>com.fasterxml.jackson.core</groupId>
       <artifactId>jackson-databind</artifactId>
       <version>[2.0,2.99]</version>
-    </dependency>
-    <dependency>
-      <groupId>org.reflections</groupId>
-      <artifactId>reflections</artifactId>
-      <version>0.9.9-RC1</version>
     </dependency>
     <!-- Test Dependencies -->
     <dependency>
@@ -173,21 +146,6 @@
       <groupId>org.easymock</groupId>
       <artifactId>easymock</artifactId>
       <version>3.0</version>
-    </dependency>
-    <dependency>
-      <groupId>com.google.apis</groupId>
-      <artifactId>google-api-services-bigquery</artifactId>
-      <version>v2-rev42-1.12.0-beta</version>
-    </dependency>
-    <dependency>
-      <groupId>com.fasterxml.jackson.core</groupId>
-      <artifactId>jackson-databind</artifactId>
-      <version>[2.0,2.99]</version>
-    </dependency>
-    <dependency>
-      <groupId>org.reflections</groupId>
-      <artifactId>reflections</artifactId>
-      <version>0.9.9-RC1</version>
     </dependency>
   </dependencies>
 </project>

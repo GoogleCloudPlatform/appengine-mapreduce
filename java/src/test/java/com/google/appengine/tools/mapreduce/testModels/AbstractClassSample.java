@@ -1,6 +1,6 @@
 package com.google.appengine.tools.mapreduce.testModels;
 
-public abstract class AbstractClassForTest {
+public abstract class AbstractClassSample {
   int id;
   String name;
 
@@ -8,7 +8,7 @@ public abstract class AbstractClassForTest {
    * @param id
    * @param name
    */
-  public AbstractClassForTest(int id, String name) {
+  public AbstractClassSample(int id, String name) {
     this.id = id;
     this.name = name;
   }
