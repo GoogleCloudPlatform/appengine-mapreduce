@@ -122,8 +122,8 @@ public final class MapReduceSpecification<I, K, V, O, R> extends BaseSpecificati
   }
 
   private static int checkNumShards(String stage, int shards, int maxShards) {
-    checkArgument(shards > 0 && shards <= maxShards, "Invalid number of " + stage + " shards: "
-        + shards + " must be between 1 and " + maxShards + ".");
+    checkArgument(shards > 0 && shards <= maxShards,
+        "Invalid number of %s shards: %s must be between 1 and %s.", stage, shards, maxShards);
     return shards;
   }
 

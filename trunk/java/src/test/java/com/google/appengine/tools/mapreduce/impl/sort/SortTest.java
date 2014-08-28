@@ -1,12 +1,13 @@
 package com.google.appengine.tools.mapreduce.impl.sort;
 
 import static java.nio.charset.StandardCharsets.US_ASCII;
+import static junit.framework.Assert.assertFalse;
+import static junit.framework.Assert.assertTrue;
 
 import com.google.appengine.tools.mapreduce.KeyValue;
 import com.google.appengine.tools.mapreduce.OutputWriter;
 import com.google.appengine.tools.mapreduce.impl.IncrementalTaskContext;
 import com.google.appengine.tools.mapreduce.impl.MapReduceConstants;
-import com.google.common.collect.Iterables;
 import com.google.common.collect.Iterators;
 import com.google.common.collect.Lists;
 
@@ -98,7 +99,7 @@ public class SortTest extends TestCase {
       if (list == null) {
         map.put(key, Lists.newArrayList(keyValue.getValue()));
       } else {
-        Iterables.addAll(list, keyValue.getValue());
+        list.addAll(keyValue.getValue());
         sameKeyCount++;
       }
     }
@@ -350,17 +351,17 @@ public class SortTest extends TestCase {
     ByteBuffer key = ByteBuffer.allocate(100);
     ByteBuffer value = ByteBuffer.allocate(1000 - 100 - SortWorker.POINTER_SIZE_BYTES);
     worker.addValue(key, value);
-    assertEquals(false, worker.isFull());
+    assertFalse(worker.isFull());
     key = ByteBuffer.allocate(1);
     value = ByteBuffer.allocate(0);
     worker.addValue(key, value);
-    assertEquals(true, worker.isFull());
+    assertTrue(worker.isFull());
     worker.beginSlice();
-    assertEquals(false, worker.isFull());
+    assertFalse(worker.isFull());
     key = ByteBuffer.allocate(100);
     value = ByteBuffer.allocate(1000 - 100 - SortWorker.POINTER_SIZE_BYTES + 1);
     worker.addValue(key, value);
-    assertEquals(true, worker.isFull());
+    assertTrue(worker.isFull());
   }
 
   private LinkedHashMap<ByteBuffer, List<ByteBuffer>> sortUntilFull(SortWorker sorter,

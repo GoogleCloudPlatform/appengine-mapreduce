@@ -70,10 +70,7 @@ public class TestController extends ShardedJobController<TestTask> {
     if (completed != other.completed) {
       return false;
     }
-    if (expectedResult != other.expectedResult) {
-      return false;
-    }
-    return true;
+    return expectedResult == other.expectedResult;
   }
 
 }

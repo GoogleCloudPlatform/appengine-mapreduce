@@ -40,7 +40,7 @@ public final class LogInput extends Input<RequestLogs> {
   public LogInput(LogQuery logQuery, int shardCount) {
     Preconditions.checkArgument(logQuery.getStartTimeUsec() != null, "Start time must be provided");
     Preconditions.checkArgument(logQuery.getStartTimeUsec() >= EARLIEST_LOG_TIME,
-        "Start time must be at least " + EARLIEST_LOG_TIME + " microseconds after the unix epoch.");
+        "Start time must be at least %s microseconds after the unix epoch.", EARLIEST_LOG_TIME);
     Preconditions.checkArgument(logQuery.getEndTimeUsec() != null, "End time must be provided");
     Preconditions.checkArgument(logQuery.getEndTimeUsec() > logQuery.getStartTimeUsec(),
         "End time must be after start time");

@@ -37,8 +37,8 @@ public class MapReduceResultImpl<R> implements MapReduceResult<R>, Externalizabl
 
   public MapReduceResultImpl(R outputResult, Counters counters) {
     if (outputResult != null) {
-      checkArgument(outputResult instanceof Serializable,
-          "outputResult(" +  outputResult.getClass() + ") should be serializable");
+      checkArgument(outputResult instanceof Serializable, "outputResult(%s) should be serializable",
+          outputResult.getClass());
     }
     this.outputResult = outputResult;
     this.counters = checkNotNull(counters, "Null counters");

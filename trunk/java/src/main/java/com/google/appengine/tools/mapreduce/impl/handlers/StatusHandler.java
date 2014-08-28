@@ -110,9 +110,7 @@ final class StatusHandler {
         retValue.write(response.getWriter());
         response.getWriter().flush();
       }
-    } catch (JSONException e) {
-      throw new RuntimeException("Couldn't write command response", e);
-    } catch (IOException e) {
+    } catch (JSONException | IOException e) {
       throw new RuntimeException("Couldn't write command response", e);
     }
   }

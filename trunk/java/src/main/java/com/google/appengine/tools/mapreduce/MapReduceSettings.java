@@ -145,7 +145,7 @@ public class MapReduceSettings extends MapSettings {
         .totalRetryPeriodMillis(20000)
         .requestTimeoutMillis(10000)
         .build());
-  GcsFilename filename = new GcsFilename(bucket, UUID.randomUUID().toString() + ".tmp");
+    GcsFilename filename = new GcsFilename(bucket, UUID.randomUUID() + ".tmp");
     if (gcsService.getMetadata(filename) != null) {
       log.warning("File '" + filename.getObjectName() + "' exists. Skipping bucket write test.");
       return;

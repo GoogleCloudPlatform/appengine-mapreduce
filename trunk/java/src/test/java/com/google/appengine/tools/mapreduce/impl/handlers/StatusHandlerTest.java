@@ -111,7 +111,7 @@ public class StatusHandlerTest extends EndToEndTestCase {
     assertNotNull(jobDetail);
     assertEquals("testGetJobDetail_populated", jobDetail.getString("mapreduce_id"));
     assertEquals("Namey", jobDetail.getString("name"));
-    assertEquals(true, jobDetail.getBoolean("active"));
+    assertTrue(jobDetail.getBoolean("active"));
     assertEquals(2, jobDetail.getInt("active_shards"));
     verify(jobDetail, tuple("mapreduce_id", "testGetJobDetail_populated"),
         tuple("chart_width", 300),
@@ -138,7 +138,7 @@ public class StatusHandlerTest extends EndToEndTestCase {
     assertNotNull(jobDetail);
     assertEquals("testGetJobDetail_populated", jobDetail.getString("mapreduce_id"));
     assertEquals("Namey", jobDetail.getString("name"));
-    assertEquals(false, jobDetail.getBoolean("active"));
+    assertFalse(jobDetail.getBoolean("active"));
     assertEquals(0, jobDetail.getInt("active_shards"));
     verify(jobDetail, tuple("chart_width", 300), tuple("chart_url", pattern("[^\"]*")),
         tuple("result_status", pattern("DONE")), tuple("chart_data", 0L, 0L),

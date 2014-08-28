@@ -40,8 +40,7 @@ public class FileUtil {
   private FileUtil() {}
 
   public static boolean isErrorCode(IOException e, int code) {
-    return e.getCause() != null
-        && e.getCause() instanceof ApiProxy.ApplicationException
+    return e.getCause() instanceof ApiProxy.ApplicationException
         && ((ApiProxy.ApplicationException) e.getCause()).getApplicationError() == code;
   }
 

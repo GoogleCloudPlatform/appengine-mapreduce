@@ -6,6 +6,7 @@ import static com.google.appengine.tools.mapreduce.MapSettings.DEFAULT_BASE_URL;
 import static com.google.appengine.tools.mapreduce.MapSettings.DEFAULT_MILLIS_PER_SLICE;
 import static com.google.appengine.tools.mapreduce.MapSettings.DEFAULT_SHARD_RETREIES;
 import static com.google.appengine.tools.mapreduce.MapSettings.DEFAULT_SLICE_RETREIES;
+import static junit.framework.Assert.assertNull;
 
 import com.google.appengine.tools.development.testing.LocalServiceTestHelper;
 
@@ -33,7 +34,7 @@ public class MapReduceSettingsTest extends TestCase {
     assertEquals(DEFAULT_MILLIS_PER_SLICE, mrSettings.getMillisPerSlice());
     assertEquals(DEFAULT_SHARD_RETREIES, mrSettings.getMaxShardRetries());
     assertEquals(DEFAULT_SLICE_RETREIES, mrSettings.getMaxSliceRetries());
-    assertEquals(null, mrSettings.getMaxSortMemory());
+    assertNull(mrSettings.getMaxSortMemory());
   }
 
   public void testNonDefaultSettings() {

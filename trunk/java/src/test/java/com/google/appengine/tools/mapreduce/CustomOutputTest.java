@@ -72,10 +72,7 @@ public class CustomOutputTest extends EndToEndTestCase {
           return false;
         }
       }
-      if (iter.hasNext()) {
-        return false;
-      }
-      return true;
+      return !iter.hasNext();
     }
   }
 
