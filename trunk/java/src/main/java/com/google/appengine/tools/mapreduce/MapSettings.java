@@ -40,7 +40,7 @@ public class MapSettings implements Serializable {
       new ExceptionHandler.Builder().retryOn(ModulesException.class).build();
   private static final ExceptionHandler QUEUE_EXCEPTION_HANDLER =
       new ExceptionHandler.Builder().retryOn(TransientFailureException.class).build();
-  private static final RetryParams RETRY_PARAMS = new RetryParams.Builder()
+  private static final RetryParams QUEUE_RETRY_PARAMS = new RetryParams.Builder()
       .initialRetryDelayMillis(500).retryMinAttempts(7).retryMaxAttempts(8)
       .retryDelayBackoffFactor(2).maxRetryDelayMillis(20_000).build();
 
@@ -256,7 +256,7 @@ public class MapSettings implements Serializable {
             @Override public String call() {
               return modulesService.getDefaultVersion(requestedModule);
             }
-          },  RETRY_PARAMS, MODULES_EXCEPTION_HANDLER);
+          },  QUEUE_RETRY_PARAMS, MODULES_EXCEPTION_HANDLER);
         }
       }
     }
@@ -277,7 +277,7 @@ public class MapSettings implements Serializable {
       @Override public ShardedJobSettings call() {
         return builder.build();
       }
-    },  RETRY_PARAMS, MODULES_EXCEPTION_HANDLER);
+    },  QUEUE_RETRY_PARAMS, MODULES_EXCEPTION_HANDLER);
   }
 
   private static String checkQueueSettings(String queueName) {
@@ -294,7 +294,7 @@ public class MapSettings implements Serializable {
           queue.fetchStatistics();
           return null;
         }
-      }, RETRY_PARAMS, QUEUE_EXCEPTION_HANDLER);
+      }, QUEUE_RETRY_PARAMS, QUEUE_EXCEPTION_HANDLER);
     } catch (RetryHelperException ex) {
       if (ex.getCause() instanceof IllegalStateException) {
         throw new RuntimeException("Queue '" + queueName + "' does not exists");

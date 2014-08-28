@@ -2,8 +2,6 @@
 
 package com.google.appengine.tools.mapreduce.impl.shardedjob;
 
-import static com.google.common.base.Preconditions.checkNotNull;
-
 import java.io.Serializable;
 import java.util.Iterator;
 
@@ -18,18 +16,6 @@ import java.util.Iterator;
 public abstract class ShardedJobController<T extends IncrementalTask> implements Serializable {
 
   private static final long serialVersionUID = 6209078163062384156L;
-  private final String shardedJobName;
-
-  public ShardedJobController(String shardedJobName) {
-    this.shardedJobName = checkNotNull(shardedJobName, "Null shardedJobName");
-  }
-
-  /**
-   * @return A human readable string for UI purposes.
-   */
-  public String getName() {
-    return shardedJobName;
-  }
 
   /**
    * Called when the sharded job has completed successfully.

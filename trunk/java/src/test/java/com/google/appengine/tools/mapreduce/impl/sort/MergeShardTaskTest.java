@@ -39,7 +39,8 @@ public class MergeShardTaskTest extends TestCase {
 
   public void testOutputSegmented() {
     MockOutputWriter writer = new MockOutputWriter();
-    MergeShardTask task = new MergeShardTask("TestJob", 0, 1, new MockInputReader(), writer);
+    MergeShardTask task =
+        new MergeShardTask("TestJob", 0, 1, new MockInputReader(), writer, Integer.MAX_VALUE);
     task.callWorker(createData(1));
     assertEquals(1, writer.written.size());
     task.callWorker(createData(3));
@@ -58,7 +59,7 @@ public class MergeShardTaskTest extends TestCase {
 
   public void testSerialization() throws ClassNotFoundException, IOException {
     MergeShardTask task =
-        new MergeShardTask("TestJob", 0, 1, new MockInputReader(), new MockOutputWriter());
+        new MergeShardTask("TestJob", 0, 1, new MockInputReader(), new MockOutputWriter(), 0);
 
     task.callWorker(createData(1));
     assertEquals(1, ((MockOutputWriter) task.getOutputWriter()).written.size());

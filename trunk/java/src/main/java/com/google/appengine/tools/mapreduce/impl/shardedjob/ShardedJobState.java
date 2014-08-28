@@ -20,11 +20,6 @@ public interface ShardedJobState {
   String getJobId();
 
   /**
-   * Returns the job's name.
-   */
-  String getJobName();
-
-  /**
    * Returns the execution settings of this job.
    */
   ShardedJobSettings getSettings();

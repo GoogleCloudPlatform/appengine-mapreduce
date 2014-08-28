@@ -30,7 +30,6 @@ import com.google.appengine.tools.cloudstorage.GcsServiceFactory;
 import com.google.appengine.tools.mapreduce.impl.HashingSharder;
 import com.google.appengine.tools.mapreduce.impl.InProcessMap;
 import com.google.appengine.tools.mapreduce.impl.InProcessMapReduce;
-import com.google.appengine.tools.mapreduce.impl.MapReduceConstants;
 import com.google.appengine.tools.mapreduce.impl.shardedjob.ShardFailureException;
 import com.google.appengine.tools.mapreduce.inputs.ConsecutiveLongInput;
 import com.google.appengine.tools.mapreduce.inputs.DatastoreInput;
@@ -339,15 +338,17 @@ public class EndToEndTest extends EndToEndTestCase {
   }
 
   @Test
-  public void testManyReduceShards() throws Exception {
-    runTest(new MapReduceSpecification.Builder<>(new ConsecutiveLongInput(0, 50000, 10),
-        new Mod37Mapper(), ValueProjectionReducer.<String, Long>create(),
-        new InMemoryOutput<Long>())
-        .setKeyMarshaller(Marshallers.getStringMarshaller())
-        .setValueMarshaller(Marshallers.getLongMarshaller())
-        .setJobName("Empty test MR")
-        .setNumReducers(MapReduceConstants.MAX_WRITER_FANOUT * 2 + 1)
-        .build(), new Verifier<List<List<Long>>>() {
+  public void testMoreReducersThanFanout() throws Exception {
+    MapReduceSpecification<Long, String, Long, Long, List<List<Long>>> spec =
+        new MapReduceSpecification.Builder<>(new ConsecutiveLongInput(0, 50000, 10),
+            new Mod37Mapper(), ValueProjectionReducer.<String, Long>create(),
+            new InMemoryOutput<Long>())
+            .setKeyMarshaller(Marshallers.getStringMarshaller())
+            .setValueMarshaller(Marshallers.getLongMarshaller())
+            .setJobName("Empty test MR")
+            .setNumReducers(10)
+            .build();
+    Verifier<List<List<Long>>> verifier = new Verifier<List<List<Long>>>() {
       @Override
       public void verify(MapReduceResult<List<List<Long>>> result) throws Exception {
         assertNotNull(result.getOutputResult());
@@ -359,7 +360,9 @@ public class EndToEndTest extends EndToEndTestCase {
         }
         assertEquals(50000, allOutput.size());
       }
-    });
+    };
+    runTest(new MapReduceSettings.Builder().setMapFanout(5).build(), spec, verifier);
+    runTest(new MapReduceSettings.Builder().setMapFanout(2).build(), spec, verifier);
   }
 
   @Test
@@ -936,56 +939,11 @@ public class EndToEndTest extends EndToEndTestCase {
             assertEquals("even", output.get(0).getKey());
             List<Long> evenValues = new ArrayList<>(output.get(0).getValue());
             Collections.sort(evenValues);
-            assertEquals(ImmutableList.of(2L,
-                4L,
-                6L,
-                8L,
-                10L,
-                12L,
-                14L,
-                16L,
-                18L,
-                20L,
-                22L,
-                24L,
-                26L,
-                28L,
-                30L,
-                32L,
-                34L,
-                36L,
-                38L,
-                40L,
-                42L,
-                44L,
-                46L,
-                48L,
-                50L,
-                52L,
-                54L,
-                56L,
-                58L,
-                60L,
-                62L,
-                64L,
-                66L,
-                68L,
-                70L,
-                72L,
-                74L,
-                76L,
-                78L,
-                80L,
-                82L,
-                84L,
-                86L,
-                88L,
-                90L,
-                92L,
-                94L,
-                96L,
-                98L,
-                100L), evenValues);
+            List<Long> expected = new ArrayList<>();
+            for (long i=2; i<=100;i+=2) {
+              expected.add(i);
+            }
+            assertEquals(expected, evenValues);
             assertEquals("multiple-of-ten", output.get(1).getKey());
             List<Long> multiplesOfTen = new ArrayList<>(output.get(1).getValue());
             Collections.sort(multiplesOfTen);
@@ -1008,10 +966,11 @@ public class EndToEndTest extends EndToEndTestCase {
             assertNotNull(counters);
 
             assertEquals(0, counters.getCounter("map").getValue());
-            assertEquals(0, counters.getCounter("beginShard").getValue());
-            assertEquals(0, counters.getCounter("endShard").getValue());
-            assertEquals(0, counters.getCounter("beginSlice").getValue());
-            assertEquals(0, counters.getCounter("endSlice").getValue());
+            long mapShards = counters.getCounter("beginShard").getValue();
+            assertEquals(mapShards, counters.getCounter("beginShard").getValue());
+            assertEquals(mapShards, counters.getCounter("endShard").getValue());
+            assertEquals(mapShards, counters.getCounter("beginSlice").getValue());
+            assertEquals(mapShards, counters.getCounter("endSlice").getValue());
 
             assertEquals(0, counters.getCounter(CounterNames.MAPPER_CALLS).getValue());
             assertEquals(0, counters.getCounter(CounterNames.MAPPER_WALLTIME_MILLIS).getValue());
@@ -1152,15 +1111,16 @@ public class EndToEndTest extends EndToEndTestCase {
         new MapReduceSpecification.Builder<>();
     builder.setJobName("Test MR");
     final long sortMem = 1000;
-    final long inputItems = 5 * MapReduceConstants.MERGE_FANIN * sortMem / 100;
-    builder.setInput(new ConsecutiveLongInput(0, inputItems, 1));
+    final long inputItems = 10 * sortMem / 100; // Forces 3 levels of merging
+    builder.setInput(new RandomLongInput(inputItems, 1));
     builder.setMapper(new DummyValueMapper(100));
     builder.setKeyMarshaller(Marshallers.getLongMarshaller());
     builder.setValueMarshaller(Marshallers.getStringMarshaller());
     builder.setReducer(KeyProjectionReducer.<Long, String>create());
     builder.setOutput(new InMemoryOutput<Long>());
     builder.setNumReducers(1);
-    runWithPipeline(new MapReduceSettings.Builder().setMaxSortMemory(sortMem).build(),
+    runWithPipeline(
+        new MapReduceSettings.Builder().setMaxSortMemory(sortMem).setMergeFanin(2).build(),
         builder.build(), new Verifier<List<List<Long>>>() {
           @Override
           public void verify(MapReduceResult<List<List<Long>>> result) throws Exception {
@@ -1168,7 +1128,7 @@ public class EndToEndTest extends EndToEndTestCase {
             assertEquals(inputItems, counters.getCounter(CounterNames.MAPPER_CALLS).getValue());
             assertEquals(inputItems, counters.getCounter(CounterNames.REDUCER_CALLS).getValue());
             assertEquals(inputItems, counters.getCounter(CounterNames.SORT_CALLS).getValue());
-            assertEquals(inputItems, counters.getCounter(CounterNames.MERGE_CALLS).getValue());
+            assertEquals(inputItems * 3, counters.getCounter(CounterNames.MERGE_CALLS).getValue());
 
             List<List<Long>> actualOutput = result.getOutputResult();
             assertEquals(1, actualOutput.size());

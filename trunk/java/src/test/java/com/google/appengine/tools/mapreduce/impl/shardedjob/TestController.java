@@ -17,7 +17,6 @@ public class TestController extends ShardedJobController<TestTask> {
   private boolean completed = false;
 
   public TestController(int expectedResult) {
-    super("TestController");
     this.expectedResult = expectedResult;
   }
 
@@ -39,11 +38,6 @@ public class TestController extends ShardedJobController<TestTask> {
 
   public boolean isCompleted() {
     return completed;
-  }
-
-  @Override
-  public String getName() {
-    return "Test controller expecting: " + expectedResult;
   }
 
   @Override

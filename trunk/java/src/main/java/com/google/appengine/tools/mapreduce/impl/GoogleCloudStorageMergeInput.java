@@ -34,9 +34,11 @@ public class GoogleCloudStorageMergeInput extends
 
   private static final long serialVersionUID = 3532660814044212575L;
   private final FilesByShard filesByShard;
+  private final Integer mergeFanin;
 
-  public GoogleCloudStorageMergeInput(FilesByShard files) {
+  public GoogleCloudStorageMergeInput(FilesByShard files, int mergeFanin) {
     this.filesByShard = checkNotNull(files, "Null files");
+    this.mergeFanin = mergeFanin;
   }
 
   /**
@@ -55,7 +57,7 @@ public class GoogleCloudStorageMergeInput extends
     for (int shard = 0; shard < filesByShard.getShardCount(); shard++) {
       List<InputReader<KeyValue<ByteBuffer, Iterator<ByteBuffer>>>> readers = new ArrayList<>();
       for (List<String> group : Lists.partition(filesByShard.getFilesForShard(shard).getFileNames(),
-          MapReduceConstants.MERGE_FANIN)) {
+          mergeFanin)) {
         GoogleCloudStorageFileSet fileSet =
             new GoogleCloudStorageFileSet(filesByShard.getBucket(), group);
         readers.add(createReaderForShard(marshaller, fileSet));

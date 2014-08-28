@@ -12,7 +12,7 @@ import com.google.common.base.Preconditions;
 
 import java.lang.reflect.Method;
 
-public final class InProcessUtil {
+final class InProcessUtil {
 
   private static Method getMethod(Class<?> clazz, String name) {
     if (clazz == null) {
@@ -41,57 +41,47 @@ public final class InProcessUtil {
   }
 
   @SuppressWarnings("rawtypes")
-  public static String getJobName(MapSpecification spec) {
+  static Input getInput(MapSpecification spec) {
     return invoke(spec);
   }
 
   @SuppressWarnings("rawtypes")
-  public static String getJobName(MapReduceSpecification spec) {
+  static Input getInput(MapReduceSpecification spec) {
     return invoke(spec);
   }
 
   @SuppressWarnings("rawtypes")
-  public static Input getInput(MapSpecification spec) {
+  static Output getOutput(MapSpecification spec) {
     return invoke(spec);
   }
 
   @SuppressWarnings("rawtypes")
-  public static Input getInput(MapReduceSpecification spec) {
+  static Output getOutput(MapReduceSpecification spec) {
     return invoke(spec);
   }
 
   @SuppressWarnings("rawtypes")
-  public static Output getOutput(MapSpecification spec) {
+  static MapOnlyMapper getMapper(MapSpecification spec) {
     return invoke(spec);
   }
 
   @SuppressWarnings("rawtypes")
-  public static Output getOutput(MapReduceSpecification spec) {
+  static Mapper getMapper(MapReduceSpecification spec) {
     return invoke(spec);
   }
 
   @SuppressWarnings("rawtypes")
-  public static MapOnlyMapper getMapper(MapSpecification spec) {
+  static Marshaller getKeyMarshaller(MapReduceSpecification spec) {
     return invoke(spec);
   }
 
   @SuppressWarnings("rawtypes")
-  public static Mapper getMapper(MapReduceSpecification spec) {
+  static Reducer getReducer(MapReduceSpecification spec) {
     return invoke(spec);
   }
 
   @SuppressWarnings("rawtypes")
-  public static Marshaller getKeyMarshaller(MapReduceSpecification spec) {
-    return invoke(spec);
-  }
-
-  @SuppressWarnings("rawtypes")
-  public static Reducer getReducer(MapReduceSpecification spec) {
-    return invoke(spec);
-  }
-
-  @SuppressWarnings("rawtypes")
-  public static Integer getNumReducers(MapReduceSpecification spec) {
+  static Integer getNumReducers(MapReduceSpecification spec) {
     return invoke(spec);
   }
 }

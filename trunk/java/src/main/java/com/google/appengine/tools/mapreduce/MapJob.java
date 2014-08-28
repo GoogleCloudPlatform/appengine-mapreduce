@@ -88,10 +88,9 @@ public class MapJob<I, O, R> extends Job0<MapReduceResult<R>> {
     }
     Output<O, R> output = specification.getOutput();
     output.setContext(context);
-    String shardedJobName = specification.getJobName() + " (map-only)";
     List<? extends OutputWriter<O>> writers = output.createWriters(readers.size());
     Preconditions.checkState(readers.size() == writers.size(), "%s: %s readers, %s writers",
-        shardedJobName, readers.size(), writers.size());
+        jobId, readers.size(), writers.size());
     ImmutableList.Builder<WorkerShardTask<I, O, MapOnlyMapperContext<O>>> mapTasks =
         ImmutableList.builder();
     for (int i = 0; i < readers.size(); i++) {
@@ -101,7 +100,7 @@ public class MapJob<I, O, R> extends Job0<MapReduceResult<R>> {
     ShardedJobSettings shardedJobSettings = settings.toShardedJobSettings(jobId, getPipelineKey());
     PromisedValue<ResultAndStatus<R>> resultAndStatus = newPromise();
     WorkerController<I, O, R, MapOnlyMapperContext<O>> workerController = new WorkerController<>(
-        jobId, shardedJobName, new CountersImpl(), output, resultAndStatus.getHandle());
+        jobId, new CountersImpl(), output, resultAndStatus.getHandle());
     ShardedJob<?> shardedJob =
         new ShardedJob<>(jobId, mapTasks.build(), workerController, shardedJobSettings);
     FutureValue<Void> shardedJobResult = futureCall(shardedJob, settings.toJobSettings());

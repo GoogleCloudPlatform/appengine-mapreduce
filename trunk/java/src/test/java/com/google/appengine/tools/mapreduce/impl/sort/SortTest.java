@@ -106,7 +106,7 @@ public class SortTest extends TestCase {
   }
 
   public void testDoesNotRunOutOfMemory() {
-    SortWorker s = new SortWorker(null);
+    SortWorker s = new SortWorker(null, Integer.MAX_VALUE);
     s.prepare();
     Map<ByteBuffer, List<ByteBuffer>> map =
         sortUntilFull(s, new StringStringGenerator(Integer.MAX_VALUE), null);
@@ -221,21 +221,22 @@ public class SortTest extends TestCase {
   private SortWorker createWorker(final int numberToWrite) {
     SortWorker worker = new SortWorker((long) (numberToWrite * (
         StringStringGenerator.KEY_SIZE + StringStringGenerator.VALUE_SIZE
-        + SortWorker.POINTER_SIZE_BYTES) - 1)); // Set to force the last item to be leftover
+        + SortWorker.POINTER_SIZE_BYTES) - 1), // Set to force the last item to be leftover
+        Integer.MAX_VALUE); 
     worker.prepare();
     return worker;
   }
 
   public void testValuesSegmentation() {
     int uniqueItems = 10;
+    int batchSize = 1000;
     List<Iterator<KeyValue<ByteBuffer, ByteBuffer>>> iters = new ArrayList<>();
-    int numDups = 2 * (int) Math.ceil((double) MapReduceConstants.BATCHED_ITEM_SIZE_PER_EMIT
-        / StringStringGenerator.VALUE_SIZE) + 1;
+    int numDups = 2 * (batchSize / StringStringGenerator.VALUE_SIZE) + 1;
     for (int i = 0; i < numDups; i++) {
       iters.add(new StringStringGenerator(uniqueItems));
     }
     Iterator<KeyValue<ByteBuffer, ByteBuffer>> datax = Iterators.concat(iters.iterator());
-    SortWorker sorter = new SortWorker(64 * 1024 * 1024L);
+    SortWorker sorter = new SortWorker(64 * 1024 * 1024L, batchSize);
     sorter.prepare();
     sorter.beginSlice();
     while (!sorter.isFull() && datax.hasNext()) {
@@ -264,7 +265,7 @@ public class SortTest extends TestCase {
     Iterator<KeyValue<ByteBuffer, ByteBuffer>> datax4 = Iterators.concat(
         new StringStringGenerator(1000), new StringStringGenerator(1000),
         new StringStringGenerator(1000), new StringStringGenerator(1000));
-    SortWorker s = new SortWorker(1024 * 1024L);
+    SortWorker s = new SortWorker(1024 * 1024L, 4 * 136);
     s.prepare();
     Map<ByteBuffer, List<ByteBuffer>> map = sortUntilFull(s, datax4, null);
     assertEquals(1000, map.size());
@@ -327,7 +328,7 @@ public class SortTest extends TestCase {
 
   public void testStoredData() {
     int size = 1000;
-    SortWorker worker = new SortWorker(256 * 1024L);
+    SortWorker worker = new SortWorker(256 * 1024L, 0);
     worker.prepare();
     worker.beginSlice();
     StringStringGenerator gen = new StringStringGenerator(size);
@@ -345,7 +346,7 @@ public class SortTest extends TestCase {
 
   public void testDetectsFull() {
     @SuppressWarnings("serial")
-    SortWorker worker = new SortWorker(1000L);
+    SortWorker worker = new SortWorker(1000L, Integer.MAX_VALUE);
     worker.prepare();
     worker.beginSlice();
     ByteBuffer key = ByteBuffer.allocate(100);

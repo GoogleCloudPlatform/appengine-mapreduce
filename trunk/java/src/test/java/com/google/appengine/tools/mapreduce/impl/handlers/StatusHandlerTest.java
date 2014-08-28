@@ -45,10 +45,6 @@ public class StatusHandlerTest extends EndToEndTestCase {
       extends ShardedJobController<TestTask> {
     private static final long serialVersionUID = 1L;
 
-    private DummyWorkerController(String shardedJobName) {
-      super(shardedJobName);
-    }
-
     @Override
     public void failed(Status status) {}
 
@@ -61,7 +57,7 @@ public class StatusHandlerTest extends EndToEndTestCase {
     ShardedJobService jobService = ShardedJobServiceFactory.getShardedJobService();
     assertTrue(jobService.cleanupJob("testCleanupJob")); // No such job yet
     ShardedJobSettings settings = new ShardedJobSettings.Builder().build();
-    ShardedJobController<TestTask> controller = new DummyWorkerController("testCleanupJob");
+    ShardedJobController<TestTask> controller = new DummyWorkerController();
     byte[] bytes = new byte[1024 * 1024];
     new Random().nextBytes(bytes);
     TestTask s1 = new TestTask(0, 2, 2, 2, bytes);
@@ -81,7 +77,7 @@ public class StatusHandlerTest extends EndToEndTestCase {
   public void testGetJobDetail_empty() throws Exception {
     ShardedJobService jobService = ShardedJobServiceFactory.getShardedJobService();
     ShardedJobSettings settings = new ShardedJobSettings.Builder().build();
-    ShardedJobController<TestTask> controller = new DummyWorkerController("Namey");
+    ShardedJobController<TestTask> controller = new DummyWorkerController();
     jobService.startJob("testGetJobDetail_empty", ImmutableList.<TestTask>of(), controller,
         settings);
 
@@ -89,7 +85,7 @@ public class StatusHandlerTest extends EndToEndTestCase {
     assertEquals("testGetJobDetail_empty", result.getString("mapreduce_id"));
     assertEquals(0, result.getJSONArray("shards").length());
     assertNotNull(result.getJSONObject("mapper_spec"));
-    assertEquals("Namey", result.getString("name"));
+    assertEquals("testGetJobDetail_empty", result.getString("name"));
     assertEquals(0, result.getJSONObject("counters").length());
   }
 
@@ -98,7 +94,7 @@ public class StatusHandlerTest extends EndToEndTestCase {
   public void testGetJobDetail_populated() throws Exception {
     ShardedJobService jobService = ShardedJobServiceFactory.getShardedJobService();
     ShardedJobSettings settings = new ShardedJobSettings.Builder().build();
-    ShardedJobController<TestTask> controller = new DummyWorkerController("Namey");
+    ShardedJobController<TestTask> controller = new DummyWorkerController();
     TestTask s1 = new TestTask(0, 2, 2, 2);
     TestTask s2 = new TestTask(1, 2, 2, 1);
     jobService.startJob("testGetJobDetail_populated", ImmutableList.of(s1, s2), controller,
@@ -110,7 +106,7 @@ public class StatusHandlerTest extends EndToEndTestCase {
     JSONObject jobDetail = StatusHandler.handleGetJobDetail("testGetJobDetail_populated");
     assertNotNull(jobDetail);
     assertEquals("testGetJobDetail_populated", jobDetail.getString("mapreduce_id"));
-    assertEquals("Namey", jobDetail.getString("name"));
+    assertEquals("testGetJobDetail_populated", jobDetail.getString("name"));
     assertTrue(jobDetail.getBoolean("active"));
     assertEquals(2, jobDetail.getInt("active_shards"));
     verify(jobDetail, tuple("mapreduce_id", "testGetJobDetail_populated"),
@@ -122,7 +118,7 @@ public class StatusHandlerTest extends EndToEndTestCase {
                 tuple("updated_timestamp_ms", pattern("[0-9]*")), tuple("shard_number", 1))),
         tuple("mapper_spec", tuple("mapper_params", tuple("Shards total", 2),
             tuple("Shards active", 2), tuple("Shards completed", 0))),
-        tuple("name", "Namey"),
+        tuple("name", "testGetJobDetail_populated"),
         tuple("active", true),
         tuple("active_shards", 2),
         tuple("updated_timestamp_ms", pattern("[0-9]*")),
@@ -137,7 +133,7 @@ public class StatusHandlerTest extends EndToEndTestCase {
     jobDetail = StatusHandler.handleGetJobDetail("testGetJobDetail_populated");
     assertNotNull(jobDetail);
     assertEquals("testGetJobDetail_populated", jobDetail.getString("mapreduce_id"));
-    assertEquals("Namey", jobDetail.getString("name"));
+    assertEquals("testGetJobDetail_populated", jobDetail.getString("name"));
     assertFalse(jobDetail.getBoolean("active"));
     assertEquals(0, jobDetail.getInt("active_shards"));
     verify(jobDetail, tuple("chart_width", 300), tuple("chart_url", pattern("[^\"]*")),
@@ -153,7 +149,7 @@ public class StatusHandlerTest extends EndToEndTestCase {
                 tuple("result_status", pattern("DONE")), tuple("shard_number", 1))),
        tuple("mapper_spec", tuple("mapper_params", tuple("Shards total", 2),
            tuple("Shards active", 0), tuple("Shards completed", 2))),
-        tuple("name", "Namey"),
+        tuple("name", "testGetJobDetail_populated"),
         tuple("active", false),
         tuple("updated_timestamp_ms", pattern("[0-9]*")),
         tuple("active_shards", 0),

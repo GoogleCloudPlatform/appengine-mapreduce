@@ -42,14 +42,12 @@ public class InProcessMap<I, O, R> {
   private static final Logger log = Logger.getLogger(InProcessMap.class.getName());
 
   private final String id;
-  private final String jobName;
   private final Input<I> input;
   private final MapOnlyMapper<I, O> mapper;
   private final Output<O, R> output;
 
   public InProcessMap(String id, MapSpecification<I, O, R> mapSpec) {
     this.id = checkNotNull(id, "Null id");
-    jobName = InProcessUtil.getJobName(mapSpec) + "-map";
     input = InProcessUtil.getInput(mapSpec);
     mapper = InProcessUtil.getMapper(mapSpec);
     output = InProcessUtil.getOutput(mapSpec);
@@ -74,7 +72,7 @@ public class InProcessMap<I, O, R> {
     }
     final Counters counters = new CountersImpl();
     InProcessShardedJobRunner.runJob(tasks.build(), new ShardedJobController<
-        WorkerShardTask<I, O, MapOnlyMapperContext<O>>>(jobName) {
+        WorkerShardTask<I, O, MapOnlyMapperContext<O>>>() {
           // Not really meant to be serialized, but avoid warning.
           private static final long serialVersionUID = 661198005749484951L;
 
