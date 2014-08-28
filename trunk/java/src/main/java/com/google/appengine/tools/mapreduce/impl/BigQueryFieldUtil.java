@@ -1,0 +1,279 @@
+package com.google.appengine.tools.mapreduce.impl;
+
+import com.google.appengine.tools.mapreduce.BigQueryDataField;
+import com.google.appengine.tools.mapreduce.BigQueryFieldMode;
+import com.google.appengine.tools.mapreduce.BigQueryIgnore;
+import com.google.common.base.Predicate;
+import com.google.common.base.Predicates;
+import com.google.common.base.Strings;
+import com.google.common.collect.ImmutableSet;
+
+import org.reflections.ReflectionUtils;
+
+import java.lang.reflect.Field;
+import java.lang.reflect.GenericArrayType;
+import java.lang.reflect.Modifier;
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
+import java.lang.reflect.TypeVariable;
+import java.util.Collection;
+import java.util.Map;
+import java.util.Set;
+
+/**
+ * Utility class for processing {@link Field} and BigQuery data fields.
+ */
+public final class BigQueryFieldUtil {
+
+  // To ignore the 'this' field present in inner classes.
+  private static final String THIS_FIELD_PREFIX = "this$";
+
+  private static final Set<Class<?>> UNSUPPORTED_TYPES =
+      new ImmutableSet.Builder<Class<?>>().add(Object.class).build();
+
+  private BigQueryFieldUtil() {
+    // utility class
+  }
+
+  /**
+   * Filters to identify the class {@link Field}s that should not be marshalled to bigquery fields.
+   */
+  @SuppressWarnings("unchecked")
+  private static Predicate<? super Field> ignoreFieldsFilter = Predicates.not(Predicates.or(
+      ReflectionUtils.withAnnotation(BigQueryIgnore.class),
+      ReflectionUtils.withModifier(Modifier.TRANSIENT),
+      ReflectionUtils.withModifier(Modifier.STATIC),
+      ReflectionUtils.withPrefix(THIS_FIELD_PREFIX)));
+
+  /**
+   * @param field - {@link Field} of a class.
+   * @return {@link BigQueryDataField} annotated name. If annotation is not present then returns the
+   *         name of the field.
+   */
+  public static String getFieldName(Field field) {
+    BigQueryDataField bq = field.getAnnotation(BigQueryDataField.class);
+    if (bq != null && !Strings.isNullOrEmpty(bq.name())) {
+      return bq.name();
+    }
+    return field.getName();
+  }
+
+  /**
+   * @param field - {@link Field} of a class.
+   * @return {@link BigQueryDataField} annotation description. Null if annotation is not present.
+   */
+  public static String getFieldDescription(Field field) {
+    BigQueryDataField bq = field.getAnnotation(BigQueryDataField.class);
+    if (bq == null || bq.description().equals("")) {
+      return null;
+    }
+    return bq.description();
+  }
+
+  /**
+   * @param field - {@link Field} of a class.
+   * @return {@link BigQueryDataField} annotation mode.
+   */
+  public static String getFieldMode(Field field) {
+    BigQueryDataField bq = field.getAnnotation(BigQueryDataField.class);
+    if (bq == null) {
+      if (field.getType().isPrimitive()) {
+        return BigQueryFieldMode.REQUIRED.getValue();
+      }
+      return null;
+    }
+    return bq.mode().getValue();
+  }
+
+  /**
+   * @param parameterizedType
+   * @return runtime type of the generic parameter.
+   */
+  public static Type getParameterType(ParameterizedType parameterizedType) {
+    return parameterizedType.getActualTypeArguments()[0];
+  }
+
+  /**
+   * @param type
+   * @return true if the type can be assigned to a {@link Collection} class
+   */
+  public static boolean isCollection(Class<?> type) {
+    return Collection.class.isAssignableFrom(type);
+  }
+
+  /**
+   * @param type
+   * @return true if the field is a parameterized generic type.
+   */
+  public static boolean isGenericType(Type type) {
+    if (isParameterized(type)) {
+      return true;
+    }
+    // check for case when the type is defined to be parameterized but is used in raw form
+    TypeVariable<?>[] typeParameters = ((Class<?>) type).getTypeParameters();
+    return typeParameters.length > 0;
+  }
+
+  /**
+   * @param type
+   * @return true if the parameterized type had a parameter declared at compile time
+   */
+  public static boolean isParameterized(Type type) {
+    return type instanceof ParameterizedType;
+  }
+
+  /**
+   * @param type
+   * @return true if it's a collection or an array type.
+   */
+  public static boolean isCollectionOrArray(Class<?> type) {
+    return isCollection(type) || type.isArray();
+  }
+
+  /**
+   * Returns a set of all the non-transient, non-static fields without the annotation
+   * {@link BigQueryIgnore}.
+   */
+  public static Set<Field> getFieldsToSerialize(Class<?> type) {
+    return ReflectionUtils.getAllFields(type, ignoreFieldsFilter);
+
+  }
+
+  /**
+   * Bigquery schema cannot be generated in following cases 1. Field is an interface or an abstract
+   * type. These types can lead to inconsistent schema at runtime. 2. Generic types. 3. {@link Map}
+   * 4. Type having reference to itself as a field.
+   */
+  static void validateTypeForSchemaMarshalling(Class<?> type) {
+    if (isNonCollectionInterface(type) || isAbstract(type)) {
+      throw new RuntimeException("Cannot marshal " + type.getSimpleName()
+          + ". Interfaces and abstract class cannot be cannot be marshalled into consistent BigQuery data.");
+    }
+    if (!isCollection(type) && isGenericType(type)) {
+      throw new RuntimeException("Cannot marshal " + type.getSimpleName()
+          + ". Parameterized type other than Collection<T> cannot be marshalled into consistent BigQuery data.");
+    }
+    if (Map.class.isAssignableFrom(type)) {
+      throw new RuntimeException("Cannot marshal a map into BigQuery data " + type.getSimpleName());
+    }
+    if (hasReferenceToItself(type)) {
+      throw new RuntimeException(
+          "Cannot marshal a type that has a reference to itself as one of its fields. "
+          + type.getSimpleName());
+    }
+    if (UNSUPPORTED_TYPES.contains(type)) {
+      throw new RuntimeException(
+          "Type cannot be marshalled into bigquery schema. " + type.getSimpleName());
+    }
+  }
+
+  private static boolean isNonCollectionInterface(Class<?> type) {
+    return !isCollection(type) && type.isInterface();
+  }
+
+  private static boolean isAbstract(Class<?> type) {
+    // primitive types and Collection interface are abstract. So added this extra check.
+    return !type.isPrimitive() && !isCollectionOrArray(type)
+        && Modifier.isAbstract(type.getModifiers());
+  }
+
+  private static boolean hasReferenceToItself(Class<?> type) {
+    return !ReflectionUtils.getAllFields(type, ReflectionUtils.withTypeAssignableTo(type))
+        .isEmpty();
+  }
+
+  /**
+   * A field of type {@link Collection} must be parameterized for marshalling it into bigquery data
+   * as a raw field can lead to ambiguous bigquery table definitions.
+   *
+   * @param field
+   */
+  public static void validateCollection(Field field) {
+    if (!isParameterized(field.getGenericType())) {
+      throw new RuntimeException("Cannot marshal a non-parameterized Collection field "
+          + field.getName() + " into BigQuery data");
+    }
+  }
+
+  /**
+   * A field of type Collection<Collection> cannot be marshalled into bigquery data format as
+   * parameterized types nested more than one level cannot be determined at runtime. So cannot be
+   * marshalled.
+   */
+  public static void validateNestedRepeatedType(Class<?> parameterType, Field field) {
+    if (isCollectionOrArray(parameterType)) {
+      throw new RuntimeException(
+          " Cannot marshal a nested collection or array field " + field.getName());
+    }
+  }
+
+  /**
+   * Parameterized types nested more than one level cannot be determined at runtime. So cannot be
+   * marshalled.
+   */
+  public static void validateNestedParameterizedType(Type parameterType) {
+    if (isParameterized(parameterType)
+        || GenericArrayType.class.isAssignableFrom(parameterType.getClass())) {
+      throw new RuntimeException(
+          "Invalid field. Cannot marshal fields of type Collection<GenericType> or GenericType[].");
+    }
+  }
+
+  /**
+   * @param field
+   * @return type of the parameter or component type for the repeated field depending on whether it
+   *         is a collection or an array
+   */
+  public static Class<?> getParameterTypeOfRepeatedField(Field field) {
+    Class<?> componentType = null;
+    if (isCollection(field.getType())) {
+      validateCollection(field);
+      Type parameterType = getParameterType((ParameterizedType) field.getGenericType());
+      validateNestedParameterizedType(parameterType);
+      componentType = (Class<?>) parameterType;
+    } else if (field.getType().isArray()) {
+      componentType = field.getType().getComponentType();
+      return componentType;
+    } else {
+      throw new RuntimeException("Unsupported repeated type " + field.getType()
+          + " Allowed repeated fields are Collection<T> and arrays");
+    }
+    validateNestedRepeatedType(componentType, field);
+    return componentType;
+  }
+
+  static Object getFieldValue(Field field, Object object) {
+    try {
+      field.setAccessible(true);
+      return field.get(object);
+    } catch (IllegalArgumentException | IllegalAccessException e) {
+      throw new RuntimeException("Failed to read the value of field " + field.getName(), e);
+    }
+  }
+
+  /**
+   * Returns true if the field is annotated as a required bigquery field.
+   */
+  static boolean isFieldRequired(Field field) {
+    BigQueryDataField bqAnnotation = field.getAnnotation(BigQueryDataField.class);
+
+    return (bqAnnotation != null && bqAnnotation.mode().equals(BigQueryFieldMode.REQUIRED))
+        || field.getType().isPrimitive();
+  }
+
+  /**
+   * Returns if a {@link BigqueryFieldMarshaller} exists for the field either in the map provided or
+   * the internally maintained list.
+   */
+  static BigqueryFieldMarshaller findMarshaller(Field field,
+      Map<Field, BigqueryFieldMarshaller> marshallers) {
+    BigqueryFieldMarshaller marshaller = null;
+    if (marshallers != null) {
+      marshaller = marshallers.get(field);
+    }
+    if (marshaller == null) {
+      marshaller = BigqueryFieldMarshallers.getMarshaller(field.getType());
+    }
+    return marshaller;
+  }
+}
