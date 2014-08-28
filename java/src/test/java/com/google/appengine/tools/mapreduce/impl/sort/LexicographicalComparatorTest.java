@@ -2,6 +2,7 @@ package com.google.appengine.tools.mapreduce.impl.sort;
 
 import static java.nio.charset.StandardCharsets.US_ASCII;
 import static java.nio.charset.StandardCharsets.UTF_8;
+import static junit.framework.Assert.assertEquals;
 
 import com.google.appengine.tools.mapreduce.Marshallers;
 
@@ -54,7 +55,7 @@ public class LexicographicalComparatorTest extends TestCase {
     assertTrue(comp.compare(left, right) > 0);
     left = ByteBuffer.wrap("0".getBytes(US_ASCII));
     right = ByteBuffer.wrap("0".getBytes(US_ASCII));
-    assertTrue(comp.compare(left, right) == 0);
+    assertEquals(0, comp.compare(left, right));
     left = ByteBuffer.wrap("00".getBytes(US_ASCII));
     right = ByteBuffer.wrap("0".getBytes(US_ASCII));
     assertTrue(comp.compare(left, right) > 0);

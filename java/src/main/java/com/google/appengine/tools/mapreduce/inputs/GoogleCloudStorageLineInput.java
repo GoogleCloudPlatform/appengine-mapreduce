@@ -49,10 +49,10 @@ public class GoogleCloudStorageLineInput extends Input<byte[]> {
     try {
       metadata = gcsService.getMetadata(file);
       if (metadata == null) {
-        throw new RuntimeException("File does not exist: " + file.toString());
+        throw new RuntimeException("File does not exist: " + file);
       }
     } catch (IOException e) {
-      throw new RuntimeException("Unable to read file metadata: " + file.toString(), e);
+      throw new RuntimeException("Unable to read file metadata: " + file, e);
     }
     long blobSize = metadata.getLength();
     return split(file, blobSize, shardCount);

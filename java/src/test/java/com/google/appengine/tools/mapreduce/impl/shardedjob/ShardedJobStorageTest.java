@@ -1,6 +1,7 @@
 package com.google.appengine.tools.mapreduce.impl.shardedjob;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 import com.google.appengine.api.datastore.DatastoreService;
@@ -76,7 +77,7 @@ public class ShardedJobStorageTest extends EndToEndTestCase {
   public void testQueryByKind() {
     Query query = new Query(ShardedJobStateImpl.ShardedJobSerializer.ENTITY_KIND);
     Iterator<Entity> iterable = DATASTORE.prepare(query).asIterable().iterator();
-    assertEquals(false, iterable.hasNext());
+    assertFalse(iterable.hasNext());
 
     ShardedJobStateImpl<TestTask> job = createGenericJobState();
     Entity entity = ShardedJobStateImpl.ShardedJobSerializer.toEntity(null, job);

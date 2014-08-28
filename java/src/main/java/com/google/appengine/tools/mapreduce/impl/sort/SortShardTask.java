@@ -85,7 +85,7 @@ public class SortShardTask extends WorkerShardTask<KeyValue<ByteBuffer, ByteBuff
     ByteBuffer value = item.getValue().slice();
     value.limit(value.position() + Math.min(MAX_LAST_ITEM_STRING_SIZE, value.remaining()));
     CharBuffer string = UTF_8.decode(value);
-    return "Key: " + UTF_8.decode(item.getKey().slice()) + " Value: " + string.toString()
+    return "Key: " + UTF_8.decode(item.getKey().slice()) + " Value: " + string
         + (item.getValue().remaining() >= MAX_LAST_ITEM_STRING_SIZE ? " ..." : "");
   }
 

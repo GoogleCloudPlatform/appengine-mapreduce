@@ -17,6 +17,7 @@ import java.nio.ByteBuffer;
 import java.nio.channels.Channels;
 import java.nio.channels.ReadableByteChannel;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Random;
@@ -125,17 +126,14 @@ public class LevelDbTest extends TestCase {
     writer.endShard();
     byte[] writtenData = arrayOutputWriter.toByteArray();
     for (int i = 0; i < 11 * 10; i++) {
-      byte[] toRead = new byte[i];
-      System.arraycopy(writtenData, 0, toRead, 0, toRead.length);
+      byte[] toRead = Arrays.copyOf(writtenData, i);
       ByteArrayInputStream arrayInputStream = new ByteArrayInputStream(toRead);
       LevelDbInputReader reader =
           new TestLevelDbInputReader(Channels.newChannel(arrayInputStream), overriddenBlockSize);
       try {
         verifyWrittenData(written, reader);
         fail();
-      } catch (CorruptDataException e) {
-        // Expected
-      } catch (NoSuchElementException e) {
+      } catch (CorruptDataException | NoSuchElementException e) {
         // Expected
       }
     }
