@@ -39,6 +39,7 @@ public class BigqueryFieldMarshallers {
           .put(Short.class, new BigqueryIntegerFieldMarshaller())
           .put(short.class, new BigqueryIntegerFieldMarshaller())
           .put(Long.class, new BigqueryIntegerFieldMarshaller())
+          .put(long.class, new BigqueryIntegerFieldMarshaller())
           .put(Float.class, new BigqueryFloatFieldMarshaller())
           .put(float.class, new BigqueryFloatFieldMarshaller())
           .put(Double.class, new BigqueryFloatFieldMarshaller())

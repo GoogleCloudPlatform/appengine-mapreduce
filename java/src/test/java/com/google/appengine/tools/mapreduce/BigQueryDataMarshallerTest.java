@@ -186,11 +186,13 @@ public class BigQueryDataMarshallerTest extends TestCase {
         new BigQueryMarshallerByType<SimpleJson>(SimpleJson.class));
     try {
       tester.testGeneratedJson("{\"id\":1}", new SimpleJson(null, 1));
-    } catch (RuntimeException e) {
+    } catch (IllegalArgumentException e) {
       assertEquals(
           "Non-nullable field name. This field is either annotated as REQUIRED or is a primitive type.",
           e.getMessage());
+      return;
     }
+    fail();
   }
 
   public void testGeneratedJsonForClassWithWrapperType() {
@@ -206,25 +208,29 @@ public class BigQueryDataMarshallerTest extends TestCase {
     try {
       tester.testGeneratedJson("{\"name\":\"test\",\"id\":1, \"value\":1.5}",
           new SampleClassWithNonParametricList(Lists.newArrayList()));
-    } catch (RuntimeException e) {
+    } catch (IllegalArgumentException e) {
       assertEquals(
           "Cannot marshal a non-parameterized Collection field " + "l" + " into BigQuery data",
           e.getMessage());
+      return;
     }
+    fail();
   }
 
   public void testGeneratedJsonForTypesWithNestedCollection() {
     BigQueryDataMarshallerTester<SampleClassWithNestedCollection> tester = new BigQueryDataMarshallerTester<SampleClassWithNestedCollection>(new BigQueryMarshallerByType<SampleClassWithNestedCollection>(SampleClassWithNestedCollection.class));
+    List<List<String>> toTest = new ArrayList<>();
+    toTest.add(Lists.newArrayList("", ""));
     try {
-      List<List<String>> toTest = new ArrayList<>();
-      toTest.add(Lists.newArrayList("", ""));
       tester.testGeneratedJson("{\"name\":\"test\",\"id\":1, \"value\":1.5}",
           new SampleClassWithNestedCollection(toTest));
-    } catch (RuntimeException e) {
+    } catch (IllegalArgumentException e) {
       assertEquals(
           "Invalid field. Cannot marshal fields of type Collection<GenericType> or GenericType[].",
           e.getMessage());
+      return;
     }
+    fail();
   }
 
   private class ClassForInnerClassTest {
@@ -265,17 +271,16 @@ public class BigQueryDataMarshallerTest extends TestCase {
 
   public void testGeneratedJsonForClassWithNumberType() {
     try {
-      BigQueryDataMarshallerTester<ClassWithNumber> tester = new BigQueryDataMarshallerTester<
-          ClassWithNumber>(new BigQueryMarshallerByType<ClassWithNumber>(ClassWithNumber.class));
-
-      tester.testGeneratedJson("{\"number\":\"5\",\"id\":1}",
-          new ClassWithNumber(BigInteger.valueOf(5), 1));
-    } catch (RuntimeException e) {
+      new BigQueryDataMarshallerTester<ClassWithNumber>(
+          new BigQueryMarshallerByType<ClassWithNumber>(ClassWithNumber.class));
+    } catch (IllegalArgumentException e) {
       assertEquals(
           "Cannot marshal " + Number.class.getSimpleName()
               + ". Interfaces and abstract class cannot be cannot be marshalled into consistent BigQuery data.",
           e.getMessage());
+      return;
     }
+    fail();
   }
 
   private static class ClassWithNumber {
@@ -290,15 +295,16 @@ public class BigQueryDataMarshallerTest extends TestCase {
 
   public void testGeneratedJsonForClassWithUnparameterizedMap() {
     try {
-      BigQueryDataMarshallerTester<ClassWithMap> tester = new BigQueryDataMarshallerTester<
-          ClassWithMap>(new BigQueryMarshallerByType<ClassWithMap>(ClassWithMap.class));
-      tester.testGeneratedJson("{\"map\":\"5\",\"id\":1}", new ClassWithMap(new HashMap(), 1));
-    } catch (RuntimeException e) {
+      new BigQueryDataMarshallerTester<ClassWithMap>(
+          new BigQueryMarshallerByType<ClassWithMap>(ClassWithMap.class));
+    } catch (IllegalArgumentException e) {
       assertEquals(
           "Cannot marshal " + Map.class.getSimpleName()
               + ". Interfaces and abstract class cannot be cannot be marshalled into consistent BigQuery data.",
           e.getMessage());
+      return;
     }
+    fail();
   }
 
   private static class ClassWithMap {
@@ -341,7 +347,8 @@ public class BigQueryDataMarshallerTest extends TestCase {
             try {
               return field.get(object);
             } catch (IllegalArgumentException | IllegalAccessException e) {
-              throw new RuntimeException("Cannot read value of the field " + field.getName());
+              throw new IllegalArgumentException(
+                  "Cannot read value of the field " + field.getName());
             }
           }
         });
@@ -368,17 +375,15 @@ public class BigQueryDataMarshallerTest extends TestCase {
 
   public void testGeneratedJsonForClassWithFieldTypeObject() {
     try {
-      BigQueryDataMarshallerTester<ClassWithFieldTypeObject> tester =
-          new BigQueryDataMarshallerTester<ClassWithFieldTypeObject>(new BigQueryMarshallerByType<
-              ClassWithFieldTypeObject>(ClassWithFieldTypeObject.class));
-
-      tester.testGeneratedJson("{\"id\":5,\"name\":\"nameField\",\"value\":6}",
-          new ClassWithFieldTypeObject(5, new Object()));
-    } catch (RuntimeException e) {
+      new BigQueryDataMarshallerTester<ClassWithFieldTypeObject>(
+          new BigQueryMarshallerByType<ClassWithFieldTypeObject>(ClassWithFieldTypeObject.class));
+    } catch (IllegalArgumentException e) {
       assertEquals(
           "Type cannot be marshalled into bigquery schema. " + Object.class.getSimpleName(),
           e.getMessage());
+      return;
     }
+    fail();
   }
 
   private static class ClassWithFieldTypeObject {
@@ -392,23 +397,17 @@ public class BigQueryDataMarshallerTest extends TestCase {
   }
 
   public void testGeneratedJsonForClassWithEnumField() {
-    try {
-      BigQueryDataMarshallerTester<ClassWithEnumField> tester = new BigQueryDataMarshallerTester<
-          ClassWithEnumField>(
-          new BigQueryMarshallerByType<ClassWithEnumField>(ClassWithEnumField.class));
-
-      tester.testGeneratedJson("{\"id\":5,\"mode\":\"REQUIRED\"}",
-          new ClassWithEnumField(5, BigQueryFieldMode.REQUIRED));
-    } catch (RuntimeException e) {
-      assertEquals(
-          "Type cannot be marshalled into bigquery schema. " + Object.class.getSimpleName(),
-          e.getMessage());
-    }
+    BigQueryDataMarshallerTester<ClassWithEnumField> tester = new BigQueryDataMarshallerTester<
+        ClassWithEnumField>(
+        new BigQueryMarshallerByType<ClassWithEnumField>(ClassWithEnumField.class));
+    tester.testGeneratedJson("{\"id\":5,\"mode\":\"REQUIRED\"}",
+        new ClassWithEnumField(5, BigQueryFieldMode.REQUIRED));
   }
 
   private static class ClassWithEnumField {
     int id;
     BigQueryFieldMode mode;
+
     public ClassWithEnumField(int id, BigQueryFieldMode mode) {
       this.id = id;
       this.mode = mode;
@@ -433,6 +432,7 @@ public class BigQueryDataMarshallerTest extends TestCase {
     int id;
     Date date;
     Calendar cal;
+
     public ClassWithDate(int id, Date date, Calendar cal) {
       this.id = id;
       this.date = date;
@@ -462,5 +462,23 @@ public class BigQueryDataMarshallerTest extends TestCase {
       this.bigInt = bigInt;
       this.bigDec = bigDec;
     }
+  }
+
+  public void testClassWithCyclicReference() {
+    try {
+      new BigQueryDataMarshallerTester<ClassA>(new BigQueryMarshallerByType<ClassA>(ClassA.class));
+    } catch (IllegalArgumentException e) {
+      assertEquals(ClassA.class + " contains cyclic reference for the field with type "
+          + ClassA.class + ". Hence cannot be resolved into bigquery schema.", e.getMessage());
+      return;
+    }
+    fail();
+  }
+
+  private static class ClassA {
+    ClassB b;
+  }
+  private static class ClassB {
+    ClassA a;
   }
 }
