@@ -28,5 +28,15 @@
     <dependency org="junit" name="junit" rev="4.10" conf="${test}->default"/>
     <dependency org="joda-time" name="joda-time" rev="2.3" conf="${thirdparty}->default"/>
     <dependency org="org.easymock" name="easymock" rev="3.0" conf="${test}->default"/>
+    <dependency org="com.google.apis" name="google-api-services-bigquery" rev="v2-rev42-1.12.0-beta"/>
+    <dependency org="com.google.oauth-client" name="google-oauth-client" rev="1.12.0-beta"/>
+    <dependency org="com.google.http-client" name="google-http-client-jackson2" rev="1.12.0-beta"/>
+    <dependency org="com.google.api.client" name="google-api-client-googleapis-json" rev="1.2.3-alpha"/>
+    <dependency org="com.google.api.client" name="google-api-client-googleapis" rev="1.4.1-beta"/>
+    <dependency org="com.google.api.client" name="google-api-client-http" rev="1.2.3-alpha"/>
+    <dependency org="com.google.http-client" name="google-http-client" rev="1.14.1-beta"/>
+    <dependency org="com.google.api.client" name="google-api-client" rev="1.4.1-beta"/>
+    <dependency org="com.fasterxml.jackson.core" name="jackson-databind" rev="[2.0,2.99]"/>
+    <dependency org="org.reflections" name="reflections-maven" rev="0.9.9-RC1"/>
   </dependencies>
 </ivy-module>
