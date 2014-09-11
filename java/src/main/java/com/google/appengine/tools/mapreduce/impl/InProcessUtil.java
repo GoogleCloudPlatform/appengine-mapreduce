@@ -12,7 +12,7 @@ import com.google.common.base.Preconditions;
 
 import java.lang.reflect.Method;
 
-final class InProcessUtil {
+public final class InProcessUtil {
 
   private static Method getMethod(Class<?> clazz, String name) {
     if (clazz == null) {
@@ -41,47 +41,47 @@ final class InProcessUtil {
   }
 
   @SuppressWarnings("rawtypes")
-  static Input getInput(MapSpecification spec) {
+  public static Input getInput(MapSpecification spec) {
     return invoke(spec);
   }
 
   @SuppressWarnings("rawtypes")
-  static Input getInput(MapReduceSpecification spec) {
+  public static Input getInput(MapReduceSpecification spec) {
     return invoke(spec);
   }
 
   @SuppressWarnings("rawtypes")
-  static Output getOutput(MapSpecification spec) {
+  public static Output getOutput(MapSpecification spec) {
     return invoke(spec);
   }
 
   @SuppressWarnings("rawtypes")
-  static Output getOutput(MapReduceSpecification spec) {
+  public static Output getOutput(MapReduceSpecification spec) {
     return invoke(spec);
   }
 
   @SuppressWarnings("rawtypes")
-  static MapOnlyMapper getMapper(MapSpecification spec) {
+  public static MapOnlyMapper getMapper(MapSpecification spec) {
     return invoke(spec);
   }
 
   @SuppressWarnings("rawtypes")
-  static Mapper getMapper(MapReduceSpecification spec) {
+  public static Mapper getMapper(MapReduceSpecification spec) {
     return invoke(spec);
   }
 
   @SuppressWarnings("rawtypes")
-  static Marshaller getKeyMarshaller(MapReduceSpecification spec) {
+  public static Marshaller getKeyMarshaller(MapReduceSpecification spec) {
     return invoke(spec);
   }
 
   @SuppressWarnings("rawtypes")
-  static Reducer getReducer(MapReduceSpecification spec) {
+  public static Reducer getReducer(MapReduceSpecification spec) {
     return invoke(spec);
   }
 
   @SuppressWarnings("rawtypes")
-  static Integer getNumReducers(MapReduceSpecification spec) {
+  public static Integer getNumReducers(MapReduceSpecification spec) {
     return invoke(spec);
   }
 }
