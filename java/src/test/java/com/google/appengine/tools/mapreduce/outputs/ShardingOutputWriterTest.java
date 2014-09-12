@@ -6,11 +6,14 @@ import com.google.appengine.tools.mapreduce.Marshallers;
 import com.google.appengine.tools.mapreduce.OutputWriter;
 import com.google.appengine.tools.mapreduce.Sharder;
 import com.google.appengine.tools.mapreduce.impl.HashingSharder;
-import com.google.appengine.tools.mapreduce.impl.util.SerializationUtil;
 
 import junit.framework.TestCase;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.util.concurrent.atomic.AtomicInteger;
 
 
@@ -37,7 +40,7 @@ public class ShardingOutputWriterTest extends TestCase {
     }
   }
 
-  public void testCreatorCalled() throws IOException {
+  public void testCreatorCalled() throws IOException, ClassNotFoundException {
     int numShards = 10;
     TestShardingOutputWriter writer = new TestShardingOutputWriter(
         Marshallers.getIntegerMarshaller(), new HashingSharder(numShards));
@@ -48,7 +51,7 @@ public class ShardingOutputWriterTest extends TestCase {
     }
     assertEquals(numShards, writer.shardsCreated);
     writer.endSlice();
-    writer = SerializationUtil.clone(writer);
+    writer = reconstruct(writer);
     writer.beginSlice();
     for (int i = 0; i < numShards * 10; i++) {
       writer.write(new KeyValue<>(i, i));
@@ -130,5 +133,16 @@ public class ShardingOutputWriterTest extends TestCase {
     assertEquals(numShards, shardEnds.get());
     assertEquals(numShards * 2, sliceBegins.get());
     assertEquals(numShards * 2, sliceEnds.get());
+  }
+
+  @SuppressWarnings("unchecked")
+  private TestShardingOutputWriter reconstruct(TestShardingOutputWriter writer) throws IOException,
+      ClassNotFoundException {
+    ByteArrayOutputStream bout = new ByteArrayOutputStream();
+    try (ObjectOutputStream oout = new ObjectOutputStream(bout)) {
+      oout.writeObject(writer);
+    }
+    ObjectInputStream in = new ObjectInputStream(new ByteArrayInputStream(bout.toByteArray()));
+    return (TestShardingOutputWriter) in.readObject();
   }
 }

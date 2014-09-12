@@ -487,9 +487,4 @@ public class SerializationUtil {
       length -= read;
     }
   }
-
-  public static <T extends Serializable> T clone(T toClone) {
-    byte[] bytes = SerializationUtil.serializeToByteArray(toClone);
-    return (T) SerializationUtil.deserializeFromByteArray(bytes);
-  }
 }
