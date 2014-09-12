@@ -14,3 +14,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import logging
+import os
+
+version = os.environ.get('CURRENT_VERSION_ID', '').split('.')[0]
+
+if (__name__ == 'google.appengine.ext.mapreduce'
+    and version != 'ah-builtin-python-bundle'):
+  msg = ('You should not use the mapreduce library that is bundled with the'
+         ' SDK. Use the one from'
+         ' https://pypi.python.org/pypi/GoogleAppEngineMapReduce instead.')
+  logging.warn(msg)
+
