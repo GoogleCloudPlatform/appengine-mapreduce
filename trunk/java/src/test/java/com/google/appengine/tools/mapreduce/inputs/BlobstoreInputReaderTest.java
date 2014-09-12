@@ -50,11 +50,11 @@ public class BlobstoreInputReaderTest extends BlobstoreInputTestCase {
 
     for (BlobstoreInputReader reader : readers) {
       if (performSerialization) {
-        reader = recreate(reader);
+        reader = SerializationUtil.clone(reader);
       }
       reader.beginShard();
       if (performSerialization) {
-        reader = recreate(reader);
+        reader = SerializationUtil.clone(reader);
       }
       while (true) {
         reader.beginSlice();
@@ -69,18 +69,12 @@ public class BlobstoreInputReaderTest extends BlobstoreInputTestCase {
 
         reader.endSlice();
         if (performSerialization) {
-          reader = recreate(reader);
+          reader = SerializationUtil.clone(reader);
         }
       }
       reader.endShard();
     }
 
     assertEquals("Number of records read", RECORDS_COUNT, recordsRead);
-  }
-
-  private BlobstoreInputReader recreate(BlobstoreInputReader reader) {
-    byte[] bytes = SerializationUtil.serializeToByteArray(reader);
-    reader = (BlobstoreInputReader) SerializationUtil.deserializeFromByteArray(bytes);
-    return reader;
   }
 }
