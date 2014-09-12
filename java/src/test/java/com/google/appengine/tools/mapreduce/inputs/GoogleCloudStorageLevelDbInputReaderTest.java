@@ -8,6 +8,7 @@ import com.google.appengine.tools.development.testing.LocalFileServiceTestConfig
 import com.google.appengine.tools.development.testing.LocalServiceTestHelper;
 import com.google.appengine.tools.development.testing.LocalTaskQueueTestConfig;
 import com.google.appengine.tools.mapreduce.impl.util.LevelDbConstants;
+import com.google.appengine.tools.mapreduce.impl.util.SerializationUtil;
 import com.google.appengine.tools.mapreduce.outputs.GoogleCloudStorageFileOutputWriter;
 import com.google.appengine.tools.mapreduce.outputs.GoogleCloudStorageLevelDbOutputWriter;
 import com.google.appengine.tools.mapreduce.outputs.LevelDbOutputWriter;
@@ -17,11 +18,7 @@ import junit.framework.TestCase;
 import org.junit.After;
 import org.junit.Before;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -145,26 +142,16 @@ public class GoogleCloudStorageLevelDbInputReaderTest extends TestCase {
     reader.beginShard();
     ByteBufferGenerator expected = new ByteBufferGenerator(100);
     while (expected.hasNext()) {
-      reader = reconstruct(reader);
+      reader = SerializationUtil.clone(reader);
       reader.beginSlice();
       ByteBuffer read = reader.next();
       assertEquals(expected.next(), read);
       reader.endSlice();
     }
-    reader = reconstruct(reader);
+    reader = SerializationUtil.clone(reader);
     reader.beginSlice();
     verifyEmpty(reader);
     reader.endSlice();
-  }
-
-  private GoogleCloudStorageLevelDbInputReader reconstruct(
-      GoogleCloudStorageLevelDbInputReader reader) throws IOException, ClassNotFoundException {
-    ByteArrayOutputStream bout = new ByteArrayOutputStream();
-    try (ObjectOutputStream oout = new ObjectOutputStream(bout)) {
-      oout.writeObject(reader);
-    }
-    ObjectInputStream in = new ObjectInputStream(new ByteArrayInputStream(bout.toByteArray()));
-    return (GoogleCloudStorageLevelDbInputReader) in.readObject();
   }
 
   private void verifyEmpty(GoogleCloudStorageLevelDbInputReader reader) throws IOException {

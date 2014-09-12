@@ -8,14 +8,11 @@ import com.google.appengine.tools.development.testing.LocalServiceTestHelper;
 import com.google.appengine.tools.mapreduce.GoogleCloudStorageFileSet;
 import com.google.appengine.tools.mapreduce.OutputWriter;
 import com.google.appengine.tools.mapreduce.impl.BigQueryConstants;
+import com.google.appengine.tools.mapreduce.impl.util.SerializationUtil;
 
 import junit.framework.TestCase;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
@@ -42,7 +39,7 @@ public class SizeSegmentedGoogleCloudStorageFileOutputTest extends TestCase {
     helper.tearDown();
   }
 
-  public void testFilesWritten() throws IOException, ClassNotFoundException {
+  public void testFilesWritten() throws IOException {
     int segmentSizeLimit = 10;
     String fileNamePattern = String.format(BigQueryConstants.GCS_FILE_NAME_FORMAT, "testJob");
     SizeSegmentedGoogleCloudStorageFileOutput segmenter =
@@ -56,11 +53,11 @@ public class SizeSegmentedGoogleCloudStorageFileOutputTest extends TestCase {
       w.beginSlice();
       w.write(ByteBuffer.wrap(new byte[9]));
       w.endSlice();
-      w = reconstruct(w);
+      w = SerializationUtil.clone(w);
       w.beginSlice();
       w.write(ByteBuffer.wrap(new byte[9]));
       w.endSlice();
-      w = reconstruct(w);
+      w = SerializationUtil.clone(w);
       w.beginSlice();
       w.write(ByteBuffer.wrap(new byte[9]));
       w.endSlice();
@@ -112,17 +109,5 @@ public class SizeSegmentedGoogleCloudStorageFileOutputTest extends TestCase {
     }
     writer.endSlice();
     writer.endShard();
-  }
-
-  @SuppressWarnings("unchecked")
-  private static <T> T reconstruct(T obj) throws IOException, ClassNotFoundException {
-    ByteArrayOutputStream bout = new ByteArrayOutputStream();
-    try (ObjectOutputStream oout = new ObjectOutputStream(bout)) {
-      oout.writeObject(obj);
-    }
-    try (ObjectInputStream in =
-        new ObjectInputStream(new ByteArrayInputStream(bout.toByteArray()))) {
-      return (T) in.readObject();
-    }
   }
 }

@@ -3,14 +3,10 @@ package com.google.appengine.tools.mapreduce.impl.sort;
 import com.google.appengine.tools.mapreduce.InputReader;
 import com.google.appengine.tools.mapreduce.KeyValue;
 import com.google.appengine.tools.mapreduce.OutputWriter;
+import com.google.appengine.tools.mapreduce.impl.util.SerializationUtil;
 
 import junit.framework.TestCase;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -57,13 +53,13 @@ public class MergeShardTaskTest extends TestCase {
     }
   }
 
-  public void testSerialization() throws ClassNotFoundException, IOException {
+  public void testSerialization() {
     MergeShardTask task =
         new MergeShardTask("TestJob", 0, 1, new MockInputReader(), new MockOutputWriter(), 0);
 
     task.callWorker(createData(1));
     assertEquals(1, ((MockOutputWriter) task.getOutputWriter()).written.size());
-    task = reconstruct(task);
+    task = SerializationUtil.clone(task);
 
     task.callWorker(createData(1));
     assertEquals(2, ((MockOutputWriter) task.getOutputWriter()).written.size());
@@ -75,17 +71,5 @@ public class MergeShardTaskTest extends TestCase {
       values.add(ByteBuffer.allocate(0));
     }
     return new KeyValue<>(ByteBuffer.allocate(0), values.iterator());
-  }
-
-  @SuppressWarnings("unchecked")
-  private static <T> T reconstruct(T obj) throws IOException, ClassNotFoundException {
-    ByteArrayOutputStream bout = new ByteArrayOutputStream();
-    try (ObjectOutputStream oout = new ObjectOutputStream(bout)) {
-      oout.writeObject(obj);
-    }
-    try (ObjectInputStream in =
-        new ObjectInputStream(new ByteArrayInputStream(bout.toByteArray()))) {
-      return (T) in.readObject();
-    }
   }
 }
