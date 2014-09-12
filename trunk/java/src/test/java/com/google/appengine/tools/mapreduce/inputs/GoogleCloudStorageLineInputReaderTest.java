@@ -70,11 +70,11 @@ public class GoogleCloudStorageLineInputReaderTest extends GoogleCloudStorageLin
 
     for (GoogleCloudStorageLineInputReader reader : readers) {
       if (performSerialization) {
-        reader = SerializationUtil.clone(reader);
+        reader = recreate(reader);
       }
       reader.beginShard();
       if (performSerialization) {
-        reader = SerializationUtil.clone(reader);
+        reader = recreate(reader);
       }
       while (true) {
         reader.beginSlice();
@@ -89,12 +89,17 @@ public class GoogleCloudStorageLineInputReaderTest extends GoogleCloudStorageLin
 
         reader.endSlice();
         if (performSerialization) {
-          reader = SerializationUtil.clone(reader);
+          reader = recreate(reader);
         }
       }
       reader.endShard();
     }
 
     assertEquals("Number of records read", RECORDS_COUNT, recordsRead);
+  }
+
+  private GoogleCloudStorageLineInputReader recreate(GoogleCloudStorageLineInputReader reader) {
+    byte[] bytes = SerializationUtil.serializeToByteArray(reader);
+    return (GoogleCloudStorageLineInputReader) SerializationUtil.deserializeFromByteArray(bytes);
   }
 }

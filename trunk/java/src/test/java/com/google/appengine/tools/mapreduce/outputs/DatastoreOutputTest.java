@@ -22,11 +22,14 @@ import com.google.appengine.api.datastore.EntityNotFoundException;
 import com.google.appengine.tools.development.testing.LocalDatastoreServiceTestConfig;
 import com.google.appengine.tools.development.testing.LocalServiceTestHelper;
 import com.google.appengine.tools.mapreduce.OutputWriter;
-import com.google.appengine.tools.mapreduce.impl.util.SerializationUtil;
 
 import junit.framework.TestCase;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.util.List;
 
 /**
@@ -70,13 +73,13 @@ public class DatastoreOutputTest extends TestCase {
   }
 
   public void testDatastoreOutputWriter()
-      throws IOException, EntityNotFoundException {
+      throws IOException, ClassNotFoundException, EntityNotFoundException {
     DatastoreOutput output = new DatastoreOutput();
     OutputWriter<Entity> writer = output.createWriters(1).get(0);
     writer.beginShard();
     writer.beginSlice();
     writer.write(entity1);
-    writer = SerializationUtil.clone(writer);
+    writer = reconstruct(writer);
     writer.beginSlice();
     writer.write(entity2);
     writer.write(entity3);
@@ -92,5 +95,17 @@ public class DatastoreOutputTest extends TestCase {
     }
     assertEquals(entity2, ds.get(entity2.getKey()));
     assertEquals(entity3, ds.get(entity3.getKey()));
+  }
+
+  private OutputWriter<Entity> reconstruct(OutputWriter<Entity> writer) throws IOException,
+      ClassNotFoundException {
+    ByteArrayOutputStream bout = new ByteArrayOutputStream();
+    try (ObjectOutputStream oout = new ObjectOutputStream(bout)) {
+      oout.writeObject(writer);
+    }
+    assertTrue(bout.size() < 1000 * 1000); // Should fit in datastore.
+    ByteArrayInputStream bin = new ByteArrayInputStream(bout.toByteArray());
+    ObjectInputStream oin = new ObjectInputStream(bin);
+    return (OutputWriter<Entity>) oin.readObject();
   }
 }

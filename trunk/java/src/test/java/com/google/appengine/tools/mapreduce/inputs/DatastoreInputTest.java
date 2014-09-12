@@ -21,7 +21,6 @@ import com.google.appengine.api.datastore.DatastoreService;
 import com.google.appengine.api.datastore.DatastoreServiceFactory;
 import com.google.appengine.api.datastore.Entity;
 import com.google.appengine.api.datastore.Key;
-import com.google.appengine.api.datastore.Query;
 import com.google.appengine.tools.development.testing.LocalDatastoreServiceTestConfig;
 import com.google.appengine.tools.development.testing.LocalServiceTestHelper;
 import com.google.appengine.tools.mapreduce.InputReader;
@@ -59,10 +58,6 @@ public class DatastoreInputTest extends TestCase {
   }
 
   private List<Key> populateData(int size, String namespace) {
-    return populateData(size, namespace, null);
-  }
-
-  private List<Key> populateData(int size, String namespace, Key ancestor) {
     Collection<Entity> entities = new ArrayList<>(size);
     String ns = NamespaceManager.get();
     try {
@@ -70,7 +65,7 @@ public class DatastoreInputTest extends TestCase {
         NamespaceManager.set(namespace);
       }
       for (int i = 0; i < size; i++) {
-        entities.add(new Entity(ENTITY_KIND_NAME, ancestor));
+        entities.add(new Entity(ENTITY_KIND_NAME));
       }
     } finally {
       NamespaceManager.set(ns);
@@ -78,36 +73,6 @@ public class DatastoreInputTest extends TestCase {
     List<Key> keys = ds.put(entities);
     Collections.sort(keys);
     return keys;
-  }
-
-  public void testCreateQuery() {
-    checkQuery("namespace", "kind");
-    checkQuery(null, "kind");
-  }
-
-  private void checkQuery(String namespace, String kind) {
-    Query query = BaseDatastoreInput.createQuery(namespace, kind);
-    assertEquals(query.getKind(), kind);
-    assertEquals(namespace == null ? "" : namespace, query.getNamespace());
-  }
-
-  public void testCreateReadersWithAncestor() throws IOException {
-    List<Key> data = populateData(2, null);
-    Key parrent = data.get(0);
-    Key notInResult = data.get(1);
-    List<Key> keys = populateData(100, null, parrent);
-    DatastoreInput input = new DatastoreInput(new Query(ENTITY_KIND_NAME, parrent), 5);
-    ArrayList<Key> read = new ArrayList<>();
-    for (InputReader<Entity> reader : input.createReaders() ) {
-      read.addAll(getEntities(reader));
-    }
-    Collections.sort(read);
-    assertFalse(read.contains(notInResult));
-    assertEquals(keys.size() + 1, read.size());
-    assertEquals(parrent, read.get(0));
-    for (int i = 0; i < keys.size(); i++) {
-      assertEquals(keys.get(i), read.get(i+1));
-    }
   }
 
   public void testCreateReadersWithNamespace() throws IOException {
@@ -126,28 +91,26 @@ public class DatastoreInputTest extends TestCase {
   }
 
   public void testCreateReadersMediumData() throws Exception {
-    assertSplitting(5, (BaseDatastoreInput.RANGE_SEGMENTS_PER_SHARD / 2) * 5);
+    assertSplitting(5, ScatterDatastoreShardStrategy.SCATTER_ENTITIES_PER_SHARD * 4);
   }
 
   public void testCreateReadersLotsOfData() throws Exception {
-    assertSplitting(5, BaseDatastoreInput.RANGE_SEGMENTS_PER_SHARD * 10 * 5);
+    assertSplitting(5, ScatterDatastoreShardStrategy.SCATTER_ENTITIES_PER_SHARD * 10 * 5);
   }
 
   private void assertSplitting(int numReaders, int numEntities) throws IOException {
-    populateData(numEntities, null);
+    List<Key> keys = populateData(numEntities, null);
     List<InputReader<Entity>> splits = createReaders(numReaders);
-    assertEquals(Math.max(1, Math.min(numReaders, numEntities)), splits.size());
+    assertEquals(numReaders, splits.size());
     // Sizes are not expected to be equal due to scatter sampling
-    int average = Math.round(numEntities / (float) numReaders);
+    int average = numEntities / numReaders;
     int min = (int) (average * 0.80) - 1;
     int max = (int) (average * 1.20) + 1;
     int[] counts = countEntities(splits);
-    assertEquals(numEntities, total(counts));
-    for (int i = 0; i < splits.size(); i++) {
-      float ratio = (counts[i] / (float) average);
-      assertTrue("Ratio was: " + ratio , counts[i] >= min);
-      assertTrue("Ratio was: " + ratio ,counts[i] <= max);
+    for (int i = 0; i < numReaders; i++) {
+      assertTrue(counts[i] >= min && counts[i] <= max);
     }
+    assertEquals(numEntities, total(counts));
   }
 
   private static int total(int[] ints) {
@@ -185,33 +148,22 @@ public class DatastoreInputTest extends TestCase {
   }
 
   public void testCreateReadersNotEnoughData() throws Exception {
-    populateData(9, null);
+    List<Key> keys = populateData(9, null);
     List<InputReader<Entity>> splits = createReaders(5);
     int[] counts = countEntities(splits);
-    assertEquals(9, total(counts));
     for (int i=0;i<counts.length;i++) {
       assertTrue(counts[i] >= 1 && counts[i] <= 6);
     }
+    assertEquals(9, total(counts));
   }
 
   public void testCreateReadersWithNoData() throws Exception {
     List<InputReader<Entity>> splits = createReaders(10);
-    assertEquals(1, splits.size());
-    InputReader<Entity> reader = splits.get(0);
-    reader.beginShard();
-    reader.beginSlice();
-    try {
-      reader.next();
-      fail();
-    } catch (NoSuchElementException e) {
-      // Expected
-    }
-    reader.endSlice();
-    reader.endShard();
+    assertEquals(0, splits.size());
   }
 
   public void testCreateReadersWithSingleKey() throws Exception {
-    ds.put(new Entity(ENTITY_KIND_NAME));
+    Key key = ds.put(new Entity(ENTITY_KIND_NAME));
     List<InputReader<Entity>> readers = createReaders(10);
 
     assertEquals(1, readers.size());
@@ -219,16 +171,52 @@ public class DatastoreInputTest extends TestCase {
     assertEquals(1, entities.size());
   }
 
-  public void test500() throws IOException {
-    assertSplitting(2, 1000);
+  public void testSplitFairness() throws Exception {
+    assertRegionSizeBounds(0, 1);
+    assertRegionSizeBounds(1, 2);
+    assertRegionSizeBounds(2, 2);
+    assertRegionSizeBounds(7, 2);
+    assertRegionSizeBounds(999, 2);
+    assertRegionSizeBounds(999, 10);
+    assertRegionSizeBounds(999, 75);
+    assertRegionSizeBounds(999, 100);
+    assertRegionSizeBounds(999, 1000);
   }
 
-  public void test100() throws IOException {
-    assertSplitting(10, 1000);
+  private static void assertStartAndEndKeys(DatastoreInputReader reader, Key startKey, Key endKey) {
+    assertEquals("Start key doesn't match", startKey, reader.startKey);
+    assertEquals("End key doesn't match", endKey, reader.endKey);
   }
 
   private static List<InputReader<Entity>> createReaders(int shardCount) {
     DatastoreInput input = new DatastoreInput(ENTITY_KIND_NAME, shardCount);
     return input.createReaders();
+  }
+
+  private static void assertRegionSizeBounds(int scatterKeys, int numShards) {
+    // Each shard should have the same number of regions, however since we round to the nearest
+    // whole number the max size may be one larger than the min if the optimal number of regions
+    // is a decimal value. The number of regions is 1 larger than the number of scatter keys.
+    int min = (scatterKeys + 1) / numShards;
+    int max = min + ((((scatterKeys + 1) % numShards) > 0) ? 1 : 0);
+
+    ArrayList<Key> entities = new ArrayList<>(scatterKeys);
+    for (int i = 1; i <= scatterKeys; i++) {
+      entities.add(new Entity(ENTITY_KIND_NAME, i).getKey());
+    }
+    Iterable<Key> splitKeys = ScatterDatastoreShardStrategy.chooseSplitPoints(entities, numShards);
+    // We start with 0 since the first shard includes the region before the first scatter key
+    long lastId = 0;
+    for (Key key : splitKeys) {
+      int shardSize = (int) (key.getId() - lastId);
+      lastId = key.getId();
+      assertTrue("Too many regions " + shardSize + ">" + max, shardSize <= max);
+      assertTrue("Too few regions " + shardSize + "<" + min, shardSize >= min);
+    }
+    // The last shard includes the region beyond that the last scatter key
+    int lastShardSize = (int) ((scatterKeys + 1) - lastId);
+    assertTrue("Last shard has too many regions " + lastShardSize + ">" + max,
+        lastShardSize <= max);
+    assertTrue("Last shard has too few regions " + lastShardSize + "<" + min, lastShardSize >= min);
   }
 }

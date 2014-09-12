@@ -3,13 +3,16 @@ package com.google.appengine.tools.mapreduce.impl;
 import com.google.appengine.tools.mapreduce.InputReader;
 import com.google.appengine.tools.mapreduce.KeyValue;
 import com.google.appengine.tools.mapreduce.Marshallers;
-import com.google.appengine.tools.mapreduce.impl.util.SerializationUtil;
 import com.google.appengine.tools.mapreduce.inputs.PeekingInputReader;
 import com.google.common.collect.Iterators;
 
 import junit.framework.TestCase;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -143,7 +146,7 @@ public class MergingReaderTest extends TestCase {
     int valueCount = 0;
     for (int key = 0; key < numKeys; key++) {
       merging.endSlice();
-      merging = SerializationUtil.clone(merging);
+      merging = reconstruct(merging);
       merging.beginSlice();
       KeyValue<String, Iterator<Integer>> next = merging.next();
       assertEquals(String.valueOf(key), next.getKey());
@@ -157,7 +160,7 @@ public class MergingReaderTest extends TestCase {
       // expected
     }
     merging.endSlice();
-    merging = SerializationUtil.clone(merging);
+    merging = reconstruct(merging);
     merging.beginSlice();
     try {
       merging.next();
@@ -184,7 +187,7 @@ public class MergingReaderTest extends TestCase {
     for (int key = 0; key < numKeys; key++) {
       for (int reader = 0;reader < readerCount; reader++) {
         merging.endSlice();
-        merging = SerializationUtil.clone(merging);
+        merging = reconstruct(merging);
         merging.beginSlice();
         KeyValue<String, Iterator<Integer>> next = merging.next();
         assertEquals(String.valueOf(key), next.getKey());
@@ -199,7 +202,7 @@ public class MergingReaderTest extends TestCase {
       // expected
     }
     merging.endSlice();
-    merging = SerializationUtil.clone(merging);
+    merging = reconstruct(merging);
     merging.beginSlice();
     try {
       merging.next();
@@ -225,7 +228,7 @@ public class MergingReaderTest extends TestCase {
     for (int key = 0; key < numKeys; key++) {
       for (int reader = 0;reader < readerCount; reader++) {
         merging.endSlice();
-        merging = SerializationUtil.clone(merging);
+        merging = reconstruct(merging);
         merging.beginSlice();
         KeyValue<String, Iterator<Integer>> next = merging.next();
         assertEquals(String.valueOf(key), next.getKey());
@@ -238,7 +241,7 @@ public class MergingReaderTest extends TestCase {
       // expected
     }
     merging.endSlice();
-    merging = SerializationUtil.clone(merging);
+    merging = reconstruct(merging);
     merging.beginSlice();
     try {
       merging.next();
@@ -263,7 +266,7 @@ public class MergingReaderTest extends TestCase {
     merging.beginSlice();
     for (int key = 0; key < numKeys; key++) {
       merging.endSlice();
-      merging = SerializationUtil.clone(merging);
+      merging = reconstruct(merging);
       merging.beginSlice();
       KeyValue<String, Iterator<Integer>> next = merging.next();
       assertEquals(String.valueOf(key), next.getKey());
@@ -275,7 +278,7 @@ public class MergingReaderTest extends TestCase {
       // expected
     }
     merging.endSlice();
-    merging = SerializationUtil.clone(merging);
+    merging = reconstruct(merging);
     merging.beginSlice();
     try {
       merging.next();
@@ -283,6 +286,16 @@ public class MergingReaderTest extends TestCase {
     } catch (NoSuchElementException e) {
       // expected
     }
+  }
+
+  private MergingReader<String, Integer> reconstruct(
+      MergingReader<String, Integer> reader) throws IOException, ClassNotFoundException {
+    ByteArrayOutputStream bout = new ByteArrayOutputStream();
+    try (ObjectOutputStream oout = new ObjectOutputStream(bout)) {
+      oout.writeObject(reader);
+    }
+    ObjectInputStream in = new ObjectInputStream(new ByteArrayInputStream(bout.toByteArray()));
+    return (MergingReader<String, Integer>) in.readObject();
   }
 
   private void verifyExpectedOutput(int readerCount, int numKeys, int valuesPerKey,
