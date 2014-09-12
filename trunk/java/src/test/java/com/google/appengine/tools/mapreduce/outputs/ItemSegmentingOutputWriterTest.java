@@ -1,14 +1,11 @@
 package com.google.appengine.tools.mapreduce.outputs;
 
 import com.google.appengine.tools.mapreduce.OutputWriter;
+import com.google.appengine.tools.mapreduce.impl.util.SerializationUtil;
 
 import junit.framework.TestCase;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -124,7 +121,7 @@ public class ItemSegmentingOutputWriterTest extends TestCase {
     writer.created.get(2).assertValues(1, 1, 1, 1, 1);
   }
 
-  public void testSlicing() throws IOException, ClassNotFoundException {
+  public void testSlicing() throws IOException {
     CountingMockWriterCreator writer = new CountingMockWriterCreator();
     writer.beginShard();
     writer.beginSlice();
@@ -132,12 +129,12 @@ public class ItemSegmentingOutputWriterTest extends TestCase {
     writer.write(2);
     assertEquals(2, writer.created.size());
     writer.endSlice();
-    writer = reconstruct(writer);
+    writer = SerializationUtil.clone(writer);
     writer.beginSlice();
     writer.created.get(0).assertValues(1, 1, 1, 1, 1);
     writer.created.get(1).assertValues(1, 2, 1, 1, 0);
     writer.endSlice();
-    writer = reconstruct(writer);
+    writer = SerializationUtil.clone(writer);
     writer.beginSlice();
     writer.write(3);
     writer.created.get(0).assertValues(1, 1, 1, 1, 1);
@@ -150,17 +147,5 @@ public class ItemSegmentingOutputWriterTest extends TestCase {
     writer.created.get(0).assertValues(1, 1, 1, 1, 1);
     writer.created.get(1).assertValues(1, 3, 2, 3, 1);
     writer.created.get(2).assertValues(1, 1, 2, 1, 1);
-  }
-
-  @SuppressWarnings("unchecked")
-  private static <T> T reconstruct(T obj) throws IOException, ClassNotFoundException {
-    ByteArrayOutputStream bout = new ByteArrayOutputStream();
-    try (ObjectOutputStream oout = new ObjectOutputStream(bout)) {
-      oout.writeObject(obj);
-    }
-    try (ObjectInputStream in =
-        new ObjectInputStream(new ByteArrayInputStream(bout.toByteArray()))) {
-      return (T) in.readObject();
-    }
   }
 }

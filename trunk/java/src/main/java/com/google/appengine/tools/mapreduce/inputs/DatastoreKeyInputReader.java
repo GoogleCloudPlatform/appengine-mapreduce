@@ -6,6 +6,7 @@ import com.google.appengine.api.datastore.Entity;
 import com.google.appengine.api.datastore.Key;
 import com.google.appengine.api.datastore.Query;
 import com.google.common.base.Function;
+import com.google.common.base.Preconditions;
 
 /**
  * An InputReader for Datastore entity keys.
@@ -24,13 +25,9 @@ public class DatastoreKeyInputReader extends BaseDatastoreInputReader<Key> {
     }
   }
 
-  public DatastoreKeyInputReader(String entityKind, Key startKey, Key endKey, String namespace) {
-    super(entityKind, startKey, endKey, namespace, EntityToKeyFunction.INSTANCE);
-  }
-
-  @Override
-  protected Query createQuery() {
-    return super.createQuery().setKeysOnly();
+  public DatastoreKeyInputReader(Query query) {
+    super(query, EntityToKeyFunction.INSTANCE);
+    Preconditions.checkArgument(query.isKeysOnly());
   }
 
   @Override

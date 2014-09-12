@@ -2,7 +2,7 @@
 package com.google.appengine.tools.mapreduce.inputs;
 
 import com.google.appengine.api.datastore.Entity;
-import com.google.appengine.api.datastore.Key;
+import com.google.appengine.api.datastore.Query;
 
 /**
  * An input to read entities of a specified kind from the datastore.
@@ -26,12 +26,19 @@ public final class DatastoreInput extends BaseDatastoreInput<Entity, DatastoreIn
    * @param namespace the namespace of the entities (if null will use current).
    */
   public DatastoreInput(String entityKind, int shardCount, String namespace) {
-    super(new ScatterDatastoreShardStrategy(entityKind, namespace), entityKind, shardCount,
-        namespace);
+    this(createQuery(namespace, entityKind), shardCount);
+  }
+
+  /**
+   * @param query the query to read from the datastore.
+   * @param shardCount the number for parallel shards for the input.
+   */
+  public DatastoreInput(Query query, int shardCount) {
+    super(query, shardCount);
   }
 
   @Override
-  protected DatastoreInputReader createReader(String kind, Key start, Key end, String namespace) {
-    return new DatastoreInputReader(kind, start, end, namespace);
+  protected DatastoreInputReader createReader(Query query) {
+    return new DatastoreInputReader(query);
   }
 }

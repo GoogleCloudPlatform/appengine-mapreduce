@@ -15,14 +15,23 @@
  */
 package com.google.appengine.tools.mapreduce.inputs;
 
+import static com.google.appengine.api.datastore.Entity.KEY_RESERVED_PROPERTY;
+import static com.google.appengine.api.datastore.Query.CompositeFilterOperator.AND;
+import static com.google.appengine.api.datastore.Query.FilterOperator.*;
+
 import com.google.appengine.api.NamespaceManager;
 import com.google.appengine.api.datastore.DatastoreService;
 import com.google.appengine.api.datastore.DatastoreServiceFactory;
 import com.google.appengine.api.datastore.Entity;
 import com.google.appengine.api.datastore.Key;
+import com.google.appengine.api.datastore.Query;
+import com.google.appengine.api.datastore.Query.CompositeFilter;
+import com.google.appengine.api.datastore.Query.Filter;
+import com.google.appengine.api.datastore.Query.FilterPredicate;
 import com.google.appengine.tools.development.testing.LocalDatastoreServiceTestConfig;
 import com.google.appengine.tools.development.testing.LocalServiceTestHelper;
 import com.google.appengine.tools.mapreduce.impl.util.SerializationUtil;
+import com.google.common.collect.ImmutableList;
 
 import junit.framework.TestCase;
 
@@ -36,17 +45,30 @@ import java.util.NoSuchElementException;
  */
 public class DatastoreInputReaderTest extends TestCase {
 
-  static final String ENTITY_KIND_NAME = "Bob";
-
   private final LocalServiceTestHelper helper =
       new LocalServiceTestHelper(new LocalDatastoreServiceTestConfig());
+
+  private final String ENTITY_KIND_NAME = "Bob";
+  private Query all;
+  private Query namespaceQuery;
+
   private DatastoreService ds;
+
+  private static Query createQuery(String namespace, String kind, String property,
+      Object lowerBound, Object upperBound) {
+    ImmutableList<Filter> f = ImmutableList.<Filter>builder()
+        .add(new FilterPredicate(property, GREATER_THAN_OR_EQUAL, lowerBound))
+        .add(new FilterPredicate(property, LESS_THAN, upperBound)).build();
+    return BaseDatastoreInput.createQuery(namespace, kind).setFilter(new CompositeFilter(AND, f));
+  }
 
   @Override
   public void setUp() throws Exception {
     super.setUp();
     helper.setUp();
     ds = DatastoreServiceFactory.getDatastoreService();
+    all = BaseDatastoreInput.createQuery(null, ENTITY_KIND_NAME);
+    namespaceQuery =  BaseDatastoreInput.createQuery("ns", ENTITY_KIND_NAME);
   }
 
   @Override
@@ -57,7 +79,7 @@ public class DatastoreInputReaderTest extends TestCase {
 
   public void testOneEntityOnly() throws Exception {
     Key key = populateData(1, null).get(0);
-    DatastoreInputReader reader = new DatastoreInputReader(ENTITY_KIND_NAME, key, null, null);
+    DatastoreInputReader reader = new DatastoreInputReader(all);
     reader.beginSlice();
     assertEquals(key, reader.next().getKey());
     try {
@@ -88,18 +110,16 @@ public class DatastoreInputReaderTest extends TestCase {
 
   public void testReadAllData() throws Exception {
     List<Key> keys = populateData(300, null);
-    validateReadAllData(keys);
+    validateReadAllData(all, keys);
   }
 
   public void testReadAllDataWithNamespace() throws Exception {
-    List<Key> keys = populateData(300, "namespace1");
-    validateReadAllData(keys);
+    List<Key> keys = populateData(300, namespaceQuery.getNamespace());
+    validateReadAllData(namespaceQuery, keys);
   }
 
-  private void validateReadAllData(List<Key> keys) {
-    Key start = keys.get(0);
-    DatastoreInputReader reader =
-        new DatastoreInputReader(ENTITY_KIND_NAME, start, null, start.getNamespace());
+  private void validateReadAllData(Query query, List<Key> keys) {
+    DatastoreInputReader reader = new DatastoreInputReader(query);
     List<Key> readKeys = readAllFromReader(reader);
     assertEquals(keys.size(), readKeys.size());
     assertEquals(keys, readKeys);
@@ -121,8 +141,9 @@ public class DatastoreInputReaderTest extends TestCase {
   public void testSerialization() throws Exception {
     List<Key> keys = populateData(300, null);
     List<Key> readKeys = new ArrayList<>();
-    DatastoreInputReader reader =
-        new DatastoreInputReader(ENTITY_KIND_NAME, keys.get(100), keys.get(200), null);
+    Query query =
+        createQuery(null, ENTITY_KIND_NAME, KEY_RESERVED_PROPERTY, keys.get(100), keys.get(200));
+    DatastoreInputReader reader = new DatastoreInputReader(query);
     reader.beginSlice();
     while (true) {
       try {
@@ -144,8 +165,9 @@ public class DatastoreInputReaderTest extends TestCase {
 
   public void testStartEndKey() throws Exception {
     List<Key> keys = populateData(300, null);
-    DatastoreInputReader reader =
-        new DatastoreInputReader(ENTITY_KIND_NAME, keys.get(100), keys.get(200), null);
+    Query query =
+        createQuery(null, ENTITY_KIND_NAME, KEY_RESERVED_PROPERTY, keys.get(100), keys.get(200));
+    DatastoreInputReader reader = new DatastoreInputReader(query);
     List<Key> readKeys = readAllFromReader(reader);
     assertEquals(100, readKeys.size());
     assertEquals(keys.subList(100, 200), readKeys);
