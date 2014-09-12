@@ -3,11 +3,11 @@ package com.google.appengine.tools.mapreduce.inputs;
 import com.google.appengine.tools.mapreduce.InputReader;
 import com.google.appengine.tools.mapreduce.Marshaller;
 import com.google.appengine.tools.mapreduce.Marshallers;
+import com.google.appengine.tools.mapreduce.impl.util.SerializationUtil;
 
 import junit.framework.TestCase;
 
 import java.io.IOException;
-import java.io.Serializable;
 import java.nio.ByteBuffer;
 import java.util.NoSuchElementException;
 
@@ -79,10 +79,10 @@ public class PeekingInputReaderTest extends TestCase {
     PeekingInputReader<Long> reader = new PeekingInputReader<>(new MarshallingInputReader<>(
         new ConsecutiveLongInput.Reader(0L, numRecords), MARSHALLER), MARSHALLER);
     for (Long i = 0L; i <  numRecords; i++) {
-      reader = reconstruct(reader);
+      reader = SerializationUtil.clone(reader);
       assertEquals(i, reader.next());
     }
-    reader = reconstruct(reader);
+    reader = SerializationUtil.clone(reader);
     assertThrowsNoSuchElement(reader);
   }
 
@@ -94,11 +94,11 @@ public class PeekingInputReaderTest extends TestCase {
     PeekingInputReader<Long> reader = new PeekingInputReader<>(new MarshallingInputReader<>(
         new ConsecutiveLongInput.Reader(0L, numRecords), MARSHALLER), MARSHALLER);
     for (Long i = 0L; i < numRecords; i++) {
-      reader = reconstruct(reader);
+      reader = SerializationUtil.clone(reader);
       assertEquals(i, reader.peek());
       assertEquals(i, reader.next());
     }
-    reader = reconstruct(reader);
+    reader = SerializationUtil.clone(reader);
     assertNull(reader.peek());
     assertThrowsNoSuchElement(reader);
   }
@@ -111,10 +111,10 @@ public class PeekingInputReaderTest extends TestCase {
     PeekingInputReader<Long> reader = new PeekingInputReader<>(new MarshallingInputReader<>(
         new ConsecutiveLongInput.Reader(0L, numRecords), MARSHALLER), MARSHALLER);
     for (Long i = 0L; i < numRecords; i++) {
-      reader = reconstruct(reader);
+      reader = SerializationUtil.clone(reader);
       assertEquals(i, reader.next());
     }
-    reader = reconstruct(reader);
+    reader = SerializationUtil.clone(reader);
     assertNull(reader.peek());
     assertThrowsNoSuchElement(reader);
   }
@@ -130,13 +130,13 @@ public class PeekingInputReaderTest extends TestCase {
         new ConsecutiveLongInput.Reader(0L, numRecords), MARSHALLER), MARSHALLER);
     for (Long i = 0L; i < numRecords; i++) {
       assertEquals(i, reader.peek());
-      reader = reconstruct(reader);
+      reader = SerializationUtil.clone(reader);
       assertEquals(i, reader.peek());
-      reader = reconstruct(reader);
+      reader = SerializationUtil.clone(reader);
       assertEquals(i, reader.next());
     }
     assertNull(reader.peek());
-    reader = reconstruct(reader);
+    reader = SerializationUtil.clone(reader);
     assertThrowsNoSuchElement(reader);
   }
 
@@ -147,10 +147,5 @@ public class PeekingInputReaderTest extends TestCase {
     } catch (NoSuchElementException e) {
       // expected
     }
-  }
-
-  private PeekingInputReader<Long> reconstruct(PeekingInputReader<Long> in) {
-    Marshaller<Serializable> marshaller = Marshallers.getSerializationMarshaller();
-    return (PeekingInputReader<Long>) marshaller.fromBytes(marshaller.toBytes(in));
   }
 }
