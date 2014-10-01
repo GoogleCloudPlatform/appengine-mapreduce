@@ -19,7 +19,7 @@
     </license>
   </licenses>
   <properties>
-    <appengine.target.version>[1.9.1,1.10)</appengine.target.version>
+    <appengine.target.version>[1.9.1,2.0)</appengine.target.version>
   </properties>
   <build>
     <plugins>
@@ -69,12 +69,12 @@
     <dependency>
       <groupId>com.google.appengine.tools</groupId>
       <artifactId>appengine-gcs-client</artifactId>
-      <version>[0.4,0.5)</version>
+      <version>[0.4,1.0)</version>
     </dependency>
     <dependency>
       <groupId>com.google.appengine.tools</groupId>
       <artifactId>appengine-pipeline</artifactId>
-      <version>[0.2.8,0.3)</version>
+      <version>[0.2.8,1.0)</version>
     </dependency>
     <dependency>
       <groupId>com.googlecode.charts4j</groupId>
@@ -91,7 +91,7 @@
       <artifactId>guava</artifactId>
       <!-- version number of release candidates come before the ##.0 in maven, use 
         .99 to get latest release within the specified major version -->
-      <version>[15.0,15.99]</version>
+      <version>[15.0,20.99]</version>
     </dependency>
     <dependency>
       <groupId>joda-time</groupId>
