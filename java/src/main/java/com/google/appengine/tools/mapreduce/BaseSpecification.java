@@ -63,7 +63,7 @@ abstract class BaseSpecification<I, O, R> implements Serializable {
     output = checkNotNull(builder.output, "Null output");
   }
 
-  String getJobName() {
+  public String getJobName() {
     return jobName;
   }
 
