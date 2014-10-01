@@ -40,6 +40,7 @@ class EntityCreator extends MapOnlyMapper<Long, Entity> {
   public void map(Long value) {
     String name = getContext().getShardNumber() + "_" + value;
     Entity entity = new Entity(kind, name);
+    entity.setProperty("foo", "bar");
     entity.setProperty("payload", new Text(randomString(payloadBytesPerEntity)));
     emit(entity);
   }

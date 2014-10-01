@@ -2,6 +2,9 @@ package com.google.appengine.demos.mapreduce.entitycount;
 
 import com.google.appengine.api.datastore.Entity;
 import com.google.appengine.api.datastore.Key;
+import com.google.appengine.api.datastore.Query;
+import com.google.appengine.api.datastore.Query.FilterOperator;
+import com.google.appengine.api.datastore.Query.FilterPredicate;
 import com.google.appengine.tools.mapreduce.KeyValue;
 import com.google.appengine.tools.mapreduce.MapJob;
 import com.google.appengine.tools.mapreduce.MapReduceJob;
@@ -29,8 +32,8 @@ import java.util.logging.Logger;
 // [START chain_job_example]
 /**
  * Runs three MapReduces in a row. The first creates random MapReduceTest entities of the type
- * {@link #datastoreType} The second counts the number of each character in all entities of this
- * type. The third deletes all entities of the {@link #datastoreType}
+ * {@link #datastoreType}. The second counts the number of each character in these entities. The
+ * third deletes all entities of the {@link #datastoreType}.
  */
 public class ChainedMapReduceJob extends Job0<Void> {
 
@@ -135,7 +138,10 @@ public class ChainedMapReduceJob extends Job0<Void> {
 
   private MapReduceSpecification<Entity, String, Long, KeyValue<String, Long>,
       List<List<KeyValue<String, Long>>>> getCountJobSpec(int mapShardCount, int reduceShardCount) {
-    return new MapReduceSpecification.Builder<>(new DatastoreInput(datastoreType, mapShardCount),
+    Query query =
+        new Query(datastoreType).setFilter(new FilterPredicate("foo", FilterOperator.EQUAL, "bar"));
+
+    return new MapReduceSpecification.Builder<>(new DatastoreInput(query, mapShardCount),
         new CountMapper(), new CountReducer(), new InMemoryOutput<KeyValue<String, Long>>())
         .setKeyMarshaller(Marshallers.getStringMarshaller())
         .setValueMarshaller(Marshallers.getLongMarshaller())
