@@ -604,6 +604,7 @@ class _HashPipeline(pipeline_base.PipelineBase):
   """
 
   def run(self, job_name, bucket_name, filenames, shards=None):
+    filenames_only = _strip_bucket_name(bucket_name, filenames)
     if shards is None:
       shards = len(filenames)
     yield mapper_pipeline.MapperPipeline(
@@ -614,7 +615,7 @@ class _HashPipeline(pipeline_base.PipelineBase):
         params={
             "input_reader": {
                 "bucket_name": bucket_name,
-                "objects": filenames,
+                "objects": filenames_only,
             },
         },
         shards=shards)
@@ -665,9 +666,8 @@ class ShufflePipeline(pipeline_base.PipelineBase):
 
   def run(self, job_name, mapper_params, filenames, shards=None):
     bucket_name = mapper_params["bucket_name"]
-    filenames_only = _strip_bucket_name(bucket_name, filenames)
     hashed_files = yield _HashPipeline(job_name, bucket_name,
-                                       filenames_only, shards=shards)
+                                       filenames, shards=shards)
     sorted_files = yield _SortChunksPipeline(job_name, hashed_files)
     temp_files = [hashed_files, sorted_files]
 

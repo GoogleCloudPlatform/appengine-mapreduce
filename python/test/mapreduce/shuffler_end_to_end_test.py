@@ -21,6 +21,58 @@ from mapreduce import test_support
 from testlib import testutil
 
 
+class HashEndToEndTest(testutil.HandlerTestBase):
+  """End-to-end test for _HashPipeline."""
+
+  def setUp(self):
+    testutil.HandlerTestBase.setUp(self)
+    pipeline.Pipeline._send_mail = self._send_mail
+    self.emails = []
+
+  # pylint: disable=invalid-name
+  def _send_mail(self, sender, subject, body, html=None):
+    """Callback function for sending mail."""
+    self.emails.append((sender, subject, body, html))
+
+  def testHashingMultipleFiles(self):
+    """Test hashing files."""
+    input_data = [(str(i), str(i)) for i in range(100)]
+    input_data.sort()
+
+    bucket_name = "testbucket"
+    test_filename = "testfile"
+    full_filename = "/%s/%s" % (bucket_name, test_filename)
+
+    with cloudstorage.open(full_filename, mode="w") as f:
+      with records.RecordsWriter(f) as w:
+        for (k, v) in input_data:
+          proto = file_service_pb.KeyValue()
+          proto.set_key(k)
+          proto.set_value(v)
+          w.write(proto.Encode())
+
+    p = shuffler._HashPipeline("testjob", bucket_name,
+                               [full_filename, full_filename, full_filename])
+    p.start()
+    test_support.execute_until_empty(self.taskqueue)
+    p = shuffler._HashPipeline.from_id(p.pipeline_id)
+
+    output_files = p.outputs.default.value
+    output_data = []
+    for output_file in output_files:
+      with files.open(output_file, "r") as f:
+        for binary_record in records.RecordsReader(f):
+          proto = file_service_pb.KeyValue()
+          proto.ParseFromString(binary_record)
+          output_data.append((proto.key(), proto.value()))
+
+    output_data.sort()
+    for i in range(len(input_data)):
+      self.assertEquals(input_data[i], output_data[(3 * i)])
+      self.assertEquals(input_data[i], output_data[(3 * i) + 1])
+      self.assertEquals(input_data[i], output_data[(3 * i) + 2])
+    self.assertEquals(1, len(self.emails))
+
 class SortFileEndToEndTest(testutil.HandlerTestBase):
   """End-to-end test for _SortFilePipeline."""
 
@@ -68,6 +120,7 @@ class SortFileEndToEndTest(testutil.HandlerTestBase):
           output_data.append((proto.key(), proto.value()))
 
     self.assertEquals(input_data, output_data)
+    self.assertEquals(1, len(self.emails))
 
 
 # pylint: disable=invalid-name
@@ -150,6 +203,7 @@ class MergingReaderEndToEndTest(testutil.HandlerTestBase):
     expected_data = [
         str((k, [v, v, v], False)) for (k, v) in input_data]
     self.assertEquals(expected_data, output_data)
+    self.assertEquals(1, len(self.emails))
 
   def testPartialRecords(self):
     """Test merging into partial key values."""
@@ -199,6 +253,7 @@ class MergingReaderEndToEndTest(testutil.HandlerTestBase):
       self.assertEquals([str(e) for e in expected_data], output_data)
     finally:
       shuffler._MergePipeline._MAX_VALUES_COUNT = self._prev_max_values_count
+    self.assertEquals(1, len(self.emails))
 
 
 class ShuffleEndToEndTest(testutil.HandlerTestBase):
@@ -223,13 +278,14 @@ class ShuffleEndToEndTest(testutil.HandlerTestBase):
     gcs_file.close()
 
     p = shuffler.ShufflePipeline("testjob", {"bucket_name": bucket_name},
-                                 [test_filename, test_filename, test_filename])
+                                 [full_filename, full_filename, full_filename])
     p.start()
     test_support.execute_until_empty(self.taskqueue)
 
     p = shuffler.ShufflePipeline.from_id(p.pipeline_id)
     for filename in p.outputs.default.value:
       self.assertEqual(0, files.stat(filename).st_size)
+    self.assertEquals(1, len(self.emails))
 
   def testShuffleNoFile(self):
     bucket_name = "testbucket"
@@ -240,6 +296,7 @@ class ShuffleEndToEndTest(testutil.HandlerTestBase):
     p = shuffler.ShufflePipeline.from_id(p.pipeline_id)
     for filename in p.outputs.default.value:
       self.assertEqual(0, files.stat(filename).st_size)
+    self.assertEquals(1, len(self.emails))
 
   def testShuffleFiles(self):
     """Test shuffling multiple files."""
@@ -259,7 +316,7 @@ class ShuffleEndToEndTest(testutil.HandlerTestBase):
           w.write(proto.Encode())
 
     p = shuffler.ShufflePipeline("testjob", {"bucket_name": bucket_name},
-                                 [test_filename, test_filename, test_filename])
+                                 [full_filename, full_filename, full_filename])
     p.start()
     test_support.execute_until_empty(self.taskqueue)
     p = shuffler.ShufflePipeline.from_id(p.pipeline_id)
@@ -277,6 +334,7 @@ class ShuffleEndToEndTest(testutil.HandlerTestBase):
     expected_data = sorted([
         (str(k), [str(v), str(v), str(v)]) for (k, v) in input_data])
     self.assertEquals(expected_data, output_data)
+    self.assertEquals(1, len(self.emails))
 
 
 if __name__ == "__main__":
