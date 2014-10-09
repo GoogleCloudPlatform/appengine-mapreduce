@@ -35,7 +35,6 @@ import time
 from mapreduce.third_party import pipeline
 from mapreduce.third_party.pipeline import common as pipeline_common
 from google.appengine.api import files
-from google.appengine.api import modules
 from google.appengine.api.files import file_service_pb
 from google.appengine.ext import db
 from mapreduce import context
@@ -619,86 +618,6 @@ class _HashPipeline(pipeline_base.PipelineBase):
             },
         },
         shards=shards)
-
-
-class _ShuffleServicePipeline(pipeline_base.PipelineBase):
-  """A pipeline to invoke shuffle service.
-
-  Args:
-    input_files: list of file names to shuffle.
-
-  Returns:
-    list of shuffled file names. Empty list if there is no input.
-  """
-  async = True
-
-  output_names = [
-      # Unfinalized files.
-      "_output_files",
-      ]
-
-  def run(self, job_name, input_files):
-    # Return immediately if we have no content to shuffle.
-    # Big shuffler can not handle no input.
-    empty = True
-    for filename in input_files:
-      if files.stat(filename).st_size > 0:
-        empty = False
-        break
-    if empty:
-      self.complete([])
-      return
-
-    shard_number = len(input_files)
-    output_files = []
-    for i in range(shard_number):
-      blob_file_name = (job_name + "-shuffle-output-" + str(i))
-      file_name = files.blobstore.create(
-          _blobinfo_uploaded_filename=blob_file_name)
-      output_files.append(file_name)
-    self.fill(self.outputs._output_files, output_files)
-
-    # Support shuffler callbacks going to specific modules and
-    # specific non-default versions of those modules.
-    target = modules.get_current_version_name()
-    module_name = modules.get_current_module_name()
-    if module_name != "default":
-      # NOTE(user): The final dot is necessary here because old versions
-      # of the shuffler library would put "myversion.12345678" in this field,
-      # expecting the admin-shuffler app to remove the timestamp suffix.
-      target = "%s.%s." % (target, module_name)
-
-    files.shuffler.shuffle("%s-%s" % (job_name, int(time.time())),
-                           input_files,
-                           output_files,
-                           {
-                               "url": self.get_callback_url(),
-                               # NOTE(user): This is always GET because of
-                               # how the admin_shuffler app adds the callback
-                               # task with additional URL params.
-                               "method": "GET",
-                               "queue": self.queue_name,
-                               "version": target,
-                           })
-
-  def callback(self, **kwargs):
-    if "error" in kwargs:
-      self.retry("Error from shuffle service: %s" % kwargs["error"])
-      return
-
-    output_files = self.outputs._output_files.value
-    for filename in output_files:
-      files.finalize(filename)
-
-    finalized_file_names = []
-    for filename in output_files:
-      finalized_file_names.append(
-          files.blobstore.get_file_name(
-              files.blobstore.get_blob_key(filename)))
-    self.complete(finalized_file_names)
-
-  def try_cancel(self):
-    return True
 
 
 def _strip_bucket_name(bucket_name, filenames):
