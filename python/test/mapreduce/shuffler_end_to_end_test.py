@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-#
 # Copyright 2011 Google Inc. All Rights Reserved.
 
 
@@ -9,19 +8,17 @@
 import unittest
 
 from mapreduce.third_party import pipeline
+
 from google.appengine.api import files
 from google.appengine.api.files import file_service_pb
-from google.appengine.ext import db
+import cloudstorage
 from mapreduce import base_handler
-from mapreduce import control
 from mapreduce import mapreduce_pipeline
-from mapreduce import model
 from mapreduce import output_writers
 from mapreduce import records
 from mapreduce import shuffler
 from mapreduce import test_support
 from testlib import testutil
-import unittest
 
 
 class SortFileEndToEndTest(testutil.HandlerTestBase):
@@ -32,6 +29,7 @@ class SortFileEndToEndTest(testutil.HandlerTestBase):
     pipeline.Pipeline._send_mail = self._send_mail
     self.emails = []
 
+  # pylint: disable=invalid-name
   def _send_mail(self, sender, subject, body, html=None):
     """Callback function for sending mail."""
     self.emails.append((sender, subject, body, html))
@@ -72,6 +70,7 @@ class SortFileEndToEndTest(testutil.HandlerTestBase):
     self.assertEquals(input_data, output_data)
 
 
+# pylint: disable=invalid-name
 def test_handler_yield_str(key, value, partial):
   """Test handler that yields parameters converted to string."""
   yield str((key, value, partial))
@@ -97,12 +96,12 @@ class TestMergePipeline(base_handler.PipelineBase):
         shuffler.__name__ + "._MergingReader",
         output_writers.__name__ + ".BlobstoreRecordsOutputWriter",
         params={
-          shuffler._MergingReader.FILES_PARAM:[filenames],
-          shuffler._MergingReader.MAX_VALUES_COUNT_PARAM:
-              shuffler._MergePipeline._MAX_VALUES_COUNT,
-          shuffler._MergingReader.MAX_VALUES_SIZE_PARAM:
-              shuffler._MergePipeline._MAX_VALUES_SIZE,
-          },
+            shuffler._MergingReader.FILES_PARAM: [filenames],
+            shuffler._MergingReader.MAX_VALUES_COUNT_PARAM:
+                shuffler._MergePipeline._MAX_VALUES_COUNT,
+            shuffler._MergingReader.MAX_VALUES_SIZE_PARAM:
+                shuffler._MergePipeline._MAX_VALUES_SIZE,
+        },
         )
 
 
@@ -114,6 +113,7 @@ class MergingReaderEndToEndTest(testutil.HandlerTestBase):
     pipeline.Pipeline._send_mail = self._send_mail
     self.emails = []
 
+  # pylint: disable=invalid-name
   def _send_mail(self, sender, subject, body, html=None):
     """Callback function for sending mail."""
     self.emails.append((sender, subject, body, html))
@@ -158,7 +158,7 @@ class MergingReaderEndToEndTest(testutil.HandlerTestBase):
       # force max values count to extremely low value.
       shuffler._MergePipeline._MAX_VALUES_COUNT = 1
 
-      input_data = [('1', 'a'), ('2', 'b'), ('3', 'c')]
+      input_data = [("1", "a"), ("2", "b"), ("3", "c")]
       input_data.sort()
 
       input_file = files.blobstore.create()
@@ -186,15 +186,15 @@ class MergingReaderEndToEndTest(testutil.HandlerTestBase):
           output_data.append(record)
 
       expected_data = [
-          ('1', ['a'], True),
-          ('1', ['a'], True),
-          ('1', ['a'], False),
-          ('2', ['b'], True),
-          ('2', ['b'], True),
-          ('2', ['b'], False),
-          ('3', ['c'], True),
-          ('3', ['c'], True),
-          ('3', ['c'], False),
+          ("1", ["a"], True),
+          ("1", ["a"], True),
+          ("1", ["a"], False),
+          ("2", ["b"], True),
+          ("2", ["b"], True),
+          ("2", ["b"], False),
+          ("3", ["c"], True),
+          ("3", ["c"], True),
+          ("3", ["c"], False),
           ]
       self.assertEquals([str(e) for e in expected_data], output_data)
     finally:
@@ -209,18 +209,21 @@ class ShuffleEndToEndTest(testutil.HandlerTestBase):
     pipeline.Pipeline._send_mail = self._send_mail
     self.emails = []
 
+  # pylint: disable=invalid-name
   def _send_mail(self, sender, subject, body, html=None):
     """Callback function for sending mail."""
     self.emails.append((sender, subject, body, html))
 
   def testShuffleNoData(self):
-    input_file = files.blobstore.create()
-    files.finalize(input_file)
-    input_file = files.blobstore.get_file_name(
-        files.blobstore.get_blob_key(input_file))
+    bucket_name = "testbucket"
+    test_filename = "testfile"
+    full_filename = "/%s/%s" % (bucket_name, test_filename)
 
-    p = shuffler.ShufflePipeline(
-        "testjob", [input_file, input_file, input_file])
+    gcs_file = cloudstorage.open(full_filename, mode="w")
+    gcs_file.close()
+
+    p = shuffler.ShufflePipeline("testjob", {"bucket_name": bucket_name},
+                                 [test_filename, test_filename, test_filename])
     p.start()
     test_support.execute_until_empty(self.taskqueue)
 
@@ -229,8 +232,8 @@ class ShuffleEndToEndTest(testutil.HandlerTestBase):
       self.assertEqual(0, files.stat(filename).st_size)
 
   def testShuffleNoFile(self):
-    p = shuffler.ShufflePipeline(
-        "testjob", [])
+    bucket_name = "testbucket"
+    p = shuffler.ShufflePipeline("testjob", {"bucket_name": bucket_name}, [])
     p.start()
     test_support.execute_until_empty(self.taskqueue)
 
@@ -243,21 +246,20 @@ class ShuffleEndToEndTest(testutil.HandlerTestBase):
     input_data = [(str(i), str(i)) for i in range(100)]
     input_data.sort()
 
-    input_file = files.blobstore.create()
+    bucket_name = "testbucket"
+    test_filename = "testfile"
+    full_filename = "/%s/%s" % (bucket_name, test_filename)
 
-    with files.open(input_file, "a") as f:
+    with cloudstorage.open(full_filename, mode="w") as f:
       with records.RecordsWriter(f) as w:
         for (k, v) in input_data:
           proto = file_service_pb.KeyValue()
           proto.set_key(k)
           proto.set_value(v)
           w.write(proto.Encode())
-    files.finalize(input_file)
-    input_file = files.blobstore.get_file_name(
-        files.blobstore.get_blob_key(input_file))
 
-    p = shuffler.ShufflePipeline(
-        "testjob", [input_file, input_file, input_file])
+    p = shuffler.ShufflePipeline("testjob", {"bucket_name": bucket_name},
+                                 [test_filename, test_filename, test_filename])
     p.start()
     test_support.execute_until_empty(self.taskqueue)
     p = shuffler.ShufflePipeline.from_id(p.pipeline_id)

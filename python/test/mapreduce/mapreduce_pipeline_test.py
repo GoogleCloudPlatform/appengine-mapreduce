@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-#
 # Copyright 2011 Google Inc. All Rights Reserved.
 
 
@@ -132,8 +131,8 @@ class MapreducePipelineTest(testutil.HandlerTestBase):
         __name__ + ".test_mapreduce_map",
         __name__ + ".test_mapreduce_reduce",
         input_reader_spec=input_readers.__name__ + ".DatastoreInputReader",
-        output_writer_spec=
-            output_writers.__name__ + ".BlobstoreRecordsOutputWriter",
+        output_writer_spec=(
+            output_writers.__name__ + ".BlobstoreRecordsOutputWriter"),
         mapper_params={
             "entity_kind": __name__ + "." + TestEntity.__name__,
             },
@@ -164,9 +163,11 @@ class MapreducePipelineTest(testutil.HandlerTestBase):
     # Verify that mapreduce doesn't leave intermediate files behind.
     blobInfos = blobstore.BlobInfo.all().fetch(limit=1000)
     for blobinfo in blobInfos:
-      self.assertTrue(
-          "Bad filename: %s" % blobinfo.filename,
-          re.match("test-reduce-.*-output-\d+", blobinfo.filename))
+      if blobinfo.filename:
+        # pylint: disable=anomalous-backslash-in-string
+        self.assertTrue(
+            "Bad filename: %s" % blobinfo.filename,
+            re.match("test-reduce-.*-output-\d+", blobinfo.filename))
 
   def testMapReduceWithShardRetry(self):
     # Prepare test data

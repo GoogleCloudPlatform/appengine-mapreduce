@@ -1,6 +1,5 @@
 #!/usr/bin/env python
-#
-# Copyright 2011 Google Inc.
+# Copyright 2011 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+
 """Mapreduce shuffler implementation."""
 
 from __future__ import with_statement
@@ -25,10 +25,11 @@ __all__ = [
     "ShufflePipeline",
     ]
 
+# Using opensource naming conventions, pylint: disable=g-bad-name
+
 import gc
 import heapq
 import logging
-import os
 import time
 
 from mapreduce.third_party import pipeline
@@ -85,6 +86,7 @@ class _BatchRecordsReader(input_readers.RecordsReader):
   BATCH_SIZE = 1024*1024 * 3
 
   def __iter__(self):
+    # pylint: disable=redefined-outer-name
     records = []
     size = 0
     for record in input_readers.RecordsReader.__iter__(self):
@@ -101,6 +103,7 @@ class _BatchRecordsReader(input_readers.RecordsReader):
       gc.collect()
 
 
+# pylint: disable=redefined-outer-name
 def _sort_records_map(records):
   """Map function sorting records.
 
@@ -154,6 +157,7 @@ class _SortChunksPipeline(pipeline_base.PipelineBase):
     The list of lists of sorted filenames. Each list corresponds to one
     input file. Each filenames contains a chunk of sorted data.
   """
+
   def run(self, job_name, filenames):
     sort_mappers = []
     for i in range(len(filenames)):
@@ -204,7 +208,6 @@ class _CleanupOutputFiles(pipeline_base.PipelineBase):
   """
 
   def run(self, job_ids):
-    result = []
     for job_id in job_ids:
       db.delete(_OutputFile.all().ancestor(_OutputFile.get_root_key(job_id)))
 
@@ -248,6 +251,12 @@ class _MergingReader(input_readers.InputReader):
 
     self._offsets is always correctly updated so that stopping iterations
     doesn't skip records and doesn't read the same record twice.
+
+    Raises:
+      Exception: when Files list and offsets do not match.
+
+    Yields:
+      The result.
     """
     ctx = context.get()
     mapper_spec = ctx.mapreduce_spec.mapper
@@ -287,12 +296,12 @@ class _MergingReader(input_readers.InputReader):
             # New key encountered
             should_yield = True
           elif (self._max_values_count != -1 and
-              current_count >= self._max_values_count):
+                current_count >= self._max_values_count):
             # Maximum number of values encountered.
             current_result[2] = True
             should_yield = True
           elif (self._max_values_size != -1 and
-              current_size >= self._max_values_size):
+                current_size >= self._max_values_size):
             # Maximum size of values encountered
             current_result[2] = True
             should_yield = True
@@ -359,7 +368,7 @@ class _MergingReader(input_readers.InputReader):
     if mapper_spec.input_reader_class() != cls:
       raise errors.BadReaderParamsError("Input reader class mismatch")
     params = mapper_spec.params
-    if not cls.FILES_PARAM in params:
+    if cls.FILES_PARAM not in params:
       raise errors.BadReaderParamsError("Missing files parameter.")
 
 
@@ -370,6 +379,7 @@ class _HashingBlobstoreOutputWriter(output_writers.BlobstoreOutputWriterBase):
   key hash modulo number of output files.
   """
 
+  # pylint: disable=super-init-not-called
   def __init__(self, filenames):
     """Constructor.
 
@@ -384,6 +394,8 @@ class _HashingBlobstoreOutputWriter(output_writers.BlobstoreOutputWriterBase):
 
     Args:
       mapper_spec: an instance of model.MapperSpec to validate.
+    Raises:
+      BadWriterParamsError: when Output writer class mismatch.
     """
     if mapper_spec.output_writer_class() != cls:
       raise errors.BadWriterParamsError("Output writer class mismatch")
@@ -491,7 +503,9 @@ class _HashingBlobstoreOutputWriter(output_writers.BlobstoreOutputWriterBase):
 
 
 class _ShardOutputs(pipeline_base.PipelineBase):
-  """Takes a flat list of filenames, returns a list of lists, each with
+  """Shards the ouputs.
+
+  Takes a flat list of filenames, returns a list of lists, each with
   one member each.
   """
 
@@ -511,6 +525,9 @@ def _merge_map(key, values, partial):
     key: values key.
     values: values themselves.
     partial: True if more values for this key will follow. False otherwise.
+
+  Yields:
+    The proto.
   """
   proto = file_service_pb.KeyValues()
   proto.set_key(key)
@@ -529,7 +546,7 @@ class _MergePipeline(pipeline_base.PipelineBase):
       shard. Each file in the list should have keys sorted and should contain
       records with KeyValue serialized entity.
 
-  Returns:
+  Yields:
     The list of filenames, where each filename is fully merged and will contain
     records with KeyValues serialized entity.
   """
@@ -547,17 +564,23 @@ class _MergePipeline(pipeline_base.PipelineBase):
         output_writer_spec=
         output_writers.__name__ + ".BlobstoreRecordsOutputWriter",
         params={
-          _MergingReader.FILES_PARAM: filenames,
-          _MergingReader.MAX_VALUES_COUNT_PARAM: self._MAX_VALUES_COUNT,
-          _MergingReader.MAX_VALUES_SIZE_PARAM: self._MAX_VALUES_SIZE,
-          },
+            _MergingReader.FILES_PARAM: filenames,
+            _MergingReader.MAX_VALUES_COUNT_PARAM: self._MAX_VALUES_COUNT,
+            _MergingReader.MAX_VALUES_SIZE_PARAM: self._MAX_VALUES_SIZE,
+        },
         shards=len(filenames))
 
 
 def _hashing_map(binary_record):
   """A map function used in hash phase.
 
-  Reads KeyValue from binary record and yields (key, value).
+  Reads KeyValue from binary record.
+
+  Args:
+    binary_record: The binary record.
+
+  Yields:
+    The (key, value).
   """
   proto = file_service_pb.KeyValue()
   proto.ParseFromString(binary_record)
@@ -569,25 +592,32 @@ class _HashPipeline(pipeline_base.PipelineBase):
 
   Args:
     job_name: root mapreduce job name.
+    bucket_name: The name of your Google Cloud Storage bucket.
     filenames: filenames of mapper output. Should be of records format
       with serialized KeyValue proto.
     shards: Optional. Number of output shards to generate. Defaults
       to the number of input files.
 
-  Returns:
+  Yields:
     The list of filenames. Each file is of records formad with serialized
     KeyValue proto. For each proto its output file is decided based on key
     hash. Thus all equal keys would end up in the same file.
   """
-  def run(self, job_name, filenames, shards=None):
+
+  def run(self, job_name, bucket_name, filenames, shards=None):
     if shards is None:
       shards = len(filenames)
     yield mapper_pipeline.MapperPipeline(
         job_name + "-shuffle-hash",
         __name__ + "._hashing_map",
-        input_readers.__name__ + ".RecordsReader",
-        output_writer_spec= __name__ + "._HashingBlobstoreOutputWriter",
-        params={'files': filenames},
+        input_readers.__name__ + "._GoogleCloudStorageRecordInputReader",
+        output_writer_spec=__name__ + "._HashingBlobstoreOutputWriter",
+        params={
+            "input_reader": {
+                "bucket_name": bucket_name,
+                "objects": filenames,
+            },
+        },
         shards=shards)
 
 
@@ -671,14 +701,38 @@ class _ShuffleServicePipeline(pipeline_base.PipelineBase):
     return True
 
 
+def _strip_bucket_name(bucket_name, filenames):
+  """Strips out the GCS bucket name from each filename if present.
+
+  Args:
+    bucket_name: The name of the Google Cloud Storage bucket in which the
+      filenames reside.
+    filenames: list of file names that may or may not contain the
+      bucket_name.
+
+  Returns:
+    filenames: without the GCS bucket name (if present).
+  """
+  strip_out = "/%s/" % bucket_name
+  filenames_only = []
+  for filename in filenames:
+    if filename.startswith(strip_out):
+      filenames_only.append(filename[len(strip_out):])
+    else:
+      filenames_only.append(filename)
+  return filenames_only
+
+
 class ShufflePipeline(pipeline_base.PipelineBase):
   """A pipeline to shuffle multiple key-value files.
 
   Args:
     job_name: The descriptive name of the overall job.
+    mapper_params: parameters to use for mapper phase.
     filenames: list of file names to sort. Files have to be of records format
       defined by Files API and contain serialized file_service_pb.KeyValue
-      protocol messages.
+      protocol messages. The filenames may or may not contain the
+      GCS bucket name in their path.
     shards: Optional. Number of output shards to generate. Defaults
       to the number of input files.
 
@@ -690,8 +744,11 @@ class ShufflePipeline(pipeline_base.PipelineBase):
       in memory shuffler.
   """
 
-  def run(self, job_name, filenames, shards=None):
-    hashed_files = yield _HashPipeline(job_name, filenames, shards=shards)
+  def run(self, job_name, mapper_params, filenames, shards=None):
+    bucket_name = mapper_params["bucket_name"]
+    filenames_only = _strip_bucket_name(bucket_name, filenames)
+    hashed_files = yield _HashPipeline(job_name, bucket_name,
+                                       filenames_only, shards=shards)
     sorted_files = yield _SortChunksPipeline(job_name, hashed_files)
     temp_files = [hashed_files, sorted_files]
 
