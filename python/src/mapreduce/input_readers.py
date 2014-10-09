@@ -2539,6 +2539,16 @@ class _GoogleCloudStorageInputReader(InputReader):
       self._bucket_iter = iter(self._bucket)
 
   @classmethod
+  def get_params(cls, mapper_spec, allowed_keys=None, allow_old=True):
+    params = _get_params(mapper_spec, allowed_keys, allow_old)
+    # Use the bucket_name defined in mapper_spec params if one was not defined
+    # specifically in the input_reader params.
+    if (mapper_spec.params.get(cls.BUCKET_NAME_PARAM) is not None and
+        params.get(cls.BUCKET_NAME_PARAM) is None):
+      params[cls.BUCKET_NAME_PARAM] = mapper_spec.params[cls.BUCKET_NAME_PARAM]
+    return params
+
+  @classmethod
   def validate(cls, mapper_spec):
     """Validate mapper specification.
 
@@ -2549,7 +2559,7 @@ class _GoogleCloudStorageInputReader(InputReader):
       BadReaderParamsError: if the specification is invalid for any reason such
         as missing the bucket name or providing an invalid bucket name.
     """
-    reader_spec = _get_params(mapper_spec, allow_old=False)
+    reader_spec = cls.get_params(mapper_spec, allow_old=False)
 
     # Bucket Name is required
     if cls.BUCKET_NAME_PARAM not in reader_spec:
@@ -2599,7 +2609,7 @@ class _GoogleCloudStorageInputReader(InputReader):
     Returns:
       A list of InputReaders. None when no input data can be found.
     """
-    reader_spec = _get_params(mapper_spec, allow_old=False)
+    reader_spec = cls.get_params(mapper_spec, allow_old=False)
     bucket = reader_spec[cls.BUCKET_NAME_PARAM]
     filenames = reader_spec[cls.OBJECT_NAMES_PARAM]
     delimiter = reader_spec.get(cls.DELIMITER_PARAM)

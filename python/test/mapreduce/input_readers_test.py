@@ -2752,6 +2752,28 @@ class GoogleCloudStorageInputReaderTest(GoogleCloudStorageInputTestBase):
         self.create_mapper_spec(input_params={"bucket_name": self.test_bucket,
                                               "objects": ["1"]}))
 
+  def testValidate_PassesWithBucketFromMapperSpec(self):
+    # expect no errors are raised
+    self.READER_CLS.validate(
+        model.MapperSpec(
+            "DummyHandler",
+            self.READER_NAME,
+            {"bucket_name": self.test_bucket,
+             "input_reader": {"objects": ["1", "2", "3"]}},
+            self.NUM_SHARDS))
+
+  def testGetParams_DoesntOverwriteInputReaderBucket(self):
+    # expect no errors are raised
+    params = self.READER_CLS.get_params(
+        model.MapperSpec(
+            "DummyHandler",
+            self.READER_NAME,
+            {"bucket_name": "bad",
+             "input_reader": {"bucket_name": "good",
+                              "objects": ["1", "2", "3"]}},
+            self.NUM_SHARDS))
+    self.assertEqual(params["bucket_name"], "good")
+
   def testValidate_ObjectList(self):
     # expect no errors are raised
     self.READER_CLS.validate(

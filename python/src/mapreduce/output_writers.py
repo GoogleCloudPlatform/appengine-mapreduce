@@ -982,6 +982,16 @@ class _GoogleCloudStorageOutputWriter(OutputWriter):
                                         "mappings, %s" % (naming_format, error))
 
   @classmethod
+  def get_params(cls, mapper_spec, allowed_keys=None, allow_old=True):
+    params = _get_params(mapper_spec, allowed_keys, allow_old)
+    # Use the bucket_name defined in mapper_spec params if one was not defined
+    # specifically in the output_writer params.
+    if (mapper_spec.params.get(cls.BUCKET_NAME_PARAM) is not None and
+        params.get(cls.BUCKET_NAME_PARAM) is None):
+      params[cls.BUCKET_NAME_PARAM] = mapper_spec.params[cls.BUCKET_NAME_PARAM]
+    return params
+
+  @classmethod
   def validate(cls, mapper_spec):
     """Validate mapper specification.
 
@@ -992,7 +1002,7 @@ class _GoogleCloudStorageOutputWriter(OutputWriter):
       BadWriterParamsError: if the specification is invalid for any reason such
         as missing the bucket name or providing an invalid bucket name.
     """
-    writer_spec = _get_params(mapper_spec, allow_old=False)
+    writer_spec = cls.get_params(mapper_spec, allow_old=False)
 
     # Bucket Name is required
     if cls.BUCKET_NAME_PARAM not in writer_spec:
@@ -1015,7 +1025,7 @@ class _GoogleCloudStorageOutputWriter(OutputWriter):
   @classmethod
   def create(cls, mr_spec, shard_number, shard_attempt, _writer_state=None):
     """Inherit docs."""
-    writer_spec = _get_params(mr_spec.mapper, allow_old=False)
+    writer_spec = cls.get_params(mr_spec.mapper, allow_old=False)
     seg_index = None
     if writer_spec.get(cls._NO_DUPLICATE, False):
       seg_index = 0
@@ -1111,7 +1121,7 @@ class _GoogleCloudStorageOutputWriter(OutputWriter):
 
       # The filename user requested.
       mr_spec = ctx.mapreduce_spec
-      writer_spec = _get_params(mr_spec.mapper, allow_old=False)
+      writer_spec = self.get_params(mr_spec.mapper, allow_old=False)
       filename = self._generate_filename(writer_spec,
                                          mr_spec.name,
                                          mr_spec.mapreduce_id,
@@ -1132,7 +1142,7 @@ class _GoogleCloudStorageOutputWriter(OutputWriter):
     return True
 
   def _supports_slice_recovery(self, mapper_spec):
-    writer_spec = _get_params(mapper_spec, allow_old=False)
+    writer_spec = self.get_params(mapper_spec, allow_old=False)
     return writer_spec.get(self._NO_DUPLICATE, False)
 
   def _recover(self, mr_spec, shard_number, shard_attempt):
@@ -1159,7 +1169,7 @@ class _GoogleCloudStorageOutputWriter(OutputWriter):
                     self._seg_valid_length})
       next_seg_index = self._seg_index + 1
 
-    writer_spec = _get_params(mr_spec.mapper, allow_old=False)
+    writer_spec = self.get_params(mr_spec.mapper, allow_old=False)
     # Create name for the new seg.
     key = self._generate_filename(
         writer_spec, mr_spec.name,

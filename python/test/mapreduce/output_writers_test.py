@@ -403,6 +403,27 @@ class GCSOutputWriterTest(GCSOutputTestBase):
              self.WRITER_CLS.CONTENT_TYPE_PARAM:
              "mime"}))
 
+  def testValidate_PassesWithBucketFromMapperSpec(self):
+    self.WRITER_CLS.validate(
+        model.MapperSpec(
+            "DummyHandler",
+            "DummyInputReader",
+            {"bucket_name": "test",
+             "output_writer": {self.WRITER_CLS.ACL_PARAM: "test-acl"}},
+            self.NUM_SHARDS,
+            output_writer_spec=self.WRITER_NAME))
+
+  def testGetParams_DoesntOverwriteOuputWriterBucket(self):
+    params = self.WRITER_CLS.get_params(
+        model.MapperSpec(
+            "DummyHandler",
+            "DummyInputReader",
+            {"bucket_name": "bad",
+             "output_writer": {self.WRITER_CLS.BUCKET_NAME_PARAM: "good"}},
+            self.NUM_SHARDS,
+            output_writer_spec=self.WRITER_NAME))
+    self.assertEqual(params["bucket_name"], "good")
+
   def testValidate_NoBucket(self):
     self.assertRaises(
         errors.BadWriterParamsError,
