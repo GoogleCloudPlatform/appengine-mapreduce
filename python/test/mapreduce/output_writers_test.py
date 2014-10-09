@@ -81,8 +81,8 @@ class FilePoolTest(unittest.TestCase):
 
     See b/6827293.
     """
-    self.pool.append("foo", "a"*output_writers._FILES_API_FLUSH_SIZE + "a")
-    self.assertEquals("a"*output_writers._FILES_API_FLUSH_SIZE + "a",
+    self.pool.append("foo", "a"*output_writers._FILE_POOL_FLUSH_SIZE + "a")
+    self.assertEquals("a"*output_writers._FILE_POOL_FLUSH_SIZE + "a",
                       self.file_service.get_content("foo"))
 
   def testAppendMultipleFiles(self):
@@ -118,6 +118,34 @@ class RecordsPoolTest(unittest.TestCase):
     self.assertEquals(
         ["a", "b"],
         list(records.RecordsReader(files.open("tempfile", "r"))))
+
+
+class GCSRecordsPoolTest(testutil.CloudStorageTestBase):
+  """Tests for GCSRecordsPool."""
+
+  def setUp(self):
+    super(GCSRecordsPoolTest, self).setUp()
+    bucket_name = "testbucket"
+    test_filename = "testfile"
+
+    self.filename = "/%s/%s" % (bucket_name, test_filename)
+    self.filehandle = cloudstorage.open(self.filename, mode="w")
+    self.pool = output_writers.GCSRecordsPool(self.filehandle,
+                                              flush_size_chars=30)
+
+  def testAppendAndFlush(self):
+    self.pool.append("a")
+    self.assertRaises(cloudstorage.errors.NotFoundError, cloudstorage.open,
+                      self.filename)
+    self.pool.append("b")
+    self.assertRaises(cloudstorage.errors.NotFoundError, cloudstorage.open,
+                      self.filename)
+    self.pool.flush()
+    # File handle does need to be explicitly closed.
+    self.filehandle.close()
+    self.assertEquals(
+        ["a", "b"],
+        list(records.RecordsReader(cloudstorage.open(self.filename))))
 
 
 class FileOutputWriterTest(testutil.HandlerTestBase):
