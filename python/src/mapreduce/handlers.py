@@ -393,6 +393,16 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
       if last_slice:
         obj.end_shard(shard_context)
 
+  def _lc_start_slice(self, tstate, slice_id):
+    self._maintain_LC(tstate.handler, slice_id)
+    self._maintain_LC(tstate.input_reader, slice_id)
+    self._maintain_LC(tstate.output_writer, slice_id)
+
+  def _lc_end_slice(self, tstate, slice_id, last_slice=False):
+    self._maintain_LC(tstate.handler, slice_id, last_slice, False)
+    self._maintain_LC(tstate.input_reader, slice_id, last_slice, False)
+    self._maintain_LC(tstate.output_writer, slice_id, last_slice, False)
+
   def handle(self):
     """Handle request.
 
@@ -456,9 +466,20 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
                                               tstate)
     try:
       slice_id = tstate.slice_id
-      self._maintain_LC(tstate.handler, slice_id)
-      self._maintain_LC(tstate.input_reader, slice_id)
-      self._maintain_LC(tstate.output_writer, slice_id)
+      self._lc_start_slice(tstate, slice_id)
+
+      if shard_state.is_input_finished():
+        self._lc_end_slice(tstate, slice_id, last_slice=True)
+        # Finalize the stream and set status if there's no more input.
+        if (tstate.output_writer and
+            isinstance(tstate.output_writer, output_writers.OutputWriter)):
+          # It's possible that finalization is successful but
+          # saving state failed. In this case this shard will retry upon
+          # finalization error.
+          # TODO(user): make finalize method idempotent!
+          tstate.output_writer.finalize(ctx, shard_state)
+        shard_state.set_for_success()
+        return self.__return(shard_state, tstate, task_directive)
 
       if is_this_a_retry:
         task_directive = self._attempt_slice_recovery(shard_state, tstate)
@@ -468,23 +489,15 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
       last_slice = self._process_inputs(
           tstate.input_reader, shard_state, tstate, ctx)
 
-      self._maintain_LC(tstate.handler, slice_id, last_slice, False)
-      self._maintain_LC(tstate.input_reader, slice_id, last_slice, False)
-      self._maintain_LC(tstate.output_writer, slice_id, last_slice, False)
+      self._lc_end_slice(tstate, slice_id)
 
       ctx.flush()
 
       if last_slice:
-        # Since there was no exception raised, we can finalize output writer
-        # safely. Otherwise writer might be stuck in some bad state.
-        if (tstate.output_writer and
-            isinstance(tstate.output_writer, output_writers.OutputWriter)):
-          # It's possible that finalization is successful but
-          # saving state failed. In this case this shard will retry upon
-          # finalization error.
-          # TODO(user): make finalize method idempotent!
-          tstate.output_writer.finalize(ctx, shard_state)
-        shard_state.set_for_success()
+        # We're done processing data but we still need to finalize the output
+        # stream. We save this condition in datastore and force a new slice.
+        # That way if finalize fails no input data will be retried.
+        shard_state.set_input_finished()
     # pylint: disable=broad-except
     except Exception, e:
       logging.warning("Shard %s got error.", shard_state.shard_id)

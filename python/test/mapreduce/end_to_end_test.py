@@ -200,8 +200,9 @@ class EndToEndTest(testutil.HandlerTestBase):
     task_run_counts = test_support.execute_until_empty(self.taskqueue)
     self.assertEquals(
         task_run_counts[handlers.MapperWorkerCallbackHandler],
-        # Shard retries + one per entity + one to exhaust input reader
-        SerializableHandler.FAILURES_INDUCED_BY_INSTANCE + entity_count + 1)
+        # Shard retries + one per entity + one to exhaust input reader + one for
+        # finalization.
+        SerializableHandler.FAILURES_INDUCED_BY_INSTANCE + entity_count + 1 + 1)
     vals = [e.int_property for e in TestEntity.all()]
     vals.sort()
     # SerializableHandler updates int_property to be incremental from 0 to 9.

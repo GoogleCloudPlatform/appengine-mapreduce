@@ -398,7 +398,7 @@ class MapreduceHandlerTestBase(testutil.HandlerTestBase):
     return None
 
   def verify_shard_task(self, task, shard_id, slice_id=0, eta=None,
-                        countdown=None, **kwargs):
+                        countdown=None, verify_spec=True, **kwargs):
     """Checks that all shard task properties have expected values.
 
     Args:
@@ -407,7 +407,8 @@ class MapreduceHandlerTestBase(testutil.HandlerTestBase):
       slice_id: expected slice_id.
       eta: expected task eta.
       countdown: expected task delay from now.
-      kwargs: Extra keyword arguments to pass to verify_mapreduce_spec.
+      verify_spec: check mapreduce_spec if True.
+      **kwargs: Extra keyword arguments to pass to verify_mapreduce_spec.
     """
     expected_task_name = handlers.MapperWorkerCallbackHandler.get_task_name(
         shard_id, slice_id)
@@ -429,10 +430,11 @@ class MapreduceHandlerTestBase(testutil.HandlerTestBase):
     self.assertEqual(str(shard_id), payload["shard_id"])
     self.assertEqual(str(slice_id), payload["slice_id"])
 
-    self.assertTrue(payload["mapreduce_spec"])
-    mapreduce_spec = model.MapreduceSpec.from_json_str(
-        payload["mapreduce_spec"])
-    self.verify_mapreduce_spec(mapreduce_spec, **kwargs)
+    if verify_spec:
+      self.assertTrue(payload["mapreduce_spec"])
+      mapreduce_spec = model.MapreduceSpec.from_json_str(
+          payload["mapreduce_spec"])
+      self.verify_mapreduce_spec(mapreduce_spec, **kwargs)
 
   def verify_mapreduce_spec(self, mapreduce_spec, **kwargs):
     """Check all mapreduce spec properties to have expected values.
@@ -474,6 +476,8 @@ class MapreduceHandlerTestBase(testutil.HandlerTestBase):
                      shard_state.slice_retries)
     self.assertEqual(kwargs.get("retries", 0),
                      shard_state.retries)
+    self.assertEqual(kwargs.get("input_finished", False),
+                     shard_state.input_finished)
 
   def verify_mapreduce_state(self, mapreduce_state, **kwargs):
     """Checks mapreduce state to have expected property values.
@@ -1563,13 +1567,38 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
     for param_name in worker_params:
       self.handler.request.set(param_name, worker_params[param_name])
 
+  def _handle_request(self, expect_finalize=True):
+    """Handles request and optionally finalizes the output stream."""
+    self.assertEquals(0, len(self.taskqueue.GetTasks("default")))
+    self.handler.post()
+    if not expect_finalize:
+      self.assertEquals(0, len(self.taskqueue.GetTasks("default")))
+      return
+
+    # We processed all the input but we still need to finalize (on a separate
+    # slice).
+
+    shard_state = model.ShardState.get_by_shard_id(self.shard_id)
+    self.assertTrue(shard_state.input_finished)
+    self.assertTrue(shard_state.active)
+
+    tasks = self.taskqueue.GetTasks("default")
+    self.assertEquals(1, len(tasks))
+    self.verify_shard_task(
+        tasks[0], self.shard_id, slice_id=1, verify_spec=False)
+    self.taskqueue.FlushQueue("default")
+    self.handler.request.set("slice_id", 1)
+    self.handler.post()
+    shard_state = model.ShardState.get_by_shard_id(self.shard_id)
+    self.assertFalse(shard_state.active)
+
   def testDecodingPayloadFailed(self):
     shard_state = model.ShardState.get_by_shard_id(self.shard_id)
     self.assertTrue(shard_state.active)
 
     del self.request.headers[model.HugeTask.PAYLOAD_VERSION_HEADER]
     self.handler.initialize(self.request, self.response)
-    self.handler.post()
+    self._handle_request(expect_finalize=False)
 
     shard_state = model.ShardState.get_by_shard_id(self.shard_id)
     self.assertFalse(shard_state.active)
@@ -1586,7 +1615,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
     e2 = TestEntity()
     e2.put()
 
-    self.handler.post()
+    self._handle_request()
 
     self.assertEquals([str(e1.key()), str(e2.key())],
                       TestHandler.processed_keys)
@@ -1594,7 +1623,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
     # we should have finished
     self.verify_shard_state(
         model.ShardState.get_by_shard_id(self.shard_id),
-        active=False, processed=2,
+        active=False, processed=2, input_finished=True,
         result_status=model.ShardState.RESULT_SUCCESS)
 
     tasks = self.taskqueue.GetTasks("default")
@@ -1650,7 +1679,27 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
         [mock.call.end_slice(slice_ctx)])
 
   def testCompletedState(self):
+    self.shard_state.input_finished = True
     self.shard_state.active = False
+    self.shard_state.put()
+
+    e1 = TestEntity()
+    e1.put()
+
+    self._handle_request(expect_finalize=False)
+
+    # completed state => no data processed
+    self.assertEquals([], TestHandler.processed_keys)
+
+    self.verify_shard_state(
+        model.ShardState.get_by_shard_id(self.shard_id),
+        active=False,
+        input_finished=True)
+
+    self.assertEquals(0, len(self.taskqueue.GetTasks("default")))
+
+  def testAllInputProcessedStopsProcessing(self):
+    self.shard_state.input_finished = True
     self.shard_state.put()
 
     e1 = TestEntity()
@@ -1660,9 +1709,14 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
 
     # completed state => no data processed
     self.assertEquals([], TestHandler.processed_keys)
+
+    # but shard is done now
     self.verify_shard_state(
-        model.ShardState.get_by_shard_id(self.shard_id), active=False)
-    self.assertEquals(0, len(self.taskqueue.GetTasks("default")))
+        model.ShardState.get_by_shard_id(self.shard_id),
+        active=False,
+        result_status=model.ShardState.RESULT_SUCCESS,
+        input_finished=True)
+
 
   def testShardStateCollision(self):
     handlers._TEST_INJECTED_FAULTS.add("worker_active_state_collision")
@@ -1670,7 +1724,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
     e1 = TestEntity()
     e1.put()
 
-    self.handler.post()
+    self._handle_request(expect_finalize=False)
 
     # Data will still be processed
     self.assertEquals([str(e1.key())], TestHandler.processed_keys)
@@ -1685,7 +1739,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
     e1 = TestEntity()
     e1.put()
 
-    self.handler.post()
+    self._handle_request(expect_finalize=False)
 
     # no state => no data processed
     self.assertEquals([], TestHandler.processed_keys)
@@ -1696,13 +1750,13 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
     self.verify_shard_state(
         model.ShardState.get_by_shard_id(self.shard_id), active=True)
 
-    self.handler.post()
+    self._handle_request()
 
     self.assertEquals([], TestHandler.processed_keys)
 
     self.verify_shard_state(
         model.ShardState.get_by_shard_id(self.shard_id),
-        active=False,
+        active=False, input_finished=True,
         result_status=model.ShardState.RESULT_SUCCESS)
 
   def testUserAbort(self):
@@ -1713,7 +1767,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
               output_writer_spec=__name__ + ".UnfinalizableTestOutputWriter")
 
     model.MapreduceControl.abort(self.mapreduce_id, force_writes=True)
-    self.handler.post()
+    self._handle_request(expect_finalize=False)
     self.verify_shard_state(
         model.ShardState.get_by_shard_id(self.shard_id),
         active=False,
@@ -1911,11 +1965,11 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
         processed=0)
 
     datastore.PutAsync = original_method
-    self.handler.post()
+    self._handle_request()
 
     self.verify_shard_state(
         model.ShardState.get_by_shard_id(self.shard_id),
-        active=False,
+        active=False, input_finished=True,
         result_status=model.ShardState.RESULT_SUCCESS,
         processed=1)
 
@@ -1951,10 +2005,10 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
     shard_state.acquired_once = True
     shard_state.put()
 
-    self.handler.post()
+    self._handle_request()
     self.verify_shard_state(
         model.ShardState.get_by_shard_id(self.shard_id),
-        active=False,
+        active=False, input_finished=True,
         result_status=model.ShardState.RESULT_SUCCESS,
         processed=0)
 
@@ -1968,10 +2022,10 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
     shard_state.acquired_once = True
     shard_state.put()
 
-    self.handler.post()
+    self._handle_request()
     self.verify_shard_state(
         model.ShardState.get_by_shard_id(self.shard_id),
-        active=False,
+        active=False, input_finished=True,
         result_status=model.ShardState.RESULT_SUCCESS)
     self.assertFalse("recover" in TestOutputWriter.events)
 
@@ -1979,10 +2033,10 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
     """Test when the slice isn't a retry."""
     self.init(output_writer_spec=__name__ + ".TestOutputWriter")
 
-    self.handler.post()
+    self._handle_request()
     self.verify_shard_state(
         model.ShardState.get_by_shard_id(self.shard_id),
-        active=False,
+        active=False, input_finished=True,
         result_status=model.ShardState.RESULT_SUCCESS)
     self.assertFalse("recover" in TestOutputWriter.events)
 
@@ -2034,7 +2088,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
     TestEntity().put()
 
     # First time, the task gets retried.
-    self.handler.post()
+    self._handle_request(expect_finalize=False)
     self.assertEqual(httplib.SERVICE_UNAVAILABLE, self.handler.response.status)
     self.verify_shard_state(
         model.ShardState.get_by_shard_id(self.shard_id),
@@ -2047,6 +2101,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
     shard_state.slice_retries = (
         parameters.config.TASK_MAX_DATA_PROCESSING_ATTEMPTS)
     shard_state.put()
+    # TODO(user): fix
     self.handler.post()
     self.verify_shard_state(
         model.ShardState.get_by_shard_id(self.shard_id),
@@ -2070,7 +2125,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
         parameters.config.TASK_MAX_DATA_PROCESSING_ATTEMPTS)
     shard_state.put()
 
-    self.handler.post()
+    self._handle_request(expect_finalize=False)
     self.verify_shard_state(
         model.ShardState.get_by_shard_id(self.shard_id),
         active=False,
@@ -2235,7 +2290,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
     e1 = TestEntity().put()
     e2 = TestEntity().put()
 
-    self.handler.post()
+    self._handle_request()
     self.assertEquals([str(e1), str(e1), str(e2), str(e2)],
                       TestOperation.processed_keys)
 
@@ -2245,7 +2300,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
     e1 = TestEntity().put()
     e2 = TestEntity().put()
 
-    self.handler.post()
+    self._handle_request()
 
     self.assertEquals(
         ["create-1",
