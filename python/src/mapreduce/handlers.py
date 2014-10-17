@@ -400,9 +400,12 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
     self._maintain_LC(tstate.output_writer, slice_id)
 
   def _lc_end_slice(self, tstate, slice_id, last_slice=False):
-    self._maintain_LC(tstate.handler, slice_id, last_slice, False)
-    self._maintain_LC(tstate.input_reader, slice_id, last_slice, False)
-    self._maintain_LC(tstate.output_writer, slice_id, last_slice, False)
+    self._maintain_LC(tstate.handler, slice_id, last_slice=last_slice,
+                      begin_slice=False)
+    self._maintain_LC(tstate.input_reader, slice_id, last_slice=last_slice,
+                      begin_slice=False)
+    self._maintain_LC(tstate.output_writer, slice_id, last_slice=last_slice,
+                      begin_slice=False)
 
   def handle(self):
     """Handle request.
