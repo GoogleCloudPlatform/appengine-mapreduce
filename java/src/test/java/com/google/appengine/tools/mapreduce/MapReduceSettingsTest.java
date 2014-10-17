@@ -12,6 +12,7 @@ import static com.google.appengine.tools.mapreduce.MapSettings.DEFAULT_SHARD_RET
 import static com.google.appengine.tools.mapreduce.MapSettings.DEFAULT_SLICE_RETREIES;
 
 import com.google.appengine.tools.development.testing.LocalServiceTestHelper;
+import com.google.appengine.tools.development.testing.LocalTaskQueueTestConfig;
 
 import junit.framework.TestCase;
 
@@ -20,11 +21,17 @@ import junit.framework.TestCase;
 @SuppressWarnings("deprecation")
 public class MapReduceSettingsTest extends TestCase {
 
-  private final LocalServiceTestHelper helper = new LocalServiceTestHelper();
+  private final LocalServiceTestHelper helper = // work around for b/17977352
+      new LocalServiceTestHelper(new LocalTaskQueueTestConfig().setDisableAutoTaskExecution(true));
 
   @Override
   public void setUp() {
     helper.setUp();
+  }
+
+  @Override
+  public void tearDown() {
+    helper.tearDown();
   }
 
   public void testDefaultSettings() {
