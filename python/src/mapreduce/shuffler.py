@@ -556,17 +556,20 @@ class _MergePipeline(pipeline_base.PipelineBase):
   # Maximum size of values to produce in a single KeyValues proto.
   _MAX_VALUES_SIZE = 1000000
 
-  def run(self, job_name, filenames):
+  def run(self, job_name, bucket_name, filenames):
     yield mapper_pipeline.MapperPipeline(
         job_name + "-shuffle-merge",
         __name__ + "._merge_map",
         __name__ + "._MergingReader",
         output_writer_spec=
-        output_writers.__name__ + ".BlobstoreRecordsOutputWriter",
+        output_writers.__name__ + "._GoogleCloudStorageRecordOutputWriter",
         params={
             _MergingReader.FILES_PARAM: filenames,
             _MergingReader.MAX_VALUES_COUNT_PARAM: self._MAX_VALUES_COUNT,
             _MergingReader.MAX_VALUES_SIZE_PARAM: self._MAX_VALUES_SIZE,
+            "output_writer": {
+                "bucket_name": bucket_name,
+            },
         },
         shards=len(filenames))
 
@@ -651,7 +654,7 @@ class ShufflePipeline(pipeline_base.PipelineBase):
     sorted_files = yield _SortChunksPipeline(job_name, hashed_files)
     temp_files = [hashed_files, sorted_files]
 
-    merged_files = yield _MergePipeline(job_name, sorted_files)
+    merged_files = yield _MergePipeline(job_name, bucket_name, sorted_files)
 
     with pipeline.After(merged_files):
       all_temp_files = yield pipeline_common.Extend(*temp_files)

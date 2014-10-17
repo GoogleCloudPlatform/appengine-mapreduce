@@ -2215,9 +2215,11 @@ class ReducerReaderTest(testutil.HandlerTestBase):
     # Clear any context that is set.
     context.Context._set(None)
 
-    input_file = files.blobstore.create()
+    bucket_name = "testbucket"
+    test_filename = "testfile"
+    full_filename = "/%s/%s" % (bucket_name, test_filename)
 
-    with files.open(input_file, "a") as f:
+    with cloudstorage.open(full_filename, mode="w") as f:
       with records.RecordsWriter(f) as w:
         # First key is all in one record
         proto = file_service_pb.KeyValues()
@@ -2234,9 +2236,8 @@ class ReducerReaderTest(testutil.HandlerTestBase):
         proto.value_list().extend(["e", "f"])
         w.write(proto.Encode())
 
-    files.finalize(input_file)
-    self.input_file = files.blobstore.get_file_name(
-        files.blobstore.get_blob_key(input_file))
+    self.bucket_name = bucket_name
+    self.input_file = full_filename
 
   def testMultipleRequests(self):
     """Tests restoring the reader state across multiple requests."""
@@ -2248,7 +2249,8 @@ class ReducerReaderTest(testutil.HandlerTestBase):
         model.MapperSpec(
             "DummyHandler",
             "DummyInputReader",
-            dict(combiner_spec=combiner_spec),
+            dict(combiner_spec=combiner_spec,
+                 bucket_name=self.bucket_name),
             1).to_json())
     shard_state = self.create_shard_state(0)
     ctx = context.Context(mapreduce_spec, shard_state)
@@ -2258,7 +2260,7 @@ class ReducerReaderTest(testutil.HandlerTestBase):
     # input reader as if it's a separate request. This check-points twice
     # because when we have a combiner we check-point after each record from
     # the input file is consumed and passed through the combiner function.
-    reader = input_readers._ReducerReader([self.input_file], 0)
+    reader = input_readers._ReducerReader([self.input_file])
     it = iter(reader)
     self.assertEquals(input_readers.ALLOW_CHECKPOINT, it.next())
 
@@ -2276,7 +2278,7 @@ class ReducerReaderTest(testutil.HandlerTestBase):
 
   def testSingleRequest(self):
     """Tests when a key can be handled during a single request."""
-    reader = input_readers._ReducerReader([self.input_file], 0)
+    reader = input_readers._ReducerReader([self.input_file])
     self.assertEquals(
         [("key1", ["a", "b"]),
          input_readers.ALLOW_CHECKPOINT,
@@ -2284,38 +2286,24 @@ class ReducerReaderTest(testutil.HandlerTestBase):
         list(reader))
 
     # now test state serialization
-    reader = input_readers._ReducerReader([self.input_file], 0)
+    reader = input_readers._ReducerReader([self.input_file])
     i = reader.__iter__()
-    self.assertEquals(
-        {"position": 0,
-         "current_values": "Ti4=",
-         "current_key": "Ti4=",
-         "filenames": [self.input_file]},
-        reader.to_json())
+    self.assertEquals("Ti4=", reader.to_json()["current_values"])
+    self.assertEquals("Ti4=", reader.to_json()["current_key"])
 
     self.assertEquals(("key1", ["a", "b"]), i.next())
-    self.assertEquals(
-        {"position": 38,
-         "current_values": "KGxwMApTJ2MnCnAxCmFTJ2QnCnAyCmEu",
-         "current_key": "UydrZXkyJwpwMAou",
-         "filenames": [self.input_file]},
-        reader.to_json())
+    self.assertEquals("KGxwMApTJ2MnCnAxCmFTJ2QnCnAyCmEu",
+                      reader.to_json()["current_values"])
+    self.assertEquals("UydrZXkyJwpwMAou", reader.to_json()["current_key"])
 
     self.assertEquals(input_readers.ALLOW_CHECKPOINT, i.next())
-    self.assertEquals(
-        {"position": 38,
-         "current_values": "KGxwMApTJ2MnCnAxCmFTJ2QnCnAyCmEu",
-         "current_key": "UydrZXkyJwpwMAou",
-         "filenames": [self.input_file]},
-        reader.to_json())
+    self.assertEquals("KGxwMApTJ2MnCnAxCmFTJ2QnCnAyCmEu",
+                      reader.to_json()["current_values"])
+    self.assertEquals("UydrZXkyJwpwMAou", reader.to_json()["current_key"])
 
     self.assertEquals(("key2", ["c", "d", "e", "f"]), i.next())
-    self.assertEquals(
-        {"position": 0,
-         "current_values": "Ti4=",
-         "current_key": "Ti4=",
-         "filenames": []},
-        reader.to_json())
+    self.assertEquals("Ti4=", reader.to_json()["current_values"])
+    self.assertEquals("Ti4=", reader.to_json()["current_key"])
 
     try:
       i.next()
@@ -2326,7 +2314,7 @@ class ReducerReaderTest(testutil.HandlerTestBase):
 
   def testSerialization(self):
     """Test deserialization at every moment."""
-    reader = input_readers._ReducerReader([self.input_file], 0)
+    reader = input_readers._ReducerReader([self.input_file])
     i = reader.__iter__()
     self.assertEquals(("key1", ["a", "b"]), i.next())
 
@@ -2987,6 +2975,30 @@ class GoogleCloudStorageRecordInputReaderTest(GoogleCloudStorageInputTestBase):
 
     for record in data:
       self.assertEqual(record, reader.next())
+    self.assertRaises(StopIteration, reader.next)
+    # ensure StopIteration is still raised after its first encountered
+    self.assertRaises(StopIteration, reader.next)
+
+  def testSingleFileManyKeyValuesRecords(self):
+    filename = "/%s/many-key-values-records-file" % self.TEST_BUCKET
+    input_data = [(str(i), ["_" + str(i), "_" + str(i)]) for i in range(100)]
+
+    with cloudstorage.open(filename, mode="w") as f:
+      with records.RecordsWriter(f) as w:
+        for (k, v) in input_data:
+          proto = file_service_pb.KeyValues()
+          proto.set_key(k)
+          proto.value_list().extend(v)
+          w.write(proto.Encode())
+    reader = self.READER_CLS([filename])
+
+    output_data = []
+    for record in reader.__iter__():
+      proto = file_service_pb.KeyValues()
+      proto.ParseFromString(record)
+      output_data.append((proto.key(), proto.value_list()))
+
+    self.assertEquals(input_data, output_data)
     self.assertRaises(StopIteration, reader.next)
     # ensure StopIteration is still raised after its first encountered
     self.assertRaises(StopIteration, reader.next)

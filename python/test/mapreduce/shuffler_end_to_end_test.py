@@ -73,6 +73,7 @@ class HashEndToEndTest(testutil.HandlerTestBase):
       self.assertEquals(input_data[i], output_data[(3 * i) + 2])
     self.assertEquals(1, len(self.emails))
 
+
 class SortFileEndToEndTest(testutil.HandlerTestBase):
   """End-to-end test for _SortFilePipeline."""
 
@@ -284,7 +285,7 @@ class ShuffleEndToEndTest(testutil.HandlerTestBase):
 
     p = shuffler.ShufflePipeline.from_id(p.pipeline_id)
     for filename in p.outputs.default.value:
-      self.assertEqual(0, files.stat(filename).st_size)
+      self.assertEqual(0, cloudstorage.stat(filename).st_size)
     self.assertEquals(1, len(self.emails))
 
   def testShuffleNoFile(self):
@@ -295,7 +296,7 @@ class ShuffleEndToEndTest(testutil.HandlerTestBase):
 
     p = shuffler.ShufflePipeline.from_id(p.pipeline_id)
     for filename in p.outputs.default.value:
-      self.assertEqual(0, files.stat(filename).st_size)
+      self.assertEqual(0, cloudstorage.stat(filename).st_size)
     self.assertEquals(1, len(self.emails))
 
   def testShuffleFiles(self):
@@ -324,7 +325,7 @@ class ShuffleEndToEndTest(testutil.HandlerTestBase):
     output_files = p.outputs.default.value
     output_data = []
     for output_file in output_files:
-      with files.open(output_file, "r") as f:
+      with cloudstorage.open(output_file) as f:
         for record in records.RecordsReader(f):
           proto = file_service_pb.KeyValues()
           proto.ParseFromString(record)

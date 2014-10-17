@@ -2759,14 +2759,15 @@ class _GoogleCloudStorageRecordInputReader(_GoogleCloudStorageInputReader):
         self._record_reader = None
 
 
-# TODO(user): Use _GoogleCloudStorageInputReader instead of the File API.
-class _ReducerReader(RecordsReader):
-  """Reader to read KeyValues records files from Files API."""
+class _ReducerReader(_GoogleCloudStorageRecordInputReader):
+  """Reader to read KeyValues records from GCS."""
 
   expand_parameters = True
 
-  def __init__(self, filenames, position):
-    super(_ReducerReader, self).__init__(filenames, position)
+  def __init__(self, filenames, index=0, buffer_size=None, _account_id=None,
+               delimiter=None):
+    super(_ReducerReader, self).__init__(filenames, index, buffer_size,
+                                         _account_id, delimiter)
     self.current_key = None
     self.current_values = None
 
@@ -2779,50 +2780,54 @@ class _ReducerReader(RecordsReader):
       if combiner_spec:
         combiner = util.handler_for_name(combiner_spec)
 
-    for binary_record in super(_ReducerReader, self).__iter__():
-      proto = file_service_pb.KeyValues()
-      proto.ParseFromString(binary_record)
+    try:
+      while True:
+        binary_record = super(_ReducerReader, self).next()
+        proto = file_service_pb.KeyValues()
+        proto.ParseFromString(binary_record)
 
-      to_yield = None
-      if self.current_key is not None and self.current_key != proto.key():
-        to_yield = (self.current_key, self.current_values)
-        self.current_key = None
-        self.current_values = None
+        to_yield = None
+        if self.current_key is not None and self.current_key != proto.key():
+          to_yield = (self.current_key, self.current_values)
+          self.current_key = None
+          self.current_values = None
 
-      if self.current_key is None:
-        self.current_key = proto.key()
-        self.current_values = []
+        if self.current_key is None:
+          self.current_key = proto.key()
+          self.current_values = []
 
-      if combiner:
-        combiner_result = combiner(
-            self.current_key, proto.value_list(), self.current_values)
+        if combiner:
+          combiner_result = combiner(
+              self.current_key, proto.value_list(), self.current_values)
 
-        if not util.is_generator(combiner_result):
-          raise errors.BadCombinerOutputError(
-              "Combiner %s should yield values instead of returning them (%s)" %
-              (combiner, combiner_result))
+          if not util.is_generator(combiner_result):
+            raise errors.BadCombinerOutputError(
+                "Combiner %s should yield values instead of returning them "
+                "(%s)" % (combiner, combiner_result))
 
-        self.current_values = []
-        for value in combiner_result:
-          if isinstance(value, operation.Operation):
-            value(ctx)
-          else:
-            # With combiner the current values always come from the combiner.
-            self.current_values.append(value)
+          self.current_values = []
+          for value in combiner_result:
+            if isinstance(value, operation.Operation):
+              value(ctx)
+            else:
+              # With combiner the current values always come from the combiner.
+              self.current_values.append(value)
 
-        # Check-point after each combiner call is run only when there's nothing
-        # that needs to be yielded below. Otherwise allowing a check-point here
-        # would cause the current to_yield data to be lost.
-        if not to_yield:
+          # Check-point after each combiner call is run only when there's
+          # nothing that needs to be yielded below. Otherwise allowing a
+          # check-point here would cause the current to_yield data to be lost.
+          if not to_yield:
+            yield ALLOW_CHECKPOINT
+        else:
+          # Without combiner we just accumulate values.
+          self.current_values.extend(proto.value_list())
+
+        if to_yield:
+          yield to_yield
+          # Check-point after each key is yielded.
           yield ALLOW_CHECKPOINT
-      else:
-        # Without combiner we just accumulate values.
-        self.current_values.extend(proto.value_list())
-
-      if to_yield:
-        yield to_yield
-        # Check-point after each key is yielded.
-        yield ALLOW_CHECKPOINT
+    except StopIteration:
+      pass
 
     # There may be some accumulated values left at the end of an input file
     # so be sure to yield those too.
