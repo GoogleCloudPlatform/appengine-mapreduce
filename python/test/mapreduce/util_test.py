@@ -1,6 +1,5 @@
 #!/usr/bin/env python
-#
-# Copyright 2010 Google Inc.
+# Copyright 2010 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -48,6 +47,7 @@ class TestHandler(object):
     pass
 
 
+# pylint: disable=unused-argument
 def test_handler_function(entity):
   """Empty test handler function."""
   pass
@@ -73,6 +73,7 @@ class TestHandlerOldStyle():
     pass
 
 
+# pylint: disable=unused-argument
 def test_handler_yield(entity):
   """Yielding handler function."""
   yield 1
@@ -340,6 +341,18 @@ class GetDescendingKeyTest(unittest.TestCase):
         "159453012940012345678",
         util._get_descending_key(
             gettime=lambda: now))
+
+
+class StripPrefixFromItemsTest(unittest.TestCase):
+  """Tests the strip_prefix_from_items function."""
+
+  def testBasic(self):
+    """Basic test of the function."""
+    items = ["/foo/bar", "/foos/bar2", "/bar3"]
+    prefix = "/foo/"
+
+    self.assertEquals(["bar", "/foos/bar2", "/bar3"],
+                      util.strip_prefix_from_items(prefix, items))
 
 
 if __name__ == "__main__":

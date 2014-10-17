@@ -45,6 +45,7 @@ from mapreduce import operation
 from mapreduce import output_writers
 from mapreduce import pipeline_base
 from mapreduce import records
+from mapreduce import util
 
 # pylint: disable=g-bad-name
 # pylint: disable=protected-access
@@ -604,7 +605,8 @@ class _HashPipeline(pipeline_base.PipelineBase):
   """
 
   def run(self, job_name, bucket_name, filenames, shards=None):
-    filenames_only = _strip_bucket_name(bucket_name, filenames)
+    filenames_only = (
+        util.strip_prefix_from_items("/%s/" % bucket_name, filenames))
     if shards is None:
       shards = len(filenames)
     yield mapper_pipeline.MapperPipeline(
@@ -619,28 +621,6 @@ class _HashPipeline(pipeline_base.PipelineBase):
             },
         },
         shards=shards)
-
-
-def _strip_bucket_name(bucket_name, filenames):
-  """Strips out the GCS bucket name from each filename if present.
-
-  Args:
-    bucket_name: The name of the Google Cloud Storage bucket in which the
-      filenames reside.
-    filenames: list of file names that may or may not contain the
-      bucket_name.
-
-  Returns:
-    filenames: without the GCS bucket name (if present).
-  """
-  strip_out = "/%s/" % bucket_name
-  filenames_only = []
-  for filename in filenames:
-    if filename.startswith(strip_out):
-      filenames_only.append(filename[len(strip_out):])
-    else:
-      filenames_only.append(filename)
-  return filenames_only
 
 
 class ShufflePipeline(pipeline_base.PipelineBase):

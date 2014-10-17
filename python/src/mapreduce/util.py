@@ -1,6 +1,5 @@
 #!/usr/bin/env python
-#
-# Copyright 2010 Google Inc.
+# Copyright 2010 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -32,6 +31,7 @@ __all__ = [
     "try_serialize_handler",
     "try_deserialize_handler",
     "CALLBACK_MR_ID_TASK_HEADER",
+    "strip_prefix_from_items"
     ]
 
 import inspect
@@ -186,7 +186,8 @@ def for_name(fq_name, recursive=False):
   name doesn't contain '.', the current module will be used.
 
   Args:
-    fq_name: fully qualified name of something to find
+    fq_name: fully qualified name of something to find.
+    recursive: run recursively or not.
 
   Returns:
     class object or None if fq_name is None.
@@ -222,7 +223,7 @@ def for_name(fq_name, recursive=False):
       raise
     else:
       raise ImportError("Could not find '%s' on path '%s'" % (
-                        short_name, module_name))
+          short_name, module_name))
   except ImportError:
     # module_name is not actually a module. Try for_name for it to figure
     # out what's this.
@@ -235,7 +236,7 @@ def for_name(fq_name, recursive=False):
         raise KeyError()
     except KeyError:
       raise ImportError("Could not find '%s' on path '%s'" % (
-                        short_name, module_name))
+          short_name, module_name))
     except ImportError:
       # This means recursive import attempts failed, thus we will raise the
       # first ImportError we encountered, since it's likely the most accurate.
@@ -406,3 +407,25 @@ def _obj_to_path(obj):
           "Object %r must be defined on the top level of a module." % obj)
     return "%s.%s" % (obj.__module__, obj.__name__)
   raise TypeError("Unexpected type %s." % type(obj))
+
+
+def strip_prefix_from_items(prefix, items):
+  """Strips out the prefix from each of the items if it is present.
+
+  Args:
+    prefix: the string for that you wish to strip from the beginning of each
+      of the items.
+    items: a list of strings that may or may not contain the prefix you want
+      to strip out.
+
+  Returns:
+    items_no_prefix: a copy of the list of items (same order) without the
+      prefix (if present).
+  """
+  items_no_prefix = []
+  for item in items:
+    if item.startswith(prefix):
+      items_no_prefix.append(item[len(prefix):])
+    else:
+      items_no_prefix.append(item)
+  return items_no_prefix
