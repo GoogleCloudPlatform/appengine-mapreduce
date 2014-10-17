@@ -1,4 +1,4 @@
-package com.google.appengine.tools.mapreduce.testModels;
+package com.google.appengine.tools.mapreduce.testmodels;
 
 public abstract class AbstractClassSample {
   int id;

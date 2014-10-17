@@ -72,7 +72,7 @@ public final class MapSpecification<I, O, R> extends BaseSpecification<I, O, R> 
 
   private final MapOnlyMapper<I, O> mapper;
 
-  @SuppressWarnings("rawtypes")
+  @SuppressWarnings({"rawtypes", "unchecked"})
   private MapSpecification(Builder builder) {
     super(builder);
     mapper = checkNotNull(builder.mapper, "Null mapper");

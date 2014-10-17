@@ -3,15 +3,15 @@ package com.google.appengine.tools.mapreduce;
 import com.google.api.services.bigquery.model.TableFieldSchema;
 import com.google.api.services.bigquery.model.TableSchema;
 import com.google.appengine.tools.mapreduce.impl.BigQueryMarshallerByType;
-import com.google.appengine.tools.mapreduce.testModels.Father;
-import com.google.appengine.tools.mapreduce.testModels.Man;
-import com.google.appengine.tools.mapreduce.testModels.ParameterizedClass;
-import com.google.appengine.tools.mapreduce.testModels.Person;
-import com.google.appengine.tools.mapreduce.testModels.SampleClassWithNonParametricList;
-import com.google.appengine.tools.mapreduce.testModels.SimplAnnotatedJson;
-import com.google.appengine.tools.mapreduce.testModels.SimpleJson;
-import com.google.appengine.tools.mapreduce.testModels.SimpleJsonWithWrapperTypes;
-import com.google.appengine.tools.mapreduce.testModels.TestClassWithArray;
+import com.google.appengine.tools.mapreduce.testmodels.ClassWithArray;
+import com.google.appengine.tools.mapreduce.testmodels.Father;
+import com.google.appengine.tools.mapreduce.testmodels.Man;
+import com.google.appengine.tools.mapreduce.testmodels.ParameterizedClass;
+import com.google.appengine.tools.mapreduce.testmodels.Person;
+import com.google.appengine.tools.mapreduce.testmodels.SampleClassWithNonParametricList;
+import com.google.appengine.tools.mapreduce.testmodels.SimplAnnotatedJson;
+import com.google.appengine.tools.mapreduce.testmodels.SimpleJson;
+import com.google.appengine.tools.mapreduce.testmodels.SimpleJsonWithWrapperTypes;
 import com.google.common.collect.Lists;
 
 import junit.framework.TestCase;
@@ -98,8 +98,8 @@ public class BigQuerySchemaMarshallerTest extends TestCase {
   }
 
   public void testSchemaWithArrayField() {
-    BigQuerySchemaMarshallerTester<TestClassWithArray> tester = new BigQuerySchemaMarshallerTester<
-        TestClassWithArray>(new BigQueryMarshallerByType<>(TestClassWithArray.class));
+    BigQuerySchemaMarshallerTester<ClassWithArray> tester = new BigQuerySchemaMarshallerTester<
+        ClassWithArray>(new BigQueryMarshallerByType<>(ClassWithArray.class));
 
     TableFieldSchema f1 = new TableFieldSchema().setType("integer").setName("id")
         .setMode(BigQueryFieldMode.REQUIRED.getValue());
@@ -209,9 +209,12 @@ public class BigQuerySchemaMarshallerTest extends TestCase {
   }
 
   private class ClassForInnerClassTest {
+    @SuppressWarnings("unused")
     int id;
+    @SuppressWarnings("unused")
     String name;
 
+    @SuppressWarnings("unused")
     public ClassForInnerClassTest(int id, String name) {
       this.id = id;
       this.name = name;

@@ -107,7 +107,7 @@ public final class MapReduceSpecification<I, K, V, O, R> extends BaseSpecificati
   private final Reducer<K, V, O> reducer;
   private final int numReducers;
 
-  @SuppressWarnings("rawtypes")
+  @SuppressWarnings({"rawtypes", "unchecked"})
   private MapReduceSpecification(Builder builder) {
     super(builder);
     mapper = checkNotNull(builder.mapper, "Null mapper");

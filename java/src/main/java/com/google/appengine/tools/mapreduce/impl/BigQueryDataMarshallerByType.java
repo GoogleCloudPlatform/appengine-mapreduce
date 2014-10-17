@@ -76,7 +76,7 @@ final class BigQueryDataMarshallerByType implements Serializable {
   }
 
   /**
-   * Asserts that a field annotated as {@link BigQueryFieldMode.REPEATED} is not left null.
+   * Asserts that a field annotated as {@link BigQueryFieldMode#REPEATED} is not left null.
    */
   private void assertFieldValue(Field field, Object fieldValue) {
     if (fieldValue == null && isFieldRequired(field)) {

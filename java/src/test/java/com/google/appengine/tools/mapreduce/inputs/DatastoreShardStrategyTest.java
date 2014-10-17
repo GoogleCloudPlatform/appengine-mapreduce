@@ -99,13 +99,14 @@ public class DatastoreShardStrategyTest extends TestCase {
     assertExpectedValues(new long[]{0, 50, 100}, splitRange(0, 100, 2));
     assertExpectedValues(new long[]{0, 33, 67, 100}, splitRange(0, 100, 3));
   }
-  
+
   @Test
   public void testSplitRangeDouble() {
-    assertExpectedValues(new double[]{0, 1}, splitRange(0D, 1D, 2));
-    assertExpectedValues(new double[]{0, 1, 2, 3, 4}, splitRange(0D, 4D, 8));
-    assertExpectedValues(new double[]{0, 50, 100}, splitRange(0D, 100D, 2));
-    assertExpectedValues(new double[]{0, 33, 67, 100}, splitRange(0D, 100D, 3));
+    assertExpectedValues(new double[]{0.0, 0.5, 1.0}, splitRange(0D, 1D, 2));
+    assertExpectedValues(new double[]{0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0},
+        splitRange(0D, 4D, 8));
+    assertExpectedValues(new double[]{0.0, 60.0, 120.0}, splitRange(0D, 120D, 2));
+    assertExpectedValues(new double[]{0.0, 40.0, 80.0, 120.0}, splitRange(0D, 120D, 3));
   }
 
   private void assertExpectedValues(long[] expected, SortedSet<Long> observed) {
@@ -122,10 +123,10 @@ public class DatastoreShardStrategyTest extends TestCase {
     assertEquals(errorMessage, expected.length, observed.size());
     Double[] array = observed.toArray(new Double[] {});
     for (int i = 0; i < expected.length; i++) {
-      assertEquals(expected[i], array[i].longValue());
+      assertEquals(expected[i], array[i].doubleValue());
     }
   }
-  
+
   @SafeVarargs
   private final List<Query> longRanges(long first, long... rest) {
     long previous = first;

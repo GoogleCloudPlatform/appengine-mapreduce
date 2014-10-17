@@ -27,6 +27,7 @@ public final class InProcessUtil {
     }
   }
 
+  @SuppressWarnings("unchecked")
   private static <T> T invoke(Object spec) {
     Preconditions.checkNotNull(spec, "Null specification");
     StackTraceElement[] stackTraceElements = Thread.currentThread().getStackTrace();

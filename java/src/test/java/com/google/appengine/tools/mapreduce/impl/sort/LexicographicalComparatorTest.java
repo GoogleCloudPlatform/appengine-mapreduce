@@ -2,7 +2,6 @@ package com.google.appengine.tools.mapreduce.impl.sort;
 
 import static java.nio.charset.StandardCharsets.US_ASCII;
 import static java.nio.charset.StandardCharsets.UTF_8;
-import static junit.framework.Assert.assertEquals;
 
 import com.google.appengine.tools.mapreduce.Marshallers;
 

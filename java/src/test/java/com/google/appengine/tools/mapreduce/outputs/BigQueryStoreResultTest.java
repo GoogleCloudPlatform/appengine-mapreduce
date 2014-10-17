@@ -4,8 +4,8 @@ import com.google.appengine.tools.development.testing.LocalFileServiceTestConfig
 import com.google.appengine.tools.development.testing.LocalServiceTestHelper;
 import com.google.appengine.tools.mapreduce.GoogleCloudStorageFileSet;
 import com.google.appengine.tools.mapreduce.impl.BigQueryMarshallerByType;
-import com.google.appengine.tools.mapreduce.testModels.Child;
-import com.google.appengine.tools.mapreduce.testModels.Father;
+import com.google.appengine.tools.mapreduce.testmodels.Child;
+import com.google.appengine.tools.mapreduce.testmodels.Father;
 import com.google.appengine.tools.pipeline.impl.util.SerializationUtils;
 import com.google.common.collect.Lists;
 
@@ -51,10 +51,11 @@ public class BigQueryStoreResultTest extends TestCase {
     }
     BigQueryStoreResult<GoogleCloudStorageFileSet> actual = creator.finish(writers);
 
-    byte[] valueInBytes = SerializationUtils.serialize(actual);
-    BigQueryStoreResult<GoogleCloudStorageFileSet> fromBytes = (BigQueryStoreResult<
-        GoogleCloudStorageFileSet>) SerializationUtils.deserialize(valueInBytes);
-
-     assertEquals(actual, actual);
+    byte[] bytes = SerializationUtils.serialize(actual);
+    @SuppressWarnings("unchecked")
+    BigQueryStoreResult<GoogleCloudStorageFileSet> copy =
+        (BigQueryStoreResult<GoogleCloudStorageFileSet>) SerializationUtils.deserialize(bytes);
+     assertEquals(actual.getResult(), copy.getResult());
+     assertEquals(actual.getSchema(), copy.getSchema());
   }
 }

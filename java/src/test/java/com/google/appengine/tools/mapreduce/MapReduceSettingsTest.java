@@ -2,9 +2,14 @@
 
 package com.google.appengine.tools.mapreduce;
 
-import static com.google.appengine.tools.mapreduce.MapSettings.*;
-import static com.google.appengine.tools.mapreduce.MapReduceSettings.*;
-import static junit.framework.Assert.assertNull;
+import static com.google.appengine.tools.mapreduce.MapReduceSettings.DEFAULT_MAP_FANOUT;
+import static com.google.appengine.tools.mapreduce.MapReduceSettings.DEFAULT_MERGE_FANIN;
+import static com.google.appengine.tools.mapreduce.MapReduceSettings.DEFAULT_SORT_BATCH_PER_EMIT_BYTES;
+import static com.google.appengine.tools.mapreduce.MapReduceSettings.DEFAULT_SORT_READ_TIME_MILLIS;
+import static com.google.appengine.tools.mapreduce.MapSettings.DEFAULT_BASE_URL;
+import static com.google.appengine.tools.mapreduce.MapSettings.DEFAULT_MILLIS_PER_SLICE;
+import static com.google.appengine.tools.mapreduce.MapSettings.DEFAULT_SHARD_RETREIES;
+import static com.google.appengine.tools.mapreduce.MapSettings.DEFAULT_SLICE_RETREIES;
 
 import com.google.appengine.tools.development.testing.LocalServiceTestHelper;
 

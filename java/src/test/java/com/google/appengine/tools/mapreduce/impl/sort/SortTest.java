@@ -1,13 +1,10 @@
 package com.google.appengine.tools.mapreduce.impl.sort;
 
 import static java.nio.charset.StandardCharsets.US_ASCII;
-import static junit.framework.Assert.assertFalse;
-import static junit.framework.Assert.assertTrue;
 
 import com.google.appengine.tools.mapreduce.KeyValue;
 import com.google.appengine.tools.mapreduce.OutputWriter;
 import com.google.appengine.tools.mapreduce.impl.IncrementalTaskContext;
-import com.google.appengine.tools.mapreduce.impl.MapReduceConstants;
 import com.google.common.collect.Iterators;
 import com.google.common.collect.Lists;
 
@@ -217,12 +214,11 @@ public class SortTest extends TestCase {
     }
   }
 
-  @SuppressWarnings("serial")
   private SortWorker createWorker(final int numberToWrite) {
     SortWorker worker = new SortWorker((long) (numberToWrite * (
         StringStringGenerator.KEY_SIZE + StringStringGenerator.VALUE_SIZE
         + SortWorker.POINTER_SIZE_BYTES) - 1), // Set to force the last item to be leftover
-        Integer.MAX_VALUE); 
+        Integer.MAX_VALUE);
     worker.prepare();
     return worker;
   }
@@ -345,7 +341,6 @@ public class SortTest extends TestCase {
   }
 
   public void testDetectsFull() {
-    @SuppressWarnings("serial")
     SortWorker worker = new SortWorker(1000L, Integer.MAX_VALUE);
     worker.prepare();
     worker.beginSlice();

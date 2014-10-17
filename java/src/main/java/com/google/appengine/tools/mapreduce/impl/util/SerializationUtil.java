@@ -273,6 +273,7 @@ public class SerializationUtil {
     return deserializeFromByteArray(bytes, false);
   }
 
+  @SuppressWarnings("resource")
   public static <T> T deserializeFromByteBuffer(ByteBuffer bytes, final boolean ignoreHeader) {
     return deserializeFromStream(new ByteBufferInputStream(bytes), ignoreHeader);
   }
@@ -488,6 +489,7 @@ public class SerializationUtil {
     }
   }
 
+  @SuppressWarnings("unchecked")
   public static <T extends Serializable> T clone(T toClone) {
     byte[] bytes = SerializationUtil.serializeToByteArray(toClone);
     return (T) SerializationUtil.deserializeFromByteArray(bytes);

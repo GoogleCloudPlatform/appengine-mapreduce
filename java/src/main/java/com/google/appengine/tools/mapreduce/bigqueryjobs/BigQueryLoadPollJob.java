@@ -47,22 +47,21 @@ final class BigQueryLoadPollJob extends Job1<Void, BigQueryLoadJobReference> {
       @Override
       public void run() {
         String jobRef = jobToPoll.getJobReference().getJobId();
-        Job pollJob = null;
         try {
-          pollJob = BigQueryLoadGoogleCloudStorageFilesJob.getBigquery().jobs()
+          Job pollJob = BigQueryLoadGoogleCloudStorageFilesJob.getBigquery().jobs()
               .get(jobToPoll.getJobReference().getProjectId(), jobRef).execute();
+          log.info("Job status of job " + jobRef + " : " + pollJob.getStatus().getState());
+          if (pollJob.getStatus().getState().equals("PENDING")
+              || pollJob.getStatus().getState().equals("RUNNING")) {
+            setForRetry();
+          } else {
+            submitPromisedValue(pollJob.getStatus().getState());
+          }
         } catch (IOException e) {
           log.warning("Unable to poll the status of the job " + jobRef + " . Retrying after "
               + BigQueryConstants.MIN_TIME_BEFORE_NEXT_POLL + " seconds");
           setForRetry();
         }
-        log.info("Job status of job " + jobRef + " : " + pollJob.getStatus().getState());
-        if (pollJob.getStatus().getState().equals("PENDING")
-            || pollJob.getStatus().getState().equals("RUNNING")) {
-          setForRetry();
-          return;
-        }
-        submitPromisedValue(pollJob.getStatus().getState());
       }
 
       private void setForRetry() {

@@ -234,6 +234,7 @@ public class Marshallers {
       }
     }
 
+    @SuppressWarnings("resource")
     @Override
     public T fromBytes(ByteBuffer b) {
       try {

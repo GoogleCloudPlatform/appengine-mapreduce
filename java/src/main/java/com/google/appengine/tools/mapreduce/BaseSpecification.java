@@ -56,7 +56,7 @@ abstract class BaseSpecification<I, O, R> implements Serializable {
     }
   }
 
-  @SuppressWarnings("rawtypes")
+  @SuppressWarnings({"rawtypes", "unchecked"})
   BaseSpecification(Builder builder) {
     jobName = Optional.fromNullable(builder.jobName).or("");
     input = checkNotNull(builder.input, "Null input");

@@ -46,6 +46,7 @@ public class InProcessMap<I, O, R> {
   private final MapOnlyMapper<I, O> mapper;
   private final Output<O, R> output;
 
+  @SuppressWarnings("unchecked")
   public InProcessMap(String id, MapSpecification<I, O, R> mapSpec) {
     this.id = checkNotNull(id, "Null id");
     input = InProcessUtil.getInput(mapSpec);

@@ -82,6 +82,7 @@ public class InProcessMapReduce<I, K, V, O, R> {
   private final Output<O, R> output;
   private final int numReducers;
 
+  @SuppressWarnings("unchecked")
   public InProcessMapReduce(String id, MapReduceSpecification<I, K, V, O, R> mrSpec) {
     this.id = checkNotNull(id, "Null id");
     input = InProcessUtil.getInput(mrSpec);

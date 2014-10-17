@@ -6,18 +6,18 @@ import com.google.api.services.bigquery.model.TableFieldSchema;
 import com.google.api.services.bigquery.model.TableSchema;
 import com.google.appengine.tools.mapreduce.impl.BigQueryMarshallerByType;
 import com.google.appengine.tools.mapreduce.impl.BigqueryFieldMarshaller;
-import com.google.appengine.tools.mapreduce.testModels.Child;
-import com.google.appengine.tools.mapreduce.testModels.ClassExtendingAbstract;
-import com.google.appengine.tools.mapreduce.testModels.Father;
-import com.google.appengine.tools.mapreduce.testModels.Man;
-import com.google.appengine.tools.mapreduce.testModels.Person;
-import com.google.appengine.tools.mapreduce.testModels.PhoneNumber;
-import com.google.appengine.tools.mapreduce.testModels.SampleClassWithNestedCollection;
-import com.google.appengine.tools.mapreduce.testModels.SampleClassWithNonParametricList;
-import com.google.appengine.tools.mapreduce.testModels.SimplAnnotatedJson;
-import com.google.appengine.tools.mapreduce.testModels.SimpleJson;
-import com.google.appengine.tools.mapreduce.testModels.SimpleJsonWithWrapperTypes;
-import com.google.appengine.tools.mapreduce.testModels.TestClassWithArray;
+import com.google.appengine.tools.mapreduce.testmodels.Child;
+import com.google.appengine.tools.mapreduce.testmodels.ClassExtendingAbstract;
+import com.google.appengine.tools.mapreduce.testmodels.ClassWithArray;
+import com.google.appengine.tools.mapreduce.testmodels.Father;
+import com.google.appengine.tools.mapreduce.testmodels.Man;
+import com.google.appengine.tools.mapreduce.testmodels.Person;
+import com.google.appengine.tools.mapreduce.testmodels.PhoneNumber;
+import com.google.appengine.tools.mapreduce.testmodels.SampleClassWithNestedCollection;
+import com.google.appengine.tools.mapreduce.testmodels.SampleClassWithNonParametricList;
+import com.google.appengine.tools.mapreduce.testmodels.SimplAnnotatedJson;
+import com.google.appengine.tools.mapreduce.testmodels.SimpleJson;
+import com.google.appengine.tools.mapreduce.testmodels.SimpleJsonWithWrapperTypes;
 import com.google.common.collect.Lists;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -145,12 +145,12 @@ public class BigQueryDataMarshallerTest extends TestCase {
   }
 
   public void testGeneratedJsonForArrayField() {
-    BigQueryDataMarshallerTester<TestClassWithArray> tester = new BigQueryDataMarshallerTester<
-        TestClassWithArray>(
-        new BigQueryMarshallerByType<TestClassWithArray>(TestClassWithArray.class));
+    BigQueryDataMarshallerTester<ClassWithArray> tester = new BigQueryDataMarshallerTester<
+        ClassWithArray>(
+        new BigQueryMarshallerByType<ClassWithArray>(ClassWithArray.class));
 
     tester.testGeneratedJson("{\"id\":345,\"values\":[\"1\",\"2\",\"3\"],\"name\":\"arrayClass\"}",
-        new TestClassWithArray(345, "arrayClass", new String[] {"1", "2", "3"}));
+        new ClassWithArray(345, "arrayClass", new String[] {"1", "2", "3"}));
   }
 
   public void testGeneratedJsonForNestedFields() {
@@ -234,7 +234,9 @@ public class BigQueryDataMarshallerTest extends TestCase {
   }
 
   private class ClassForInnerClassTest {
+    @SuppressWarnings("unused")
     int id;
+    @SuppressWarnings("unused")
     String name;
 
     public ClassForInnerClassTest(int id, String name) {
@@ -260,7 +262,9 @@ public class BigQueryDataMarshallerTest extends TestCase {
   }
 
   private static class ClassWithCurrency {
+    @SuppressWarnings("unused")
     Currency currency;
+    @SuppressWarnings("unused")
     int id;
 
     public ClassWithCurrency(Currency currency, int id) {
@@ -269,6 +273,7 @@ public class BigQueryDataMarshallerTest extends TestCase {
     }
   }
 
+  @SuppressWarnings("unused")
   public void testGeneratedJsonForClassWithNumberType() {
     try {
       new BigQueryDataMarshallerTester<ClassWithNumber>(
@@ -284,15 +289,19 @@ public class BigQueryDataMarshallerTest extends TestCase {
   }
 
   private static class ClassWithNumber {
+    @SuppressWarnings("unused")
     Number number;
+    @SuppressWarnings("unused")
     int id;
 
+    @SuppressWarnings("unused")
     public ClassWithNumber(Number number, int id) {
       this.number = number;
       this.id = id;
     }
   }
 
+  @SuppressWarnings("unused")
   public void testGeneratedJsonForClassWithUnparameterizedMap() {
     try {
       new BigQueryDataMarshallerTester<ClassWithMap>(
@@ -308,9 +317,12 @@ public class BigQueryDataMarshallerTest extends TestCase {
   }
 
   private static class ClassWithMap {
+    @SuppressWarnings({"rawtypes", "unused"})
     Map map;
+    @SuppressWarnings("unused")
     int id;
 
+    @SuppressWarnings({"unused", "rawtypes"})
     public ClassWithMap(Map map, int id) {
       this.map = map;
       this.id = id;
@@ -364,7 +376,9 @@ public class BigQueryDataMarshallerTest extends TestCase {
   }
 
   private static class ClassWithUnsupportedType {
+    @SuppressWarnings("unused")
     UUID ip;
+    @SuppressWarnings("unused")
     int id;
 
     public ClassWithUnsupportedType(UUID ip, int id) {
@@ -373,6 +387,7 @@ public class BigQueryDataMarshallerTest extends TestCase {
     }
   }
 
+  @SuppressWarnings("unused")
   public void testGeneratedJsonForClassWithFieldTypeObject() {
     try {
       new BigQueryDataMarshallerTester<ClassWithFieldTypeObject>(
@@ -387,9 +402,12 @@ public class BigQueryDataMarshallerTest extends TestCase {
   }
 
   private static class ClassWithFieldTypeObject {
+    @SuppressWarnings("unused")
     int id;
+    @SuppressWarnings("unused")
     Object name;
 
+    @SuppressWarnings("unused")
     public ClassWithFieldTypeObject(int id, Object name) {
       this.id = id;
       this.name = name;
@@ -405,7 +423,9 @@ public class BigQueryDataMarshallerTest extends TestCase {
   }
 
   private static class ClassWithEnumField {
+    @SuppressWarnings("unused")
     int id;
+    @SuppressWarnings("unused")
     BigQueryFieldMode mode;
 
     public ClassWithEnumField(int id, BigQueryFieldMode mode) {
@@ -429,8 +449,11 @@ public class BigQueryDataMarshallerTest extends TestCase {
   }
 
   private static class ClassWithDate {
+    @SuppressWarnings("unused")
     int id;
+    @SuppressWarnings("unused")
     Date date;
+    @SuppressWarnings("unused")
     Calendar cal;
 
     public ClassWithDate(int id, Date date, Calendar cal) {
@@ -455,7 +478,9 @@ public class BigQueryDataMarshallerTest extends TestCase {
   }
 
   private static class ClassWithBigNumbers {
+    @SuppressWarnings("unused")
     BigInteger bigInt;
+    @SuppressWarnings("unused")
     BigDecimal bigDec;
 
     public ClassWithBigNumbers(BigInteger bigInt, BigDecimal bigDec) {
@@ -464,6 +489,7 @@ public class BigQueryDataMarshallerTest extends TestCase {
     }
   }
 
+  @SuppressWarnings("unused")
   public void testClassWithCyclicReference() {
     try {
       new BigQueryDataMarshallerTester<ClassA>(new BigQueryMarshallerByType<ClassA>(ClassA.class));
@@ -476,9 +502,12 @@ public class BigQueryDataMarshallerTest extends TestCase {
   }
 
   private static class ClassA {
+    @SuppressWarnings("unused")
     ClassB b;
   }
+
   private static class ClassB {
+    @SuppressWarnings("unused")
     ClassA a;
   }
 }

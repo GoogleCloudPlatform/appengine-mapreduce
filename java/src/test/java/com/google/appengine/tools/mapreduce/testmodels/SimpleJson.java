@@ -1,4 +1,4 @@
-package com.google.appengine.tools.mapreduce.testModels;
+package com.google.appengine.tools.mapreduce.testmodels;
 
 import com.google.appengine.tools.mapreduce.BigQueryDataField;
 import com.google.appengine.tools.mapreduce.BigQueryFieldMode;

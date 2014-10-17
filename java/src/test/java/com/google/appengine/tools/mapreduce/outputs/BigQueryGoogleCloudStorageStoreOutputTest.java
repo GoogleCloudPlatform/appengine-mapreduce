@@ -8,8 +8,8 @@ import com.google.appengine.tools.mapreduce.BigQueryFieldMode;
 import com.google.appengine.tools.mapreduce.GoogleCloudStorageFileSet;
 import com.google.appengine.tools.mapreduce.impl.BigQueryMarshallerByType;
 import com.google.appengine.tools.mapreduce.impl.util.SerializationUtil;
-import com.google.appengine.tools.mapreduce.testModels.Child;
-import com.google.appengine.tools.mapreduce.testModels.Father;
+import com.google.appengine.tools.mapreduce.testmodels.Child;
+import com.google.appengine.tools.mapreduce.testmodels.Father;
 import com.google.common.collect.Lists;
 
 import junit.framework.TestCase;
@@ -18,7 +18,9 @@ import org.junit.Test;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class BigQueryGoogleCloudStorageStoreOutputTest extends TestCase {
   private static final String BUCKET = "test-bigquery-loader";
@@ -28,13 +30,11 @@ public class BigQueryGoogleCloudStorageStoreOutputTest extends TestCase {
 
   @Override
   protected void setUp() throws Exception {
-    super.setUp();
     helper.setUp();
   }
 
   @Override
   protected void tearDown() throws Exception {
-    super.tearDown();
     helper.tearDown();
   }
 
@@ -79,6 +79,27 @@ public class BigQueryGoogleCloudStorageStoreOutputTest extends TestCase {
 
     TableSchema actual = result.getSchema();
     TableSchema expected = new TableSchema().setFields(Lists.newArrayList(f1, f2, f3));
-    assertTrue(actual.equals(expected));
+    compareFields(expected.getFields(), actual.getFields());
+  }
+
+  private void compareFields(List<TableFieldSchema> expected, List<TableFieldSchema> actual) {
+    if (expected == null) {
+      assertNull(actual);
+      return;
+    }
+    Map<String, TableFieldSchema> expectedMap = new HashMap<>();
+    for (TableFieldSchema expectedField : expected) {
+      expectedMap.put(expectedField.getName(), expectedField);
+    }
+    for (TableFieldSchema actualField : actual) {
+      TableFieldSchema expectedField = expectedMap.remove(actualField.getName());
+      assertNotNull("Missing expected field for " + actualField, expectedField);
+      assertEquals(expectedField.getDescription(), actualField.getDescription());
+      assertEquals(expectedField.getMode(), actualField.getMode());
+      assertEquals(expectedField.getName(), actualField.getName());
+      assertEquals(expectedField.getType(), actualField.getType());
+      compareFields(expectedField.getFields(), actualField.getFields());
+    }
+    assertTrue("Missing actual values for " + expectedMap, expectedMap.isEmpty());
   }
 }

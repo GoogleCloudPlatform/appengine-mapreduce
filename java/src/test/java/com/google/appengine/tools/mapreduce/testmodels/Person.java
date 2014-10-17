@@ -1,5 +1,4 @@
-package com.google.appengine.tools.mapreduce.testModels;
-
+package com.google.appengine.tools.mapreduce.testmodels;
 
 
 public class Person {
@@ -30,8 +29,4 @@ public class Person {
     this.gender = gender;
     this.phoneNumber = phoneNumber;
   }
-  
-  
 }
-
-//{"kind": "person", "fullName": "John Doe", "age": 22, "gender": "Male", "phoneNumber": { "areaCode": "206", "number": "1234567"}, "children": [{ "name": "Jane", "gender": "Female", "age": "6"}, {"name": "John", "gender": "Male", "age": "15"}], "citiesLived": [{ "place": "Seattle", "yearsLived": ["1995"]}, {"place": "Stockholm", "yearsLived": ["2005"]}]}
