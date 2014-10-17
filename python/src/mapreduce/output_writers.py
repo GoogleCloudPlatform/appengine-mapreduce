@@ -67,6 +67,14 @@ try:
 except ImportError:
   pass  # CloudStorage library not available
 
+# Attempt to load cloudstorage from the bundle (availble in some tests)
+if cloudstorage is None:
+  try:
+    import cloudstorage
+    from cloudstorage import cloudstorage_api
+  except ImportError:
+    pass  # CloudStorage library really not available
+
 
 # Counter name for number of bytes written.
 COUNTER_IO_WRITE_BYTES = "io-write-bytes"
