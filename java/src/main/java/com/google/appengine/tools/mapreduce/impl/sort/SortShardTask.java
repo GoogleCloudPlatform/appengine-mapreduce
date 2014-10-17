@@ -128,7 +128,10 @@ public class SortShardTask extends WorkerShardTask<KeyValue<ByteBuffer, ByteBuff
   public void jobCompleted(Status status) {
     inMemSorter = null;
     in = null;
-    out = null;
+    if (out != null) {
+      out.cleanup();
+      out = null;
+    }
     finalized = true;
   }
 

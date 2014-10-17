@@ -98,7 +98,10 @@ public class ReduceShardTask<K, V, O>
   public void jobCompleted(Status status) {
     reducer = null;
     in = null;
-    out = null;
+    if (out != null) {
+      out.cleanup();
+      out = null;
+    }
     finalized = true;
   }
 

@@ -89,7 +89,10 @@ public class MapOnlyShardTask<I, O> extends WorkerShardTask<I, O, MapOnlyMapperC
   public void jobCompleted(Status status) {
     mapper = null;
     in = null;
-    out = null;
+    if (out != null) {
+      out.cleanup();
+      out = null;
+    }
     finalized = true;
   }
 

@@ -107,7 +107,10 @@ public class MergeShardTask extends WorkerShardTask<KeyValue<ByteBuffer, Iterato
   public void jobCompleted(Status status) {
     worker = null;
     in = null;
-    out = null;
+    if (out != null) {
+      out.cleanup();
+      out = null;
+    }
     finalized = true;
   }
 

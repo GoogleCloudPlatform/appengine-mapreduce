@@ -9,9 +9,9 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 
 /**
- * An composition of {@link GoogleCloudStorageLevelDbOutputWriter} and
- * {@link GoogleCloudStorageFileOutputWriter} that pads blocks to GCS write boundaries on end of
- * slice. This is needed because GCS requires data to be passed in in 256kb but LevelDb uses 32kb
+ * A decorator for LevelDbOutputWriter that delegates to {@link GoogleCloudStorageFileOutputWriter}
+ * and pads blocks to GCS write boundaries on end of slice.
+ * This is needed because GCS requires data to be passed in in 256kb but LevelDb uses 32kb
  * blocks this class provides a way get this class to pad the output by writing empty blocks.
  *
  */

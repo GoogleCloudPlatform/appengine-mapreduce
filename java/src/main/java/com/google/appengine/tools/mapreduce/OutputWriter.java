@@ -114,4 +114,10 @@ public abstract class OutputWriter<O> implements Serializable {
   public boolean allowSliceRetry() {
     return false;
   }
+
+  /**
+   * called after shards completes for any necessary cleanup.
+   */
+  public void cleanup() {
+  }
 }
