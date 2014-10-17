@@ -176,6 +176,8 @@ public class GoogleCloudStorageMapOutputWriter<K, V>
         if (previousSliceFileName != null) {
           compose(ImmutableList.of(previousSliceFileName, fileName), fileName);
           ++compositionCount;
+        } else {
+          compositionCount = 1;
         }
         previousSliceFileName = fileName;
         channel = null;
