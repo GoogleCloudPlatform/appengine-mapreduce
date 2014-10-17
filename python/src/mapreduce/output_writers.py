@@ -58,6 +58,7 @@ from mapreduce import records
 # TODO(user): Cleanup imports if/when cloudstorage becomes part of runtime.
 try:
   # Check if the full cloudstorage package exists. The stub part is in runtime.
+  cloudstorage = None
   import cloudstorage
   if hasattr(cloudstorage, "_STUB"):
     cloudstorage = None
