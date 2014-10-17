@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 """Output writer interface for map job."""
 
-from . import shard_life_cycle
 from mapreduce import errors
 from mapreduce import json_util
+from mapreduce import shard_life_cycle
 
 # pylint: disable=protected-access
 # pylint: disable=invalid-name
@@ -80,7 +80,7 @@ class OutputWriter(shard_life_cycle._ShardLifeCycle, json_util.JsonMixin):
     """Create new writer for a shard.
 
     Args:
-      shard_ctx: map_job.ShardContext for this shard.
+      shard_ctx: map_job_context.ShardContext for this shard.
     """
     raise NotImplementedError("create() not implemented in %s" % cls)
 
@@ -103,7 +103,7 @@ class OutputWriter(shard_life_cycle._ShardLifeCycle, json_util.JsonMixin):
     (e.g a list of filenames)
 
     Args:
-      shard_ctx: map_job.ShardContext for this shard.
+      shard_ctx: map_job_context.ShardContext for this shard.
       iterator: an iterator that yields json serializable
         references to the outputs from this shard.
         Contents from the iterator can be accessible later via

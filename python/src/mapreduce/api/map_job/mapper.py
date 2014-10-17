@@ -1,9 +1,10 @@
 #!/usr/bin/env python
 """Interface for user defined mapper."""
 
-from . import shard_life_cycle
-# pylint: disable=invalid-name
+from mapreduce import shard_life_cycle
+
 # pylint: disable=protected-access
+# pylint: disable=invalid-name
 
 
 # TODO(user): Move common APIs to parent class.
@@ -51,7 +52,7 @@ class Mapper(shard_life_cycle._ShardLifeCycle):
     CAUTION! Carefully tune to not to exceed memory limit or request deadline.
 
     Args:
-      slice_ctx: map_job.SliceContext object.
+      slice_ctx: map_job_context.SliceContext object.
       val: a single value yielded by your input reader. The type
         depends on the input reader. For example, some may yield a single
         datastore entity, others may yield a (int, str) tuple.

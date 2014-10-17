@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 """Input Reader interface for map job."""
 
-from . import shard_life_cycle
 from mapreduce import errors
 from mapreduce import json_util
+from mapreduce import shard_life_cycle
 
 # pylint: disable=protected-access
 # pylint: disable=invalid-name

@@ -55,14 +55,15 @@ from mapreduce import handlers
 from mapreduce import hooks
 from mapreduce import input_readers
 from mapreduce import key_ranges
+from mapreduce import map_job_context
 from mapreduce import model
 from mapreduce import operation
 from mapreduce import output_writers
 from mapreduce import parameters
+from mapreduce import shard_life_cycle
 from mapreduce import test_support
 from mapreduce import util
 from mapreduce.api import map_job
-from mapreduce.api.map_job import shard_life_cycle
 from google.appengine.ext.webapp import mock_webapp
 
 
@@ -338,6 +339,27 @@ class TestOutputWriter(output_writers.OutputWriter):
   def _recover(self, mr_spec, shard_number, shard_attempt):
     self.events.append("recover")
     return self.__class__()
+
+
+class ShardLifeCycleOutputWriter(shard_life_cycle._ShardLifeCycle,
+                                 TestOutputWriter):
+  """OutputWriter implementing life cycle methods."""
+
+  def begin_shard(self, shard_ctx):
+    assert isinstance(shard_ctx, map_job_context.ShardContext)
+    self.events.append("begin_shard-%s" % shard_ctx.id)
+
+  def end_shard(self, shard_ctx):
+    assert isinstance(shard_ctx, map_job_context.ShardContext)
+    self.events.append("end_shard-%s" % shard_ctx.id)
+
+  def begin_slice(self, slice_ctx):
+    assert isinstance(slice_ctx, map_job_context.SliceContext)
+    self.events.append("begin_slice-%s" % slice_ctx.number)
+
+  def end_slice(self, slice_ctx):
+    assert isinstance(slice_ctx, map_job_context.SliceContext)
+    self.events.append("end_slice-%s" % slice_ctx.number)
 
 
 class UnfinalizableTestOutputWriter(TestOutputWriter):
@@ -1772,6 +1794,28 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
         model.ShardState.get_by_shard_id(self.shard_id),
         active=False,
         result_status=model.ShardState.RESULT_ABORTED)
+
+  def testLifeCycle(self):
+    """Tests life cycle methods are called."""
+    self.init(__name__ + ".test_handler_yield_keys",
+              output_writer_spec=__name__ + ".ShardLifeCycleOutputWriter")
+
+    e1 = TestEntity()
+    e1.put()
+
+    self._handle_request()
+    expected_events = [
+        "create-1",
+        "begin_shard-mapreduce0-1",
+        "begin_slice-0",
+        "write-agd0ZXN0YXBwchALEgpUZXN0RW50aXR5GAEM",
+        "end_slice-0",
+        "begin_slice-1",
+        "end_slice-1",
+        "end_shard-mapreduce0-1",
+        "finalize-1"
+    ]
+    self.assertEquals(expected_events, ShardLifeCycleOutputWriter.events)
 
   def testLongProcessingShouldStartAnotherSlice(self):
     """Long scan.
