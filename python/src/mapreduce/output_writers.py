@@ -1395,7 +1395,7 @@ class _GoogleCloudStorageConsistentOutputWriter(
       self._rewrite_tmpfile(status.mainfile, status.tmpfile.name, writer_spec)
 
     # clean all the garbage you can find
-    self._try_to_clean_garbage()
+    self._try_to_clean_garbage(writer_spec)
 
     # Rotate the files in status.
     status.tmpfile_1ago = status.tmpfile
@@ -1420,14 +1420,16 @@ class _GoogleCloudStorageConsistentOutputWriter(
     super(_GoogleCloudStorageConsistentOutputWriter, self).write(data)
     self._data_written_to_slice = True
 
-  def _try_to_clean_garbage(self):
+  def _try_to_clean_garbage(self, writer_spec):
     # Try to remove garbage (if any). Note that listbucket is not strongly
     # consistent so something might survive.
     tmpl = string.Template(self._TMPFILE_PREFIX)
     prefix = tmpl.substitute(
         id=self.status.mapreduce_id, shard=self.status.shard)
     bucket = self.status.writer_spec[self.BUCKET_NAME_PARAM]
-    for f in cloudstorage.listbucket("/%s/%s" % (bucket, prefix)):
+    account_id = writer_spec.get(self._ACCOUNT_ID_PARAM, None)
+    for f in cloudstorage.listbucket("/%s/%s" % (bucket, prefix),
+                                     _account_id=account_id):
       self._remove_file(f.filename, self.status.writer_spec)
 
   def finalize(self, ctx, shard_state):
@@ -1445,7 +1447,7 @@ class _GoogleCloudStorageConsistentOutputWriter(
     if self.status.tmpfile:
       self._remove_file(self.status.tmpfile.name, self.status.writer_spec)
 
-    self._try_to_clean_garbage()
+    self._try_to_clean_garbage(self.status.writer_spec)
 
     shard_state.writer_state = {"filename": self.status.mainfile.name}
 
