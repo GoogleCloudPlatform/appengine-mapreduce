@@ -130,6 +130,8 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
     """Constructor."""
     super(MapperWorkerCallbackHandler, self).__init__(*args)
     self._time = time.time
+    self.slice_context = None
+    self.shard_context = None
 
   def _drop_gracefully(self):
     """Drop worker task gracefully.
@@ -395,9 +397,9 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
         obj.end_shard(shard_context)
 
   def _lc_start_slice(self, tstate, slice_id):
-    self._maintain_LC(tstate.handler, slice_id)
-    self._maintain_LC(tstate.input_reader, slice_id)
     self._maintain_LC(tstate.output_writer, slice_id)
+    self._maintain_LC(tstate.input_reader, slice_id)
+    self._maintain_LC(tstate.handler, slice_id)
 
   def _lc_end_slice(self, tstate, slice_id, last_slice=False):
     self._maintain_LC(tstate.handler, slice_id, last_slice=last_slice,

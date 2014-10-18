@@ -30,6 +30,7 @@ from google.appengine.tools import os_compat
 from testlib import testutil
 
 import base64
+import collections
 import datetime
 import httplib
 import math
@@ -1699,6 +1700,36 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
     self.assertEqual(
         obj.mock_calls,
         [mock.call.end_slice(slice_ctx)])
+
+  def testLCBeginSliceCallOrdering(self):
+    parent = mock.MagicMock()
+    parent.handler = mock.Mock(spec=shard_life_cycle._ShardLifeCycle)
+    parent.input_reader = mock.Mock(spec=shard_life_cycle._ShardLifeCycle)
+    parent.output_writer = mock.Mock(spec=shard_life_cycle._ShardLifeCycle)
+
+    TState = collections.namedtuple(
+        "TState", ["handler", "input_reader", "output_writer"])
+    tstate = TState(parent.handler, parent.input_reader, parent.output_writer)
+
+    self.handler._lc_start_slice(tstate, 42)
+    parent.assert_has_calls([mock.call.output_writer.begin_slice(None),
+                             mock.call.input_reader.begin_slice(None),
+                             mock.call.handler.begin_slice(None)])
+
+  def testLCEndSliceCallOrdering(self):
+    parent = mock.MagicMock()
+    parent.handler = mock.Mock(spec=shard_life_cycle._ShardLifeCycle)
+    parent.input_reader = mock.Mock(spec=shard_life_cycle._ShardLifeCycle)
+    parent.output_writer = mock.Mock(spec=shard_life_cycle._ShardLifeCycle)
+
+    TState = collections.namedtuple(
+        "TState", ["handler", "input_reader", "output_writer"])
+    tstate = TState(parent.handler, parent.input_reader, parent.output_writer)
+
+    self.handler._lc_end_slice(tstate, 42)
+    parent.assert_has_calls([mock.call.handler.end_slice(None),
+                             mock.call.input_reader.end_slice(None),
+                             mock.call.output_writer.end_slice(None)])
 
   def testCompletedState(self):
     self.shard_state.input_finished = True
