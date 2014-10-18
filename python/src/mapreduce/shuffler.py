@@ -30,22 +30,34 @@ __all__ = [
 import gc
 import heapq
 import logging
+import pickle
 import time
 
 from mapreduce.third_party import pipeline
 from mapreduce.third_party.pipeline import common as pipeline_common
-from google.appengine.api import files
 from google.appengine.api.files import file_service_pb
 from google.appengine.ext import db
 from mapreduce import context
 from mapreduce import errors
 from mapreduce import input_readers
 from mapreduce import mapper_pipeline
+from mapreduce import model
 from mapreduce import operation
 from mapreduce import output_writers
 from mapreduce import pipeline_base
 from mapreduce import records
 from mapreduce import util
+
+# pylint: disable=g-import-not-at-top
+# TODO(user): Cleanup imports if/when cloudstorage becomes part of runtime.
+try:
+  # Check if the full cloudstorage package exists. The stub part is in runtime.
+  import cloudstorage
+  if hasattr(cloudstorage, "_STUB"):
+    cloudstorage = None
+except ImportError:
+  pass  # CloudStorage library not available
+
 
 # pylint: disable=g-bad-name
 # pylint: disable=protected-access
@@ -80,23 +92,28 @@ def _compare_keys(key_record1, key_record2):
   return cmp(key_record1[0], key_record2[0])
 
 
-class _BatchRecordsReader(input_readers.RecordsReader):
-  """Records reader that reads in big batches."""
+class _BatchGCSRecordsReader(
+    input_readers._GoogleCloudStorageRecordInputReader):
+  """GCS Records reader that reads in big batches."""
 
-  BATCH_SIZE = 1024*1024 * 3
+  BATCH_SIZE = 1024 *1024 * 3
 
   def __iter__(self):
     # pylint: disable=redefined-outer-name
     records = []
     size = 0
-    for record in input_readers.RecordsReader.__iter__(self):
-      records.append(record)
-      size += len(record)
-      if size > self.BATCH_SIZE:
-        yield records
-        size = 0
-        records = []
-        gc.collect()
+    try:
+      while True:
+        record = super(_BatchGCSRecordsReader, self).next()
+        records.append(record)
+        size += len(record)
+        if size > self.BATCH_SIZE:
+          yield records
+          size = 0
+          records = []
+          gc.collect()
+    except StopIteration:
+      pass
     if records:
       yield records
       records = []
@@ -108,7 +125,7 @@ def _sort_records_map(records):
   """Map function sorting records.
 
   Converts records to KeyValue protos, sorts them by key and writes them
-  into new blobstore file. Creates _OutputFile entity to record resulting
+  into new GCS file. Creates _OutputFile entity to record resulting
   file name.
 
   Args:
@@ -128,20 +145,21 @@ def _sort_records_map(records):
   key_records.sort(cmp=_compare_keys)
 
   logging.debug("Writing")
-  blob_file_name = (ctx.mapreduce_spec.name + "-" +
-                    ctx.mapreduce_id + "-output")
-  output_path = files.blobstore.create(
-      _blobinfo_uploaded_filename=blob_file_name)
-  with output_writers.RecordsPool(output_path, ctx=ctx) as pool:
+  mapper_spec = ctx.mapreduce_spec.mapper
+  params = input_readers._get_params(mapper_spec)
+  bucket_name = params.get("bucket_name")
+  filename = (ctx.mapreduce_spec.name + "/" + ctx.mapreduce_id + "/output-" +
+              ctx.shard_id + "-" + str(int(time.time())))
+  full_filename = "/%s/%s" % (bucket_name, filename)
+  filehandle = cloudstorage.open(full_filename, mode="w")
+  with output_writers.GCSRecordsPool(filehandle, ctx=ctx) as pool:
     for key_record in key_records:
       pool.append(key_record[1])
 
   logging.debug("Finalizing")
-  files.finalize(output_path)
-  output_path = files.blobstore.get_file_name(
-      files.blobstore.get_blob_key(output_path))
+  filehandle.close()
 
-  entity = _OutputFile(key_name=output_path,
+  entity = _OutputFile(key_name=full_filename,
                        parent=_OutputFile.get_root_key(ctx.mapreduce_id))
   entity.put()
 
@@ -151,25 +169,30 @@ class _SortChunksPipeline(pipeline_base.PipelineBase):
 
   Args:
     job_name: root job name.
-    filenames: list of filenames to sort.
+    bucket_name: The name of the Google Cloud Storage bucket.
+    filenames: list of a list of filenames (hashed/bucketed) to sort,
+      as produced by _HashingGCSOutputWriter.
 
   Returns:
-    The list of lists of sorted filenames. Each list corresponds to one
-    input file. Each filenames contains a chunk of sorted data.
+    The list of lists of sorted filenames. Each list corresponds to each
+    list of input files. Each filenames contains a chunk of sorted data.
   """
 
-  def run(self, job_name, filenames):
+  def run(self, job_name, bucket_name, filenames):
     sort_mappers = []
     for i in range(len(filenames)):
-      filename = filenames[i]
+      filenames_only = util.strip_prefix_from_items("/%s/" % bucket_name,
+                                                    filenames[i])
       sort_mapper = yield mapper_pipeline.MapperPipeline(
           "%s-shuffle-sort-%s" % (job_name, str(i)),
           __name__ + "._sort_records_map",
-          __name__ + "._BatchRecordsReader",
+          __name__ + "._BatchGCSRecordsReader",
           None,
           {
-              "files": [filename],
-              "processing_rate": 1000000,
+              "input_reader": {
+                  "bucket_name": bucket_name,
+                  "objects": filenames_only,
+              },
           },
           shards=1)
       sort_mappers.append(sort_mapper)
@@ -230,6 +253,9 @@ class _MergingReader(input_readers.InputReader):
   MAX_VALUES_COUNT_PARAM = "max_values_count"
   MAX_VALUES_SIZE_PARAM = "max_values_size"
 
+  # Use a smaller buffer than the default.
+  GCS_BUFFER_SIZE = 256 * 1024  # 256K.
+
   def __init__(self,
                offsets,
                max_values_count,
@@ -272,7 +298,10 @@ class _MergingReader(input_readers.InputReader):
     # Initialize heap
     for (i, filename) in enumerate(filenames):
       offset = self._offsets[i]
-      reader = records.RecordsReader(files.BufferedFile(filename))
+      # TODO(user): Shrinking the buffer size is a workaround until
+      # a tiered/segmented merge is implemented.
+      reader = records.RecordsReader(
+          cloudstorage.open(filename, read_buffer_size=self.GCS_BUFFER_SIZE))
       reader.seek(offset)
       readers.append((None, None, i, reader))
 
@@ -372,21 +401,29 @@ class _MergingReader(input_readers.InputReader):
       raise errors.BadReaderParamsError("Missing files parameter.")
 
 
-class _HashingBlobstoreOutputWriter(output_writers.BlobstoreOutputWriterBase):
-  """An OutputWriter which outputs data into blobstore in key-value format.
+class _HashingGCSOutputWriter(output_writers.OutputWriter):
+  """An OutputWriter which outputs data into GCS in key-value format.
 
   The output is tailored towards shuffler needs. It shards key/values using
-  key hash modulo number of output files.
+  key hash modulo number of output files. Each shard will hash keys that will
+  be placed in one of shard_count number of files (buckets) specific to that
+  shard. The same key will be hashed to the same logical file across all of
+  the shards. Then the list of all the same logical files will be assembled
+  and a list of those lists will be returned.
   """
 
+  # Supported parameters
+  BUCKET_NAME_PARAM = "bucket_name"
+
   # pylint: disable=super-init-not-called
-  def __init__(self, filenames):
+  def __init__(self, filehandles):
     """Constructor.
 
     Args:
-      filenames: list of filenames that this writer outputs to.
+      filehandles: list of file handles that this writer outputs to.
     """
-    self._filenames = filenames
+    self._filehandles = filehandles
+    self._pools = [None] * len(filehandles)
 
   @classmethod
   def validate(cls, mapper_spec):
@@ -399,26 +436,12 @@ class _HashingBlobstoreOutputWriter(output_writers.BlobstoreOutputWriterBase):
     """
     if mapper_spec.output_writer_class() != cls:
       raise errors.BadWriterParamsError("Output writer class mismatch")
-
-  @classmethod
-  def init_job(cls, mapreduce_state):
-    """Initialize job-level writer state.
-
-    Args:
-      mapreduce_state: an instance of model.MapreduceState describing current
-      job. State can be modified during initialization.
-    """
-    shards = mapreduce_state.mapreduce_spec.mapper.shard_count
-
-    filenames = []
-    for i in range(shards):
-      blob_file_name = (mapreduce_state.mapreduce_spec.name +
-                        "-" + mapreduce_state.mapreduce_spec.mapreduce_id +
-                        "-output-" + str(i))
-      filenames.append(
-          files.blobstore.create(
-              _blobinfo_uploaded_filename=blob_file_name))
-    mapreduce_state.writer_state = {"filenames": filenames}
+    params = output_writers._get_params(mapper_spec)
+    # Bucket Name is required
+    if cls.BUCKET_NAME_PARAM not in params:
+      raise errors.BadWriterParamsError(
+          "%s is required for the _HashingGCSOutputWriter" %
+          cls.BUCKET_NAME_PARAM)
 
   @classmethod
   def finalize_job(cls, mapreduce_state):
@@ -428,13 +451,16 @@ class _HashingBlobstoreOutputWriter(output_writers.BlobstoreOutputWriterBase):
       mapreduce_state: an instance of model.MapreduceState describing current
         job. State can be modified during finalization.
     """
-    finalized_filenames = []
-    for filename in mapreduce_state.writer_state["filenames"]:
-      files.finalize(filename)
-      finalized_filenames.append(
-          files.blobstore.get_file_name(
-              files.blobstore.get_blob_key(filename)))
-    mapreduce_state.writer_state = {"filenames": finalized_filenames}
+    shards = mapreduce_state.mapreduce_spec.mapper.shard_count
+    filenames = []
+    for _ in range(shards):
+      filenames.append([None] * shards)
+    shard_states = model.ShardState.find_all_by_mapreduce_state(mapreduce_state)
+    for x, shard_state in enumerate(shard_states):
+      shard_filenames = shard_state.writer_state["shard_filenames"]
+      for y in range(shards):
+        filenames[y][x] = shard_filenames[y]
+    mapreduce_state.writer_state = {"filenames": filenames}
 
   @classmethod
   def from_json(cls, json):
@@ -446,7 +472,7 @@ class _HashingBlobstoreOutputWriter(output_writers.BlobstoreOutputWriterBase):
     Returns:
       An instance of the OutputWriter configured using the values of json.
     """
-    return cls(json["filenames"])
+    return cls(pickle.loads(json["filehandles"]))
 
   def to_json(self):
     """Returns writer state to serialize in json.
@@ -454,12 +480,29 @@ class _HashingBlobstoreOutputWriter(output_writers.BlobstoreOutputWriterBase):
     Returns:
       A json-izable version of the OutputWriter state.
     """
-    return {"filenames": self._filenames}
+    # Use the member variable (since we don't have access to the context) to
+    # flush each pool to minimize the size of each filehandle before we
+    # serialize it.
+    for pool in self._pools:
+      if pool is not None:
+        pool.flush(True)
+    return {"filehandles": pickle.dumps(self._filehandles)}
 
   @classmethod
   def create(cls, mr_spec, shard_number, shard_attempt, _writer_state=None):
     """Inherit docs."""
-    return cls(_writer_state["filenames"])
+    mapper_spec = mr_spec.mapper
+    params = output_writers._get_params(mapper_spec)
+    bucket_name = params.get(cls.BUCKET_NAME_PARAM)
+    shards = mapper_spec.shard_count
+
+    filehandles = []
+    filename = (mr_spec.name + "/" + mr_spec.mapreduce_id +
+                "/shard-" + str(shard_number) + "-bucket-")
+    for i in range(shards):
+      full_filename = "/%s/%s%d" % (bucket_name, filename, i)
+      filehandles.append(cloudstorage.open(full_filename, mode="w"))
+    return cls(filehandles)
 
   @classmethod
   def get_filenames(cls, mapreduce_state):
@@ -469,7 +512,12 @@ class _HashingBlobstoreOutputWriter(output_writers.BlobstoreOutputWriterBase):
     return []
 
   def finalize(self, ctx, shard_state):
-    pass
+    """See parent class."""
+    filenames = []
+    for filehandle in self._filehandles:
+      filenames.append(filehandle.name)
+      filehandle.close()
+    shard_state.writer_state = {"shard_filenames": filenames}
 
   def write(self, data):
     """Write data.
@@ -489,17 +537,22 @@ class _HashingBlobstoreOutputWriter(output_writers.BlobstoreOutputWriterBase):
       logging.error("Expecting a tuple, but got %s: %s",
                     data.__class__.__name__, data)
 
-    file_index = key.__hash__() % len(self._filenames)
-    pool_name = "kv_pool%d" % file_index
-    filename = self._filenames[file_index]
+    file_index = key.__hash__() % len(self._filehandles)
 
-    if ctx.get_pool(pool_name) is None:
-      ctx.register_pool(pool_name,
-                        output_writers.RecordsPool(filename=filename, ctx=ctx))
+    # Work-around: Since we don't have access to the context in the to_json()
+    # function, but we need to flush each pool before we serialize the
+    # filehandle, we rely on a member variable instead of using context for
+    # pool management.
+    pool = self._pools[file_index]
+    if pool is None:
+      filehandle = self._filehandles[file_index]
+      pool = output_writers.GCSRecordsPool(filehandle=filehandle, ctx=ctx)
+      self._pools[file_index] = pool
+
     proto = file_service_pb.KeyValue()
     proto.set_key(key)
     proto.set_value(value)
-    ctx.get_pool(pool_name).append(proto.Encode())
+    pool.append(proto.Encode())
 
 
 class _ShardOutputs(pipeline_base.PipelineBase):
@@ -595,7 +648,7 @@ class _HashPipeline(pipeline_base.PipelineBase):
 
   Args:
     job_name: root mapreduce job name.
-    bucket_name: The name of your Google Cloud Storage bucket.
+    bucket_name: The name of the Google Cloud Storage bucket.
     filenames: filenames of mapper output. Should be of records format
       with serialized KeyValue proto.
     shards: Optional. Number of output shards to generate. Defaults
@@ -616,11 +669,14 @@ class _HashPipeline(pipeline_base.PipelineBase):
         job_name + "-shuffle-hash",
         __name__ + "._hashing_map",
         input_readers.__name__ + "._GoogleCloudStorageRecordInputReader",
-        output_writer_spec=__name__ + "._HashingBlobstoreOutputWriter",
+        output_writer_spec=__name__ + "._HashingGCSOutputWriter",
         params={
             "input_reader": {
                 "bucket_name": bucket_name,
                 "objects": filenames_only,
+            },
+            "output_writer": {
+                "bucket_name": bucket_name,
             },
         },
         shards=shards)
@@ -651,7 +707,8 @@ class ShufflePipeline(pipeline_base.PipelineBase):
     bucket_name = mapper_params["bucket_name"]
     hashed_files = yield _HashPipeline(job_name, bucket_name,
                                        filenames, shards=shards)
-    sorted_files = yield _SortChunksPipeline(job_name, hashed_files)
+    sorted_files = yield _SortChunksPipeline(job_name, bucket_name,
+                                             hashed_files)
     temp_files = [hashed_files, sorted_files]
 
     merged_files = yield _MergePipeline(job_name, bucket_name, sorted_files)

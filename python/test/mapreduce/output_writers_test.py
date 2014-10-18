@@ -141,8 +141,29 @@ class GCSRecordsPoolTest(testutil.CloudStorageTestBase):
     self.assertRaises(cloudstorage.errors.NotFoundError, cloudstorage.open,
                       self.filename)
     self.pool.flush()
+    self.assertRaises(cloudstorage.errors.NotFoundError, cloudstorage.open,
+                      self.filename)
     # File handle does need to be explicitly closed.
     self.filehandle.close()
+    self.assertEquals(32 * 1024, cloudstorage.stat(self.filename).st_size)
+    self.assertEquals(
+        ["a", "b"],
+        list(records.RecordsReader(cloudstorage.open(self.filename))))
+
+  def testAppendAndForceFlush(self):
+    self.pool.append("a")
+    self.assertRaises(cloudstorage.errors.NotFoundError, cloudstorage.open,
+                      self.filename)
+    self.pool.append("b")
+    self.assertRaises(cloudstorage.errors.NotFoundError, cloudstorage.open,
+                      self.filename)
+    self.pool.flush(True)
+    self.assertRaises(cloudstorage.errors.NotFoundError, cloudstorage.open,
+                      self.filename)
+    # File handle does need to be explicitly closed.
+    self.filehandle.close()
+    # Check the file size contains the padding.
+    self.assertEquals(256 * 1024, cloudstorage.stat(self.filename).st_size)
     self.assertEquals(
         ["a", "b"],
         list(records.RecordsReader(cloudstorage.open(self.filename))))

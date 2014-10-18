@@ -9,7 +9,6 @@ import unittest
 
 from mapreduce.third_party import pipeline
 
-from google.appengine.api import files
 from google.appengine.api.files import file_service_pb
 import cloudstorage
 from mapreduce import base_handler
@@ -57,16 +56,18 @@ class HashEndToEndTest(testutil.HandlerTestBase):
     test_support.execute_until_empty(self.taskqueue)
     p = shuffler._HashPipeline.from_id(p.pipeline_id)
 
-    output_files = p.outputs.default.value
+    list_of_output_files = p.outputs.default.value
     output_data = []
-    for output_file in output_files:
-      with files.open(output_file, "r") as f:
-        for binary_record in records.RecordsReader(f):
-          proto = file_service_pb.KeyValue()
-          proto.ParseFromString(binary_record)
-          output_data.append((proto.key(), proto.value()))
+    for output_files in list_of_output_files:
+      for output_file in output_files:
+        with cloudstorage.open(output_file) as f:
+          for binary_record in records.RecordsReader(f):
+            proto = file_service_pb.KeyValue()
+            proto.ParseFromString(binary_record)
+            output_data.append((proto.key(), proto.value()))
 
     output_data.sort()
+    self.assertEquals(300, len(output_data))
     for i in range(len(input_data)):
       self.assertEquals(input_data[i], output_data[(3 * i)])
       self.assertEquals(input_data[i], output_data[(3 * i) + 1])
@@ -89,23 +90,22 @@ class SortFileEndToEndTest(testutil.HandlerTestBase):
 
   def testSortFile(self):
     """Test sorting a file."""
-    input_file = files.blobstore.create()
+    bucket_name = "testbucket"
+    test_filename = "testfile"
+    full_filename = "/%s/%s" % (bucket_name, test_filename)
 
     input_data = [
         (str(i), "_" + str(i)) for i in range(100)]
 
-    with files.open(input_file, "a") as f:
+    with cloudstorage.open(full_filename, mode="w") as f:
       with records.RecordsWriter(f) as w:
         for (k, v) in input_data:
           proto = file_service_pb.KeyValue()
           proto.set_key(k)
           proto.set_value(v)
           w.write(proto.Encode())
-    files.finalize(input_file)
-    input_file = files.blobstore.get_file_name(
-        files.blobstore.get_blob_key(input_file))
 
-    p = shuffler._SortChunksPipeline("testjob", [input_file])
+    p = shuffler._SortChunksPipeline("testjob", bucket_name, [[full_filename]])
     p.start()
     test_support.execute_until_empty(self.taskqueue)
     p = shuffler._SortChunksPipeline.from_id(p.pipeline_id)
@@ -114,7 +114,7 @@ class SortFileEndToEndTest(testutil.HandlerTestBase):
     output_files = p.outputs.default.value[0]
     output_data = []
     for output_file in output_files:
-      with files.open(output_file, "r") as f:
+      with cloudstorage.open(output_file) as f:
         for binary_record in records.RecordsReader(f):
           proto = file_service_pb.KeyValue()
           proto.ParseFromString(binary_record)
@@ -134,6 +134,7 @@ class TestMergePipeline(base_handler.PipelineBase):
   """A pipeline to merge-sort multiple sorted files.
 
   Args:
+    bucket_name: The name of the Google Cloud Storage bucket.
     filenames: list of input file names as string. Each file is of records
     format with file_service_pb.KeyValue protocol messages. All files should
     be sorted by key value.
@@ -143,18 +144,21 @@ class TestMergePipeline(base_handler.PipelineBase):
     str((key, values)) obtained from MergingReader.
   """
 
-  def run(self, filenames):
+  def run(self, bucket_name, filenames):
     yield mapreduce_pipeline.MapperPipeline(
         "sort",
         __name__ + ".test_handler_yield_str",
         shuffler.__name__ + "._MergingReader",
-        output_writers.__name__ + ".BlobstoreRecordsOutputWriter",
+        output_writers.__name__ + "._GoogleCloudStorageRecordOutputWriter",
         params={
             shuffler._MergingReader.FILES_PARAM: [filenames],
             shuffler._MergingReader.MAX_VALUES_COUNT_PARAM:
                 shuffler._MergePipeline._MAX_VALUES_COUNT,
             shuffler._MergingReader.MAX_VALUES_SIZE_PARAM:
                 shuffler._MergePipeline._MAX_VALUES_SIZE,
+            "output_writer": {
+                "bucket_name": bucket_name,
+            },
         },
         )
 
@@ -177,27 +181,27 @@ class MergingReaderEndToEndTest(testutil.HandlerTestBase):
     input_data = [(str(i), "_" + str(i)) for i in range(100)]
     input_data.sort()
 
-    input_file = files.blobstore.create()
+    bucket_name = "testbucket"
+    test_filename = "testfile"
+    full_filename = "/%s/%s" % (bucket_name, test_filename)
 
-    with files.open(input_file, "a") as f:
+    with cloudstorage.open(full_filename, mode="w") as f:
       with records.RecordsWriter(f) as w:
         for (k, v) in input_data:
           proto = file_service_pb.KeyValue()
           proto.set_key(k)
           proto.set_value(v)
           w.write(proto.Encode())
-    files.finalize(input_file)
-    input_file = files.blobstore.get_file_name(
-        files.blobstore.get_blob_key(input_file))
 
-    p = TestMergePipeline([input_file, input_file, input_file])
+    p = TestMergePipeline(bucket_name,
+                          [full_filename, full_filename, full_filename])
     p.start()
     test_support.execute_until_empty(self.taskqueue)
     p = TestMergePipeline.from_id(p.pipeline_id)
 
     output_file = p.outputs.default.value[0]
     output_data = []
-    with files.open(output_file, "r") as f:
+    with cloudstorage.open(output_file) as f:
       for record in records.RecordsReader(f):
         output_data.append(record)
 
@@ -216,27 +220,27 @@ class MergingReaderEndToEndTest(testutil.HandlerTestBase):
       input_data = [("1", "a"), ("2", "b"), ("3", "c")]
       input_data.sort()
 
-      input_file = files.blobstore.create()
+      bucket_name = "testbucket"
+      test_filename = "testfile"
+      full_filename = "/%s/%s" % (bucket_name, test_filename)
 
-      with files.open(input_file, "a") as f:
+      with cloudstorage.open(full_filename, mode="w") as f:
         with records.RecordsWriter(f) as w:
           for (k, v) in input_data:
             proto = file_service_pb.KeyValue()
             proto.set_key(k)
             proto.set_value(v)
             w.write(proto.Encode())
-      files.finalize(input_file)
-      input_file = files.blobstore.get_file_name(
-          files.blobstore.get_blob_key(input_file))
 
-      p = TestMergePipeline([input_file, input_file, input_file])
+      p = TestMergePipeline(bucket_name,
+                            [full_filename, full_filename, full_filename])
       p.start()
       test_support.execute_until_empty(self.taskqueue)
       p = TestMergePipeline.from_id(p.pipeline_id)
 
       output_file = p.outputs.default.value[0]
       output_data = []
-      with files.open(output_file, "r") as f:
+      with cloudstorage.open(output_file) as f:
         for record in records.RecordsReader(f):
           output_data.append(record)
 

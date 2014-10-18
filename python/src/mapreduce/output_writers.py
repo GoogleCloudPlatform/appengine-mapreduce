@@ -503,6 +503,9 @@ class RecordsPool(_RecordsPoolBase):
 class GCSRecordsPool(_RecordsPoolBase):
   """Pool of append operations for records using GCS."""
 
+  # GCS writes in 256K blocks.
+  _GCS_BLOCK_SIZE = 256 * 1024  # 256K
+
   def __init__(self,
                filehandle,
                flush_size_chars=_FILE_POOL_FLUSH_SIZE,
@@ -511,10 +514,26 @@ class GCSRecordsPool(_RecordsPoolBase):
     """Requires the filehandle of an open GCS file to write to."""
     super(GCSRecordsPool, self).__init__(flush_size_chars, ctx, exclusive)
     self._filehandle = filehandle
+    self._buf_size = 0
 
   def _write(self, str_buf):
     """Uses the filehandle to the file in GCS to write to it."""
     self._filehandle.write(str_buf)
+    self._buf_size += len(str_buf)
+
+  def flush(self, force=False):
+    """Flush pool contents.
+
+    Args:
+      force: Inserts additional padding to achieve the minimum block size
+        required for GCS.
+    """
+    super(GCSRecordsPool, self).flush()
+    if force:
+      extra_padding = self._buf_size % self._GCS_BLOCK_SIZE
+      if extra_padding > 0:
+        self._write("\x00" * (self._GCS_BLOCK_SIZE - extra_padding))
+    self._filehandle.flush()
 
 
 class FileOutputWriterBase(OutputWriter):
