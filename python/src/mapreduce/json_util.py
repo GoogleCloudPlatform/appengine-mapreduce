@@ -8,6 +8,7 @@ from mapreduce.third_party import simplejson
 from google.appengine.api import datastore_errors
 from google.appengine.api import datastore_types
 from google.appengine.ext import db
+from google.appengine.ext import ndb
 
 import base64
 import zlib
@@ -92,6 +93,19 @@ _register_json_primitive(datetime.datetime,
                          _json_encode_datetime,
                          _json_decode_datetime)
 
+# ndb.Key
+def _JsonEncodeKey(o):
+    """Json encode an ndb.Key object."""
+    return {'key_string': o.urlsafe()}
+
+def _JsonDecodeKey(d):
+    """Json decode a ndb.Key object."""
+    k_c = d['key_string']
+    if isinstance(k_c, (list, tuple)):
+        return ndb.Key(flat=k_c)
+    return ndb.Key(urlsafe=d['key_string'])
+
+_register_json_primitive(ndb.Key, _JsonEncodeKey, _JsonDecodeKey)
 
 class JsonMixin(object):
   """Simple, stateless json utilities mixin.
