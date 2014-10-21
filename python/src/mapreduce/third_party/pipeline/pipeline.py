@@ -3129,10 +3129,8 @@ def get_pipeline_names():
   """Returns the class paths of all Pipelines defined in alphabetical order."""
   class_path_set = set()
   for cls in _PipelineMeta._all_classes:
-    if cls._class_path is None:
-      cls._set_class_path()
-    if cls._class_path is not None:
-      class_path_set.add(cls._class_path)
+      if cls.class_path is not None:
+        class_path_set.add(cls.class_path)
   return sorted(class_path_set)
 
 
