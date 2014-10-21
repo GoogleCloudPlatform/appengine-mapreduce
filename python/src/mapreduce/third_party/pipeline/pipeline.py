@@ -29,6 +29,7 @@ __all__ = [
 import datetime
 import hashlib
 import itertools
+import json
 import logging
 import os
 import pprint
@@ -48,7 +49,6 @@ from google.appengine.ext import webapp
 
 # Relative imports
 import models
-from mapreduce.third_party import simplejson
 import status_ui
 import util as mr_util
 
@@ -255,7 +255,7 @@ class Slot(object):
     self._filler_pipeline_key = filler_pipeline_key
     self._fill_datetime = datetime.datetime.utcnow()
     # Convert to JSON and back again, to simulate the behavior of production.
-    self._value = simplejson.loads(simplejson.dumps(
+    self._value = json.loads(json.dumps(
         value, cls=mr_util.JsonEncoder), cls=mr_util.JsonDecoder)
 
   def __repr__(self):
@@ -1361,7 +1361,7 @@ def _generate_args(pipeline, future, queue_name, base_path):
     output_slot_keys.add(slot.key)
     output_slots[name] = str(slot.key)
 
-  params_encoded = simplejson.dumps(params, cls=mr_util.JsonEncoder)
+  params_encoded = json.dumps(params, cls=mr_util.JsonEncoder)
   params_text = None
   params_blob = None
   if len(params_encoded) > _MAX_JSON_SIZE:
@@ -1429,9 +1429,9 @@ class _PipelineContext(object):
     if _TEST_MODE:
       slot._set_value_test(filler_pipeline_key, value)
     else:
-      encoded_value = simplejson.dumps(value,
-                                       sort_keys=True,
-                                       cls=mr_util.JsonEncoder)
+      encoded_value = json.dumps(value,
+                                 sort_keys=True,
+                                 cls=mr_util.JsonEncoder)
       value_text = None
       value_blob = None
       if len(encoded_value) <= _MAX_JSON_SIZE:
