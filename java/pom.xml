@@ -86,7 +86,7 @@
     <dependency>
       <groupId>com.google.appengine.tools</groupId>
       <artifactId>appengine-pipeline</artifactId>
-      <version>[0.2.8,1.0)</version>
+      <version>[0.2.11,1.0)</version>
       <exclusions>
         <exclusion>
           <groupId>com.google.guava</groupId>

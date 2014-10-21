@@ -4,6 +4,7 @@ import com.google.appengine.tools.cloudstorage.GcsFilename;
 import com.google.appengine.tools.pipeline.FutureValue;
 import com.google.appengine.tools.pipeline.Job1;
 import com.google.appengine.tools.pipeline.JobSetting;
+import com.google.appengine.tools.pipeline.Jobs;
 import com.google.appengine.tools.pipeline.PipelineService;
 import com.google.appengine.tools.pipeline.PipelineServiceFactory;
 import com.google.appengine.tools.pipeline.Value;
@@ -29,14 +30,14 @@ public class CleanupPipelineJob extends Job1<Void, List<GcsFilename>> {
   public Value<Void> run(List<GcsFilename> files) {
     List<List<GcsFilename>> batches = Lists.partition(files, DELETE_BATCH_SIZE);
     int index = 0;
-    JobSetting[] settings = new JobSetting[batches.size()];
+    @SuppressWarnings("unchecked")
+    FutureValue<Void>[] futures = new FutureValue[batches.size()];
     for (List<GcsFilename> batch : batches) {
       FutureValue<Void> futureCall =
           futureCall(new DeleteFilesJob(), immediate(new ArrayList<>(batch)));
-      settings[index++] = waitFor(futureCall);
+      futures[index++] = futureCall;
     }
-    // TODO(user): should not be needed once b/9940384 is fixed
-    return futureCall(new DeletePipelineJob(getPipelineKey().getName()), settings);
+    return Jobs.waitForAllAndDelete(this, null, futures);
   }
 
   public static void cleanup(List<GcsFilename> toDelete, JobSetting... settings) {
