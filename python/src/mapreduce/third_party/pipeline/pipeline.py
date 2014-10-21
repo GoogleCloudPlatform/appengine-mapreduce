@@ -115,8 +115,13 @@ class Retry(PipelineUserError):
 class Abort(PipelineUserError):
   """The currently running pipeline should be aborted up to the root."""
 
+
 class PipelineStatusError(Error):
   """Exceptions raised when trying to collect pipeline status."""
+
+
+class _CallbackTaskError(Error):
+  """A callback task was unable to execute properly for some reason."""
 
 
 ################################################################################
@@ -142,6 +147,8 @@ _DEBUG = False
 _MAX_JSON_SIZE = 900000
 
 _ENFORCE_AUTH = True
+
+_MAX_CALLBACK_TASK_RETRIES = 5
 
 ################################################################################
 
@@ -2695,51 +2702,63 @@ class _CallbackHandler(webapp.RequestHandler):
     self.get()
 
   def get(self):
-    # NOTE: The rest of these validations and the undescriptive error code 400
-    # are present to address security risks of giving external users access to
-    # cause PipelineRecord lookups and execution. This approach is still
-    # vulnerable to timing attacks, since db.get() will have different latency
-    # depending on existence. Luckily, the key names are generally unguessable
-    # UUIDs, so the risk here is low.
+    try:
+      self.run_callback()
+    except _CallbackTaskError, e:
+      logging.error(str(e))
+      if 'HTTP_X_APPENGINE_TASKRETRYCOUNT' in self.request.environ:
+        # Silently give up on tasks that have retried many times. This
+        # probably means that the target pipeline has been deleted, so there's
+        # no reason to keep trying this task forever.
+        retry_count = int(
+            self.request.environ.get('HTTP_X_APPENGINE_TASKRETRYCOUNT'))
+        if retry_count > _MAX_CALLBACK_TASK_RETRIES:
+          logging.error('Giving up on task after %d retries',
+                        _MAX_CALLBACK_TASK_RETRIES)
+          return
 
+      # NOTE: The undescriptive error code 400 are present to address security
+      # risks of giving external users access to cause PipelineRecord lookups
+      # and execution.
+      self.response.set_status(400)
+
+  def run_callback(self):
+    """Runs the callback for the pipeline specified in the request.
+
+    Raises:
+      _CallbackTaskError if something was wrong with the request parameters.
+    """
     pipeline_id = self.request.get('pipeline_id')
     if not pipeline_id:
-      logging.error('"pipeline_id" parameter missing.')
-      self.response.set_status(400)
-      return
+      raise _CallbackTaskError('"pipeline_id" parameter missing.')
 
     pipeline_key = db.Key.from_path(_PipelineRecord.kind(), pipeline_id)
     pipeline_record = db.get(pipeline_key)
     if pipeline_record is None:
-      logging.error('Pipeline ID "%s" for callback does not exist.',
-                    pipeline_id)
-      self.response.set_status(400)
-      return
+      raise _CallbackTaskError(
+          'Pipeline ID "%s" for callback does not exist.' % pipeline_id)
 
     params = pipeline_record.params
     real_class_path = params['class_path']
     try:
       pipeline_func_class = mr_util.for_name(real_class_path)
     except ImportError, e:
-      logging.error('Cannot load class named "%s" for pipeline ID "%s".',
-                    real_class_path, pipeline_id)
-      self.response.set_status(400)
-      return
+      raise _CallbackTaskError(
+          'Cannot load class named "%s" for pipeline ID "%s".'
+          % (real_class_path, pipeline_id))
 
     if 'HTTP_X_APPENGINE_TASKNAME' not in self.request.environ:
       if pipeline_func_class.public_callbacks:
         pass
       elif pipeline_func_class.admin_callbacks:
         if not users.is_current_user_admin():
-          logging.error('Unauthorized callback for admin-only pipeline ID "%s"',
-                        pipeline_id)
-          self.response.set_status(400)
-          return
+          raise _CallbackTaskError(
+              'Unauthorized callback for admin-only pipeline ID "%s"'
+              % pipeline_id)
       else:
-        logging.error('External callback for internal-only pipeline ID "%s"',
-                      pipeline_id)
-        self.response.set_status(400)
-        return
+        raise _CallbackTaskError(
+            'External callback for internal-only pipeline ID "%s"'
+            % pipeline_id)
 
     kwargs = {}
     for key in self.request.arguments():
@@ -2749,9 +2768,8 @@ class _CallbackHandler(webapp.RequestHandler):
     def perform_callback():
       stage = pipeline_func_class.from_id(pipeline_id)
       if stage is None:
-        logging.error('Pipeline ID "%s" deleted during callback', pipeline_id)
-        self.response.set_status(400)
-        return
+        raise _CallbackTaskError(
+            'Pipeline ID "%s" deleted during callback' % pipeline_id)
       return stage._callback_internal(kwargs)
 
     # callback_xg_transaction is a 3-valued setting (None=no trans,
