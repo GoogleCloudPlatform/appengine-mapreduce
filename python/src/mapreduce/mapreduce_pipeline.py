@@ -50,7 +50,7 @@ MapperPipeline = mapper_pipeline.MapperPipeline
 
 ShufflePipeline = shuffler.ShufflePipeline
 
-CleanupPipeline = mapper_pipeline._CleanupPipeline
+CleanupPipeline = shuffler._GCSCleanupPipeline
 
 # For backward compatibility.
 _ReducerReader = input_readers._ReducerReader

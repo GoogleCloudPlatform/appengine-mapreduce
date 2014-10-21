@@ -6,13 +6,11 @@
 
 # pylint: disable=g-bad-name
 
-import re
 import unittest
 
 
 from mapreduce.third_party import pipeline
-from google.appengine.api import files
-from google.appengine.ext import blobstore
+import cloudstorage
 from google.appengine.ext import db
 from mapreduce import errors
 from mapreduce import input_readers
@@ -55,7 +53,8 @@ def test_failed_map(_):
   raise errors.FailJobError()
 
 
-class TestFileRecordsOutputWriter(output_writers.FileRecordsOutputWriter):
+class TestFileRecordsOutputWriter(
+    output_writers._GoogleCloudStorageRecordOutputWriter):
 
   RETRIES = 11
 
@@ -67,7 +66,7 @@ class TestFileRecordsOutputWriter(output_writers.FileRecordsOutputWriter):
     if retry_count.retries < self.RETRIES:
       retry_count.retries += 1
       retry_count.put()
-      raise files.FinalizationError("output writer finalize failed.")
+      raise cloudstorage.TransientError("output writer finalize failed.")
     super(TestFileRecordsOutputWriter, self).finalize(ctx, shard_state)
 
 
@@ -84,6 +83,7 @@ class MapreducePipelineTest(testutil.HandlerTestBase):
     self.emails.append((sender, subject, body, html))
 
   def testFailedMapReduce(self):
+    bucket_name = "testbucket"
     max_attempts_before = pipeline.pipeline._DEFAULT_MAX_ATTEMPTS
     try:
       pipeline.pipeline._DEFAULT_MAX_ATTEMPTS = 1
@@ -102,11 +102,16 @@ class MapreducePipelineTest(testutil.HandlerTestBase):
           __name__ + ".test_failed_map",
           __name__ + ".test_mapreduce_reduce",
           input_reader_spec=input_readers.__name__ + ".DatastoreInputReader",
-          output_writer_spec=(
-              output_writers.__name__ + ".BlobstoreRecordsOutputWriter"),
+          output_writer_spec=(output_writers.__name__ +
+                              "._GoogleCloudStorageRecordOutputWriter"),
           mapper_params={
               "entity_kind": __name__ + "." + TestEntity.__name__,
+          },
+          reducer_params={
+              "output_writer": {
+                  "bucket_name": bucket_name
               },
+          },
           shards=3)
       p.max_attempts = 1
       p.start()
@@ -119,6 +124,8 @@ class MapreducePipelineTest(testutil.HandlerTestBase):
 
   def testMapReduce(self):
     # Prepare test data
+    bucket_name = "testbucket"
+    job_name = "test_job"
     entity_count = 200
 
     for i in range(entity_count):
@@ -127,15 +134,21 @@ class MapreducePipelineTest(testutil.HandlerTestBase):
 
     # Run Mapreduce
     p = mapreduce_pipeline.MapreducePipeline(
-        "test",
+        job_name,
         __name__ + ".test_mapreduce_map",
         __name__ + ".test_mapreduce_reduce",
         input_reader_spec=input_readers.__name__ + ".DatastoreInputReader",
         output_writer_spec=(
-            output_writers.__name__ + ".BlobstoreRecordsOutputWriter"),
+            output_writers.__name__ + "._GoogleCloudStorageRecordOutputWriter"),
         mapper_params={
             "entity_kind": __name__ + "." + TestEntity.__name__,
+            "bucket_name": bucket_name
+        },
+        reducer_params={
+            "output_writer": {
+                "bucket_name": bucket_name
             },
+        },
         shards=16)
     p.start()
     test_support.execute_until_empty(self.taskqueue)
@@ -150,7 +163,7 @@ class MapreducePipelineTest(testutil.HandlerTestBase):
                      p.outputs.result_status.value)
     output_data = []
     for output_file in p.outputs.default.value:
-      with files.open(output_file, "r") as f:
+      with cloudstorage.open(output_file) as f:
         for record in records.RecordsReader(f):
           output_data.append(record)
 
@@ -161,16 +174,16 @@ class MapreducePipelineTest(testutil.HandlerTestBase):
     self.assertEquals(expected_data, output_data)
 
     # Verify that mapreduce doesn't leave intermediate files behind.
-    blobInfos = blobstore.BlobInfo.all().fetch(limit=1000)
-    for blobinfo in blobInfos:
-      if blobinfo.filename:
-        # pylint: disable=anomalous-backslash-in-string
-        self.assertTrue(
-            "Bad filename: %s" % blobinfo.filename,
-            re.match("test-reduce-.*-output-\d+", blobinfo.filename))
+    temp_file_stats = cloudstorage.listbucket("/" + bucket_name)
+    for stat in temp_file_stats:
+      if stat.filename:
+        self.assertFalse(
+            stat.filename.startswith("/%s/%s-shuffle-" %
+                                     (bucket_name, job_name)))
 
   def testMapReduceWithShardRetry(self):
     # Prepare test data
+    bucket_name = "testbucket"
     entity_count = 200
     db.delete(RetryCount.all())
 
@@ -193,8 +206,7 @@ class MapreducePipelineTest(testutil.HandlerTestBase):
         },
         reducer_params={
             "output_writer": {
-                "filesystem": "gs",
-                "gs_bucket_name": "bucket"
+                "bucket_name": bucket_name
             },
         },
         shards=16)
@@ -214,12 +226,12 @@ class MapreducePipelineTest(testutil.HandlerTestBase):
     for output_file in p.outputs.default.value:
       # Get the number of shard retries by parsing filename.
       retries += (int(output_file[-1]) - 1)
-      with files.open(output_file, "r") as f:
+      with cloudstorage.open(output_file) as f:
         for record in records.RecordsReader(f):
           output_data.append(record)
 
     # Assert file names also suggest the right number of retries.
-    self.assertEquals(1, retries)
+    self.assertEquals(44, retries)
     expected_data = [
         str((str(d), ["", ""])) for d in range(entity_count)]
     expected_data.sort()

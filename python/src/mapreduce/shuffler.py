@@ -715,6 +715,36 @@ class ShufflePipeline(pipeline_base.PipelineBase):
 
     with pipeline.After(merged_files):
       all_temp_files = yield pipeline_common.Extend(*temp_files)
-      yield mapper_pipeline._CleanupPipeline(all_temp_files)
+      yield _GCSCleanupPipeline(all_temp_files)
 
     yield pipeline_common.Return(merged_files)
+
+
+class _GCSCleanupPipeline(pipeline_base.PipelineBase):
+  """A pipeline to do a cleanup for mapreduce jobs that use GCS.
+
+  Args:
+    filename_or_list: list of files or file lists to delete.
+  """
+
+  # The minimum number of retries for GCS to delete the file.
+  _MIN_RETRIES = 5
+  # The maximum number of retries for GCS to delete the file.
+  _MAX_RETRIES = 10
+
+  def delete_file_or_list(self, filename_or_list):
+    if isinstance(filename_or_list, list):
+      for filename in filename_or_list:
+        self.delete_file_or_list(filename)
+    else:
+      filename = filename_or_list
+      retry_params = cloudstorage.RetryParams(min_retries=self._MIN_RETRIES,
+                                              max_retries=self._MAX_RETRIES)
+      # pylint: disable=bare-except
+      try:
+        cloudstorage.delete(filename, retry_params)
+      except:
+        pass
+
+  def run(self, temp_files):
+    self.delete_file_or_list(temp_files)
