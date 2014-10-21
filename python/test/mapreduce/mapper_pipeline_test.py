@@ -11,14 +11,12 @@ import unittest
 
 
 from mapreduce.third_party import pipeline
-from google.appengine.api import files
 from google.appengine.ext import db
 from mapreduce import context
 from mapreduce import errors
 from mapreduce import input_readers
 from mapreduce import mapper_pipeline
 from mapreduce import model
-from mapreduce import output_writers
 from mapreduce import test_support
 from testlib import testutil
 
@@ -88,113 +86,14 @@ def test_map(entity):
   yield (entity.data, "")
 
 
+# pylint: disable=unused-argument
 def test_empty_handler(entity):
   """Test handler that does nothing."""
   pass
 
 
-class CleanupPipelineTest(testutil.HandlerTestBase):
-  """Tests for the CleanupPipeline class."""
-
-  def setUp(self):
-    testutil.HandlerTestBase.setUp(self)
-    pipeline.Pipeline._send_mail = self._send_mail
-    self.emails = []
-
-  def _send_mail(self, sender, subject, body, html=None):
-    """Callback function for sending mail."""
-    self.emails.append((sender, subject, body, html))
-
-  def testCleanup_Flat(self):
-    """Tests cleaning up a flat list of files."""
-    # Prepare test data
-    entity_count = 200
-
-    for i in range(entity_count):
-      TestEntity(data=str(i)).put()
-      TestEntity(data=str(i)).put()
-
-    # Run map
-    p = mapper_pipeline.MapperPipeline(
-        "test",
-        handler_spec=__name__ + ".test_map",
-        input_reader_spec=input_readers.__name__ + ".DatastoreInputReader",
-        output_writer_spec=
-            output_writers.__name__ + ".KeyValueBlobstoreOutputWriter",
-        params={
-            "input_reader": {
-                "entity_kind": __name__ + ".TestEntity",
-                },
-            },
-        )
-    p.start()
-    test_support.execute_until_empty(self.taskqueue)
-
-    finished_map = mapper_pipeline.MapperPipeline.from_id(p.pipeline_id)
-
-    # Can open files
-    file_list = finished_map.outputs.default.value
-    self.assertTrue(len(file_list) > 0)
-    for name in file_list:
-      files.open(name, "r").read(0)
-
-    # Cleanup
-    cleanup = mapper_pipeline._CleanupPipeline(file_list)
-    cleanup.start()
-    test_support.execute_until_empty(self.taskqueue)
-
-    # Cannot open files
-    for name in file_list:
-      self.assertRaises(files.Error, files.open, name, "r")
-
-  def testCleanup_ListOfLists(self):
-    """Tests cleaning up a list of file lists."""
-    # Prepare test data
-    entity_count = 200
-
-    for i in range(entity_count):
-      TestEntity(data=str(i)).put()
-      TestEntity(data=str(i)).put()
-
-    # Run map
-    p = mapper_pipeline.MapperPipeline(
-        "test",
-        handler_spec=__name__ + ".test_map",
-        input_reader_spec=input_readers.__name__ + ".DatastoreInputReader",
-        output_writer_spec=
-            output_writers.__name__ + ".KeyValueBlobstoreOutputWriter",
-        params={
-            "input_reader": {
-                "entity_kind": __name__ + ".TestEntity",
-                },
-            },
-        )
-    p.start()
-    test_support.execute_until_empty(self.taskqueue)
-
-    finished_map = mapper_pipeline.MapperPipeline.from_id(p.pipeline_id)
-
-    # Can open files
-    file_list = finished_map.outputs.default.value
-    self.assertTrue(len(file_list) > 0)
-    for name in file_list:
-      files.open(name, "r").read(0)
-
-    grouped_list = [file_list]
-
-    # Cleanup
-    cleanup = mapper_pipeline._CleanupPipeline(grouped_list)
-    cleanup.start()
-    test_support.execute_until_empty(self.taskqueue)
-
-    # Cannot open files
-    for name in file_list:
-      self.assertRaises(files.Error, files.open, name, "r")
-
-
 class MapperPipelineTest(testutil.HandlerTestBase):
   """Tests for MapperPipeline."""
-
 
   def setUp(self):
     testutil.HandlerTestBase.setUp(self)
