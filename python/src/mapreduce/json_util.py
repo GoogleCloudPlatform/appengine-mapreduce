@@ -9,7 +9,8 @@ from google.appengine.api import datastore_errors
 from google.appengine.api import datastore_types
 from google.appengine.ext import db
 
-
+import base64
+import zlib
 # pylint: disable=invalid-name
 
 
@@ -166,8 +167,11 @@ class JsonProperty(db.UnindexedProperty):
       json_value = value.to_json()
     if not json_value:
       return None
-    return datastore_types.Text(simplejson.dumps(
-        json_value, sort_keys=True, cls=JsonEncoder))
+    text_value = simplejson.dumps(
+        json_value, sort_keys=True, cls=JsonEncoder)
+    text_value = base64.b64encode(text_value)
+
+    return datastore_types.Blob(zlib.compress(text_value))
 
   def make_value_from_datastore(self, value):
     """Convert value from datastore representation.
@@ -181,6 +185,18 @@ class JsonProperty(db.UnindexedProperty):
 
     if value is None:
       return None
+
+    try:
+      value = zlib.decompress(value)
+    except:
+      pass
+
+    try:
+      if not value.startswith("{"):
+        value = base64.b64decode(value)
+    except TypeError:
+      pass
+
     json = simplejson.loads(value, cls=JsonDecoder)
     if self.data_type == dict:
       return json
@@ -200,7 +216,7 @@ class JsonProperty(db.UnindexedProperty):
     """
     if value is not None and not isinstance(value, self.data_type):
       raise datastore_errors.BadValueError(
-          "Property %s must be convertible to a %s instance (%s)" % 
+          "Property %s must be convertible to a %s instance (%s)" %
           (self.name, self.data_type, value))
     return super(JsonProperty, self).validate(value)
 
