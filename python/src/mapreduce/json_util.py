@@ -96,14 +96,14 @@ _register_json_primitive(datetime.datetime,
 # ndb.Key
 def _JsonEncodeKey(o):
     """Json encode an ndb.Key object."""
-    return {'key_string': o.urlsafe()}
+    return {'encoded_key': o.urlsafe()}
 
 def _JsonDecodeKey(d):
     """Json decode a ndb.Key object."""
-    k_c = d['key_string']
-    if isinstance(k_c, (list, tuple)):
-        return ndb.Key(flat=k_c)
-    return ndb.Key(urlsafe=d['key_string'])
+    encoded_key = d['encoded_key']
+    if isinstance(encoded_key, (list, tuple)):
+        return ndb.Key(flat=encoded_key)
+    return ndb.Key(urlsafe=d['encoded_key'])
 
 _register_json_primitive(ndb.Key, _JsonEncodeKey, _JsonDecodeKey)
 
