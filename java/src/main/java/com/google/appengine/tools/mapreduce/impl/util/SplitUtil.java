@@ -26,7 +26,7 @@ public class SplitUtil {
         posInList += numItems;
       }
     }
-    if(posInList != toSplit.size()) {
+    if (posInList != toSplit.size()) {
       throw new IllegalStateException(); // Impossible
     }
     return result;

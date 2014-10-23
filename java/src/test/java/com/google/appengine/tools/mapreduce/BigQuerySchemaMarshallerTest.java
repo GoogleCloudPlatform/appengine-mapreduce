@@ -75,8 +75,8 @@ public class BigQuerySchemaMarshallerTest extends TestCase {
   }
 
   public void testSchemaWithSimpleFields() {
-    BigQuerySchemaMarshallerTester<SimpleJson> tester = new BigQuerySchemaMarshallerTester<
-        SimpleJson>(new BigQueryMarshallerByType<>(SimpleJson.class));
+    BigQuerySchemaMarshallerTester<SimpleJson> tester = new BigQuerySchemaMarshallerTester<>(
+        new BigQueryMarshallerByType<>(SimpleJson.class));
 
     tester.testSchema(new TableSchema().setFields(Lists.newArrayList(new TableFieldSchema()
         .setName("id").setType("integer")
@@ -85,9 +85,9 @@ public class BigQuerySchemaMarshallerTest extends TestCase {
   }
 
   public void testSchemaWithAnnotatedName() {
-    BigQuerySchemaMarshallerTester<SimplAnnotatedJson> tester = new BigQuerySchemaMarshallerTester<
-        SimplAnnotatedJson>(
-        new BigQueryMarshallerByType<SimplAnnotatedJson>(SimplAnnotatedJson.class));
+    BigQuerySchemaMarshallerTester<SimplAnnotatedJson> tester =
+        new BigQuerySchemaMarshallerTester<>(
+            new BigQueryMarshallerByType<>(SimplAnnotatedJson.class));
 
     tester.testSchema(new TableSchema().setFields(Lists.newArrayList(
         new TableFieldSchema().setName("id").setType("string"), new TableFieldSchema()
@@ -98,8 +98,8 @@ public class BigQuerySchemaMarshallerTest extends TestCase {
   }
 
   public void testSchemaWithArrayField() {
-    BigQuerySchemaMarshallerTester<ClassWithArray> tester = new BigQuerySchemaMarshallerTester<
-        ClassWithArray>(new BigQueryMarshallerByType<>(ClassWithArray.class));
+    BigQuerySchemaMarshallerTester<ClassWithArray> tester = new BigQuerySchemaMarshallerTester<>(
+        new BigQueryMarshallerByType<>(ClassWithArray.class));
 
     TableFieldSchema f1 = new TableFieldSchema().setType("integer").setName("id")
         .setMode(BigQueryFieldMode.REQUIRED.getValue());
@@ -113,8 +113,8 @@ public class BigQuerySchemaMarshallerTest extends TestCase {
   }
 
   public void testSchemaWithNestedFields() {
-    BigQuerySchemaMarshallerTester<Person> tester = new BigQuerySchemaMarshallerTester<Person>(
-        new BigQueryMarshallerByType<Person>(Person.class));
+    BigQuerySchemaMarshallerTester<Person> tester = new BigQuerySchemaMarshallerTester<>(
+        new BigQueryMarshallerByType<>(Person.class));
 
     TableFieldSchema f1 = new TableFieldSchema().setType("integer").setName("age")
         .setMode(BigQueryFieldMode.REQUIRED.getValue());
@@ -140,7 +140,7 @@ public class BigQuerySchemaMarshallerTest extends TestCase {
 
   public void testSchemaWithBigIgnoreAnnotations() {
     BigQuerySchemaMarshallerTester<Man> tester =
-        new BigQuerySchemaMarshallerTester<Man>(new BigQueryMarshallerByType<Man>(Man.class));
+        new BigQuerySchemaMarshallerTester<>(new BigQueryMarshallerByType<>(Man.class));
     TableFieldSchema f1 = new TableFieldSchema().setType("string").setName("name");
     TableFieldSchema f2 = new TableFieldSchema().setType("string").setName("gender");
 
@@ -148,8 +148,8 @@ public class BigQuerySchemaMarshallerTest extends TestCase {
   }
 
   public void testSchemaWithRepeatedNestedRecord() {
-    BigQuerySchemaMarshallerTester<Father> tester = new BigQuerySchemaMarshallerTester<Father>(
-        new BigQueryMarshallerByType<Father>(Father.class));
+    BigQuerySchemaMarshallerTester<Father> tester = new BigQuerySchemaMarshallerTester<>(
+        new BigQueryMarshallerByType<>(Father.class));
 
     TableFieldSchema f1 = new TableFieldSchema().setType("boolean").setName("married")
         .setMode(BigQueryFieldMode.REQUIRED.getValue());
@@ -165,7 +165,7 @@ public class BigQuerySchemaMarshallerTest extends TestCase {
 
   public void testSchemaForClassWithWrapperType() {
     BigQuerySchemaMarshallerTester<SimpleJsonWithWrapperTypes> tester =
-        new BigQuerySchemaMarshallerTester<SimpleJsonWithWrapperTypes>(
+        new BigQuerySchemaMarshallerTester<>(
             new BigQueryMarshallerByType<>(SimpleJsonWithWrapperTypes.class));
 
     tester.testSchema(new TableSchema().setFields(Lists.newArrayList(
@@ -178,7 +178,7 @@ public class BigQuerySchemaMarshallerTest extends TestCase {
   public void testSchemaForParameterizedTypes() {
     try {
       BigQuerySchemaMarshallerTester<ParameterizedClass> tester =
-          new BigQuerySchemaMarshallerTester<ParameterizedClass>(
+          new BigQuerySchemaMarshallerTester<>(
               new BigQueryMarshallerByType<>(ParameterizedClass.class));
 
       tester.testSchema(new TableSchema().setFields(Lists.newArrayList(new TableFieldSchema()
@@ -187,7 +187,8 @@ public class BigQuerySchemaMarshallerTest extends TestCase {
     } catch (IllegalArgumentException e) {
       assertEquals(
           "Cannot marshal " + ParameterizedClass.class.getSimpleName()
-              + ". Parameterized type other than Collection<T> cannot be marshalled into consistent BigQuery data.",
+              + ". Parameterized type other than Collection<T> cannot be marshalled into"
+              + " consistent BigQuery data.",
           e.getMessage());
     }
   }
@@ -195,7 +196,7 @@ public class BigQuerySchemaMarshallerTest extends TestCase {
   public void testSchemaForTypesWithNonParameterizedCollection() {
     try {
       BigQuerySchemaMarshallerTester<SampleClassWithNonParametricList> tester =
-          new BigQuerySchemaMarshallerTester<SampleClassWithNonParametricList>(
+          new BigQuerySchemaMarshallerTester<>(
               new BigQueryMarshallerByType<>(SampleClassWithNonParametricList.class));
 
       tester.testSchema(new TableSchema().setFields(Lists.newArrayList(new TableFieldSchema()
@@ -223,7 +224,7 @@ public class BigQuerySchemaMarshallerTest extends TestCase {
 
   public void testSchemaForInnerClass() {
     BigQuerySchemaMarshallerTester<ClassForInnerClassTest> tester =
-        new BigQuerySchemaMarshallerTester<ClassForInnerClassTest>(
+        new BigQuerySchemaMarshallerTester<>(
             new BigQueryMarshallerByType<>(ClassForInnerClassTest.class));
 
     tester.testSchema(new TableSchema().setFields(Lists.newArrayList(new TableFieldSchema()

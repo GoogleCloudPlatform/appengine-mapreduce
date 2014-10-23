@@ -127,7 +127,7 @@ public class MergingReaderTest extends TestCase {
     verifyExpectedOutput(readerCount, numKeys, valuesPerKey, merging);
   }
 
-  public void testSerializingMultipleReaders() throws IOException, ClassNotFoundException {
+  public void testSerializingMultipleReaders() throws IOException {
     List<PeekingInputReader<KeyValue<ByteBuffer, ? extends Iterable<Integer>>>> readers =
         new ArrayList<>();
     int readerCount = 10;
@@ -167,7 +167,7 @@ public class MergingReaderTest extends TestCase {
     }
   }
 
-  public void testNonCombining() throws IOException, ClassNotFoundException {
+  public void testNonCombining() throws IOException {
     List<PeekingInputReader<KeyValue<ByteBuffer, ? extends Iterable<Integer>>>> readers =
         new ArrayList<>();
     int readerCount = 10;
@@ -182,7 +182,7 @@ public class MergingReaderTest extends TestCase {
     merging.beginSlice();
     int valueCount = 0;
     for (int key = 0; key < numKeys; key++) {
-      for (int reader = 0;reader < readerCount; reader++) {
+      for (int reader = 0; reader < readerCount; reader++) {
         merging.endSlice();
         merging = SerializationUtil.clone(merging);
         merging.beginSlice();
@@ -209,7 +209,7 @@ public class MergingReaderTest extends TestCase {
     }
   }
 
-  public void testNonCombiningIgnoringValues() throws IOException, ClassNotFoundException {
+  public void testNonCombiningIgnoringValues() throws IOException {
     List<PeekingInputReader<KeyValue<ByteBuffer, ? extends Iterable<Integer>>>> readers =
         new ArrayList<>();
     int readerCount = 10;
@@ -223,7 +223,7 @@ public class MergingReaderTest extends TestCase {
         new MergingReader<>(readers, Marshallers.getStringMarshaller(), false);
     merging.beginSlice();
     for (int key = 0; key < numKeys; key++) {
-      for (int reader = 0;reader < readerCount; reader++) {
+      for (int reader = 0; reader < readerCount; reader++) {
         merging.endSlice();
         merging = SerializationUtil.clone(merging);
         merging.beginSlice();
@@ -248,7 +248,7 @@ public class MergingReaderTest extends TestCase {
     }
   }
 
-  public void testSerializingIgnoringValues() throws IOException, ClassNotFoundException {
+  public void testSerializingIgnoringValues() throws IOException {
     List<PeekingInputReader<KeyValue<ByteBuffer, ? extends Iterable<Integer>>>> readers =
         new ArrayList<>();
     int readerCount = 10;

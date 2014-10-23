@@ -98,7 +98,7 @@ public class DatastoreInputTest extends TestCase {
     List<Key> keys = populateData(100, null, parrent);
     DatastoreInput input = new DatastoreInput(new Query(ENTITY_KIND_NAME, parrent), 5);
     ArrayList<Key> read = new ArrayList<>();
-    for (InputReader<Entity> reader : input.createReaders() ) {
+    for (InputReader<Entity> reader : input.createReaders()) {
       read.addAll(getEntities(reader));
     }
     Collections.sort(read);
@@ -106,7 +106,7 @@ public class DatastoreInputTest extends TestCase {
     assertEquals(keys.size() + 1, read.size());
     assertEquals(parrent, read.get(0));
     for (int i = 0; i < keys.size(); i++) {
-      assertEquals(keys.get(i), read.get(i+1));
+      assertEquals(keys.get(i), read.get(i + 1));
     }
   }
 
@@ -146,7 +146,7 @@ public class DatastoreInputTest extends TestCase {
     for (int i = 0; i < splits.size(); i++) {
       float ratio = (counts[i] / (float) average);
       assertTrue("Ratio was: " + ratio , counts[i] >= min);
-      assertTrue("Ratio was: " + ratio ,counts[i] <= max);
+      assertTrue("Ratio was: " + ratio , counts[i] <= max);
     }
   }
 
@@ -189,7 +189,7 @@ public class DatastoreInputTest extends TestCase {
     List<InputReader<Entity>> splits = createReaders(5);
     int[] counts = countEntities(splits);
     assertEquals(9, total(counts));
-    for (int i=0;i<counts.length;i++) {
+    for (int i = 0; i < counts.length; i++) {
       assertTrue(counts[i] >= 1 && counts[i] <= 6);
     }
   }

@@ -58,6 +58,9 @@ public class GoogleCloudStorageMapOutput<K, V> extends Output<KeyValue<K, V>, Fi
     return result;
   }
 
+  /**
+   * @throws IOException
+   */
   @Override
   public FilesByShard finish(Collection<? extends OutputWriter<KeyValue<K, V>>> outputWriters)
       throws IOException {

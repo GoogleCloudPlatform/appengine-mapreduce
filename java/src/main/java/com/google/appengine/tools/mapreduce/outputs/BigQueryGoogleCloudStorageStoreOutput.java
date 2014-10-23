@@ -16,6 +16,8 @@ import java.util.List;
 /**
  * An {@link Output} that writes files in Google cloud storage using a format compatible with
  * bigquery ingestion.
+ *
+ * @param <O> type of result produced by this output.
  */
 public final class BigQueryGoogleCloudStorageStoreOutput<O> extends
     Output<O, BigQueryStoreResult<GoogleCloudStorageFileSet>> {
@@ -37,8 +39,7 @@ public final class BigQueryGoogleCloudStorageStoreOutput<O> extends
     SizeSegmentedGoogleCloudStorageFileOutput sizeSegmentedOutput =
         new SizeSegmentedGoogleCloudStorageFileOutput(this.bucketName, MAX_BIG_QUERY_GCS_FILE_SIZE,
             String.format(GCS_FILE_NAME_FORMAT, this.fileNamePattern), MIME_TYPE);
-    this.dataMarshallingOutput = new MarshallingOutput<O, GoogleCloudStorageFileSet>(
-        sizeSegmentedOutput, bigQueryMarshaller);
+    this.dataMarshallingOutput = new MarshallingOutput<>(sizeSegmentedOutput, bigQueryMarshaller);
   }
 
   @Override
@@ -49,7 +50,7 @@ public final class BigQueryGoogleCloudStorageStoreOutput<O> extends
   @Override
   public BigQueryStoreResult<GoogleCloudStorageFileSet> finish(
       Collection<? extends OutputWriter<O>> writers) throws IOException {
-    return new BigQueryStoreResult<GoogleCloudStorageFileSet>(dataMarshallingOutput.finish(writers),
+    return new BigQueryStoreResult<>(dataMarshallingOutput.finish(writers),
         bigQueryMarshaller.getSchema());
   }
 }

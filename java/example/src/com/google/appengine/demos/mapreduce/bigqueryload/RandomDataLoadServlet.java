@@ -41,14 +41,13 @@ public class RandomDataLoadServlet extends HttpServlet {
   private static final String TABLE_NAME = "example_table";
   private static final String PROJECT_ID = "mapreduce-example";
   private static final int MAX_ROWS_PER_WRITER = 10000;
-
+  private static final int MAX_ALLOWED_ROWS = 10000;
 
   private static final Logger log = Logger.getLogger(RandomDataLoadServlet.class.getName());
   private final MemcacheService memcache = MemcacheServiceFactory.getMemcacheService();
   private final UserService userService = UserServiceFactory.getUserService();
   private final SecureRandom random = new SecureRandom();
 
-  private final int MAX_ALLOWED_ROWS = 10000;
 
   private void writeResponse(HttpServletResponse resp) throws IOException {
     String token = String.valueOf(random.nextLong() & Long.MAX_VALUE);
@@ -60,7 +59,8 @@ public class RandomDataLoadServlet extends HttpServlet {
               + "<meta http-equiv=\"content-type\" content=\"text/html; charset=UTF-8\">"
               + "<title>Big Query data load</title></head>" + "<body>"
               + "<div> Note : This example does not work on locally devappserver.</div>"
-              + "<div id=\"loadform\"><label>Loads the given number of rows(less than 10,000) into bigquery table bigquery_example:example_table.</label></div>"
+              + "<div id=\"loadform\"><label>Loads the given number of rows(less than 10,000)"
+              + " into bigquery table bigquery_example:example_table.</label></div>"
               + "<form action=\"/randomDataLoad\" method=\"post\">"
               + "<label>Number of rows to load</label><input value='1000' name='row_count' />"
               + "<div><input type=\"submit\" value=\"Load\"></div>" + "</form></body></html>");
@@ -140,11 +140,11 @@ public class RandomDataLoadServlet extends HttpServlet {
           extractJob);
     }
 
-    private MapSpecification<Long, SampleTable, BigQueryStoreResult<GoogleCloudStorageFileSet>> getInputJobSpec(
-        int rowCount) {
+    private MapSpecification<Long, SampleTable, BigQueryStoreResult<GoogleCloudStorageFileSet>>
+        getInputJobSpec(int rowCount) {
       BigQueryGoogleCloudStorageStoreOutput<SampleTable> bqStore =
-          new BigQueryGoogleCloudStorageStoreOutput<SampleTable>(
-              new BigQueryMarshallerByType<SampleTable>(SampleTable.class), BUCKET,
+          new BigQueryGoogleCloudStorageStoreOutput<>(
+              new BigQueryMarshallerByType<>(SampleTable.class), BUCKET,
               getJobKey().getName());
 
       int numShards = (rowCount / MAX_ROWS_PER_WRITER) + 1;

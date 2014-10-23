@@ -130,35 +130,36 @@ public class BigQueryDataMarshallerTest extends TestCase {
   }
 
   public void testGeneratedJsonForSimpleFields() {
-    BigQueryDataMarshallerTester<SimpleJson> tester = new BigQueryDataMarshallerTester<SimpleJson>(
-        new BigQueryMarshallerByType<SimpleJson>(SimpleJson.class));
+    BigQueryDataMarshallerTester<SimpleJson> tester = new BigQueryDataMarshallerTester<>(
+        new BigQueryMarshallerByType<>(SimpleJson.class));
     tester.testGeneratedJson("{\"name\":\"test\",\"id\":1}", new SimpleJson("test", 1));
   }
 
   public void testGeneratedJsonForAnnotatedName() {
-    BigQueryDataMarshallerTester<SimplAnnotatedJson> tester = new BigQueryDataMarshallerTester<
-        SimplAnnotatedJson>(
-        new BigQueryMarshallerByType<SimplAnnotatedJson>(SimplAnnotatedJson.class));
+    BigQueryDataMarshallerTester<SimplAnnotatedJson> tester = new BigQueryDataMarshallerTester<>(
+        new BigQueryMarshallerByType<>(SimplAnnotatedJson.class));
 
     tester.testGeneratedJson("{\"niceName\":\"someName\",\"id\":\"456\",\"intField\":55}",
         new SimplAnnotatedJson("someName", "456", 55));
   }
 
   public void testGeneratedJsonForArrayField() {
-    BigQueryDataMarshallerTester<ClassWithArray> tester = new BigQueryDataMarshallerTester<
-        ClassWithArray>(
-        new BigQueryMarshallerByType<ClassWithArray>(ClassWithArray.class));
+    BigQueryDataMarshallerTester<ClassWithArray> tester = new BigQueryDataMarshallerTester<>(
+        new BigQueryMarshallerByType<>(ClassWithArray.class));
 
     tester.testGeneratedJson("{\"id\":345,\"values\":[\"1\",\"2\",\"3\"],\"name\":\"arrayClass\"}",
         new ClassWithArray(345, "arrayClass", new String[] {"1", "2", "3"}));
   }
 
   public void testGeneratedJsonForNestedFields() {
-    BigQueryDataMarshallerTester<Person> tester = new BigQueryDataMarshallerTester<Person>(
-        new BigQueryMarshallerByType<Person>(Person.class));
+    BigQueryDataMarshallerTester<Person> tester = new BigQueryDataMarshallerTester<>(
+        new BigQueryMarshallerByType<>(Person.class));
 
     tester.testGeneratedJson(
-        "{\"fullName\":\"Joe\",\"age\":45,\"height\":5.8,\"weight\":100.0,\"gender\":\"male\",\"phoneNumber\":{\"areaCode\":404,\"number\":5686}}", new Person("Joe",
+        "{\"fullName\":\"Joe\",\"age\":45,\"height\":5.8,\"weight\":100.0,\"gender\":\"male\""
+        + ",\"phoneNumber\":{\"areaCode\":404,\"number\":5686}}",
+        new Person(
+            "Joe",
             45,
             5.8,
             100,
@@ -168,27 +169,30 @@ public class BigQueryDataMarshallerTest extends TestCase {
 
   public void testGeneratedJsonForBigIgnoreAnnotations() {
     BigQueryDataMarshallerTester<Man> tester =
-        new BigQueryDataMarshallerTester<Man>(new BigQueryMarshallerByType<Man>(Man.class));
+        new BigQueryDataMarshallerTester<>(new BigQueryMarshallerByType<>(Man.class));
     tester.testGeneratedJson("{\"name\":\"Iniesta\",\"gender\":\"male\"}",
         new Man(454, "Iniesta", "male"));
   }
 
   public void testGeneratedJsonForRepeatedNestedRecord() {
-    BigQueryDataMarshallerTester<Father> tester = new BigQueryDataMarshallerTester<Father>(
-        new BigQueryMarshallerByType<Father>(Father.class));
+    BigQueryDataMarshallerTester<Father> tester = new BigQueryDataMarshallerTester<>(
+        new BigQueryMarshallerByType<>(Father.class));
 
     tester.testGeneratedJson(
-        "{\"married\":true,\"name\":\"Messi\",\"sons\":[{\"fullName\":\"Ronaldo\",\"age\":28},{\"fullName\":\"Rooney\",\"age\":29}]}", new Father(true, "Messi", Lists.newArrayList(new Child("Ronaldo", 28), new Child("Rooney", 29))));
+        "{\"married\":true,\"name\":\"Messi\",\"sons\":[{\"fullName\":\"Ronaldo\",\"age\":28},"
+        + "{\"fullName\":\"Rooney\",\"age\":29}]}", new Father(true, "Messi",
+        Lists.newArrayList(new Child("Ronaldo", 28), new Child("Rooney", 29))));
   }
 
   public void testGeneratedJsonForFieldWithNullValue() {
-    BigQueryDataMarshallerTester<SimpleJson> tester = new BigQueryDataMarshallerTester<SimpleJson>(
-        new BigQueryMarshallerByType<SimpleJson>(SimpleJson.class));
+    BigQueryDataMarshallerTester<SimpleJson> tester = new BigQueryDataMarshallerTester<>(
+        new BigQueryMarshallerByType<>(SimpleJson.class));
     try {
       tester.testGeneratedJson("{\"id\":1}", new SimpleJson(null, 1));
     } catch (IllegalArgumentException e) {
       assertEquals(
-          "Non-nullable field name. This field is either annotated as REQUIRED or is a primitive type.",
+          "Non-nullable field name."
+          + " This field is either annotated as REQUIRED or is a primitive type.",
           e.getMessage());
       return;
     }
@@ -197,14 +201,16 @@ public class BigQueryDataMarshallerTest extends TestCase {
 
   public void testGeneratedJsonForClassWithWrapperType() {
     BigQueryDataMarshallerTester<SimpleJsonWithWrapperTypes> tester =
-        new BigQueryDataMarshallerTester<SimpleJsonWithWrapperTypes>(new BigQueryMarshallerByType<
-            SimpleJsonWithWrapperTypes>(SimpleJsonWithWrapperTypes.class));
+        new BigQueryDataMarshallerTester<>(
+            new BigQueryMarshallerByType<>(SimpleJsonWithWrapperTypes.class));
     tester.testGeneratedJson("{\"name\":\"test\",\"id\":1, \"value\":1.5}",
         new SimpleJsonWithWrapperTypes(Integer.valueOf(1), "test", Float.valueOf("1.5")));
   }
 
   public void testGeneratedJsonForTypesWithNonParameterizedCollection() {
-    BigQueryDataMarshallerTester<SampleClassWithNonParametricList> tester = new BigQueryDataMarshallerTester<SampleClassWithNonParametricList>(new BigQueryMarshallerByType<SampleClassWithNonParametricList>(SampleClassWithNonParametricList.class));
+    BigQueryDataMarshallerTester<SampleClassWithNonParametricList> tester =
+        new BigQueryDataMarshallerTester<>(
+            new BigQueryMarshallerByType<>(SampleClassWithNonParametricList.class));
     try {
       tester.testGeneratedJson("{\"name\":\"test\",\"id\":1, \"value\":1.5}",
           new SampleClassWithNonParametricList(Lists.newArrayList()));
@@ -218,7 +224,9 @@ public class BigQueryDataMarshallerTest extends TestCase {
   }
 
   public void testGeneratedJsonForTypesWithNestedCollection() {
-    BigQueryDataMarshallerTester<SampleClassWithNestedCollection> tester = new BigQueryDataMarshallerTester<SampleClassWithNestedCollection>(new BigQueryMarshallerByType<SampleClassWithNestedCollection>(SampleClassWithNestedCollection.class));
+    BigQueryDataMarshallerTester<SampleClassWithNestedCollection> tester =
+        new BigQueryDataMarshallerTester<>(
+            new BigQueryMarshallerByType<>(SampleClassWithNestedCollection.class));
     List<List<String>> toTest = new ArrayList<>();
     toTest.add(Lists.newArrayList("", ""));
     try {
@@ -246,17 +254,16 @@ public class BigQueryDataMarshallerTest extends TestCase {
   }
 
   public void testGeneratedJsonForInnerClass() {
-    BigQueryDataMarshallerTester<ClassForInnerClassTest> tester = new BigQueryDataMarshallerTester<
-        ClassForInnerClassTest>(
-        new BigQueryMarshallerByType<ClassForInnerClassTest>(ClassForInnerClassTest.class));
+    BigQueryDataMarshallerTester<ClassForInnerClassTest> tester =
+        new BigQueryDataMarshallerTester<>(
+            new BigQueryMarshallerByType<>(ClassForInnerClassTest.class));
     tester.testGeneratedJson("{\"name\":\"test\",\"id\":1}",
         this.new ClassForInnerClassTest(1, "test"));
   }
 
   public void testGeneratedJsonForClassWithCurrencyType() {
-    BigQueryDataMarshallerTester<ClassWithCurrency> tester = new BigQueryDataMarshallerTester<
-        ClassWithCurrency>(
-        new BigQueryMarshallerByType<ClassWithCurrency>(ClassWithCurrency.class));
+    BigQueryDataMarshallerTester<ClassWithCurrency> tester = new BigQueryDataMarshallerTester<>(
+        new BigQueryMarshallerByType<>(ClassWithCurrency.class));
     tester.testGeneratedJson("{\"currency\":\"USD\",\"id\":1}",
         new ClassWithCurrency(Currency.getInstance("USD"), 1));
   }
@@ -281,7 +288,8 @@ public class BigQueryDataMarshallerTest extends TestCase {
     } catch (IllegalArgumentException e) {
       assertEquals(
           "Cannot marshal " + Number.class.getSimpleName()
-              + ". Interfaces and abstract class cannot be cannot be marshalled into consistent BigQuery data.",
+              + ". Interfaces and abstract class cannot be cannot be marshalled into consistent"
+              + " BigQuery data.",
           e.getMessage());
       return;
     }
@@ -309,7 +317,8 @@ public class BigQueryDataMarshallerTest extends TestCase {
     } catch (IllegalArgumentException e) {
       assertEquals(
           "Cannot marshal " + Map.class.getSimpleName()
-              + ". Interfaces and abstract class cannot be cannot be marshalled into consistent BigQuery data.",
+              + ". Interfaces and abstract class cannot be cannot be marshalled into consistent"
+              + " BigQuery data.",
           e.getMessage());
       return;
     }
@@ -330,9 +339,9 @@ public class BigQueryDataMarshallerTest extends TestCase {
   }
 
   public void testGeneratedJsonForClassExtendingAbstractClass() {
-    BigQueryDataMarshallerTester<ClassExtendingAbstract> tester = new BigQueryDataMarshallerTester<
-        ClassExtendingAbstract>(
-        new BigQueryMarshallerByType<ClassExtendingAbstract>(ClassExtendingAbstract.class));
+    BigQueryDataMarshallerTester<ClassExtendingAbstract> tester =
+        new BigQueryDataMarshallerTester<>(
+            new BigQueryMarshallerByType<>(ClassExtendingAbstract.class));
     tester.testGeneratedJson("{\"id\":5,\"name\":\"nameField\",\"value\":6}",
         new ClassExtendingAbstract(5, "nameField", 6));
 
@@ -365,8 +374,8 @@ public class BigQueryDataMarshallerTest extends TestCase {
           }
         });
     BigQueryDataMarshallerTester<ClassWithUnsupportedType> tester =
-        new BigQueryDataMarshallerTester<ClassWithUnsupportedType>(new BigQueryMarshallerByType<
-            ClassWithUnsupportedType>(ClassWithUnsupportedType.class, marshallers));
+        new BigQueryDataMarshallerTester<>(
+            new BigQueryMarshallerByType<>(ClassWithUnsupportedType.class, marshallers));
     tester.testGeneratedJson("{\"ip\":\"00000001-0002-0003-0004-000000000005\",\"id\":5}",
         new ClassWithUnsupportedType(UUID.fromString("1-2-3-4-5"), 5));
 
@@ -415,9 +424,8 @@ public class BigQueryDataMarshallerTest extends TestCase {
   }
 
   public void testGeneratedJsonForClassWithEnumField() {
-    BigQueryDataMarshallerTester<ClassWithEnumField> tester = new BigQueryDataMarshallerTester<
-        ClassWithEnumField>(
-        new BigQueryMarshallerByType<ClassWithEnumField>(ClassWithEnumField.class));
+    BigQueryDataMarshallerTester<ClassWithEnumField> tester = new BigQueryDataMarshallerTester<>(
+        new BigQueryMarshallerByType<>(ClassWithEnumField.class));
     tester.testGeneratedJson("{\"id\":5,\"mode\":\"REQUIRED\"}",
         new ClassWithEnumField(5, BigQueryFieldMode.REQUIRED));
   }
@@ -435,8 +443,8 @@ public class BigQueryDataMarshallerTest extends TestCase {
   }
 
   public void testGeneratedJsonForClassWithDate() {
-    BigQueryDataMarshallerTester<ClassWithDate> tester = new BigQueryDataMarshallerTester<
-        ClassWithDate>(new BigQueryMarshallerByType<ClassWithDate>(ClassWithDate.class));
+    BigQueryDataMarshallerTester<ClassWithDate> tester = new BigQueryDataMarshallerTester<>(
+        new BigQueryMarshallerByType<>(ClassWithDate.class));
     Calendar cal = Calendar.getInstance();
     cal.setTimeInMillis(1406054209);
     tester.testGeneratedJson("{\"id\":1,\"date\":1406054.209,\"cal\":1406054.209}",
@@ -464,13 +472,15 @@ public class BigQueryDataMarshallerTest extends TestCase {
   }
 
   public void testGeneratedJsonForClassWithBigNumbers() {
-    BigQueryDataMarshallerTester<ClassWithBigNumbers> tester = new BigQueryDataMarshallerTester<
-        ClassWithBigNumbers>(
-        new BigQueryMarshallerByType<ClassWithBigNumbers>(ClassWithBigNumbers.class));
+    BigQueryDataMarshallerTester<ClassWithBigNumbers> tester = new BigQueryDataMarshallerTester<>(
+        new BigQueryMarshallerByType<>(ClassWithBigNumbers.class));
     Calendar cal = Calendar.getInstance();
     cal.setTimeInMillis(1406054209);
     tester.testGeneratedJson(
-        "{\"bigInt\":342438484894389432894389432894289489234,\"bigDec\":2385923859023849203489023849023841241234.12398}", new ClassWithBigNumbers(new BigInteger("342438484894389432894389432894289489234"), new BigDecimal("2385923859023849203489023849023841241234.12398")));
+        "{\"bigInt\":342438484894389432894389432894289489234,"
+        + "\"bigDec\":2385923859023849203489023849023841241234.12398}",
+        new ClassWithBigNumbers(new BigInteger("342438484894389432894389432894289489234"),
+            new BigDecimal("2385923859023849203489023849023841241234.12398")));
 
     tester.testSchema(new TableSchema().setFields(Lists.newArrayList(
         new TableFieldSchema().setName("bigInt").setType("string"),

@@ -9,6 +9,8 @@ import java.io.IOException;
  * Segments data by using a separate writer each time {@link #shouldSegment} returns true. This is
  * used by the Merge output in the event that there are too many files to merge in one pass.
  *
+ *
+ * @param <O> the type of the written values.
  */
 public abstract class ItemSegmentingOutputWriter<O> extends ForwardingOutputWriter<O> {
 

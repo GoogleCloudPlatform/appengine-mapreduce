@@ -262,7 +262,7 @@ public class DatastoreShardStrategy {
   }
 
   private List<Key> sortKeys(List<Entity> entities) {
-    List<Key> result = new ArrayList<Key>(entities.size());
+    List<Key> result = new ArrayList<>(entities.size());
     for (Entity e : entities) {
       result.add(e.getKey());
     }
@@ -390,7 +390,7 @@ public class DatastoreShardStrategy {
         list.size(); // Forces the loading of all the data.
         return list;
       }
-    },RetryParams.getDefaultInstance(), EXCEPTION_HANDLER);
+    }, RetryParams.getDefaultInstance(), EXCEPTION_HANDLER);
   }
 
   @VisibleForTesting

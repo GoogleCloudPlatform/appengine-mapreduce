@@ -53,6 +53,7 @@ public class MapSettingsTest extends TestCase {
   public void setUp() {
     helper.setUp();
     Map<String, Object> attributes = ApiProxy.getCurrentEnvironment().getAttributes();
+    @SuppressWarnings("unchecked")
     Map<String, Object> portMap =
         (Map<String, Object>) attributes.get("com.google.appengine.devappserver.portmapping");
     if (portMap == null) {

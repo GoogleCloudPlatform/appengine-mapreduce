@@ -8,7 +8,6 @@ import com.google.common.collect.ImmutableList;
 
 import junit.framework.TestCase;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -26,7 +25,7 @@ public class MapReduceSpecificationTest extends TestCase {
     private int index = -1;
 
     @Override
-    public void beginShard() throws IOException {
+    public void beginShard() {
       index = 0;
     }
 
@@ -52,7 +51,7 @@ public class MapReduceSpecificationTest extends TestCase {
     private int total;
 
     @Override
-    public void write(Number value) throws IOException {
+    public void write(Number value) {
       total += value.intValue();
     }
   }

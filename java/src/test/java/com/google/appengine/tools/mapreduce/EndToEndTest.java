@@ -940,7 +940,7 @@ public class EndToEndTest extends EndToEndTestCase {
             List<Long> evenValues = new ArrayList<>(output.get(0).getValue());
             Collections.sort(evenValues);
             List<Long> expected = new ArrayList<>();
-            for (long i=2; i<=100;i+=2) {
+            for (long i = 2; i <= 100; i += 2) {
               expected.add(i);
             }
             assertEquals(expected, evenValues);

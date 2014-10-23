@@ -280,6 +280,6 @@ public class Marshallers {
    * Returns a {@code Marshaller} for the given type. Uses jackson to serialize/deserialize.
    */
   public static <T> Marshaller<T> getGenericJsonMarshaller(Class<T> type) {
-    return new GenericMarshaller<T>(type);
+    return new GenericMarshaller<>(type);
   }
 }

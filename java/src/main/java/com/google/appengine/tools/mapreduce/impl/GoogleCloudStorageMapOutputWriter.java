@@ -36,6 +36,9 @@ import java.util.logging.Logger;
  * Content is written in a LevelDb log Format and then using the {@link KeyValueMarshaller}
  * to marshall the individual record.
  *
+ *
+ * @param <K> type of intermediate keys
+ * @param <V> type of intermediate values
  */
 public class GoogleCloudStorageMapOutputWriter<K, V>
     extends ShardingOutputWriter<K, V, GoogleCloudStorageMapOutputWriter.MapOutputWriter<K, V>> {
@@ -138,7 +141,7 @@ public class GoogleCloudStorageMapOutputWriter<K, V>
     }
 
     @Override
-    public void beginShard() throws IOException {
+    public void beginShard() {
       cleanup();
       previousSliceFileName = null;
       compositionCount = 0;

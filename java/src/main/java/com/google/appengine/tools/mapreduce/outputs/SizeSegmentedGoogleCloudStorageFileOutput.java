@@ -105,6 +105,8 @@ public final class SizeSegmentedGoogleCloudStorageFileOutput extends
 
   /**
    * Returns a list of all the filenames written by the output writers
+   *
+   * @throws IOException
    */
   @Override
   public GoogleCloudStorageFileSet finish(Collection<? extends OutputWriter<ByteBuffer>> writers)

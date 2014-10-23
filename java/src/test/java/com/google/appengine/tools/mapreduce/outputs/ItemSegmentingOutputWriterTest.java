@@ -44,7 +44,6 @@ public class ItemSegmentingOutputWriterTest extends TestCase {
       endShard++;
     }
 
-    @SuppressWarnings("hiding")
     private void assertValues(int beginShard, int beginSlice, int write, int endSlice,
         int endShard) {
       assertEquals(beginShard, this.beginShard);
