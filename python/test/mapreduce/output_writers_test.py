@@ -446,7 +446,7 @@ class GCSOutputWriterNoDupModeTest(GCSOutputTestBase,
 class GCSOutputWriterTestCommon(GCSOutputTestBase):
 
   # _GoogleCloudStorageOutputWriter and
-  # _GoogleCloudStorageConsistentOutputWriter both run all of these tests.
+  # GoogleCloudStorageConsistentOutputWriter both run all of these tests.
 
   def testValidate_PassesBasic(self):
     self.WRITER_CLS.validate(self.create_mapper_spec(
@@ -650,12 +650,11 @@ class GCSOutputWriterTestCommon(GCSOutputTestBase):
     self.assertEqual([], self.WRITER_CLS.get_filenames(mapreduce_state))
 
 
-class GCSRecordOutputWriterTest(GCSOutputTestBase,
-                                testutil.CloudStorageTestBase):
+class GCSRecordOutputWriterTestBase(GCSOutputTestBase):
 
+  WRITER_CLS = None
+  WRITER_NAME = None
   BUCKET_NAME = "test"
-  WRITER_CLS = output_writers._GoogleCloudStorageRecordOutputWriter
-  WRITER_NAME = output_writers.__name__ + "." + WRITER_CLS.__name__
 
   def create_mapreduce_state(self, output_params=None):
     """Create a model.MapreduceState including MapreduceSpec and MapperSpec.
@@ -668,7 +667,7 @@ class GCSRecordOutputWriterTest(GCSOutputTestBase,
     """
     all_params = {self.WRITER_CLS.BUCKET_NAME_PARAM: self.BUCKET_NAME}
     all_params.update(output_params or {})
-    return super(GCSRecordOutputWriterTest, self).create_mapreduce_state(
+    return super(GCSRecordOutputWriterTestBase, self).create_mapreduce_state(
         all_params)
 
   def setupWriter(self):
@@ -682,6 +681,7 @@ class GCSRecordOutputWriterTest(GCSOutputTestBase,
     self.writer = self.WRITER_CLS.create(self.mapreduce_state.mapreduce_spec,
                                          self.shard_state.shard_number,
                                          self.shard_state.retries + 1)
+    self.writer.begin_slice(None)
     self.ctx = context.Context(self.mapreduce_state.mapreduce_spec,
                                self.shard_state)
     context.Context._set(self.ctx)
@@ -691,7 +691,7 @@ class GCSRecordOutputWriterTest(GCSOutputTestBase,
     self.setupWriter()
 
     # Serialize un-used writer
-    self.writer = self.WRITER_CLS.from_json_str(self.writer.to_json_str())
+    self.writer = self._serialize_and_deserialize(self.writer)
 
     # Write single record
     self.writer.write("d" * data_size)
@@ -715,8 +715,22 @@ class GCSRecordOutputWriterTest(GCSOutputTestBase,
                      self.shard_state.counters_map.get(
                          output_writers.COUNTER_IO_WRITE_BYTES))
 
-    self.writer.finalize(self.ctx, self.shard_state)
     self.writer = self._serialize_and_deserialize(self.writer)
+    self.writer.finalize(self.ctx, self.shard_state)
+
+
+class GCSRecordOutputWriterTest(GCSRecordOutputWriterTestBase,
+                                testutil.CloudStorageTestBase):
+
+  WRITER_CLS = output_writers._GoogleCloudStorageRecordOutputWriter
+  WRITER_NAME = output_writers.__name__ + "." + WRITER_CLS.__name__
+
+
+class GCSConsistentRecordOutputWriterTest(GCSRecordOutputWriterTestBase,
+                                          testutil.CloudStorageTestBase):
+
+  WRITER_CLS = output_writers.GoogleCloudStorageConsistentRecordOutputWriter
+  WRITER_NAME = output_writers.__name__ + "." + WRITER_CLS.__name__
 
 
 class GCSOutputWriterTest(GCSOutputWriterTestCommon,
@@ -729,7 +743,7 @@ class GCSOutputWriterTest(GCSOutputWriterTestCommon,
 class GCSOutputConsistentOutputWriterTest(GCSOutputWriterTestCommon,
                                           testutil.CloudStorageTestBase):
 
-  WRITER_CLS = output_writers._GoogleCloudStorageConsistentOutputWriter
+  WRITER_CLS = output_writers.GoogleCloudStorageConsistentOutputWriter
   WRITER_NAME = output_writers.__name__ + "." + WRITER_CLS.__name__
 
   def testFinalizeChecksForErrors(self):

@@ -275,9 +275,7 @@ class GoogleCloudStorageOutputWriterEndToEndTest(testutil.CloudStorageTestBase):
     self._runTest(num_shards=4)
 
 
-class GoogleCloudStorageRecordOutputWriterEndToEndTest(
-    testutil.CloudStorageTestBase):
-  """End-to-end tests for CloudStorageRecordOutputWriter."""
+class GCSRecordOutputWriterEndToEndTestBase(object):
 
   WRITER_CLS = output_writers._GoogleCloudStorageRecordOutputWriter
   WRITER_NAME = output_writers.__name__ + "." + WRITER_CLS.__name__
@@ -326,11 +324,29 @@ class GoogleCloudStorageRecordOutputWriterEndToEndTest(
     self._runTest(num_shards=4)
 
 
+class GoogleCloudStorageRecordOutputWriterEndToEndTest(
+    GCSRecordOutputWriterEndToEndTestBase,
+    testutil.CloudStorageTestBase):
+  """End-to-end tests for CloudStorageRecordOutputWriter."""
+
+  WRITER_CLS = output_writers._GoogleCloudStorageRecordOutputWriter
+  WRITER_NAME = output_writers.__name__ + "." + WRITER_CLS.__name__
+
+
+class GoogleCloudStorageConsistentRecordOutputWriterEndToEndTest(
+    GCSRecordOutputWriterEndToEndTestBase,
+    testutil.CloudStorageTestBase):
+  """End-to-end tests for CloudStorageConsistentRecordOutputWriter."""
+
+  WRITER_CLS = output_writers.GoogleCloudStorageConsistentRecordOutputWriter
+  WRITER_NAME = output_writers.__name__ + "." + WRITER_CLS.__name__
+
+
 class GoogleCloudStorageConsistentOutputWriterEndToEndTest(
     testutil.CloudStorageTestBase):
   """End-to-end tests for CloudStorageOutputWriter."""
 
-  WRITER_CLS = output_writers._GoogleCloudStorageConsistentOutputWriter
+  WRITER_CLS = output_writers.GoogleCloudStorageConsistentOutputWriter
   WRITER_NAME = output_writers.__name__ + "." + WRITER_CLS.__name__
 
   def _runTest(self, num_shards):
