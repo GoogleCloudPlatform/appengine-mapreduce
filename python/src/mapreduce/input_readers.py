@@ -796,13 +796,6 @@ class DatastoreInputReader(AbstractDatastoreInputReader):
             "Property %s is not defined for entity type %s",
             prop, model_class._get_kind())
 
-      try:
-        if (isinstance(val, basestring) and
-            isinstance(properties[prop], ndb.KeyProperty)):
-          val = ndb.Key(urlsafe=val)
-      except:
-        pass
-
       # Validate the value of each filter. We need to know filters have
       # valid value to carry out splits.
       try:

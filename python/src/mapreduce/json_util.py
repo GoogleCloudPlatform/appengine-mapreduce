@@ -8,10 +8,8 @@ from mapreduce.third_party import simplejson
 from google.appengine.api import datastore_errors
 from google.appengine.api import datastore_types
 from google.appengine.ext import db
-from google.appengine.ext import ndb
 
-import base64
-import zlib
+
 # pylint: disable=invalid-name
 
 
@@ -93,19 +91,6 @@ _register_json_primitive(datetime.datetime,
                          _json_encode_datetime,
                          _json_decode_datetime)
 
-# ndb.Key
-def _JsonEncodeKey(o):
-    """Json encode an ndb.Key object."""
-    return {'encoded_key': o.urlsafe()}
-
-def _JsonDecodeKey(d):
-    """Json decode a ndb.Key object."""
-    encoded_key = d['encoded_key']
-    if isinstance(encoded_key, (list, tuple)):
-        return ndb.Key(flat=encoded_key)
-    return ndb.Key(urlsafe=encoded_key)
-
-_register_json_primitive(ndb.Key, _JsonEncodeKey, _JsonDecodeKey)
 
 class JsonMixin(object):
   """Simple, stateless json utilities mixin.
@@ -181,11 +166,8 @@ class JsonProperty(db.UnindexedProperty):
       json_value = value.to_json()
     if not json_value:
       return None
-    text_value = simplejson.dumps(
-        json_value, sort_keys=True, cls=JsonEncoder)
-    text_value = base64.b64encode(text_value)
-
-    return datastore_types.Blob(zlib.compress(text_value))
+    return datastore_types.Text(simplejson.dumps(
+        json_value, sort_keys=True, cls=JsonEncoder))
 
   def make_value_from_datastore(self, value):
     """Convert value from datastore representation.
@@ -199,18 +181,6 @@ class JsonProperty(db.UnindexedProperty):
 
     if value is None:
       return None
-
-    try:
-      value = zlib.decompress(value)
-    except:
-      pass
-
-    try:
-      if not value.startswith("{"):
-        value = base64.b64decode(value)
-    except TypeError:
-      pass
-
     json = simplejson.loads(value, cls=JsonDecoder)
     if self.data_type == dict:
       return json
@@ -230,7 +200,7 @@ class JsonProperty(db.UnindexedProperty):
     """
     if value is not None and not isinstance(value, self.data_type):
       raise datastore_errors.BadValueError(
-          "Property %s must be convertible to a %s instance (%s)" %
+          "Property %s must be convertible to a %s instance (%s)" % 
           (self.name, self.data_type, value))
     return super(JsonProperty, self).validate(value)
 

@@ -2,12 +2,12 @@ package com.google.appengine.tools.mapreduce.impl;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
-import com.google.appengine.api.files.FileServicePb;
-import com.google.appengine.repackaged.com.google.protobuf.ByteString;
-import com.google.appengine.repackaged.com.google.protobuf.InvalidProtocolBufferException;
+import com.google.protobuf.ByteString;
+import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.appengine.tools.mapreduce.CorruptDataException;
 import com.google.appengine.tools.mapreduce.KeyValue;
 import com.google.appengine.tools.mapreduce.Marshaller;
+import com.google.appengine.tools.mapreduce.impl.proto.KeyValuePb;
 
 import java.nio.ByteBuffer;
 
@@ -33,7 +33,7 @@ public class KeyValueMarshaller<K, V> extends Marshaller<KeyValue<K, V>> {
 
   @Override
   public ByteBuffer toBytes(KeyValue<K, V> keyValues) {
-    FileServicePb.KeyValues.Builder b = FileServicePb.KeyValues.newBuilder();
+    KeyValuePb.KeyValues.Builder b = KeyValuePb.KeyValues.newBuilder();
     b.setKey(ByteString.copyFrom(keyMarshaller.toBytes(keyValues.getKey())));
     b.addValue(ByteString.copyFrom(valueMarshaller.toBytes(keyValues.getValue())));
     return ByteBuffer.wrap(b.build().toByteArray());
@@ -41,9 +41,9 @@ public class KeyValueMarshaller<K, V> extends Marshaller<KeyValue<K, V>> {
 
   @Override
   public KeyValue<K, V> fromBytes(ByteBuffer input) {
-    FileServicePb.KeyValues proto;
+    KeyValuePb.KeyValues proto;
     try {
-      proto = FileServicePb.KeyValues.parseFrom(ByteString.copyFrom(input));
+      proto = KeyValuePb.KeyValues.parseFrom(ByteString.copyFrom(input));
     } catch (InvalidProtocolBufferException e) {
       throw new CorruptDataException(e);
     }

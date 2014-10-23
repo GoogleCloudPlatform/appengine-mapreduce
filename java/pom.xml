@@ -105,6 +105,11 @@
       <version>20090211</version>
     </dependency>
     <dependency>
+      <groupId>com.google.protobuf</groupId>
+      <artifactId>protobuf-java</artifactId>
+      <version>2.6.0</version>
+    </dependency>
+    <dependency>
       <groupId>com.google.guava</groupId>
       <artifactId>guava</artifactId>
       <!-- version number of release candidates come before the ##.0 in maven, use 
