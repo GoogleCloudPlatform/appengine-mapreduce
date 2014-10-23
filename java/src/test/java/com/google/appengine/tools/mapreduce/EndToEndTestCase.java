@@ -90,7 +90,7 @@ public abstract class EndToEndTestCase {
 
   protected void executeTask(String queueName, QueueStateInfo.TaskStateInfo taskStateInfo)
       throws Exception {
-    logger.info("Executing task " + taskStateInfo.getTaskName()
+    logger.fine("Executing task " + taskStateInfo.getTaskName()
         + " with URL " + taskStateInfo.getUrl());
     // Hack to allow for deferred tasks. Exploits knowing how they work.
     if (taskStateInfo.getUrl().endsWith("__deferred__")) {
@@ -119,7 +119,7 @@ public abstract class EndToEndTestCase {
     for (HeaderWrapper header : taskStateInfo.getHeaders()) {
       int value = parseAsQuotedInt(header.getValue());
       expect(request.getIntHeader(header.getKey())).andReturn(value).anyTimes();
-      logger.info("header: " + header.getKey() + "=" + header.getValue());
+      logger.fine("header: " + header.getKey() + "=" + header.getValue());
       expect(request.getHeader(header.getKey())).andReturn(header.getValue()).anyTimes();
     }
 

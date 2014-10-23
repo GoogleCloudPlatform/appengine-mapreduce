@@ -73,47 +73,22 @@ public class ShardedJobRunner<T extends IncrementalTask> implements ShardedJobHa
 
   // High-level overview:
   //
-  // A sharded job is started with a given number of tasks, and every task
-  // has zero or one follow-up task; so the total number of tasks never
-  // increases.  We assign each follow-up task the same taskId as its
-  // predecessor and reuse the same datastore entity to store it.  So, each
-  // taskId really represents an entire chain of tasks, and the set of such task
-  // chains is known at startup.
+  // A sharded job is started with a given number of tasks, task is invoked
+  // over and over until it indicates it is complete.
   //
-  // Each task chain is its own entity group to avoid contention.
-  //
-  // (We could extend the API later to allow more than one follow-up task, but
-  // that either leads to datastore contention, or makes finding the set of all
-  // task entities harder; so, since we don't need more than one follow-up task
-  // for now, we use a single entity for each chain of follow-up tasks.)
+  // Each task is its own entity group to avoid contention.
   //
   // There is also a single entity (in its own entity group) that holds the
-  // overall job state.  It is updated only during initialization and from the
-  // controller.
+  // overall job state. It is updated only during initialization and when the tasks complete.
   //
-  // Partial results of each task and its chain of follow-up tasks are combined
-  // incrementally as the tasks complete.  Partial results across chains are
-  // combined only when the job completes, or when getJobState() is called.  (We
-  // could have the controller store the overall combined result, but there's a
-  // risk that it doesn't fit in a single entity, so we don't.
-  // ShardedJobStateImpl has a field for it and the Serializer supports it
-  // for completeness, but the value in the datastore is always null.)
-  //
-  // Worker and controller tasks and entities carry a strictly monotonic
-  // "sequence number" that allows each task to detect if its work has already
-  // been done (useful in case the task queue runs it twice).  We schedule each
+  // Tasks entities carry a "sequence number" that allows it to detect if its work has already
+  // been done (useful in case the task queue runs it twice). We schedule each
   // task in the same datastore transaction that updates the sequence number in
   // the entity.
   //
   // Each task also checks the job state entity to detect if the job has been
   // aborted or deleted, and terminates if so.
-  //
-  // We make job startup idempotent by letting the caller specify the job id
-  // (rather than generating one randomly), and deriving task ids from it in a
-  // deterministic fashion.  This makes it possible to schedule sharded jobs
-  // from Pipeline jobs with no danger of scheduling a duplicate sharded job if
-  // Pipeline or the task queue runs a job twice.  (For example, a caller could
-  // derive the job id for the sharded job from the Pipeline job id.)
+
 
   private static final Logger log = Logger.getLogger(ShardedJobRunner.class.getName());
 
@@ -369,7 +344,7 @@ public class ShardedJobRunner<T extends IncrementalTask> implements ShardedJobHa
       tx.commit();
       locked = true;
     } catch (ConcurrentModificationException ex) {
-      // TODO(user): would be nice to have a test for it. b/12822091 can help with that.
+      // TODO: would be nice to have a test for this...
       log.warning("Failed to acquire the lock, Will reschedule task for: " + taskState.getJobId()
           + " on slice " + taskState.getSequenceNumber());
       long eta = System.currentTimeMillis() + new Random().nextInt(5000) + 5000;

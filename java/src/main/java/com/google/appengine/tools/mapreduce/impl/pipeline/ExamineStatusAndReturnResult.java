@@ -12,7 +12,8 @@ import com.google.appengine.tools.pipeline.Value;
  *
  * @param <R> the type of MapReduceResult content
  */
-// TODO(user): This class will not be needed once b/11279055 is fixed.
+ // TODO: This class will not be needed once 
+ // https://github.com/GoogleCloudPlatform/appengine-pipelines/issues/3 is fixed.
 public class ExamineStatusAndReturnResult<R> extends Job1<MapReduceResult<R>, ResultAndStatus<R>> {
 
   private static final long serialVersionUID = -4916783324594785878L;

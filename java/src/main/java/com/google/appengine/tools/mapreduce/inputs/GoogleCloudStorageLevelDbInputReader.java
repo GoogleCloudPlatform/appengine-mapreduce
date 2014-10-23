@@ -23,7 +23,6 @@ public final class GoogleCloudStorageLevelDbInputReader extends LevelDbInputRead
   private static final GcsService gcsService = GcsServiceFactory.createGcsService(
       new GcsServiceOptions.Builder()
           .setRetryParams(GCS_RETRY_PARAMETERS)
-          // TODO(user): include version once b/12689661 is fixed
           .setHttpHeaders(ImmutableMap.of("User-Agent", "App Engine MR"))
           .build());
 

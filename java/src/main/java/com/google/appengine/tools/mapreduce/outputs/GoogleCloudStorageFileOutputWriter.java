@@ -32,7 +32,6 @@ public class GoogleCloudStorageFileOutputWriter extends OutputWriter<ByteBuffer>
       new GcsServiceOptions.Builder()
           .setRetryParams(GCS_RETRY_PARAMETERS)
           .setDefaultWriteBufferSize(DEFAULT_IO_BUFFER_SIZE)
-          // TODO(user): include version once b/12689661 is fixed
           .setHttpHeaders(ImmutableMap.of("User-Agent", "App Engine MR"))
           .build());
 

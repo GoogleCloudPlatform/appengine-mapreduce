@@ -70,7 +70,6 @@ public class WorkerController<I, O, R, C extends WorkerContext<O>> extends
     submitPromisedJob(new ResultAndStatus<R>(null, status));
   }
 
-  // TODO(user): consider using a pipeline for it after b/12067201 is fixed.
   private void submitPromisedJob(final ResultAndStatus<R> resultAndStatus) {
     try {
       PipelineServiceFactory.newPipelineService().submitPromisedValue(resultPromiseHandle,

@@ -27,7 +27,6 @@ class GoogleCloudStorageLineInputReader extends InputReader<byte[]> {
   private static final GcsService GCS_SERVICE = GcsServiceFactory.createGcsService(
       new GcsServiceOptions.Builder()
           .setRetryParams(GCS_RETRY_PARAMETERS)
-          // TODO(user): include version once b/12689661 is fixed
           .setHttpHeaders(ImmutableMap.of("User-Agent", "App Engine MR"))
           .build());
 

@@ -17,7 +17,6 @@ import java.util.NoSuchElementException;
 public class PeekingInputReader<T> extends UnmarshallingInputReader<T> implements Iterator<T> {
 
   private static final long serialVersionUID = -1740668578124485473L;
-  // TODO(user): May be a problem if peeked values are large b/10294530
   private SerializableValue<T> peekedItem; // assigned in readObject & peek
 
   public PeekingInputReader(InputReader<ByteBuffer> reader, Marshaller<T> marshaller) {
