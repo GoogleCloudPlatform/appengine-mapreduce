@@ -352,6 +352,7 @@ class GoogleCloudStorageConsistentOutputWriterEndToEndTest(
   def _runTest(self, num_shards):
     entity_count = 1000
     bucket_name = "bucket"
+    tmp_bucket_name = "tmp_bucket"
     job_name = "test_map"
 
     for _ in range(entity_count):
@@ -365,6 +366,7 @@ class GoogleCloudStorageConsistentOutputWriterEndToEndTest(
             "entity_kind": __name__ + "." + TestEntity.__name__,
             "output_writer": {
                 "bucket_name": bucket_name,
+                "tmp_bucket_name": tmp_bucket_name,
             },
         },
         shard_count=num_shards,
@@ -384,6 +386,13 @@ class GoogleCloudStorageConsistentOutputWriterEndToEndTest(
       # does not retrun extraneous empty entries.
       total_entries += len(data.strip().split("\n"))
     self.assertEqual(entity_count, total_entries)
+
+    # no files left in tmpbucket
+    self.assertFalse(list(cloudstorage.listbucket("/%s" % tmp_bucket_name)))
+    # and only expected files in regular bucket
+    files_in_bucket = [
+        f.filename for f in cloudstorage.listbucket("/%s" % bucket_name)]
+    self.assertEquals(filenames, files_in_bucket)
 
   def testSingleShard(self):
     self._runTest(num_shards=1)

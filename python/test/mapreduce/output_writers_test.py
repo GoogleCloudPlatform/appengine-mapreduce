@@ -794,8 +794,8 @@ class GCSOutputConsistentOutputWriterTest(GCSOutputWriterTestCommon,
 
     writer = self.WRITER_CLS.create(mapreduce_state.mapreduce_spec,
                                     shard_state.shard_number, 0)
-    writer._remove_file(None, writer_spec)  # no exceptions
-    writer._remove_file("/test/i_dont_exist", writer_spec)
+    writer._remove_tmpfile(None, writer_spec)  # no exceptions
+    writer._remove_tmpfile("/test/i_dont_exist", writer_spec)
 
   def testTmpfileName(self):
     writer_spec = {self.WRITER_CLS.BUCKET_NAME_PARAM: "test"}
@@ -813,9 +813,40 @@ class GCSOutputConsistentOutputWriterTest(GCSOutputWriterTestCommon,
     self.assertTrue(tmpfile_name.startswith(prefix),
                     "Test file name is: %s" % tmpfile_name)
 
+  def testTmpDefaultsToMain(self):
+    writer_spec = {self.WRITER_CLS.BUCKET_NAME_PARAM: "bucket",
+                   self.WRITER_CLS._ACCOUNT_ID_PARAM: "account"}
+    mapreduce_state = self.create_mapreduce_state(output_params=writer_spec)
+    shard_state = self.create_shard_state(1)
+    ctx = context.Context(mapreduce_state.mapreduce_spec, shard_state)
+    context.Context._set(ctx)
+
+    writer = self.WRITER_CLS.create(mapreduce_state.mapreduce_spec,
+                                    shard_state.shard_number, 0)
+
+    self.assertEquals("bucket", writer._get_tmp_gcs_bucket(writer_spec))
+    self.assertEquals("account", writer._get_tmp_account_id(writer_spec))
+
+  def testTmpTakesPrecedence(self):
+    writer_spec = {self.WRITER_CLS.BUCKET_NAME_PARAM: "bucket",
+                   self.WRITER_CLS._ACCOUNT_ID_PARAM: "account",
+                   self.WRITER_CLS.TMP_BUCKET_NAME_PARAM: "tmp_bucket",
+                   self.WRITER_CLS._TMP_ACCOUNT_ID_PARAM: None}
+    mapreduce_state = self.create_mapreduce_state(output_params=writer_spec)
+    shard_state = self.create_shard_state(1)
+    ctx = context.Context(mapreduce_state.mapreduce_spec, shard_state)
+    context.Context._set(ctx)
+
+    writer = self.WRITER_CLS.create(mapreduce_state.mapreduce_spec,
+                                    shard_state.shard_number, 0)
+
+    self.assertEquals("tmp_bucket", writer._get_tmp_gcs_bucket(writer_spec))
+    self.assertEquals(None, writer._get_tmp_account_id(writer_spec))
+
   def testRemoveGarbage(self):
     """Make sure abandoned files get removed."""
-    writer_spec = {self.WRITER_CLS.BUCKET_NAME_PARAM: "test"}
+    writer_spec = {self.WRITER_CLS.BUCKET_NAME_PARAM: "unused",
+                   self.WRITER_CLS.TMP_BUCKET_NAME_PARAM: "test"}
     mapreduce_state = self.create_mapreduce_state(output_params=writer_spec)
     shard_state = self.create_shard_state(1)
     ctx = context.Context(mapreduce_state.mapreduce_spec, shard_state)
