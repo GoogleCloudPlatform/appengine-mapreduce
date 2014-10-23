@@ -103,7 +103,7 @@ def _JsonDecodeKey(d):
     encoded_key = d['encoded_key']
     if isinstance(encoded_key, (list, tuple)):
         return ndb.Key(flat=encoded_key)
-    return ndb.Key(urlsafe=d['encoded_key'])
+    return ndb.Key(urlsafe=encoded_key)
 
 _register_json_primitive(ndb.Key, _JsonEncodeKey, _JsonDecodeKey)
 
