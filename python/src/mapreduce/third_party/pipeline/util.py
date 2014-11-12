@@ -24,9 +24,11 @@ __all__ = ["for_name",
 
 import datetime
 import inspect
-import json
 import logging
 import os
+
+# Relative imports
+from mapreduce.third_party import simplejson
 
 # pylint: disable=protected-access
 
@@ -148,7 +150,7 @@ def is_generator_function(obj):
                obj.func_code.co_flags & CO_GENERATOR))
 
 
-class JsonEncoder(json.JSONEncoder):
+class JsonEncoder(simplejson.JSONEncoder):
   """Pipeline customized json encoder."""
 
   TYPE_ID = "__pipeline_json_type"
@@ -163,7 +165,7 @@ class JsonEncoder(json.JSONEncoder):
     return super(JsonEncoder, self).default(o)
 
 
-class JsonDecoder(json.JSONDecoder):
+class JsonDecoder(simplejson.JSONDecoder):
   """Pipeline customized json decoder."""
 
   def __init__(self, **kwargs):
