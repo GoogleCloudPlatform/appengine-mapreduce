@@ -262,7 +262,16 @@
     </copy>
   </target>
 
+  <target name="shuffler" depends="dist,dependencies_test,dependencies_sdk">
+    <mkdir dir="${example}/shuffler/WEB-INF/lib"/>
+    <copy todir="${example}/shuffler/WEB-INF/lib">
+      <fileset dir="${dist}"/>
+      <fileset dir="${lib_sdk}"/>
+    </copy>
+  </target>
+
   <target name="clean_example">
+    <delete dir="${example}/shuffler/WEB-INF/lib"/>
     <delete dir="${example}/default/WEB-INF/lib"/>
     <delete dir="${example}/default/WEB-INF/classes"/>
     <delete dir="${example}/default/WEB-INF/appengine-generated"/>

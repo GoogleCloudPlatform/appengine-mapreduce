@@ -29,6 +29,18 @@
     <url-pattern>/mapreduce/*</url-pattern>
   </servlet-mapping>
 
+  <!-- Provides a pre-made servlet to kick off shuffle jobs -->
+  <servlet>
+    <servlet-name>ShufflerServlet</servlet-name>
+    <servlet-class>
+      com.google.appengine.tools.mapreduce.servlets.ShufflerServlet
+    </servlet-class>
+  </servlet>
+  <servlet-mapping>
+    <servlet-name>ShufflerServlet</servlet-name>
+    <url-pattern>/shufflerServlet/*</url-pattern>
+  </servlet-mapping>
+
   <!-- In this example we put an admin constraint on everything, since MapReduce
     can use a significant amount of resources. -->
   <security-constraint>
