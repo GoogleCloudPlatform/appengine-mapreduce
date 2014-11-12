@@ -85,7 +85,7 @@ public class DatastoreShardStrategyTest extends TestCase {
 
   public void testDate() {
     validateSplits(createQuery(ENTITY_KIND_NAME, PROPERTY_NAME, new Date(0), new Date(100)),
-        longRanges(0, 20, 40, 60, 80, 100));
+        longRanges(0, 20000, 40000, 60000, 80000, 100000));
   }
   public void testRating() {
     validateSplits(createQuery(ENTITY_KIND_NAME, PROPERTY_NAME, new Rating(0), new Rating(100)),

@@ -149,8 +149,13 @@ public class DatastoreShardStrategy {
   private static class DateSplitter implements Splitter<Long> {
     @Override
     public SortedSet<Long> getSplitPoints(Range range, int numSplits) {
-      return splitRange(((Date) range.getLowerBound().getValue()).getTime(),
-          ((Date) range.getUpperBound().getValue()).getTime(), numSplits);
+      return splitRange(toDatastoreValue(range.getLowerBound().getValue()),
+          toDatastoreValue(range.getUpperBound().getValue()), numSplits);
+    }
+
+    private long toDatastoreValue(Object value) {
+      // Date(long) expects milliseconds, Datastore uses micros.
+      return ((Date) value).getTime() * 1000L;
     }
   }
 

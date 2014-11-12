@@ -22,6 +22,10 @@ import com.google.appengine.api.datastore.DatastoreServiceFactory;
 import com.google.appengine.api.datastore.Entity;
 import com.google.appengine.api.datastore.Key;
 import com.google.appengine.api.datastore.Query;
+import com.google.appengine.api.datastore.Query.CompositeFilterOperator;
+import com.google.appengine.api.datastore.Query.Filter;
+import com.google.appengine.api.datastore.Query.FilterOperator;
+import com.google.appengine.api.datastore.Query.FilterPredicate;
 import com.google.appengine.tools.development.testing.LocalDatastoreServiceTestConfig;
 import com.google.appengine.tools.development.testing.LocalServiceTestHelper;
 import com.google.appengine.tools.mapreduce.InputReader;
@@ -30,10 +34,13 @@ import junit.framework.TestCase;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Date;
 import java.util.List;
 import java.util.NoSuchElementException;
+import java.util.Random;
 
 /**
  */
@@ -41,8 +48,8 @@ public class DatastoreInputTest extends TestCase {
 
   static final String ENTITY_KIND_NAME = "Bob";
 
-  private final LocalServiceTestHelper helper
-      = new LocalServiceTestHelper(new LocalDatastoreServiceTestConfig());
+  private final LocalServiceTestHelper helper = new LocalServiceTestHelper(
+      new LocalDatastoreServiceTestConfig().setApplyAllHighRepJobPolicy());
   private DatastoreService ds;
 
   @Override
@@ -69,8 +76,13 @@ public class DatastoreInputTest extends TestCase {
       if (namespace != null) {
         NamespaceManager.set(namespace);
       }
+      Random rnd = new Random();
       for (int i = 0; i < size; i++) {
-        entities.add(new Entity(ENTITY_KIND_NAME, ancestor));
+        Entity entity = new Entity(ENTITY_KIND_NAME, ancestor);
+        Calendar cal = Calendar.getInstance();
+        cal.add(Calendar.DATE, -1 * rnd.nextInt(5));
+        entity.setProperty("date", cal.getTime());
+        entities.add(entity);
       }
     } finally {
       NamespaceManager.set(ns);
@@ -89,6 +101,29 @@ public class DatastoreInputTest extends TestCase {
     Query query = BaseDatastoreInput.createQuery(namespace, kind);
     assertEquals(query.getKind(), kind);
     assertEquals(namespace == null ? "" : namespace, query.getNamespace());
+  }
+
+  public void testCreateReadersWithFilter() throws IOException {
+    List<Key> keys = populateData(100, null, null);
+    Query query = new Query(ENTITY_KIND_NAME);
+    Calendar cal = Calendar.getInstance();
+    cal.setTime(new Date());
+    Date dateNow = cal.getTime();
+    cal.add(Calendar.DATE, -5);
+    Date fivedaysago = cal.getTime();
+    Filter min = new FilterPredicate("date", FilterOperator.GREATER_THAN_OR_EQUAL, fivedaysago);
+    Filter max = new FilterPredicate("date", FilterOperator.LESS_THAN_OR_EQUAL, dateNow);
+    query.setFilter(CompositeFilterOperator.and(min, max));
+    DatastoreInput input = new DatastoreInput(query, 5);
+    ArrayList<Key> read = new ArrayList<>();
+    for (InputReader<Entity> reader : input.createReaders()) {
+      read.addAll(getEntities(reader));
+    }
+    Collections.sort(read);
+    assertEquals(keys.size(), read.size());
+    for (int i = 0; i < keys.size(); i++) {
+      assertEquals(keys.get(i), read.get(i));
+    }
   }
 
   public void testCreateReadersWithAncestor() throws IOException {

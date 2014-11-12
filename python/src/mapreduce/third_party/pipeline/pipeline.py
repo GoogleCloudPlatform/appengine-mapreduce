@@ -598,7 +598,9 @@ class Pipeline(object):
             idempotence_key='',
             queue_name='default',
             base_path='/_ah/pipeline',
-            return_task=False):
+            return_task=False,
+            countdown=None,
+            eta=None):
     """Starts a new instance of this pipeline.
 
     Args:
@@ -613,6 +615,13 @@ class Pipeline(object):
         as part of a separate transaction (potentially leaving this newly
         allocated pipeline's datastore entities in place if that separate
         transaction fails for any reason).
+      countdown: Time in seconds into the future that this Task should execute.
+        Defaults to zero.
+      eta: A datetime.datetime specifying the absolute time at which the task
+        should be executed. Must not be specified if 'countdown' is specified.
+        This may be timezone-aware or timezone-naive. If None, defaults to now.
+        For pull tasks, no worker will be able to lease this task before the
+        time indicated by eta.
 
     Returns:
       A taskqueue.Task instance if return_task was True. This task will *not*
@@ -637,7 +646,8 @@ class Pipeline(object):
     try:
       self._set_values_internal(
           context, pipeline_key, pipeline_key, future, _PipelineRecord.WAITING)
-      return context.start(self, return_task=return_task)
+      return context.start(
+          self, return_task=return_task, countdown=countdown, eta=eta)
     except Error:
       # Pass through exceptions that originate in this module.
       raise
@@ -1704,13 +1714,20 @@ class _PipelineContext(object):
       except (taskqueue.TombstonedTaskError, taskqueue.TaskAlreadyExistsError):
         pass
 
-  def start(self, pipeline, return_task=True):
+  def start(self, pipeline, return_task=True, countdown=None, eta=None):
     """Starts a pipeline.
 
     Args:
       pipeline: Pipeline instance to run.
       return_task: When True, do not submit the task to start the pipeline
         but instead return it for someone else to enqueue.
+      countdown: Time in seconds into the future that this Task should execute.
+        Defaults to zero.
+      eta: A datetime.datetime specifying the absolute time at which the task
+        should be executed. Must not be specified if 'countdown' is specified.
+        This may be timezone-aware or timezone-naive. If None, defaults to now.
+        For pull tasks, no worker will be able to lease this task before the
+        time indicated by eta.
 
     Returns:
       The task to start this pipeline if return_task was True.
@@ -1767,7 +1784,9 @@ class _PipelineContext(object):
           url=self.pipeline_handler_path,
           params=dict(pipeline_key=pipeline._pipeline_key),
           headers={'X-Ae-Pipeline-Key': pipeline._pipeline_key},
-          target=pipeline.target)
+          target=pipeline.target,
+          countdown=countdown,
+          eta=eta)
       if return_task:
         return task
       task.add(queue_name=self.queue_name, transactional=True)
