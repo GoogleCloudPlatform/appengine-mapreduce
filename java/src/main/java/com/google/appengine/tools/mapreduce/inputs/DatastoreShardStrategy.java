@@ -239,7 +239,7 @@ public class DatastoreShardStrategy {
    * Uses the scatter property to distribute ranges to segments.
    *
    *  A random scatter property is added to 1 out of every 512 entities see:
-   * http://code.google.com/p/appengine-mapreduce/wiki/ScatterPropertyImplementation
+   * https://github.com/GoogleCloudPlatform/appengine-mapreduce/wiki/ScatterPropertyImplementation
    *
    *  Retrieving the entities with the highest scatter values provides a random sample of entities.
    * Because they are randomly selected, their distribution in keyspace should be the same as other
