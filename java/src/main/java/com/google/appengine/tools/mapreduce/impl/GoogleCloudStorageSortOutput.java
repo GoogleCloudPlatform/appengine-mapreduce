@@ -69,7 +69,7 @@ public class GoogleCloudStorageSortOutput extends
     @Override
     public long estimateMemoryRequirement() {
       return Math.max(getShardsToWriterMap().size(), 1)
-          * GoogleCloudStorageFileOutputWriter.MEMORY_REQUIRED;
+          * GoogleCloudStorageFileOutputWriter.MEMORY_REQUIRED_WITHOUT_SLICE_RETRY;
     }
   }
 
@@ -105,13 +105,13 @@ public class GoogleCloudStorageSortOutput extends
       // unneeded as the file is being finalized.
       return new MarshallingOutputWriter<>(
           new LevelDbOutputWriter(new GoogleCloudStorageFileOutputWriter(
-              new GcsFilename(bucket, fileName), MapReduceConstants.REDUCE_INPUT_MIME_TYPE)),
+              new GcsFilename(bucket, fileName), MapReduceConstants.REDUCE_INPUT_MIME_TYPE, false)),
           Marshallers.getKeyValuesMarshaller(identity, identity));
     }
 
     @Override
     public long estimateMemoryRequirement() {
-      return GoogleCloudStorageFileOutputWriter.MEMORY_REQUIRED;
+      return GoogleCloudStorageFileOutputWriter.MEMORY_REQUIRED_WITHOUT_SLICE_RETRY;
     }
 
     public List<String> getFilesCreated() {

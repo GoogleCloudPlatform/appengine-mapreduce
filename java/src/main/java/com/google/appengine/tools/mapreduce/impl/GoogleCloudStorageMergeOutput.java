@@ -69,8 +69,11 @@ public class GoogleCloudStorageMergeOutput extends
       String fileName = String.format(fileNamePattern, sliceNumber);
       fileNames.add(fileName);
       return new MarshallingOutputWriter<>(
-          new GoogleCloudStorageLevelDbOutputWriter(new GoogleCloudStorageFileOutputWriter(
-              new GcsFilename(bucket, fileName), MapReduceConstants.REDUCE_INPUT_MIME_TYPE)),
+          new GoogleCloudStorageLevelDbOutputWriter(
+              new GoogleCloudStorageFileOutputWriter(
+                  new GcsFilename(bucket, fileName),
+                  MapReduceConstants.REDUCE_INPUT_MIME_TYPE,
+                  false)),
           Marshallers.getKeyValuesMarshaller(identity, identity));
     }
 
@@ -80,7 +83,7 @@ public class GoogleCloudStorageMergeOutput extends
 
     @Override
     public long estimateMemoryRequirement() {
-      return GoogleCloudStorageFileOutputWriter.MEMORY_REQUIRED;
+      return GoogleCloudStorageFileOutputWriter.MEMORY_REQUIRED_WITHOUT_SLICE_RETRY;
     }
 
     @Override

@@ -14,8 +14,8 @@
 
 package com.google.appengine.tools.mapreduce.servlets;
 
-import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 import com.google.appengine.api.blobstore.dev.LocalBlobstoreService;
@@ -42,6 +42,7 @@ import com.google.appengine.tools.pipeline.PipelineService;
 import com.google.appengine.tools.pipeline.PipelineServiceFactory;
 import com.google.appengine.tools.pipeline.impl.servlets.PipelineServlet;
 import com.google.apphosting.api.ApiProxy;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.TreeMultimap;
 
 import org.junit.After;
@@ -54,7 +55,6 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
@@ -79,19 +79,19 @@ public class ShufflerServletTest {
 
   private static final String CALLBACK_PATH = "/callback";
 
-  private static final int maxRecordSize = 500;
+  private static final int MAX_RECORD_SIZE = 500;
 
-  private static Marshaller<KeyValue<ByteBuffer, ByteBuffer>> KEY_VALUE_MARSHALLER =
+  private static final Marshaller<KeyValue<ByteBuffer, ByteBuffer>> KEY_VALUE_MARSHALLER =
       Marshallers.getKeyValueMarshaller(Marshallers.getByteBufferMarshaller(),
           Marshallers.getByteBufferMarshaller());
 
-  private static
+  private static final
       Marshaller<KeyValue<ByteBuffer, ? extends Iterable<ByteBuffer>>> KEY_VALUES_MARSHALLER =
           Marshallers.getKeyValuesMarshaller(Marshallers.getByteBufferMarshaller(),
               Marshallers.getByteBufferMarshaller());
   private final int recordsPerFile = 10;
 
-  private final static Semaphore WAIT_ON = new Semaphore(0);
+  private static final Semaphore WAIT_ON = new Semaphore(0);
 
   private final LocalServiceTestHelper helper = new LocalServiceTestHelper(
       new LocalDatastoreServiceTestConfig(), new LocalTaskQueueTestConfig()
@@ -100,20 +100,21 @@ public class ShufflerServletTest {
       new LocalModulesServiceTestConfig());
 
 
-
   public static class TaskRunner extends ServletInvokingTaskCallback {
-    private final static Map<String, HttpServlet> servletMap = new HashMap<>();
-    static {
-      servletMap.put("/mapreduce", new MapReduceServlet());
-      servletMap.put("/_ah/pipeline", new PipelineServlet());
-      servletMap.put(CALLBACK_PATH, new CallbackServlet());
-    }
+
+    private static final Map<String, HttpServlet> servletMap =
+        new ImmutableMap.Builder<String, HttpServlet>()
+            .put("/mapreduce", new MapReduceServlet())
+            .put("/_ah/pipeline", new PipelineServlet())
+            .put(CALLBACK_PATH, new CallbackServlet())
+            .build();
 
     @Override
     protected Map<String, HttpServlet> getServletMap() {
       return servletMap;
     }
 
+    @SuppressWarnings("serial")
     @Override
     protected HttpServlet getDefaultServlet() {
       return new HttpServlet() {};
@@ -226,6 +227,7 @@ public class ShufflerServletTest {
           result.add(new KeyValue<ByteBuffer, List<ByteBuffer>>(keyValue.getKey(), list));
         }
       } catch (NoSuchElementException e) {
+        // reader has no more values
       }
       reader.endSlice();
       reader.endShard();
@@ -255,7 +257,7 @@ public class ShufflerServletTest {
   private KeyValue<ByteBuffer, ByteBuffer> writeRandomKVByteBuffer(Random rand,
       LevelDbOutputWriter writer) throws IOException {
     byte[] key = new byte[rand.nextInt(5) + 1];
-    byte[] value = new byte[rand.nextInt(maxRecordSize)];
+    byte[] value = new byte[rand.nextInt(MAX_RECORD_SIZE)];
     rand.nextBytes(key);
     rand.nextBytes(value);
     KeyValue<ByteBuffer, ByteBuffer> keyValue =

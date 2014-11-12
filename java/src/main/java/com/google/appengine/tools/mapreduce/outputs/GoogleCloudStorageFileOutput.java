@@ -26,6 +26,19 @@ public class GoogleCloudStorageFileOutput extends Output<ByteBuffer, GoogleCloud
   private final String mimeType;
   private final String fileNamePattern;
   private final String bucket;
+  private final boolean supportSliceRetries;
+
+  /**
+   * Creates output files who's names follow the provided pattern in the specified bucket.
+   * This will construct an instance that supports slice retries.
+   *
+   * @param fileNamePattern a Java format string {@link java.util.Formatter} containing one int
+   *        argument for the shard number.
+   * @param mimeType The string to be passed as the mimeType to GCS.
+   */
+  public GoogleCloudStorageFileOutput(String bucket, String fileNamePattern, String mimeType) {
+    this(bucket, fileNamePattern, mimeType, true);
+  }
 
   /**
    * Creates output files who's names follow the provided pattern in the specified bucket.
@@ -33,11 +46,16 @@ public class GoogleCloudStorageFileOutput extends Output<ByteBuffer, GoogleCloud
    * @param fileNamePattern a Java format string {@link java.util.Formatter} containing one int
    *        argument for the shard number.
    * @param mimeType The string to be passed as the mimeType to GCS.
+   * @param supportSliceRetries indicates if slice retries should be supported by this writer.
+   *        Slice retries are achieved by writing each slice to a temporary file
+   *        and copying it to its destination when processing the next slice.
    */
-  public GoogleCloudStorageFileOutput(String bucket, String fileNamePattern, String mimeType) {
+  public GoogleCloudStorageFileOutput(String bucket, String fileNamePattern, String mimeType,
+      boolean supportSliceRetries) {
     this.bucket = checkNotNull(bucket);
     this.mimeType = checkNotNull(mimeType, "Null mimeType");
     this.fileNamePattern = checkNotNull(fileNamePattern, "Null fileNamePattern");
+    this.supportSliceRetries = supportSliceRetries;
   }
 
   @Override
@@ -45,7 +63,7 @@ public class GoogleCloudStorageFileOutput extends Output<ByteBuffer, GoogleCloud
     ImmutableList.Builder<GoogleCloudStorageFileOutputWriter> out = ImmutableList.builder();
     for (int i = 0; i < numShards; i++) {
       GcsFilename file = new GcsFilename(bucket, String.format(fileNamePattern, i));
-      out.add(new GoogleCloudStorageFileOutputWriter(file, mimeType));
+      out.add(new GoogleCloudStorageFileOutputWriter(file, mimeType, supportSliceRetries));
     }
     return out.build();
   }

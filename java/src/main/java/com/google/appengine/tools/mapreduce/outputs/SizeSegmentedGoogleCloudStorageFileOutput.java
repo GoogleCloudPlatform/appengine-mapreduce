@@ -71,7 +71,7 @@ public final class SizeSegmentedGoogleCloudStorageFileOutput extends
 
     @Override
     protected OutputWriter<ByteBuffer> createWriter(int fileNum) {
-      String fileName = String.format(fileNamePattern, shardNumber, fileNum);
+      String fileName = String.format(fileNamePattern, shardNumber, System.currentTimeMillis());
       GoogleCloudStorageFileOutputWriter toReturn =
           new GoogleCloudStorageFileOutputWriter(new GcsFilename(bucket, fileName), mimeType);
       delegatedWriters.add(toReturn);
@@ -85,6 +85,11 @@ public final class SizeSegmentedGoogleCloudStorageFileOutput extends
 
     List<GoogleCloudStorageFileOutputWriter> getDelegatedWriters() {
       return delegatedWriters;
+    }
+
+    @Override
+    public boolean allowSliceRetry() {
+      return true;
     }
   }
 

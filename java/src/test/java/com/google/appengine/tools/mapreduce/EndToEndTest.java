@@ -23,6 +23,7 @@ import com.google.appengine.api.datastore.Query;
 import com.google.appengine.api.files.AppEngineFile;
 import com.google.appengine.api.files.FileReadChannel;
 import com.google.appengine.api.files.FileServiceFactory;
+import com.google.appengine.tools.cloudstorage.GcsFileMetadata;
 import com.google.appengine.tools.cloudstorage.GcsFilename;
 import com.google.appengine.tools.cloudstorage.GcsInputChannel;
 import com.google.appengine.tools.cloudstorage.GcsService;
@@ -726,8 +727,18 @@ public class EndToEndTest extends EndToEndTestCase {
     });
   }
 
+
   @Test
-  public void testPassByteBufferToGcs() throws Exception {
+  public void testPassByteBufferToGcsWithSliceRetries() throws Exception {
+    applyTestPassByteBufferToGcs(true);
+  }
+
+  @Test
+  public void testPassByteBufferToGcsWithoutSliceRetries() throws Exception {
+    applyTestPassByteBufferToGcs(false);
+  }
+
+  private void applyTestPassByteBufferToGcs(boolean sliceRetry) throws Exception {
     final RandomLongInput input = new RandomLongInput(10, 1);
     input.setSeed(0L);
     MapReduceSpecification.Builder<Long, ByteBuffer, ByteBuffer, ByteBuffer,
@@ -739,7 +750,7 @@ public class EndToEndTest extends EndToEndTestCase {
     builder.setValueMarshaller(Marshallers.getByteBufferMarshaller());
     builder.setReducer(ValueProjectionReducer.<ByteBuffer, ByteBuffer>create());
     builder.setOutput(new GoogleCloudStorageFileOutput("bucket", "fileNamePattern-%04d",
-        "application/octet-stream"));
+        "application/octet-stream", sliceRetry));
     builder.setNumReducers(2);
     runTest(builder.build(), new Verifier<GoogleCloudStorageFileSet>() {
       @Override
@@ -750,6 +761,8 @@ public class EndToEndTest extends EndToEndTestCase {
         GcsService gcsService = GcsServiceFactory.createGcsService();
         ByteBuffer holder = ByteBuffer.allocate(8);
         for (GcsFilename file : result.getOutputResult().getFiles()) {
+          GcsFileMetadata metadata = gcsService.getMetadata(file);
+          assertEquals("application/octet-stream", metadata.getOptions().getMimeType());
           try (GcsInputChannel channel = gcsService.openPrefetchingReadChannel(file, 0, 4096)) {
             int read = channel.read(holder);
             while (read != -1) {

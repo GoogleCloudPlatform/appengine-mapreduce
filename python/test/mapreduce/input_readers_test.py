@@ -2604,7 +2604,7 @@ class GoogleCloudStorageInputReaderWithDelimiterTest(
     GoogleCloudStorageInputTestBase):
   """Tests for GoogleCloudStorageInputReader."""
 
-  READER_CLS = input_readers._GoogleCloudStorageInputReader
+  READER_CLS = input_readers.GoogleCloudStorageInputReader
   READER_NAME = input_readers.__name__ + "." + READER_CLS.__name__
 
   def setUp(self):
@@ -2691,7 +2691,7 @@ class GoogleCloudStorageInputReaderWithDelimiterTest(
 class GoogleCloudStorageInputReaderTest(GoogleCloudStorageInputTestBase):
   """Tests for GoogleCloudStorageInputReader."""
 
-  READER_CLS = input_readers._GoogleCloudStorageInputReader
+  READER_CLS = input_readers.GoogleCloudStorageInputReader
   READER_NAME = input_readers.__name__ + "." + READER_CLS.__name__
 
   def setUp(self):
@@ -2932,7 +2932,7 @@ class GoogleCloudStorageInputReaderTest(GoogleCloudStorageInputTestBase):
 class GoogleCloudStorageRecordInputReaderTest(GoogleCloudStorageInputTestBase):
   """Tests for GoogleCloudStorageInputReader."""
 
-  READER_CLS = input_readers._GoogleCloudStorageRecordInputReader
+  READER_CLS = input_readers.GoogleCloudStorageRecordInputReader
   READER_NAME = input_readers.__name__ + "." + READER_CLS.__name__
   TEST_BUCKET = "testing"
 

@@ -28,6 +28,9 @@ __all__ = [
     "FileRecordsOutputWriter",
     "GoogleCloudStorageConsistentOutputWriter",
     "GoogleCloudStorageConsistentRecordOutputWriter",
+    "GoogleCloudStorageKeyValueOutputWriter",
+    "GoogleCloudStorageOutputWriter",
+    "GoogleCloudStorageRecordOutputWriter",
     "KeyValueBlobstoreOutputWriter",
     "KeyValueFileOutputWriter",
     "COUNTER_IO_WRITE_BYTES",
@@ -1328,6 +1331,9 @@ class _GoogleCloudStorageOutputWriter(_GoogleCloudStorageOutputWriterBase):
     return self._streaming_buffer.name
 
 
+GoogleCloudStorageOutputWriter = _GoogleCloudStorageOutputWriter
+
+
 class _ConsistentStatus(object):
   """Object used to pass status to the next slice."""
 
@@ -1595,6 +1601,9 @@ class _GoogleCloudStorageRecordOutputWriter(
   WRITER_CLS = _GoogleCloudStorageOutputWriter
 
 
+GoogleCloudStorageRecordOutputWriter = _GoogleCloudStorageRecordOutputWriter
+
+
 class GoogleCloudStorageConsistentRecordOutputWriter(
     _GoogleCloudStorageRecordOutputWriterBase):
   WRITER_CLS = GoogleCloudStorageConsistentOutputWriter
@@ -1620,4 +1629,7 @@ class _GoogleCloudStorageKeyValueOutputWriter(
     proto = file_service_pb.KeyValue()
     proto.set_key(key)
     proto.set_value(value)
-    _GoogleCloudStorageRecordOutputWriter.write(self, proto.Encode())
+    GoogleCloudStorageRecordOutputWriter.write(self, proto.Encode())
+
+
+GoogleCloudStorageKeyValueOutputWriter = _GoogleCloudStorageKeyValueOutputWriter

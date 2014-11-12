@@ -48,11 +48,4 @@ public abstract class SizeSegmentingOutputWriter extends ItemSegmentingOutputWri
   }
 
   protected abstract OutputWriter<ByteBuffer> createWriter(int fileNum);
-
-  @Override
-  public boolean allowSliceRetry() {
-    // TODO : Fix by maintaining number of bytes written by each slice. Also the delegated writer
-    // needs to support it too.
-    return false;
-  }
 }

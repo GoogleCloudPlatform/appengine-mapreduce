@@ -335,7 +335,7 @@ class GCSOutputTestBase(object):
 class GCSOutputWriterNoDupModeTest(GCSOutputTestBase,
                                    testutil.CloudStorageTestBase):
 
-  WRITER_CLS = output_writers._GoogleCloudStorageOutputWriter
+  WRITER_CLS = output_writers.GoogleCloudStorageOutputWriter
   WRITER_NAME = output_writers.__name__ + "." + WRITER_CLS.__name__
 
   def setUp(self):
@@ -445,7 +445,7 @@ class GCSOutputWriterNoDupModeTest(GCSOutputTestBase,
 
 class GCSOutputWriterTestCommon(GCSOutputTestBase):
 
-  # _GoogleCloudStorageOutputWriter and
+  # GoogleCloudStorageOutputWriter and
   # GoogleCloudStorageConsistentOutputWriter both run all of these tests.
 
   def testValidate_PassesBasic(self):
@@ -722,7 +722,7 @@ class GCSRecordOutputWriterTestBase(GCSOutputTestBase):
 class GCSRecordOutputWriterTest(GCSRecordOutputWriterTestBase,
                                 testutil.CloudStorageTestBase):
 
-  WRITER_CLS = output_writers._GoogleCloudStorageRecordOutputWriter
+  WRITER_CLS = output_writers.GoogleCloudStorageRecordOutputWriter
   WRITER_NAME = output_writers.__name__ + "." + WRITER_CLS.__name__
 
 
@@ -736,7 +736,7 @@ class GCSConsistentRecordOutputWriterTest(GCSRecordOutputWriterTestBase,
 class GCSOutputWriterTest(GCSOutputWriterTestCommon,
                           testutil.CloudStorageTestBase):
 
-  WRITER_CLS = output_writers._GoogleCloudStorageOutputWriter
+  WRITER_CLS = output_writers.GoogleCloudStorageOutputWriter
   WRITER_NAME = output_writers.__name__ + "." + WRITER_CLS.__name__
 
 
