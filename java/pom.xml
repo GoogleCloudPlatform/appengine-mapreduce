@@ -6,7 +6,7 @@
   <name>App Engine MapReduce Library</name>
   <description>A user space MapReduce library for Google App Engine.
   </description>
-  <url>http://code.google.com/p/appengine-mapreduce/</url>
+  <url>https://github.com/GoogleCloudPlatform/appengine-mapreduce/</url>
   <organization>
     <name>Google</name>
   </organization>

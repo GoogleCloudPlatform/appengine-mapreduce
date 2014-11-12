@@ -22,7 +22,7 @@ import java.util.NoSuchElementException;
  * {@link com.google.appengine.tools.mapreduce.outputs.LevelDbOutputWriter})
  *
  * If you want to read about the format it is here:
- * {@linkplain "https://code.google.com/p/leveldb/"}
+ * {@linkplain "https://github.com/google/leveldb/"}
  *
  * This implementation deviates from the specification above, in that it allows blocks to be zero
  * padded regardless of how much data is in the block, rather than only if the block is within 6
