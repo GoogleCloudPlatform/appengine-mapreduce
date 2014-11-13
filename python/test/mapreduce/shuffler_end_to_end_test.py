@@ -7,7 +7,7 @@
 
 import unittest
 
-from mapreduce.third_party import pipeline
+import pipeline
 
 from google.appengine.api.files import file_service_pb
 import cloudstorage

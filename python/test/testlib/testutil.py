@@ -32,7 +32,7 @@ import os
 import sys
 import unittest
 
-from testlib import mox
+import mox
 
 from google.appengine.datastore import entity_pb
 from google.appengine.ext import ndb

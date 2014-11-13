@@ -39,8 +39,8 @@ import time
 import unittest
 
 import mock
-from testlib import mox
-from mapreduce.third_party import simplejson
+import mox
+import simplejson
 
 from google.appengine.api import apiproxy_stub_map
 from google.appengine.api import datastore

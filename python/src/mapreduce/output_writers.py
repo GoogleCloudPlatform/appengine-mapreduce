@@ -81,7 +81,6 @@ if cloudstorage is None:
   try:
     import cloudstorage
     from cloudstorage import cloudstorage_api
-    from cloudstorage import errors as cloud_errors
   except ImportError:
     pass  # CloudStorage library really not available
 

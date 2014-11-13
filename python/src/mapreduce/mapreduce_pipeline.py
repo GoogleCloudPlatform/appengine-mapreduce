@@ -29,8 +29,8 @@ __all__ = [
     ]
 
 
-from mapreduce.third_party import pipeline
-from mapreduce.third_party.pipeline import common as pipeline_common
+import pipeline
+from pipeline import common as pipeline_common
 from google.appengine.api import app_identity
 from mapreduce import errors
 from mapreduce import input_readers

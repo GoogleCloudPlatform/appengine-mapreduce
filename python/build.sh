@@ -30,10 +30,10 @@ $APPENGINE_LIB/lib/yaml/lib:\
 $dir/src:\
 $dir/test:\
 "
-
+  fetch_dependencies
   echo "Using PYTHONPATH=$PYTHONPATH"
   exit_status=0
-  for t in $(find "$dir/test" -name "*test.py"); do
+  for t in $(find "$dir/test" -name "*test.py" | grep -Ev "/test/mapreduce/api/|test/mapreduce/module_test.py|test/mapreduce/webapp2_test.py"); do
     if python $t
     then
       echo "PASSED"
@@ -54,12 +54,23 @@ $dir/test:\
 }
 
 build_demo () {
+  fetch_dependencies
   [ ! -d "$dir/demo/mapreduce" ] && ln -s "$dir/src/mapreduce" "$dir/demo"
 }
 
 run_demo () {
   build_demo
   dev_appserver.py "$dir/demo"
+}
+
+fetch_dependencies() {
+  if [ ! `which pip` ]
+  then
+    echo "pip not found. pip is required to install dependencies."
+    exit 1;
+  fi
+  # This may fail due to https://github.com/pypa/pip/issues/1356
+  pip install --exists-action=s -r $dir/src/requirements.txt -t $dir/src/ || exit 1
 }
 
 case "$1" in

@@ -41,8 +41,8 @@ import datetime
 import urllib
 import zlib
 
-from mapreduce.third_party.graphy.backends import google_chart_api
-from mapreduce.third_party import simplejson
+from graphy.backends import google_chart_api
+import simplejson
 
 from google.appengine.api import memcache
 from google.appengine.api import taskqueue

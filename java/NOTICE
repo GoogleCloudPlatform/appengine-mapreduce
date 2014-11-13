@@ -1,0 +1,17 @@
+The following libraries are included under the terms of their respective
+licenses and can be found at their respective websites:
+
+commons logging (Apache) - http://commons.apache.org/logging/
+guava (Apache) - https://github.com/google/guava/
+hadoop (Apache) - http://hadoop.apache.org/
+charts4j (MIT) - https://github.com/julienchastang/charts4j/
+json (MIT + good/evil clause) - http://www.json.org/license.html
+
+The following libraries are included under the terms of their respective
+licenses, but are only used for testing, and do not need to be uploaded
+with your code:
+
+cglib (Apache) - http://cglib.sourceforge.net/
+easymock and classextension (Apache) - http://easymock.org/
+junit (CPL) - http://junit.org/
+objenesis (Apache) - http://objenesis.org/

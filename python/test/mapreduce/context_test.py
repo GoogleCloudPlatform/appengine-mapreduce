@@ -20,7 +20,7 @@
 import random
 import unittest
 
-from testlib import mox
+import mox
 
 from google.appengine.ext import ndb
 from google.appengine.api import datastore

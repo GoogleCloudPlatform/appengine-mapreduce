@@ -24,7 +24,7 @@
 import httplib
 import logging
 
-from mapreduce.third_party import simplejson
+import simplejson
 
 try:
   from mapreduce import pipeline_base

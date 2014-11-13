@@ -9,7 +9,7 @@
 import unittest
 
 
-from mapreduce.third_party import pipeline
+import pipeline
 from google.appengine.api import files
 from google.appengine.ext import db
 from mapreduce import input_readers

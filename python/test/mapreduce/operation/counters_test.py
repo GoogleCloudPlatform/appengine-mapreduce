@@ -17,7 +17,7 @@
 
 
 
-from testlib import mox
+import mox
 import unittest
 
 from mapreduce import context

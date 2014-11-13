@@ -29,7 +29,7 @@ import random
 import sys
 import time
 import traceback
-from mapreduce.third_party import simplejson
+import simplejson
 
 from google.appengine.ext import ndb
 

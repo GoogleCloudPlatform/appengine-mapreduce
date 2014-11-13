@@ -18,7 +18,7 @@
 
 
 import os
-from mapreduce.third_party import simplejson
+import simplejson
 import shutil
 import tempfile
 import time

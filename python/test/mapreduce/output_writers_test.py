@@ -21,7 +21,7 @@
 import unittest
 
 
-from testlib import mox
+import mox
 
 from google.appengine.api import apiproxy_stub_map
 from google.appengine.api import files

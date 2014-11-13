@@ -9,7 +9,7 @@
 import unittest
 
 
-from mapreduce.third_party import pipeline
+import pipeline
 import cloudstorage
 from google.appengine.ext import db
 from mapreduce import errors

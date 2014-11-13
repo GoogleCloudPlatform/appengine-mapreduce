@@ -35,7 +35,7 @@ import time
 import unittest
 import zipfile
 
-from testlib import mox
+import mox
 
 from google.appengine.ext import ndb
 from google.appengine.api import apiproxy_stub_map

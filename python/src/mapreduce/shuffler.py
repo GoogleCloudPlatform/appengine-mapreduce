@@ -33,8 +33,8 @@ import logging
 import pickle
 import time
 
-from mapreduce.third_party import pipeline
-from mapreduce.third_party.pipeline import common as pipeline_common
+import pipeline
+from pipeline import common as pipeline_common
 from google.appengine.api.files import file_service_pb
 from google.appengine.ext import db
 from mapreduce import context
