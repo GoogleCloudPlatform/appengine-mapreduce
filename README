@@ -3,8 +3,8 @@ AppEngine Mapreduce library
 
 Official site: https://github.com/GoogleCloudPlatform/appengine-mapreduce
 
-Check the site for up to date status, latest version, getting started & user
-guides and other documentation.
+Check the wiki for getting started & user guides and other documentation.
+The source below contains a working example application in both Java and Python.
 
 Archive contents:
 - python         : python version of the library resides here
@@ -12,4 +12,6 @@ Archive contents:
   - src          : python source code for mapreduce library
   - tests        : tests for mapreduce library
 - java           : java version of the library
+  - src          : java source code for the mapreduce library
+  - example      : an example application useing mapreduce
   - build.xml    : ant build file
