@@ -1,7 +1,8 @@
-AppEngine Mapreduce library
+App Engine Mapreduce library
 ===========================
 
-Official site: https://github.com/GoogleCloudPlatform/appengine-mapreduce
+App Engine Mapreduce: https://cloud.google.com/appengine/docs/python/dataprocessing/
+Official GitHub site: https://github.com/GoogleCloudPlatform/appengine-mapreduce
 
 Check the wiki for getting started & user guides and other documentation.
 The source below contains a working example application in both Java and Python.
