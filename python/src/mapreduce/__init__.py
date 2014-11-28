@@ -21,7 +21,7 @@ mapreduce
 A python library to perform MapReduce operations on App Engine.
 
 master is the current release branch of the library.
-GoogleCloudPlatformBase is the version in sync with the forked repo.
+base is the version in sync with the forked repo.
 
 Release Notes
 ============

@@ -19,5 +19,5 @@ Archive contents:
 Branching:
 - master:
   - VendAsta mapreduce library.
-- GoogleCloudPlatformBase:
-  - In sync with forked repo from GoogleCloudPlatform/appengine-mapreduce
+- base:
+  - Forked repo from GoogleCloudPlatform/appengine-mapreduce. Keep in sync with upstream.
