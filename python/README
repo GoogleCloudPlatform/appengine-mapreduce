@@ -1,0 +1,2 @@
+To build the library:
+pip install -r src/requirements.txt -t src/mapreduce/third_party/
