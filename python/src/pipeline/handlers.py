@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/python2.5
 #
 # Copyright 2010 Google Inc.
 #
@@ -14,19 +14,25 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""Web request dispatcher for the Google App Engine Pipeline API.
 
+In a separate file from the core pipeline module to break circular dependencies.
 """
-mapreduce
 
-A python library to perform MapReduce operations on App Engine.
+import logging
 
-master is the current release branch of the library.
-GoogleCloudPlatformBase is the version in sync with the forked repo.
+from google.appengine.ext import webapp
+from google.appengine.ext.webapp import util as webapp_util
 
-Release Notes
-============
-1.0.0
- - Sync with GoogleCloudPlatform/appengine-mapreduce repository.
+import pipeline
 
-"""
-__version__ = '1.0.0'
+
+_APP = webapp.WSGIApplication(pipeline.create_handlers_map(), debug=True)
+
+
+def _main():
+  webapp_util.run_wsgi_app(_APP)
+
+
+if __name__ == '__main__':
+  _main()
