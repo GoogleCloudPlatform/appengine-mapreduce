@@ -30,7 +30,6 @@ $APPENGINE_LIB/lib/yaml/lib:\
 $dir/src:\
 $dir/test:\
 "
-  fetch_dependencies
   echo "Using PYTHONPATH=$PYTHONPATH"
   exit_status=0
   for t in $(find "$dir/test" -name "*test.py" | grep -Ev "/test/mapreduce/api/|test/mapreduce/module_test.py|test/mapreduce/webapp2_test.py"); do
@@ -54,7 +53,6 @@ $dir/test:\
 }
 
 build_demo () {
-  fetch_dependencies
   [ ! -d "$dir/demo/mapreduce" ] && ln -s "$dir/src/mapreduce" "$dir/demo"
 }
 
@@ -71,6 +69,7 @@ fetch_dependencies() {
   fi
   # This may fail due to https://github.com/pypa/pip/issues/1356
   pip install --exists-action=s -r $dir/src/requirements.txt -t $dir/src/ || exit 1
+  rm -rf $dir/src/.egg-info/
 }
 
 case "$1" in
@@ -83,7 +82,10 @@ case "$1" in
   run_demo)
     run_demo
     ;;
+  fetch_dependencies)
+    fetch_dependencies
+    ;;
   *)
-    echo $"Usage: $0 {test|build_demo|run_demo}"
+    echo $"Usage: $0 {test|build_demo|run_demo|fetch_dependencies}"
     exit 1
 esac
