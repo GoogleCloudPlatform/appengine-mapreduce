@@ -15,3 +15,9 @@ Archive contents:
   - src          : java source code for the mapreduce library
   - example      : an example application useing mapreduce
   - build.xml    : ant build file
+
+Branching:
+- master:
+  - VendAsta mapreduce library.
+- GoogleCloudPlatformBase:
+  - In sync with forked repo from GoogleCloudPlatform/appengine-mapreduce

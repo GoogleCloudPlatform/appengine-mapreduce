@@ -14,15 +14,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import logging
-import os
 
-version = os.environ.get('CURRENT_VERSION_ID', '').split('.')[0]
+"""
+mapreduce
 
-if (__name__ == 'google.appengine.ext.mapreduce'
-    and version != 'ah-builtin-python-bundle'):
-  msg = ('You should not use the mapreduce library that is bundled with the'
-         ' SDK. Use the one from'
-         ' https://pypi.python.org/pypi/GoogleAppEngineMapReduce instead.')
-  logging.warn(msg)
+A python library to perform MapReduce operations on App Engine.
 
+master is the current release branch of the library.
+GoogleCloudPlatformBase is the version in sync with the forked repo.
+
+Release Notes
+============
+1.0.0
+ - Sync with GoogleCloudPlatform/appengine-mapreduce repository.
+
+"""
+__version__ = '1.0.0'
