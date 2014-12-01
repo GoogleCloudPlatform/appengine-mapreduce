@@ -45,6 +45,10 @@ public class WorkerController<I, O, R, C extends WorkerContext<O>> extends
     List<Counters> counters = new ArrayList<>();
     while (workers.hasNext()) {
       WorkerShardTask<I, O, C> worker = workers.next();
+      if (worker.wasFinalized()) {
+        log.info("Detected a finalized worker. Will ignore this, repeated, job completed call.");
+        return;
+      }
       outputWriters.add(worker.getOutputWriter());
       counters.add(worker.getContext().getCounters());
     }

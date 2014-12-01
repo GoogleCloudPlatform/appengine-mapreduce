@@ -34,7 +34,6 @@ public class MergeShardTask extends WorkerShardTask<KeyValue<ByteBuffer, Iterato
   private InputReader<KeyValue<ByteBuffer, Iterator<ByteBuffer>>> in;
   private OutputWriter<KeyValue<ByteBuffer, List<ByteBuffer>>> out;
   private MergeWorker worker;
-  private boolean finalized;
   private final Integer sortReadTimeMillis; // Only null as a result of an old version.
 
   public MergeShardTask(String mrJobId, int shardNumber, int shardCount,
@@ -111,12 +110,12 @@ public class MergeShardTask extends WorkerShardTask<KeyValue<ByteBuffer, Iterato
       out.cleanup();
       out = null;
     }
-    finalized = true;
+    setFinalized();
   }
 
   private void readObject(ObjectInputStream stream) throws IOException, ClassNotFoundException {
     stream.defaultReadObject();
-    if (!finalized) {
+    if (!wasFinalized()) {
       fillContext();
     }
   }

@@ -44,6 +44,7 @@ public abstract class WorkerShardTask<I, O, C extends WorkerContext<O>> implemen
   private final IncrementalTaskContext context;
   private boolean inputExhausted = false;
   private boolean isFirstSlice = true;
+  private boolean wasFinalized;
 
   protected WorkerShardTask(IncrementalTaskContext context) {
     this.context = context;
@@ -188,6 +189,15 @@ public abstract class WorkerShardTask<I, O, C extends WorkerContext<O>> implemen
   @Override
   public boolean isDone() {
     return inputExhausted;
+  }
+
+
+  protected final void setFinalized() {
+    wasFinalized = true;
+  }
+
+  protected final boolean wasFinalized() {
+    return wasFinalized;
   }
 
   /**

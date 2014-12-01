@@ -35,7 +35,6 @@ public class SortShardTask extends WorkerShardTask<KeyValue<ByteBuffer, ByteBuff
   private SortWorker inMemSorter;
   private InputReader<KeyValue<ByteBuffer, ByteBuffer>> in;
   private OutputWriter<KeyValue<ByteBuffer, List<ByteBuffer>>> out;
-  private boolean finalized;
   private final Integer sortReadTimeMillis;  // Only null as a result of an old version.
 
   public SortShardTask(String mrJobId, int shardNumber, int shardCount,
@@ -132,13 +131,13 @@ public class SortShardTask extends WorkerShardTask<KeyValue<ByteBuffer, ByteBuff
       out.cleanup();
       out = null;
     }
-    finalized = true;
+    setFinalized();
   }
 
 
   private void readObject(ObjectInputStream stream) throws IOException, ClassNotFoundException {
     stream.defaultReadObject();
-    if (!finalized) {
+    if (!wasFinalized()) {
       fillContext();
     }
   }
