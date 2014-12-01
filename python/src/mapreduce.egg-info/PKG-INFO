@@ -1,0 +1,11 @@
+Metadata-Version: 1.0
+Name: mapreduce
+Version: 1.0.0
+Summary: Enable MapReduce style data processing on App Engine
+Home-page: https://github.com/vendasta/appengine-mapreduce.git
+Author: VendAsta
+Author-email: jcollins@vendasta.com
+License: Apache License 2.0
+Description: UNKNOWN
+Keywords: google app engine mapreduce data processing
+Platform: UNKNOWN

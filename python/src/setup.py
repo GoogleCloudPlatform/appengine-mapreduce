@@ -1,9 +1,9 @@
-from distutils.core import setup
+from setuptools import setup, find_packages
 
 setup(
     name="mapreduce",
     version="1.0.0",
-    packages=["mapreduce"],
+    packages=find_packages(),
     author="VendAsta",
     author_email="jcollins@vendasta.com",
     keywords="google app engine mapreduce data processing",
