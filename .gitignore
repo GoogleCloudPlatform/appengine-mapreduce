@@ -4,6 +4,8 @@
 settings_local.py
 settings_local.BACKUP.py
 
+MANIFEST
+dist/
 /.project
 /.pydevproject
 /.sass-cache/
