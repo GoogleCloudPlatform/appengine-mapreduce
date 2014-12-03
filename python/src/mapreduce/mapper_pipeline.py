@@ -95,6 +95,7 @@ class MapperPipeline(pipeline_base._OutputSlotsMixin,
         },
         shard_count=shards,
         output_writer_spec=output_writer_spec,
+        queue_name=self.queue_name,
         )
     self.fill(self.outputs.job_id, mapreduce_id)
     self.set_status(console_url="%s/detail?mapreduce_id=%s" % (
