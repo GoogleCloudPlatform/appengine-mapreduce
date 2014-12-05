@@ -29,7 +29,7 @@ setuptools.setup(
     exclude_package_data={"": ["README"]},
     install_requires=[
         "GoogleAppEngineCloudStorageClient >= 1.9.15",
-        "GoogleAppEnginePipeline >= 1.9.15",
+        "GoogleAppEnginePipeline >= 1.9.15.1",
         "Graphy >= 1.0.0",
         "simplejson >= 3.6.5",
         "mock >= 1.0.1",
