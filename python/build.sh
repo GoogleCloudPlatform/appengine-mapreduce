@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-dir=`pwd`
+dir=`dirname $0`
 
 test () {
   if [ -z $APPENGINE_LIB ]; then
@@ -71,7 +71,6 @@ fetch_dependencies() {
   fi
   # This may fail due to https://github.com/pypa/pip/issues/1356
   pip install --exists-action=s -r $dir/src/requirements.txt -t $dir/src/ || exit 1
-  pip install --exists-action=s -r $dir/src/requirements.txt -t $dir/demo/ || exit 1
 }
 
 case "$1" in
