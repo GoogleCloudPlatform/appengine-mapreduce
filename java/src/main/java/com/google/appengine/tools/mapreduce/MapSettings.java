@@ -47,10 +47,7 @@ public class MapSettings implements Serializable {
   public static final String DEFAULT_BASE_URL = "/mapreduce/";
   public static final String CONTROLLER_PATH = "controllerCallback";
   public static final String WORKER_PATH = "workerCallback";
-  // this value needs to be lower than the datastore query iterator timeout, or 60 seconds
-  // ideally we should wrapper the query iterator to work around such limitation
-  // but it's not straightforward to intercept the datastore input reader
-  public static final int DEFAULT_MILLIS_PER_SLICE = 60_000;
+  public static final int DEFAULT_MILLIS_PER_SLICE = 180_000;
   public static final int DEFAULT_SHARD_RETREIES = 4;
   public static final int DEFAULT_SLICE_RETREIES = 20;
 
