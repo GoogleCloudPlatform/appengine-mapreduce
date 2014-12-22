@@ -32,7 +32,6 @@ public class MapShardTask<I, K, V> extends WorkerShardTask<I, KeyValue<K, V>, Ma
   private final long millisPerSlice;
   private InputReader<I> in;
   private OutputWriter<KeyValue<K, V>> out;
-  private boolean finalized;
 
   private transient MapperContextImpl<K, V> context;
 
@@ -97,12 +96,12 @@ public class MapShardTask<I, K, V> extends WorkerShardTask<I, KeyValue<K, V>, Ma
       out.cleanup();
       out = null;
     }
-    finalized = true;
+    setFinalized();
   }
 
   private void readObject(ObjectInputStream stream) throws IOException, ClassNotFoundException {
     stream.defaultReadObject();
-    if (!finalized) {
+    if (!wasFinalized()) {
       fillContext();
     }
   }

@@ -17,7 +17,8 @@ package com.google.appengine.tools.mapreduce.inputs;
 
 import static com.google.appengine.api.datastore.Entity.KEY_RESERVED_PROPERTY;
 import static com.google.appengine.api.datastore.Query.CompositeFilterOperator.AND;
-import static com.google.appengine.api.datastore.Query.FilterOperator.*;
+import static com.google.appengine.api.datastore.Query.FilterOperator.GREATER_THAN_OR_EQUAL;
+import static com.google.appengine.api.datastore.Query.FilterOperator.LESS_THAN;
 
 import com.google.appengine.api.NamespaceManager;
 import com.google.appengine.api.datastore.DatastoreService;
@@ -31,6 +32,7 @@ import com.google.appengine.api.datastore.Query.FilterPredicate;
 import com.google.appengine.tools.development.testing.LocalDatastoreServiceTestConfig;
 import com.google.appengine.tools.development.testing.LocalServiceTestHelper;
 import com.google.appengine.tools.mapreduce.impl.util.SerializationUtil;
+import com.google.common.base.Ticker;
 import com.google.common.collect.ImmutableList;
 
 import junit.framework.TestCase;
@@ -48,7 +50,7 @@ public class DatastoreInputReaderTest extends TestCase {
   private final LocalServiceTestHelper helper =
       new LocalServiceTestHelper(new LocalDatastoreServiceTestConfig());
 
-  private final String ENTITY_KIND_NAME = "Bob";
+  private static final String ENTITY_KIND_NAME = "Bob";
   private Query all;
   private Query namespaceQuery;
 
@@ -75,6 +77,7 @@ public class DatastoreInputReaderTest extends TestCase {
   public void tearDown() throws Exception {
     helper.tearDown();
     super.tearDown();
+    BaseDatastoreInputReader.resetTicker();
   }
 
   public void testOneEntityOnly() throws Exception {
@@ -127,15 +130,33 @@ public class DatastoreInputReaderTest extends TestCase {
 
   private List<Key> readAllFromReader(DatastoreInputReader reader) {
     List<Key> readKeys = new ArrayList<>();
+    int entriesPerSlice = 20;
+    int count = 0;
+    final int entriesPerQueryExpiration = 8;
+    boolean finish = false;
+    BaseDatastoreInputReader.setTickerForTesting(new Ticker() {
+      int tickerCount = 0;
+      @Override
+      public long read() {
+        return ++tickerCount % entriesPerQueryExpiration == 0 ? 0 : System.nanoTime();
+      }
+    });
     reader.beginSlice();
-    while (true) {
+    while (!finish) {
       try {
         Entity entity = reader.next();
         readKeys.add(entity.getKey());
       } catch (NoSuchElementException e) {
-        return readKeys;
+        finish = true;
+      }
+      if (++count % entriesPerSlice == 0) {
+        reader.endSlice();
+        reader.beginSlice();
       }
     }
+    reader.endSlice();
+    BaseDatastoreInputReader.resetTicker();
+    return readKeys;
   }
 
   public void testSerialization() throws Exception {

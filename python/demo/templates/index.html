@@ -1,0 +1,92 @@
+<html>
+  <head>
+    <title>MapReduce Made Easy!</title>
+    <script src="mapreduce/jquery.js" type="text/javascript"></script>
+    <script src="static/js/custom.js" type="text/javascript"></script>
+  </head>
+  <body bgcolor="#66ccff">
+    <div style="width:75%; background-color:#FFFFFF">
+      <h1>MapReduce in Three Simple Steps</h1>
+      <h2>Step 1: Choose your input file:</h2>
+      <div>{{ username }}'s files:</div>
+      <br />
+      {% if length %}
+      <table border=1>
+        <tr>
+          <td></td>
+          <td>name</td>
+          <td>uploaded on</td>
+          <td>source</td>
+          <td>wordcount link</td>
+          <td>index link</td>
+          <td>phrases link</td>
+        </tr>
+        {% for item in items %}
+        <tr>
+          <td><input type="radio" onclick="updateForm('{{ item.key() }}',
+            '{{ item.blobkey }}', '{{ item.filename }}');"></td>
+          <td><a href="/blobstore/{{ item.blobkey }}">{{ item.filename }}</a></td>
+          <td>{{ item.uploadedOn }}</td>
+          <td>{{ item.source }}</td>
+          <td>
+            {% if item.wordcount_link %}
+            <a href="{{ item.wordcount_link }}">wordcount</a>
+            {% endif %}
+          </td>
+          <td>
+            {% if item.index_link %}
+            <a href="{{ item.index_link }}">index</a>
+            {% endif %}
+          </td>
+          <td>
+            {% if item.phrases_link %}
+            <a href="{{ item.phrases_link }}">phrases</a>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </table>
+      {% else %}
+      <div>No files uploaded yet!</div>
+      {% endif %}
+      <br />
+      <br />
+      <div>Upload some new data (should be a zip file containing as many text files as you like).</div>
+      <form action="{{ upload_url }}" method="POST" enctype="multipart/form-data">
+        <table>
+          <tr>
+            <td>From your computer:</td>
+            <td><input type='file' name='file' id='file' /></td>
+          </tr>
+          <tr>
+            <td>Give it a name:</td>
+            <td><input type='textfield' id="name" name='name' /></td>
+          </tr>
+          <tr>
+            <td colspan=2 align="center"><input type='submit' name='submit' value='Upload'></td>
+          </tr>
+        </table>
+      </form>
+      <h2>Step 2: Run your MapReduce job:</h2>
+      <form action="/" method="post">
+        Input File: <label id="jobName">none selected</label>
+        <input type="hidden" name="filekey" id="filekey" value="">
+        <input type="hidden" name="blobkey" id="blobkey" value="">
+        <br />
+        <br />
+        <table>
+          <tr>
+            <td><input type="submit" id="word_count" name="word_count" value="Word Count" disabled="true"></td>
+            <td><input type="submit" id="index" name="index" value="Index" disabled="true"></td>
+            <td><input type="submit" id="phrases" name="phrases" value="Phrases" disabled="true"></td>
+          </tr>
+        </table>
+      </form>
+      <h2>Step 3: Sit back and enjoy!</h2>
+      <p>Once your MapReduce job finishes, come back to this page and you'll see a link next to the input file you selected, depending on which job you ran.</p>
+      <h3>About MapReduce Made Easy</h3>
+      <p>MapReduce Made Easy is a more accessible version of the original mapreduce test application found in the App Engine MapReduce source code, designed by Mike Aizatsky. Retouching work done by Chris Bunch - learn more about <a href="http://mapreduce.appspot.com">App Engine MapReduce</a> and make your own apps!</p>
+    </div>
+    <div style="text-align:center"><img src="https://developers.google.com/appengine/images/appengine-silver-120x30.gif" alt="Powered by Google App Engine" /></div>
+  </body>
+</html>

@@ -1,0 +1,29 @@
+mapreduce:
+- name: Make messages lowercase
+  params:
+  - name: done_callback
+    value: /done
+  mapper:
+    handler: main.lower_case_posts
+    input_reader: mapreduce.input_readers.DatastoreInputReader
+    params:
+    - name: entity_kind
+      default: main.Post
+    - name: processing_rate
+      default: 100
+    - name: shard_count
+      default: 4
+- name: Make messages upper case
+  params:
+  - name: done_callback
+    value: /done
+  mapper:
+    handler: main.upper_case_posts
+    input_reader: mapreduce.input_readers.DatastoreInputReader
+    params:
+    - name: entity_kind
+      default: main.Post
+    - name: processing_rate
+      default: 100
+    - name: shard_count
+      default: 4

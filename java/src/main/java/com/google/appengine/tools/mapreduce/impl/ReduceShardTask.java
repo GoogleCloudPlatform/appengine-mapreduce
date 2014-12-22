@@ -35,7 +35,6 @@ public class ReduceShardTask<K, V, O>
   private final long millisPerSlice;
   private InputReader<KeyValue<K, Iterator<V>>> in;
   private OutputWriter<O> out;
-  private boolean finalized;
 
   private transient ReducerContextImpl<O> context;
 
@@ -102,12 +101,12 @@ public class ReduceShardTask<K, V, O>
       out.cleanup();
       out = null;
     }
-    finalized = true;
+    setFinalized();
   }
 
   private void readObject(ObjectInputStream stream) throws IOException, ClassNotFoundException {
     stream.defaultReadObject();
-    if (!finalized) {
+    if (!wasFinalized()) {
       fillContext();
     }
   }
