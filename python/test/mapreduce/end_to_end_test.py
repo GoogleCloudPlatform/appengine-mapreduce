@@ -1,11 +1,11 @@
 #!/usr/bin/env python
-#
 # Copyright 2011 Google Inc. All Rights Reserved.
 
 """Testing mapreduce functionality end to end."""
 
 
 
+# Using opensource naming conventions, pylint: disable=g-bad-name
 
 import datetime
 import logging
@@ -13,20 +13,22 @@ import random
 import string
 import unittest
 
+from google.appengine.ext import db
+
 from google.appengine.ext import ndb
 
-from google.appengine.api import files
-from google.appengine.ext import db
+# pylint: disable=g-direct-third-party-import
 from mapreduce import context
 from mapreduce import control
 from mapreduce import handlers
+from mapreduce import input_readers
 from mapreduce import model
 from mapreduce import output_writers
 from mapreduce import parameters
 from mapreduce import records
 from mapreduce import test_support
-from testlib import testutil
 from mapreduce.tools import gcs_file_seg_reader
+from testlib import testutil
 
 
 # pylint: disable=g-import-not-at-top
@@ -101,7 +103,7 @@ class SerializableHandler(object):
 
   def __call__(self, entity):
     if self.instance < self.INSTANCES_THAT_RAISE_ERRORS:
-      raise files.FinalizationError("Injected error.")
+      raise cloudstorage.FatalError("Injected error.")
     # Increment the int property by one on every call.
     entity.int_property = self.count
     entity.put()
@@ -190,7 +192,7 @@ class EndToEndTest(testutil.HandlerTestBase):
     control.start_map(
         "test_map",
         __name__ + ".SerializableHandler",
-        "mapreduce.input_readers.DatastoreInputReader",
+        input_readers.__name__ + ".DatastoreInputReader",
         {
             "entity_kind": __name__ + "." + TestEntity.__name__,
         },
@@ -211,13 +213,13 @@ class EndToEndTest(testutil.HandlerTestBase):
   def testLotsOfEntities(self):
     entity_count = 1000
 
-    for i in range(entity_count):
+    for _ in range(entity_count):
       TestEntity().put()
 
-    mapreduce_id = control.start_map(
+    control.start_map(
         "test_map",
         __name__ + ".TestHandler",
-        "mapreduce.input_readers.DatastoreInputReader",
+        input_readers.__name__ + ".DatastoreInputReader",
         {
             "entity_kind": __name__ + "." + TestEntity.__name__,
         },
@@ -236,7 +238,7 @@ class EndToEndTest(testutil.HandlerTestBase):
     control.start_map(
         "test_map",
         __name__ + ".TestHandler",
-        "mapreduce.input_readers.DatastoreInputReader",
+        input_readers.__name__ + ".DatastoreInputReader",
         {
             "entity_kind": __name__ + "." + TestEntity.__name__,
             "filters": [("int_property", "=", 3),
@@ -252,13 +254,13 @@ class EndToEndTest(testutil.HandlerTestBase):
   def testLotsOfNdbEntities(self):
     entity_count = 1000
 
-    for i in range(entity_count):
+    for _ in range(entity_count):
       NdbTestEntity().put()
 
-    mapreduce_id = control.start_map(
+    control.start_map(
         "test_map",
         __name__ + ".TestHandler",
-        "mapreduce.input_readers.DatastoreInputReader",
+        input_readers.__name__ + ".DatastoreInputReader",
         {
             "entity_kind": __name__ + "." + NdbTestEntity.__name__,
         },
@@ -271,13 +273,13 @@ class EndToEndTest(testutil.HandlerTestBase):
   def testInputReaderDedicatedParameters(self):
     entity_count = 100
 
-    for i in range(entity_count):
+    for _ in range(entity_count):
       TestEntity().put()
 
-    mapreduce_id = control.start_map(
+    control.start_map(
         "test_map",
         __name__ + ".TestHandler",
-        "mapreduce.input_readers.DatastoreInputReader",
+        input_readers.__name__ + ".DatastoreInputReader",
         {
             "input_reader": {
                 "entity_kind": __name__ + "." + TestEntity.__name__,
@@ -293,13 +295,13 @@ class EndToEndTest(testutil.HandlerTestBase):
     """End-to-end test with output writer."""
     entity_count = 1000
 
-    for i in range(entity_count):
+    for _ in range(entity_count):
       TestEntity().put()
 
-    mapreduce_id = control.start_map(
+    control.start_map(
         "test_map",
         __name__ + ".test_handler_yield_key",
-        "mapreduce.input_readers.DatastoreInputReader",
+        input_readers.__name__ + ".DatastoreInputReader",
         {
             "entity_kind": __name__ + "." + TestEntity.__name__,
         },
@@ -313,23 +315,26 @@ class EndToEndTest(testutil.HandlerTestBase):
 
   def testRecordsReader(self):
     """End-to-end test for records reader."""
-    input_file = files.blobstore.create()
     input_data = [str(i) for i in range(100)]
 
-    with files.open(input_file, "a") as f:
+    bucket_name = "testbucket"
+    test_filename = "testfile"
+    full_filename = "/%s/%s" % (bucket_name, test_filename)
+
+    with cloudstorage.open(full_filename, mode="w") as f:
       with records.RecordsWriter(f) as w:
         for record in input_data:
           w.write(record)
-    files.finalize(input_file)
-    input_file = files.blobstore.get_file_name(
-        files.blobstore.get_blob_key(input_file))
 
-    mapreduce_id = control.start_map(
+    control.start_map(
         "test_map",
         __name__ + ".TestHandler",
-        "mapreduce.input_readers.RecordsReader",
+        input_readers.__name__ + ".GoogleCloudStorageRecordInputReader",
         {
-            "file": input_file
+            "input_reader": {
+                "bucket_name": bucket_name,
+                "objects": [test_filename]
+            }
         },
         shard_count=4,
         base_path="/mapreduce_base_path")
@@ -339,26 +344,29 @@ class EndToEndTest(testutil.HandlerTestBase):
 
   def testHugeTaskPayloadTest(self):
     """Test map job with huge parameter values."""
-    input_file = files.blobstore.create()
     input_data = [str(i) for i in range(100)]
 
-    with files.open(input_file, "a") as f:
+    bucket_name = "testbucket"
+    test_filename = "testfile"
+    full_filename = "/%s/%s" % (bucket_name, test_filename)
+
+    with cloudstorage.open(full_filename, mode="w") as f:
       with records.RecordsWriter(f) as w:
         for record in input_data:
           w.write(record)
-    files.finalize(input_file)
-    input_file = files.blobstore.get_file_name(
-        files.blobstore.get_blob_key(input_file))
 
-    mapreduce_id = control.start_map(
+    control.start_map(
         "test_map",
         __name__ + ".TestHandler",
-        "mapreduce.input_readers.RecordsReader",
+        input_readers.__name__ + ".GoogleCloudStorageRecordInputReader",
         {
-            "file": input_file,
-            # the parameter will be compressed and should fit into
-            # taskqueue payload
-            "huge_parameter": "0" * 200000, # 200K
+            "input_reader": {
+                "bucket_name": bucket_name,
+                "objects": [test_filename],
+                # the parameter will be compressed and should fit into
+                # taskqueue payload
+                "huge_parameter": "0" * 200000,  # 200K
+            }
         },
         shard_count=4,
         base_path="/mapreduce_base_path")
@@ -369,26 +377,29 @@ class EndToEndTest(testutil.HandlerTestBase):
 
   def testHugeTaskUseDatastore(self):
     """Test map job with huge parameter values."""
-    input_file = files.blobstore.create()
     input_data = [str(i) for i in range(100)]
 
-    with files.open(input_file, "a") as f:
+    bucket_name = "testbucket"
+    test_filename = "testfile"
+    full_filename = "/%s/%s" % (bucket_name, test_filename)
+
+    with cloudstorage.open(full_filename, mode="w") as f:
       with records.RecordsWriter(f) as w:
         for record in input_data:
           w.write(record)
-    files.finalize(input_file)
-    input_file = files.blobstore.get_file_name(
-        files.blobstore.get_blob_key(input_file))
 
-    mapreduce_id = control.start_map(
+    control.start_map(
         "test_map",
         __name__ + ".TestHandler",
-        "mapreduce.input_readers.RecordsReader",
+        input_readers.__name__ + ".GoogleCloudStorageRecordInputReader",
         {
-            "file": input_file,
-            # the parameter can't be compressed and wouldn't fit into
-            # taskqueue payload
-            "huge_parameter": random_string(900000)
+            "input_reader": {
+                "bucket_name": bucket_name,
+                "objects": [test_filename],
+                # the parameter can't be compressed and wouldn't fit into
+                # taskqueue payload
+                "huge_parameter": random_string(900000)
+            }
         },
         shard_count=4,
         base_path="/mapreduce_base_path")
@@ -437,7 +448,7 @@ class GCSOutputWriterNoDupModeTest(GCSOutputWriterTestBase):
     mr_id = control.start_map(
         "test_map",
         __name__ + ".FaultyHandler",
-        "mapreduce.input_readers.DatastoreInputReader",
+        input_readers.__name__ + ".DatastoreInputReader",
         {
             "input_reader": {
                 "entity_kind": __name__ + "." + TestEntity.__name__,
@@ -448,8 +459,8 @@ class GCSOutputWriterNoDupModeTest(GCSOutputWriterTestBase):
             },
             "processing_rate": self.processing_rate,
         },
-        output_writer_spec=("mapreduce.output_writers."
-                            "_GoogleCloudStorageOutputWriter"),
+        output_writer_spec=(output_writers.__name__ +
+                            "._GoogleCloudStorageOutputWriter"),
         shard_count=1)
 
     test_support.execute_until_empty(self.taskqueue)
@@ -483,7 +494,7 @@ class GCSOutputWriterNoDupModeTest(GCSOutputWriterTestBase):
     mr_id = control.start_map(
         "test_map",
         __name__ + ".FaultyHandler",
-        "mapreduce.input_readers.DatastoreInputReader",
+        input_readers.__name__ + ".DatastoreInputReader",
         {
             "input_reader": {
                 "entity_kind": __name__ + "." + TestEntity.__name__,
@@ -494,8 +505,8 @@ class GCSOutputWriterNoDupModeTest(GCSOutputWriterTestBase):
             },
             "processing_rate": self.processing_rate,
         },
-        output_writer_spec=("mapreduce.output_writers."
-                            "_GoogleCloudStorageOutputWriter"),
+        output_writer_spec=(output_writers.__name__ +
+                            "._GoogleCloudStorageOutputWriter"),
         shard_count=1)
 
     test_support.execute_until_empty(self.taskqueue)
@@ -520,7 +531,7 @@ class GCSOutputWriterNoDupModeTest(GCSOutputWriterTestBase):
     mr_id = control.start_map(
         "test_map",
         __name__ + ".FaultyHandler",
-        "mapreduce.input_readers.DatastoreInputReader",
+        input_readers.__name__ + ".DatastoreInputReader",
         {
             "input_reader": {
                 "entity_kind": __name__ + "." + TestEntity.__name__,
@@ -531,8 +542,8 @@ class GCSOutputWriterNoDupModeTest(GCSOutputWriterTestBase):
             },
             "processing_rate": self.processing_rate,
         },
-        output_writer_spec=("mapreduce.output_writers."
-                            "_GoogleCloudStorageOutputWriter"),
+        output_writer_spec=(output_writers.__name__ +
+                            "._GoogleCloudStorageOutputWriter"),
         shard_count=1)
 
     test_support.execute_until_empty(self.taskqueue)
@@ -574,6 +585,7 @@ class FaultyHandler(object):
   def __init__(self):
     self.slice_count = 0
 
+  # pylint: disable=unused-argument
   def __setstate__(self, state):
     # Reset at beginning of each slice.
     self.slice_count = 0

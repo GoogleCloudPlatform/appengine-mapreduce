@@ -1,16 +1,18 @@
 #!/usr/bin/env python
-#
 # Copyright 2011 Google Inc. All Rights Reserved.
 
 
 
 
+# Using opensource naming conventions, pylint: disable=g-bad-name
+
 import unittest
 
 
 import pipeline
-from google.appengine.api import files
+import cloudstorage
 from google.appengine.ext import db
+# pylint: disable=g-direct-third-party-import
 from mapreduce import input_readers
 from mapreduce import mapreduce_pipeline
 from mapreduce import operation
@@ -91,21 +93,28 @@ class CombinerTest(testutil.HandlerTestBase):
         __name__ + ".test_combiner_reduce",
         input_reader_spec=input_readers.__name__ + ".DatastoreInputReader",
         output_writer_spec=
-        output_writers.__name__ + ".BlobstoreOutputWriter",
+        output_writers.__name__ + ".GoogleCloudStorageOutputWriter",
         mapper_params={
             "entity_kind": __name__ + ".TestEntity",
             },
+        reducer_params={
+            "output_writer": {
+                "bucket_name": "testbucket"
+            },
+        },
         shards=4)
     p.start()
     test_support.execute_until_empty(self.taskqueue)
 
     p = mapreduce_pipeline.MapreducePipeline.from_id(p.pipeline_id)
-    self.assertEquals(1, len(p.outputs.default.value))
-    output_file = p.outputs.default.value[0]
-
+    self.assertEquals(4, len(p.outputs.default.value))
     file_content = []
-    with files.open(output_file, "r") as f:
-      file_content = sorted(f.read(10000000).strip().split("\n"))
+    for input_file in p.outputs.default.value:
+      with cloudstorage.open(input_file) as infile:
+        for line in infile:
+          file_content.append(line.strip())
+
+    file_content = sorted(file_content)
 
     self.assertEquals(
         ["('0', 9800)", "('1', 9900)", "('2', 10000)", "('3', 10100)"],
@@ -127,21 +136,29 @@ class CombinerTest(testutil.HandlerTestBase):
         combiner_spec=__name__ + ".TestCombiner",
         input_reader_spec=input_readers.__name__ + ".DatastoreInputReader",
         output_writer_spec=
-        output_writers.__name__ + ".BlobstoreOutputWriter",
+        output_writers.__name__ + ".GoogleCloudStorageOutputWriter",
         mapper_params={
             "entity_kind": __name__ + ".TestEntity",
+        },
+        reducer_params={
+            "output_writer": {
+                "bucket_name": "testbucket"
             },
+        },
         shards=4)
     p.start()
     test_support.execute_until_empty(self.taskqueue)
 
     p = mapreduce_pipeline.MapreducePipeline.from_id(p.pipeline_id)
-    self.assertEquals(1, len(p.outputs.default.value))
-    output_file = p.outputs.default.value[0]
-
+    self.assertEquals(4, len(p.outputs.default.value))
     file_content = []
-    with files.open(output_file, "r") as f:
-      file_content = sorted(f.read(10000000).strip().split("\n"))
+    for input_file in p.outputs.default.value:
+      with cloudstorage.open(input_file) as infile:
+        for line in infile:
+          file_content.append(line.strip())
+
+    file_content = sorted(file_content)
+
     self.assertEquals(
         ["('0', 9800)", "('1', 9900)", "('2', 10000)", "('3', 10100)"],
         file_content)
@@ -151,7 +168,6 @@ class CombinerTest(testutil.HandlerTestBase):
     for invocation in TestCombiner.invocations:
       key = invocation[0]
       values = invocation[1]
-      combiner_values = invocation[2]
       self.assertTrue(key)
       self.assertTrue(values)
       self.assertEquals(1, len(values))

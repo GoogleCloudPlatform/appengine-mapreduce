@@ -1,17 +1,19 @@
 #!/usr/bin/env python
-#
 # Copyright 2011 Google Inc. All Rights Reserved.
 
 """Testing large mapreduce jobs."""
 
 
 
+# Using opensource naming conventions, pylint: disable=g-bad-name
+
 import unittest
 
 
 import pipeline
-from google.appengine.api import files
+import cloudstorage
 from google.appengine.ext import db
+# pylint: disable=g-direct-third-party-import
 from mapreduce import input_readers
 from mapreduce import mapreduce_pipeline
 from mapreduce import output_writers
@@ -25,16 +27,16 @@ class TestEntity(db.Model):
   data = db.TextProperty()
 
 
+# pylint: disable=unused-argument
 def map_yield_lots_of_values(entity):
   """Test map handler that yields lots of pairs."""
-  for i in range(50000):
+  for _ in range(50000):
     yield (1, " " * 100)
 
 
 def reduce_length(key, values):
   """Reduce function yielding a string with key and values length."""
   yield str((key, len(values)))
-
 
 
 class LargeMapreduceTest(testutil.HandlerTestBase):
@@ -57,11 +59,16 @@ class LargeMapreduceTest(testutil.HandlerTestBase):
         __name__ + ".map_yield_lots_of_values",
         __name__ + ".reduce_length",
         input_reader_spec=input_readers.__name__ + ".DatastoreInputReader",
-        output_writer_spec=
-            output_writers.__name__ + ".BlobstoreRecordsOutputWriter",
-        mapper_params= {
+        output_writer_spec=(
+            output_writers.__name__ + ".GoogleCloudStorageRecordOutputWriter"),
+        mapper_params={
             "entity_kind": __name__ + "." + TestEntity.__name__,
+        },
+        reducer_params={
+            "output_writer": {
+                "bucket_name": "test"
             },
+        },
         shards=16)
     p.start()
     test_support.execute_until_empty(self.taskqueue)
@@ -74,7 +81,7 @@ class LargeMapreduceTest(testutil.HandlerTestBase):
     p = mapreduce_pipeline.MapreducePipeline.from_id(p.pipeline_id)
     output_data = []
     for output_file in p.outputs.default.value:
-      with files.open(output_file, "r") as f:
+      with cloudstorage.open(output_file, "r") as f:
         for record in records.RecordsReader(f):
           output_data.append(record)
 
