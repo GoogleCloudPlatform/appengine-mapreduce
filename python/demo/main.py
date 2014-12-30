@@ -27,6 +27,8 @@ zip file to attain higher accuracies)."""
 __author__ = """aizatsky@google.com (Mike Aizatsky), cbunch@google.com (Chris
 Bunch)"""
 
+# Using opensource naming conventions, pylint: disable=g-bad-name
+
 import datetime
 import jinja2
 import logging
@@ -39,7 +41,7 @@ from google.appengine.ext import db
 
 from google.appengine.ext.webapp import blobstore_handlers
 
-from google.appengine.api import files
+from google.appengine.api import app_identity
 from google.appengine.api import taskqueue
 from google.appengine.api import users
 
@@ -151,7 +153,9 @@ class IndexHandler(webapp2.RequestHandler):
     items = [result for result in results]
     length = len(items)
 
-    upload_url = blobstore.create_upload_url("/upload")
+    bucket_name = app_identity.get_default_gcs_bucket_name()
+    upload_url = blobstore.create_upload_url("/upload",
+                                             gs_bucket_name=bucket_name)
 
     self.response.out.write(self.template_env.get_template("index.html").render(
         {"username": username,
@@ -263,17 +267,21 @@ class WordCountPipeline(base_handler.PipelineBase):
 
   def run(self, filekey, blobkey):
     logging.debug("filename is %s" % filekey)
+    bucket_name = app_identity.get_default_gcs_bucket_name()
     output = yield mapreduce_pipeline.MapreducePipeline(
         "word_count",
         "main.word_count_map",
         "main.word_count_reduce",
         "mapreduce.input_readers.BlobstoreZipInputReader",
-        "mapreduce.output_writers.BlobstoreOutputWriter",
+        "mapreduce.output_writers.GoogleCloudStorageOutputWriter",
         mapper_params={
             "blob_key": blobkey,
         },
         reducer_params={
-            "mime_type": "text/plain",
+            "output_writer": {
+                "bucket_name": bucket_name,
+                "content_type": "text/plain",
+            }
         },
         shards=16)
     yield StoreOutput("WordCount", filekey, output)
@@ -289,17 +297,21 @@ class IndexPipeline(base_handler.PipelineBase):
 
 
   def run(self, filekey, blobkey):
+    bucket_name = app_identity.get_default_gcs_bucket_name()
     output = yield mapreduce_pipeline.MapreducePipeline(
         "index",
         "main.index_map",
         "main.index_reduce",
         "mapreduce.input_readers.BlobstoreZipInputReader",
-        "mapreduce.output_writers.BlobstoreOutputWriter",
+        "mapreduce.output_writers.GoogleCloudStorageOutputWriter",
         mapper_params={
             "blob_key": blobkey,
         },
         reducer_params={
-            "mime_type": "text/plain",
+            "output_writer": {
+                "bucket_name": bucket_name,
+                "content_type": "text/plain",
+            }
         },
         shards=16)
     yield StoreOutput("Index", filekey, output)
@@ -314,17 +326,21 @@ class PhrasesPipeline(base_handler.PipelineBase):
   """
 
   def run(self, filekey, blobkey):
+    bucket_name = app_identity.get_default_gcs_bucket_name()
     output = yield mapreduce_pipeline.MapreducePipeline(
         "phrases",
         "main.phrases_map",
         "main.phrases_reduce",
         "mapreduce.input_readers.BlobstoreZipInputReader",
-        "mapreduce.output_writers.BlobstoreOutputWriter",
+        "mapreduce.output_writers.GoogleCloudStorageOutputWriter",
         mapper_params={
             "blob_key": blobkey,
         },
         reducer_params={
-            "mime_type": "text/plain",
+            "output_writer": {
+                "bucket_name": bucket_name,
+                "content_type": "text/plain",
+            }
         },
         shards=16)
     yield StoreOutput("Phrases", filekey, output)
@@ -336,7 +352,7 @@ class StoreOutput(base_handler.PipelineBase):
   Args:
     mr_type: the type of mapreduce job run (e.g., WordCount, Index)
     encoded_key: the DB key corresponding to the metadata of this job
-    output: the blobstore location where the output of the job is stored
+    output: the gcs file path where the output of the job is stored
   """
 
   def run(self, mr_type, encoded_key, output):
@@ -344,12 +360,16 @@ class StoreOutput(base_handler.PipelineBase):
     key = db.Key(encoded=encoded_key)
     m = FileMetadata.get(key)
 
+    blobstore_filename = "/gs" + output[0]
+    blobstore_gs_key = blobstore.create_gs_key(blobstore_filename)
+    url_path = "/blobstore/" + blobstore_gs_key
+
     if mr_type == "WordCount":
-      m.wordcount_link = output[0]
+      m.wordcount_link = url_path
     elif mr_type == "Index":
-      m.index_link = output[0]
+      m.index_link = url_path
     elif mr_type == "Phrases":
-      m.phrases_link = output[0]
+      m.phrases_link = url_path
 
     m.put()
 
