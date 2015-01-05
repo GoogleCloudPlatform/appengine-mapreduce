@@ -39,7 +39,6 @@ from google.appengine.api import apiproxy_stub_map
 from google.appengine.api import datastore
 from google.appengine.api import datastore_file_stub
 from google.appengine.api import datastore_types
-from google.appengine.api.files import file_service_pb
 from google.appengine.api import logservice
 from google.appengine.api import namespace_manager
 from google.appengine.api.blobstore import blobstore_stub
@@ -54,6 +53,7 @@ from google.appengine.ext.blobstore import blobstore as blobstore_internal
 from mapreduce import context
 from mapreduce import errors
 from mapreduce import input_readers
+from mapreduce import kv_pb
 from mapreduce import model
 from mapreduce import namespace_range
 from mapreduce import records
@@ -2060,16 +2060,16 @@ class ReducerReaderTest(testutil.HandlerTestBase):
     with cloudstorage.open(full_filename, mode="w") as f:
       with records.RecordsWriter(f) as w:
         # First key is all in one record
-        proto = file_service_pb.KeyValues()
+        proto = kv_pb.KeyValues()
         proto.set_key("key1")
         proto.value_list().extend(["a", "b"])
         w.write(proto.Encode())
         # Second key is split across two records
-        proto = file_service_pb.KeyValues()
+        proto = kv_pb.KeyValues()
         proto.set_key("key2")
         proto.value_list().extend(["c", "d"])
         w.write(proto.Encode())
-        proto = file_service_pb.KeyValues()
+        proto = kv_pb.KeyValues()
         proto.set_key("key2")
         proto.value_list().extend(["e", "f"])
         w.write(proto.Encode())
@@ -2599,7 +2599,7 @@ class GoogleCloudStorageRecordInputReaderTest(GoogleCloudStorageInputTestBase):
     with cloudstorage.open(filename, mode="w") as f:
       with records.RecordsWriter(f) as w:
         for (k, v) in input_data:
-          proto = file_service_pb.KeyValues()
+          proto = kv_pb.KeyValues()
           proto.set_key(k)
           proto.value_list().extend(v)
           w.write(proto.Encode())
@@ -2607,7 +2607,7 @@ class GoogleCloudStorageRecordInputReaderTest(GoogleCloudStorageInputTestBase):
 
     output_data = []
     for record in reader.__iter__():
-      proto = file_service_pb.KeyValues()
+      proto = kv_pb.KeyValues()
       proto.ParseFromString(record)
       output_data.append((proto.key(), proto.value_list()))
 

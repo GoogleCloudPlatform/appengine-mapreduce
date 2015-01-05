@@ -35,11 +35,11 @@ import time
 
 import pipeline
 from pipeline import common as pipeline_common
-from google.appengine.api.files import file_service_pb
 from google.appengine.ext import db
 from mapreduce import context
 from mapreduce import errors
 from mapreduce import input_readers
+from mapreduce import kv_pb
 from mapreduce import mapper_pipeline
 from mapreduce import model
 from mapreduce import operation
@@ -137,7 +137,7 @@ def _sort_records_map(records):
 
   logging.debug("Parsing")
   for i in range(l):
-    proto = file_service_pb.KeyValue()
+    proto = kv_pb.KeyValue()
     proto.ParseFromString(records[i])
     key_records[i] = (proto.key(), records[i])
 
@@ -357,7 +357,7 @@ class _MergingReader(input_readers.InputReader):
           operation.counters.Increment(
               input_readers.COUNTER_IO_READ_MSEC,
               int((time.time() - start_time) * 1000))(context.get())
-        proto = file_service_pb.KeyValue()
+        proto = kv_pb.KeyValue()
         proto.ParseFromString(binary_record)
         # Put read data back into heap.
         heapq.heapreplace(readers,
@@ -549,7 +549,7 @@ class _HashingGCSOutputWriter(output_writers.OutputWriter):
       pool = output_writers.GCSRecordsPool(filehandle=filehandle, ctx=ctx)
       self._pools[file_index] = pool
 
-    proto = file_service_pb.KeyValue()
+    proto = kv_pb.KeyValue()
     proto.set_key(key)
     proto.set_value(value)
     pool.append(proto.Encode())
@@ -569,6 +569,7 @@ class _ShardOutputs(pipeline_base.PipelineBase):
     return result
 
 
+# pylint: disable=unused-argument
 def _merge_map(key, values, partial):
   """A map function used in merge phase.
 
@@ -582,10 +583,9 @@ def _merge_map(key, values, partial):
   Yields:
     The proto.
   """
-  proto = file_service_pb.KeyValues()
+  proto = kv_pb.KeyValues()
   proto.set_key(key)
   proto.value_list().extend(values)
-  proto.set_partial(partial)
   yield proto.Encode()
 
 
@@ -638,7 +638,7 @@ def _hashing_map(binary_record):
   Yields:
     The (key, value).
   """
-  proto = file_service_pb.KeyValue()
+  proto = kv_pb.KeyValue()
   proto.ParseFromString(binary_record)
   yield (proto.key(), proto.value())
 
@@ -689,7 +689,7 @@ class ShufflePipeline(pipeline_base.PipelineBase):
     job_name: The descriptive name of the overall job.
     mapper_params: parameters to use for mapper phase.
     filenames: list of file names to sort. Files have to be of records format
-      defined by Files API and contain serialized file_service_pb.KeyValue
+      defined by Files API and contain serialized kv_pb.KeyValue
       protocol messages. The filenames may or may not contain the
       GCS bucket name in their path.
     shards: Optional. Number of output shards to generate. Defaults
@@ -697,7 +697,7 @@ class ShufflePipeline(pipeline_base.PipelineBase):
 
   Returns:
     default: a list of filenames as string. Resulting files contain
-      serialized file_service_pb.KeyValues protocol messages with
+      serialized kv_pb.KeyValues protocol messages with
       all values collated to a single key. When there is no output,
       an empty list from shuffle service or a list of empty files from
       in memory shuffler.

@@ -57,7 +57,6 @@ from google.appengine.ext import ndb
 
 from google.appengine.api import datastore
 from google.appengine.api import logservice
-from google.appengine.api.files import file_service_pb
 from google.appengine.api.logservice import log_service_pb
 from google.appengine.ext import blobstore
 from google.appengine.ext import db
@@ -68,6 +67,7 @@ from mapreduce import datastore_range_iterators as db_iters
 from mapreduce import errors
 from mapreduce import json_util
 from mapreduce import key_ranges
+from mapreduce import kv_pb
 from mapreduce import model
 from mapreduce import namespace_range
 from mapreduce import operation
@@ -2518,7 +2518,7 @@ class _ReducerReader(_GoogleCloudStorageRecordInputReader):
     try:
       while True:
         binary_record = super(_ReducerReader, self).next()
-        proto = file_service_pb.KeyValues()
+        proto = kv_pb.KeyValues()
         proto.ParseFromString(binary_record)
 
         to_yield = None

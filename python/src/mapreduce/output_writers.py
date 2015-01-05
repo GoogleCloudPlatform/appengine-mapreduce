@@ -42,10 +42,10 @@ import random
 import string
 import time
 
-from google.appengine.api.files import file_service_pb
 from mapreduce import context
 from mapreduce import errors
 from mapreduce import json_util
+from mapreduce import kv_pb
 from mapreduce import model
 from mapreduce import operation
 from mapreduce import records
@@ -1140,7 +1140,7 @@ class _GoogleCloudStorageKeyValueOutputWriter(
       logging.error("Expecting a tuple, but got %s: %s",
                     data.__class__.__name__, data)
 
-    proto = file_service_pb.KeyValue()
+    proto = kv_pb.KeyValue()
     proto.set_key(key)
     proto.set_value(value)
     GoogleCloudStorageRecordOutputWriter.write(self, proto.Encode())

@@ -9,9 +9,9 @@ import unittest
 
 import pipeline
 
-from google.appengine.api.files import file_service_pb
 import cloudstorage
 from mapreduce import base_handler
+from mapreduce import kv_pb
 from mapreduce import mapreduce_pipeline
 from mapreduce import output_writers
 from mapreduce import records
@@ -45,7 +45,7 @@ class HashEndToEndTest(testutil.HandlerTestBase):
     with cloudstorage.open(full_filename, mode="w") as f:
       with records.RecordsWriter(f) as w:
         for (k, v) in input_data:
-          proto = file_service_pb.KeyValue()
+          proto = kv_pb.KeyValue()
           proto.set_key(k)
           proto.set_value(v)
           w.write(proto.Encode())
@@ -62,7 +62,7 @@ class HashEndToEndTest(testutil.HandlerTestBase):
       for output_file in output_files:
         with cloudstorage.open(output_file) as f:
           for binary_record in records.RecordsReader(f):
-            proto = file_service_pb.KeyValue()
+            proto = kv_pb.KeyValue()
             proto.ParseFromString(binary_record)
             output_data.append((proto.key(), proto.value()))
 
@@ -100,7 +100,7 @@ class SortFileEndToEndTest(testutil.HandlerTestBase):
     with cloudstorage.open(full_filename, mode="w") as f:
       with records.RecordsWriter(f) as w:
         for (k, v) in input_data:
-          proto = file_service_pb.KeyValue()
+          proto = kv_pb.KeyValue()
           proto.set_key(k)
           proto.set_value(v)
           w.write(proto.Encode())
@@ -116,7 +116,7 @@ class SortFileEndToEndTest(testutil.HandlerTestBase):
     for output_file in output_files:
       with cloudstorage.open(output_file) as f:
         for binary_record in records.RecordsReader(f):
-          proto = file_service_pb.KeyValue()
+          proto = kv_pb.KeyValue()
           proto.ParseFromString(binary_record)
           output_data.append((proto.key(), proto.value()))
 
@@ -136,7 +136,7 @@ class TestMergePipeline(base_handler.PipelineBase):
   Args:
     bucket_name: The name of the Google Cloud Storage bucket.
     filenames: list of input file names as string. Each file is of records
-    format with file_service_pb.KeyValue protocol messages. All files should
+    format with kv_pb.KeyValue protocol messages. All files should
     be sorted by key value.
 
   Returns:
@@ -188,7 +188,7 @@ class MergingReaderEndToEndTest(testutil.HandlerTestBase):
     with cloudstorage.open(full_filename, mode="w") as f:
       with records.RecordsWriter(f) as w:
         for (k, v) in input_data:
-          proto = file_service_pb.KeyValue()
+          proto = kv_pb.KeyValue()
           proto.set_key(k)
           proto.set_value(v)
           w.write(proto.Encode())
@@ -227,7 +227,7 @@ class MergingReaderEndToEndTest(testutil.HandlerTestBase):
       with cloudstorage.open(full_filename, mode="w") as f:
         with records.RecordsWriter(f) as w:
           for (k, v) in input_data:
-            proto = file_service_pb.KeyValue()
+            proto = kv_pb.KeyValue()
             proto.set_key(k)
             proto.set_value(v)
             w.write(proto.Encode())
@@ -315,7 +315,7 @@ class ShuffleEndToEndTest(testutil.HandlerTestBase):
     with cloudstorage.open(full_filename, mode="w") as f:
       with records.RecordsWriter(f) as w:
         for (k, v) in input_data:
-          proto = file_service_pb.KeyValue()
+          proto = kv_pb.KeyValue()
           proto.set_key(k)
           proto.set_value(v)
           w.write(proto.Encode())
@@ -331,7 +331,7 @@ class ShuffleEndToEndTest(testutil.HandlerTestBase):
     for output_file in output_files:
       with cloudstorage.open(output_file) as f:
         for record in records.RecordsReader(f):
-          proto = file_service_pb.KeyValues()
+          proto = kv_pb.KeyValues()
           proto.ParseFromString(record)
           output_data.append((proto.key(), proto.value_list()))
     output_data.sort()
