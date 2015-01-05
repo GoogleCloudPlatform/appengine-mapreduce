@@ -5,8 +5,8 @@ package com.google.appengine.tools.mapreduce;
 import static com.google.appengine.tools.mapreduce.MapSettings.CONTROLLER_PATH;
 import static com.google.appengine.tools.mapreduce.MapSettings.DEFAULT_BASE_URL;
 import static com.google.appengine.tools.mapreduce.MapSettings.DEFAULT_MILLIS_PER_SLICE;
-import static com.google.appengine.tools.mapreduce.MapSettings.DEFAULT_SHARD_RETREIES;
-import static com.google.appengine.tools.mapreduce.MapSettings.DEFAULT_SLICE_RETREIES;
+import static com.google.appengine.tools.mapreduce.MapSettings.DEFAULT_SHARD_RETRIES;
+import static com.google.appengine.tools.mapreduce.MapSettings.DEFAULT_SLICE_RETRIES;
 import static com.google.appengine.tools.mapreduce.MapSettings.WORKER_PATH;
 import static com.google.appengine.tools.pipeline.impl.servlets.PipelineServlet.makeViewerUrl;
 
@@ -70,8 +70,8 @@ public class MapSettingsTest extends TestCase {
     assertNull(mrSettings.getWorkerQueueName());
     assertEquals(DEFAULT_BASE_URL, mrSettings.getBaseUrl());
     assertEquals(DEFAULT_MILLIS_PER_SLICE, mrSettings.getMillisPerSlice());
-    assertEquals(DEFAULT_SHARD_RETREIES, mrSettings.getMaxShardRetries());
-    assertEquals(DEFAULT_SLICE_RETREIES, mrSettings.getMaxSliceRetries());
+    assertEquals(DEFAULT_SHARD_RETRIES, mrSettings.getMaxShardRetries());
+    assertEquals(DEFAULT_SLICE_RETRIES, mrSettings.getMaxSliceRetries());
   }
 
   public void testNonDefaultSettings() {

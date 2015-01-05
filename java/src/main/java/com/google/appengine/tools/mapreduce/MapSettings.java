@@ -48,8 +48,8 @@ public class MapSettings implements Serializable {
   public static final String CONTROLLER_PATH = "controllerCallback";
   public static final String WORKER_PATH = "workerCallback";
   public static final int DEFAULT_MILLIS_PER_SLICE = 180_000;
-  public static final int DEFAULT_SHARD_RETREIES = 4;
-  public static final int DEFAULT_SLICE_RETREIES = 20;
+  public static final int DEFAULT_SHARD_RETRIES = 4;
+  public static final int DEFAULT_SLICE_RETRIES = 20;
 
   private final String baseUrl;
   private final String backend;
@@ -66,8 +66,8 @@ public class MapSettings implements Serializable {
     protected String backend;
     protected String workerQueueName;
     protected int millisPerSlice = DEFAULT_MILLIS_PER_SLICE;
-    protected int maxShardRetries = DEFAULT_SHARD_RETREIES;
-    protected int maxSliceRetries = DEFAULT_SLICE_RETREIES;
+    protected int maxShardRetries = DEFAULT_SHARD_RETRIES;
+    protected int maxSliceRetries = DEFAULT_SLICE_RETRIES;
 
     BaseBuilder() {
     }

@@ -30,7 +30,7 @@ public final class BigQueryConstants {
 
   public static final int DEFAULT_MILLIS_PER_SLICE = 30_000;
 
-  public static final int DEFAULT_SHARD_RETREIES = 4;
+  public static final int DEFAULT_SHARD_RETRIES = 4;
 
-  public static final int DEFAULT_SLICE_RETREIES = 20;
+  public static final int DEFAULT_SLICE_RETRIES = 20;
 }

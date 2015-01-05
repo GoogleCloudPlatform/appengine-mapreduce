@@ -8,8 +8,8 @@ import static com.google.appengine.tools.mapreduce.MapReduceSettings.DEFAULT_SOR
 import static com.google.appengine.tools.mapreduce.MapReduceSettings.DEFAULT_SORT_READ_TIME_MILLIS;
 import static com.google.appengine.tools.mapreduce.MapSettings.DEFAULT_BASE_URL;
 import static com.google.appengine.tools.mapreduce.MapSettings.DEFAULT_MILLIS_PER_SLICE;
-import static com.google.appengine.tools.mapreduce.MapSettings.DEFAULT_SHARD_RETREIES;
-import static com.google.appengine.tools.mapreduce.MapSettings.DEFAULT_SLICE_RETREIES;
+import static com.google.appengine.tools.mapreduce.MapSettings.DEFAULT_SHARD_RETRIES;
+import static com.google.appengine.tools.mapreduce.MapSettings.DEFAULT_SLICE_RETRIES;
 
 import com.google.appengine.tools.development.testing.LocalServiceTestHelper;
 import com.google.appengine.tools.development.testing.LocalTaskQueueTestConfig;
@@ -40,8 +40,8 @@ public class MapReduceSettingsTest extends TestCase {
     assertEquals(DEFAULT_BASE_URL, mrSettings.getBaseUrl());
     assertEquals("app_default_bucket", mrSettings.getBucketName());
     assertEquals(DEFAULT_MAP_FANOUT, mrSettings.getMapFanout());
-    assertEquals(DEFAULT_SHARD_RETREIES, mrSettings.getMaxShardRetries());
-    assertEquals(DEFAULT_SLICE_RETREIES, mrSettings.getMaxSliceRetries());
+    assertEquals(DEFAULT_SHARD_RETRIES, mrSettings.getMaxShardRetries());
+    assertEquals(DEFAULT_SLICE_RETRIES, mrSettings.getMaxSliceRetries());
     assertNull(mrSettings.getMaxSortMemory());
     assertEquals(DEFAULT_MERGE_FANIN, mrSettings.getMergeFanin());
     assertEquals(DEFAULT_MILLIS_PER_SLICE, mrSettings.getMillisPerSlice());
