@@ -14,7 +14,7 @@ import setuptools
 # To debug, set DISTUTILS_DEBUG env var to anything.
 setuptools.setup(
     name="GoogleAppEngineMapReduce",
-    version="1.9.15.0",
+    version="1.9.16.1",
     packages=setuptools.find_packages(),
     author="Google App Engine",
     author_email="app-engine-pipeline-api@googlegroups.com",
