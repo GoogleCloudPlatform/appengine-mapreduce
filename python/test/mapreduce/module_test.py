@@ -12,9 +12,6 @@ from mapreduce import context
 from mapreduce import control
 from mapreduce import datastore_range_iterators
 from mapreduce import errors
-from mapreduce import file_format_parser
-from mapreduce import file_format_root
-from mapreduce import file_formats
 from mapreduce import input_readers
 from mapreduce import key_ranges
 from mapreduce import mapper_pipeline
@@ -97,27 +94,6 @@ class InputReadersTest(module_testutil.ModuleInterfaceTest,
   """Test input_readers module interface."""
 
   MODULE = input_readers
-
-
-class FileFormatsTest(module_testutil.ModuleInterfaceTest,
-                      googletest.TestCase):
-  """Test file_formats module interface."""
-
-  MODULE = file_formats
-
-
-class FileFormatRootTest(module_testutil.ModuleInterfaceTest,
-                         googletest.TestCase):
-  """Test file_format_root module interface."""
-
-  MODULE = file_format_root
-
-
-class FileFormatParserTest(module_testutil.ModuleInterfaceTest,
-                           googletest.TestCase):
-  """Test file_format_parser module interface."""
-
-  MODULE = file_format_parser
 
 
 class ModelTest(module_testutil.ModuleInterfaceTest,
