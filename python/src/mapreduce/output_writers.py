@@ -29,6 +29,7 @@ __all__ = [
     "COUNTER_IO_WRITE_MSEC",
     "OutputWriter",
     "GCSRecordsPool"
+	"GoogleCloudStorageMergedOutputWriter"
     ]
 
 # pylint: disable=g-bad-name
@@ -1145,5 +1146,42 @@ class _GoogleCloudStorageKeyValueOutputWriter(
     proto.set_value(value)
     GoogleCloudStorageRecordOutputWriter.write(self, proto.Encode())
 
+class GoogleCloudStorageMergedOutputWriter(GoogleCloudStorageConsistentOutputWriter):
+    @classmethod
+    def get_filenames(cls, mapreduce_state):
+        fileNames = super(GoogleCloudStorageMergedOutputWriter, cls).get_filenames(mapreduce_state)
+        outputFileName = ""
+        if len(fileNames) > 0:
+            outputFileName = fileNames[0]
+            outputFileName = outputFileName[:outputFileName.rfind("__")]
+            mergedData = []
+            for fileName in fileNames:
+                with cloudstorage.open(fileName, "r") as gcsFile:
+                    line = gcsFile.readline()
+                    while line:
+                        mergedData.append(line)
+                        line = gcsFile.readline()
+    
+            
+            mergedData.sort()
+    
+            with cloudstorage.open(outputFileName, "w") as gcsFile:
+                gcsFile.write("".join(mergedData))
+            
+            for fileName in fileNames:
+                cloudstorage.delete(fileName)
+        
+        return outputFileName
+    
+    @classmethod
+    def _generate_filename(cls, writer_spec, name, job_id, num,
+                         attempt=None, seg_index=None):
+        
+        fileName = super(GoogleCloudStorageMergedOutputWriter, cls)._generate_filename(writer_spec, name, job_id, num,
+                         attempt, seg_index)
+        fileName += "__" + str(num)
+        return fileName
 
+
+	
 GoogleCloudStorageKeyValueOutputWriter = _GoogleCloudStorageKeyValueOutputWriter
