@@ -19,6 +19,7 @@ import com.google.appengine.api.datastore.Key;
 import com.google.appengine.api.datastore.Transaction;
 import com.google.appengine.api.log.LogQuery;
 import com.google.appengine.api.log.LogService;
+import com.google.appengine.api.log.LogServiceException;
 import com.google.appengine.api.log.LogServiceFactory;
 import com.google.appengine.api.log.RequestLogs;
 import com.google.appengine.api.taskqueue.QueueFactory;
@@ -324,11 +325,16 @@ public class ShardedJobRunner<T extends IncrementalTask> implements ShardedJobHa
   private static boolean wasRequestCompleted(String requestId) {
     if (requestId != null) {
       LogQuery query = LogQuery.Builder.withRequestIds(Collections.singletonList(requestId));
-      for (RequestLogs requestLog : LOG_SERVICE.fetch(query)) {
-        if (requestLog.isFinished()) {
-          log.info("Previous un-released lock for request " + requestId + " has finished");
-          return true;
+      try {
+        for (RequestLogs requestLog : LOG_SERVICE.fetch(query)) {
+          if (requestLog.isFinished()) {
+            log.info("Previous un-released lock for request " + requestId + " has finished");
+            return true;
+          }
         }
+      } catch (LogServiceException ex) {
+        // consider any log-fetch failure as if request is not known to be completed
+        log.log(Level.FINE, "Failed to query log service for request " + requestId, ex);
       }
     }
     return false;
