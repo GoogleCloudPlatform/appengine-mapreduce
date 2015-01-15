@@ -1146,42 +1146,41 @@ class _GoogleCloudStorageKeyValueOutputWriter(
     proto.set_value(value)
     GoogleCloudStorageRecordOutputWriter.write(self, proto.Encode())
 
-class GoogleCloudStorageMergedOutputWriter(GoogleCloudStorageConsistentOutputWriter):
-    @classmethod
-    def get_filenames(cls, mapreduce_state):
-        fileNames = super(GoogleCloudStorageMergedOutputWriter, cls).get_filenames(mapreduce_state)
-        outputFileName = ""
-        if len(fileNames) > 0:
-            outputFileName = fileNames[0]
-            outputFileName = outputFileName[:outputFileName.rfind("__")]
-            mergedData = []
-            for fileName in fileNames:
-                with cloudstorage.open(fileName, "r") as gcsFile:
-                    line = gcsFile.readline()
-                    while line:
-                        mergedData.append(line)
-                        line = gcsFile.readline()
-    
-            
-            mergedData.sort()
-    
-            with cloudstorage.open(outputFileName, "w") as gcsFile:
-                gcsFile.write("".join(mergedData))
-            
-            for fileName in fileNames:
-                cloudstorage.delete(fileName)
-        
-        return outputFileName
-    
-    @classmethod
-    def _generate_filename(cls, writer_spec, name, job_id, num,
-                         attempt=None, seg_index=None):
-        
-        fileName = super(GoogleCloudStorageMergedOutputWriter, cls)._generate_filename(writer_spec, name, job_id, num,
-                         attempt, seg_index)
-        fileName += "__" + str(num)
-        return fileName
+class GoogleCloudStorageMergedOutputWriter(
+        GoogleCloudStorageConsistentOutputWriter):
+  """Output writer to Google Cloud Storage using the cloudstorage library.
 
+  Extends the GoogleCloudStorageConsistentOutputWriter to merge all the
+    outputs from the shards into a single file
+  """
+  @classmethod
+  def get_filenames(cls, mapreduce_state):
+    file_names = super(GoogleCloudStorageMergedOutputWriter, cls).get_filenames(mapreduce_state)
+    output_file_name = ""
+    if len(file_names) > 0:
+      output_file_name = file_names[0]
+      output_file_name = output_file_name[:output_file_name.rfind("__")]
+      merged_data = []
+      for file_name in file_names:
+        with cloudstorage.open(file_name, "r") as gcs_file:
+          line = gcs_file.readline()
+          while line:
+            merged_data.append(line)
+            line = gcs_file.readline()
+      merged_data.sort()
+      with cloudstorage.open(output_file_name, "w") as gcs_file:
+        gcs_file.write("".join(merged_data))
+      for file_name in file_names:
+        cloudstorage.delete(file_name)
+    return output_file_name
+  #pylint: disable=too-many-arguments
+  @classmethod
+  def _generate_filename(cls, writer_spec, name, job_id, num,
+             attempt=None, seg_index=None):
+    file_name = super(GoogleCloudStorageMergedOutputWriter,
+                       cls)._generate_filename(writer_spec, name, job_id, num,
+             attempt, seg_index)
+    file_name += "__" + str(num)
+    return file_name
 
-	
 GoogleCloudStorageKeyValueOutputWriter = _GoogleCloudStorageKeyValueOutputWriter
