@@ -25,6 +25,7 @@ import org.junit.Test;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
 import java.util.SortedSet;
@@ -36,8 +37,8 @@ public class DatastoreShardStrategyTest extends TestCase {
   static final String ENTITY_KIND_NAME = "kind";
   static final String PROPERTY_NAME = Entity.KEY_RESERVED_PROPERTY;
   private Query baseQuery;
-  private final LocalServiceTestHelper helper =
-      new LocalServiceTestHelper(new LocalDatastoreServiceTestConfig());
+  private final LocalServiceTestHelper helper = new LocalServiceTestHelper(
+      new LocalDatastoreServiceTestConfig().setApplyAllHighRepJobPolicy());
   private DatastoreService ds;
 
   private static Query createQuery(String kind, String property, Object lowerBound,
@@ -87,9 +88,40 @@ public class DatastoreShardStrategyTest extends TestCase {
     validateSplits(createQuery(ENTITY_KIND_NAME, PROPERTY_NAME, new Date(0), new Date(100)),
         longRanges(0, 20000, 40000, 60000, 80000, 100000));
   }
+
   public void testRating() {
     validateSplits(createQuery(ENTITY_KIND_NAME, PROPERTY_NAME, new Rating(0), new Rating(100)),
         longRanges(0, 20, 40, 60, 80, 100));
+  }
+
+  public void testFindingLowerBound() throws Exception {
+    Calendar cal =  Calendar.getInstance();
+    Date upperBound = cal.getTime();
+    cal.add(Calendar.DATE, -1);
+    Date lowerBound = cal.getTime();
+    String kind = ENTITY_KIND_NAME + "_FindLowerBound";
+    Entity entity = new Entity(kind, "name1");
+    entity.setProperty("date", lowerBound);
+    ds.put(entity);
+    Filter filter = new FilterPredicate("date", LESS_THAN, upperBound);
+    Query query = BaseDatastoreInput.createQuery(null, kind).setFilter(filter);
+    List<Query> splitQuery = strategy.splitQuery(query, 1);
+    assertEquals(1, splitQuery.size());
+    CompositeFilter rangeFilter = (CompositeFilter) splitQuery.get(0).getFilter();
+    assertEquals(2, rangeFilter.getSubFilters().size());
+    for (Filter f : rangeFilter.getSubFilters()) {
+      FilterPredicate fp = (FilterPredicate) f;
+      switch (fp.getOperator()) {
+        case GREATER_THAN_OR_EQUAL:
+          assertEquals(lowerBound.getTime() * 1000L, fp.getValue());
+          break;
+        case LESS_THAN:
+          assertEquals(upperBound.getTime() * 1000L, fp.getValue());
+          break;
+        default:
+          fail("Unexpected operator " + fp);
+      }
+    }
   }
 
   @Test

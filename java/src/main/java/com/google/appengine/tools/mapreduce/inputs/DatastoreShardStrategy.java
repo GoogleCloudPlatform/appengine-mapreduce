@@ -22,6 +22,7 @@ import com.google.appengine.api.datastore.Query;
 import com.google.appengine.api.datastore.Query.CompositeFilter;
 import com.google.appengine.api.datastore.Query.CompositeFilterOperator;
 import com.google.appengine.api.datastore.Query.Filter;
+import com.google.appengine.api.datastore.Query.FilterOperator;
 import com.google.appengine.api.datastore.Query.FilterPredicate;
 import com.google.appengine.api.datastore.Query.SortDirection;
 import com.google.appengine.api.datastore.Rating;
@@ -61,11 +62,13 @@ import java.util.logging.Logger;
  * keyspace.
  *
  *  The following clauses are not supported by this class: An inequality filter of unsupported type.
- * (Only numeric and date types are currently supported: {@link "https://developers.google.com/appengine/docs/java/datastore/entities#Java_Properties_and_value_types"}
+ * (Only numeric and date types are currently supported:
+ * {@link "https://developers.google.com/appengine/docs/java/datastore/entities#Java_Properties_and_value_types"}
  * )
  *
- *  Filters that are incompatable with datastore cursors such as: Combining multiple clauses with an
- * OR. A filter on a value being NOT_EQUAL. A filter on a value being IN a set. {@link "https://developers.google.com/appengine/docs/java/datastore/queries#Java_Limitations_of_cursors"}
+ *  Filters that are incompatible with datastore cursors such as: Combining multiple clauses with an
+ * OR. A filter on a value being NOT_EQUAL. A filter on a value being IN a set.
+ * {@link "https://developers.google.com/appengine/docs/java/datastore/queries#Java_Limitations_of_cursors"}
  */
 public class DatastoreShardStrategy {
 
@@ -382,8 +385,9 @@ public class DatastoreShardStrategy {
     if (item.isEmpty()) {
       return null;
     }
-    return new FilterPredicate(propertyName,
-        direction == DESCENDING ? LESS_THAN_OR_EQUAL : GREATER_THAN_OR_EQUAL, item.get(0));
+    FilterOperator operator =
+        direction == DESCENDING ? LESS_THAN_OR_EQUAL : GREATER_THAN_OR_EQUAL;
+    return new FilterPredicate(propertyName, operator, item.get(0).getProperty(propertyName));
   }
 
   private List<Entity> runQuery(Query q, final int limit) {
