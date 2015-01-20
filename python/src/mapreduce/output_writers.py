@@ -977,11 +977,16 @@ class GoogleCloudStorageConsistentOutputWriter(
       self._remove_tmpfile(status.tmpfile_1ago.name, writer_spec)
 
     # rewrite N-1's tmpfile (idempotent)
+    # N-1 file might be needed if this this slice is ever retried so we need
+    # to make sure it won't be cleaned up just yet.
+    files_to_keep = []
     if status.tmpfile:  # does no exist on slice 0
       self._rewrite_tmpfile(status.mainfile, status.tmpfile.name, writer_spec)
+      files_to_keep.append(status.tmpfile.name)
 
     # clean all the garbage you can find
-    self._try_to_clean_garbage(writer_spec)
+    self._try_to_clean_garbage(
+        writer_spec, exclude_list=files_to_keep)
 
     # Rotate the files in status.
     status.tmpfile_1ago = status.tmpfile
@@ -1006,7 +1011,14 @@ class GoogleCloudStorageConsistentOutputWriter(
     super(GoogleCloudStorageConsistentOutputWriter, self).write(data)
     self._data_written_to_slice = True
 
-  def _try_to_clean_garbage(self, writer_spec):
+  def _try_to_clean_garbage(self, writer_spec, exclude_list=()):
+    """Tries to remove any files created by this shard that aren't needed.
+
+    Args:
+      writer_spec: writer_spec for the MR.
+      exclude_list: A list of filenames (strings) that should not be
+        removed.
+    """
     # Try to remove garbage (if any). Note that listbucket is not strongly
     # consistent so something might survive.
     tmpl = string.Template(self._TMPFILE_PREFIX)
@@ -1016,7 +1028,8 @@ class GoogleCloudStorageConsistentOutputWriter(
     account_id = self._get_tmp_account_id(writer_spec)
     for f in cloudstorage.listbucket("/%s/%s" % (bucket, prefix),
                                      _account_id=account_id):
-      self._remove_tmpfile(f.filename, self.status.writer_spec)
+      if f.filename not in exclude_list:
+        self._remove_tmpfile(f.filename, self.status.writer_spec)
 
   def finalize(self, ctx, shard_state):
     if self._data_written_to_slice:
