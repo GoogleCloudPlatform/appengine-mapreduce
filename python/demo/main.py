@@ -406,8 +406,7 @@ class DownloadHandler(blobstore_handlers.BlobstoreDownloadHandler):
   def get(self, key):
     key = str(urllib.unquote(key)).strip()
     logging.debug("key is %s" % key)
-    blob_info = blobstore.BlobInfo.get(key)
-    self.send_blob(blob_info)
+    self.send_blob(key)
 
 
 app = webapp2.WSGIApplication(
