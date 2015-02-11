@@ -24,7 +24,8 @@ setuptools.setup(
     description=("Enable MapReduce style data processing on "
                  "App Engine"),
     zip_safe=True,
-    # Exclude these files from installation.
+    # Include package data except README.
+    include_package_data=True,
     exclude_package_data={"": ["README"]},
     install_requires=[
         "GoogleAppEngineCloudStorageClient >= 1.9.15",
