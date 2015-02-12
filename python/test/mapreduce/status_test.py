@@ -18,11 +18,15 @@
 
 
 import os
-import simplejson
 import shutil
 import tempfile
 import time
 import unittest
+
+try:
+  import json
+except ImportError:
+  import simplejson as json
 
 from google.appengine.api import yaml_errors
 from google.appengine.ext import db
@@ -373,7 +377,7 @@ class ListConfigsTest(testutil.HandlerTestBase):
            u'params': {
                u'foo': u'bar',},
            }]},
-        simplejson.loads(self.handler.response.out.getvalue()))
+        json.loads(self.handler.response.out.getvalue()))
     self.assertEquals("text/javascript",
                       self.handler.response.headers["Content-Type"])
 
@@ -427,7 +431,7 @@ class ListJobsTest(testutil.HandlerTestBase):
     self.start.post()
 
     self.handler.get()
-    result = simplejson.loads(self.handler.response.out.getvalue())
+    result = json.loads(self.handler.response.out.getvalue())
     expected_args = set([
         "active",
         "active_shards",
@@ -458,7 +462,7 @@ class ListJobsTest(testutil.HandlerTestBase):
 
     self.handler.request.set("count", "1")
     self.handler.get()
-    result = simplejson.loads(self.handler.response.out.getvalue())
+    result = json.loads(self.handler.response.out.getvalue())
     self.assertEquals(1, len(result["jobs"]))
     self.assertTrue("cursor" in result)
 
@@ -466,14 +470,14 @@ class ListJobsTest(testutil.HandlerTestBase):
     self.handler.request.set("count", "1")
     self.handler.request.set("cursor", result['cursor'])
     self.handler.get()
-    result2 = simplejson.loads(self.handler.response.out.getvalue())
+    result2 = json.loads(self.handler.response.out.getvalue())
     self.assertEquals(1, len(result2["jobs"]))
     self.assertFalse("cursor" in result2)
 
   def testNoJobs(self):
     """Tests when there are no jobs."""
     self.handler.get()
-    result = simplejson.loads(self.handler.response.out.getvalue())
+    result = json.loads(self.handler.response.out.getvalue())
     self.assertEquals({'jobs': []}, result)
 
 
@@ -500,7 +504,7 @@ class GetJobDetailTest(testutil.HandlerTestBase):
     self.start.request.headers["X-Requested-With"] = "XMLHttpRequest"
 
     self.start.post()
-    result = simplejson.loads(self.start.response.out.getvalue())
+    result = json.loads(self.start.response.out.getvalue())
     self.mapreduce_id = result["mapreduce_id"]
 
     self.handler = status.GetJobDetailHandler()
@@ -525,7 +529,7 @@ class GetJobDetailTest(testutil.HandlerTestBase):
     self.KickOffMapreduce()
     self.handler.request.set("mapreduce_id", self.mapreduce_id)
     self.handler.get()
-    result = simplejson.loads(self.handler.response.out.getvalue())
+    result = json.loads(self.handler.response.out.getvalue())
 
     expected_keys = set([
         "active", "chart_url", "counters", "mapper_spec", "mapreduce_id",
@@ -544,7 +548,7 @@ class GetJobDetailTest(testutil.HandlerTestBase):
     """Tests getting the job details."""
     self.handler.request.set("mapreduce_id", self.mapreduce_id)
     self.handler.get()
-    result = simplejson.loads(self.handler.response.out.getvalue())
+    result = json.loads(self.handler.response.out.getvalue())
 
     expected_keys = set([
         "active", "chart_url", "counters", "mapper_spec", "mapreduce_id",
@@ -557,7 +561,7 @@ class GetJobDetailTest(testutil.HandlerTestBase):
     """Tests when an invalid job ID is supplied."""
     self.handler.request.set("mapreduce_id", "does not exist")
     self.handler.get()
-    result = simplejson.loads(self.handler.response.out.getvalue())
+    result = json.loads(self.handler.response.out.getvalue())
     self.assertEquals(
         {"error_message": "\"Could not find job with ID 'does not exist'\"",
          "error_class": "KeyError"},

@@ -42,7 +42,11 @@ import urllib
 import zlib
 
 from graphy.backends import google_chart_api
-import simplejson
+
+try:
+  import json
+except ImportError:
+  import simplejson as json
 
 from google.appengine.api import memcache
 from google.appengine.api import taskqueue
@@ -788,11 +792,11 @@ class TransientShardState(object):
     """Create new TransientShardState from webapp request."""
     mapreduce_spec = MapreduceSpec.from_json_str(request.get("mapreduce_spec"))
     mapper_spec = mapreduce_spec.mapper
-    input_reader_spec_dict = simplejson.loads(request.get("input_reader_state"),
-                                              cls=json_util.JsonDecoder)
+    input_reader_spec_dict = json.loads(request.get("input_reader_state"),
+                                        cls=json_util.JsonDecoder)
     input_reader = mapper_spec.input_reader_class().from_json(
         input_reader_spec_dict)
-    initial_input_reader_spec_dict = simplejson.loads(
+    initial_input_reader_spec_dict = json.loads(
         request.get("initial_input_reader_state"), cls=json_util.JsonDecoder)
     initial_input_reader = mapper_spec.input_reader_class().from_json(
         initial_input_reader_spec_dict)
@@ -800,8 +804,8 @@ class TransientShardState(object):
     output_writer = None
     if mapper_spec.output_writer_class():
       output_writer = mapper_spec.output_writer_class().from_json(
-          simplejson.loads(request.get("output_writer_state", "{}"),
-                           cls=json_util.JsonDecoder))
+          json.loads(request.get("output_writer_state", "{}"),
+                     cls=json_util.JsonDecoder))
       assert isinstance(output_writer, mapper_spec.output_writer_class()), (
           "%s.from_json returned an instance of wrong class: %s" % (
               mapper_spec.output_writer_class(),

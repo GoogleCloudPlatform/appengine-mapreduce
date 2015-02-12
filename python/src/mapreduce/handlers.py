@@ -29,7 +29,11 @@ import random
 import sys
 import time
 import traceback
-import simplejson
+
+try:
+  import json
+except ImportError:
+  import simplejson as json
 
 from google.appengine.ext import ndb
 
@@ -1436,8 +1440,8 @@ class KickOffJobHandler(base_handler.TaskQueueHandler):
     if serialized_input_readers is None:
       readers = input_reader_class.split_input(split_param)
     else:
-      readers = [input_reader_class.from_json_str(json) for json in
-                 simplejson.loads(serialized_input_readers.payload)]
+      readers = [input_reader_class.from_json_str(_json) for _json in
+                 json.loads(serialized_input_readers.payload)]
 
     if not readers:
       return None, None
@@ -1452,7 +1456,7 @@ class KickOffJobHandler(base_handler.TaskQueueHandler):
       serialized_input_readers = model._HugeTaskPayload(
           key_name=serialized_input_readers_key, parent=state)
       readers_json_str = [i.to_json_str() for i in readers]
-      serialized_input_readers.payload = simplejson.dumps(readers_json_str)
+      serialized_input_readers.payload = json.dumps(readers_json_str)
     return readers, serialized_input_readers
 
   def _setup_output_writer(self, state):
