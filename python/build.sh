@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-dir=`pwd $0`
+dir=`dirname $0`
 
 test () {
   if [ -z $APPENGINE_LIB ]; then

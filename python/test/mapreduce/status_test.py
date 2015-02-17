@@ -27,7 +27,6 @@ try:
   import json
 except ImportError:
   import simplejson as json
-
 from google.appengine.api import yaml_errors
 from google.appengine.ext import db
 from mapreduce import errors
