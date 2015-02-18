@@ -113,19 +113,6 @@ COUNTER_IO_READ_MSEC = "io-read-msec"
 # to yield an actual value to the handler.
 ALLOW_CHECKPOINT = object()
 
-"""
-InputReader's lifecycle is the following:
-0) validate called to validate mapper specification.
-1) split_input splits the input for each shard.
-2) __init__ is called for each shard. It takes the input, including ranges,
-  sent by the split_input.
-3) from_json()/to_json() are used to persist writer's state across
-   multiple slices.
-4) __str__ is the string representation of the reader.
-5) next is called to send one piece of data to the user defined mapper.
-  It will continue to return data until it reaches the end of the range
-    specified in the split_input
-"""
 
 class InputReader(json_util.JsonMixin):
   """Abstract base class for input readers.
@@ -2633,6 +2620,20 @@ class _ReducerReader(_GoogleCloudStorageRecordInputReader):
     result.current_values = _ReducerReader.decode_data(json["current_values"])
     return result
 
+"""
+
+  InputReader's lifecycle is the following:
+  0) validate called to validate mapper specification.
+  1) split_input splits the input for each shard.
+  2) __init__ is called for each shard. It takes the input, including ranges,
+    sent by the split_input.
+  3) from_json()/to_json() are used to persist writer's state across
+     multiple slices.
+  4) __str__ is the string representation of the reader.
+  5) next is called to send one piece of data to the user defined mapper.
+    It will continue to return data until it reaches the end of the range
+      specified in the split_input
+  """
 
 class GoogleCloudStorageLineInputReader(InputReader):
   """Input reader for a newline delimited file in Google Cloud Storage.
@@ -2659,7 +2660,7 @@ class GoogleCloudStorageLineInputReader(InputReader):
       hundreds of thousands of files.
   Outputs:
     A tuple containing an other tuple and the Line
-    ((File name, start position), line)
+    (File name, start position), line
     File name : Name of the file the data came from
     start position : Files index position for the start of the data
     line : The data read till a '\n' was reached
@@ -2677,7 +2678,6 @@ class GoogleCloudStorageLineInputReader(InputReader):
   # Serialization parameters.
   INITIAL_POSITION_PARAM = "initial_position"
   END_POSITION_PARAM = "end_position"
-  
   @classmethod
   def validate(cls, mapper_spec):
     """Validates mapper spec and all mapper parameters.
@@ -2850,7 +2850,6 @@ class GoogleCloudStorageLineInputReader(InputReader):
       raise StopIteration()
     return (self._file_name, start_position), line.rstrip("\n")
 
-
 class GoogleCloudStorageZipInputReader(InputReader):
   """Input reader for files from a zip archive stored in the GCS.
 
@@ -2886,7 +2885,7 @@ class GoogleCloudStorageZipInputReader(InputReader):
     text file : Current file being outputed
     data : contents of the file
   """
-  
+
   # Mapreduce parameters.
   OBJECT_NAMES_PARAM = "objects"
   START_INDEX_PARAM = "start_index"
@@ -3115,7 +3114,6 @@ class GoogleCloudStorageZipInputReader(InputReader):
              COUNTER_IO_READ_MSEC, int((time.time() - start_time) * 1000))(ctx)
 
     return content
-
 
 class GoogleCloudStorageZipLineInputReader(InputReader):
   """Input reader for newline delimited files in zip archives from GCS.
