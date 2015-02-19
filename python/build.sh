@@ -15,6 +15,7 @@
 # limitations under the License.
 
 dir=`dirname $0`
+demo_dir=`pwd`
 
 test () {
   if [ -z $APPENGINE_LIB ]; then
@@ -55,7 +56,7 @@ $dir/test:\
 
 build_demo () {
   fetch_dependencies
-  [ ! -d "$dir/demo/mapreduce" ] && ln -s "$dir/src/mapreduce" "$dir/demo"
+  [ ! -d "$demo_dir/demo/mapreduce" ] && ln -s "$demo_dir/src/mapreduce" "$demo_dir/demo"
 }
 
 run_demo () {
