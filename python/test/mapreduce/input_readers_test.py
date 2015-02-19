@@ -2274,6 +2274,51 @@ class GoogleCloudStorageInputReaderWithDelimiterTest(
     self.assertEqual(self.filenames_in_first_10_dirs + self.test_filenames,
                      result_filenames)
 
+  def testFailOnMissingInputSerialization(self):
+    """Tests that pickling doesn't mess up _fail_on_missing_input."""
+    # fail_on_missing_input=True.
+    readers = self.READER_CLS.split_input(
+        self.create_mapper_spec(num_shards=1,
+                                input_params={"bucket_name": self.test_bucket,
+                                              "objects": ["dir-0*", "file*"],
+                                              "delimiter": "/",
+                                              "fail_on_missing_input": True}))
+    self.assertEqual(1, len(readers))
+    reader = readers[0]
+    self.assertTrue(reader._fail_on_missing_input)
+    reader = self.READER_CLS.from_json_str(reader.to_json_str())
+    self.assertTrue(reader._fail_on_missing_input)
+
+    # fail_on_missing_input=False.
+    readers = self.READER_CLS.split_input(
+        self.create_mapper_spec(num_shards=1,
+                                input_params={"bucket_name": self.test_bucket,
+                                              "objects": ["dir-0*", "file*"],
+                                              "delimiter": "/",
+                                              "fail_on_missing_input": False}))
+    self.assertEqual(1, len(readers))
+    reader = readers[0]
+    self.assertFalse(reader._fail_on_missing_input)
+    reader = self.READER_CLS.from_json_str(reader.to_json_str())
+    self.assertFalse(reader._fail_on_missing_input)
+
+    # fail_on_missing_input not present in json.
+    readers = self.READER_CLS.split_input(
+        self.create_mapper_spec(num_shards=1,
+                                input_params={"bucket_name": self.test_bucket,
+                                              "objects": ["dir-0*", "file*"],
+                                              "delimiter": "/"}))
+    self.assertEqual(1, len(readers))
+    reader = readers[0]
+    self.assertFalse(reader._fail_on_missing_input)
+    json_dict = reader.to_json()
+    self.assertTrue("fail_on_missing_input" in json_dict)
+    del json_dict["fail_on_missing_input"]
+    reader = self.READER_CLS.from_json(json_dict)
+    # _fail_on_missing_input defaults to False.
+    self.assertFalse(reader._fail_on_missing_input)
+
+
   def testSplit(self):
     # Grab all files in the first 10 directories.
     readers = self.READER_CLS.split_input(

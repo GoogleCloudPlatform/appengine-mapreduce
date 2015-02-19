@@ -351,23 +351,27 @@ class GCSOutputWriterTestCommon(GCSOutputTestBase):
     writer = self.WRITER_CLS.create(mapreduce_state.mapreduce_spec,
                                     shard_state.shard_number,
                                     shard_state.retries + 1)
-    writer.begin_slice(None)
-    writer.write("badData")
-
-    # Test re-creating the writer for a retry
-    shard_state.reset_for_retry()
-    writer = self.WRITER_CLS.create(mapreduce_state.mapreduce_spec,
-                                    shard_state.shard_number,
-                                    shard_state.retries + 1)
-    writer.begin_slice(None)
     new_filename = writer._get_filename_for_test()
-    good_data = "goodData"
-    writer.write(good_data)
+    writer.begin_slice(None)
+    writer.write("initData")
+    writer.end_slice(None)
+
+    orig_json = writer.to_json()
+
+    writer = self.WRITER_CLS.from_json(orig_json)
+    writer.begin_slice(None)
+    writer.write("badData")  # we fail here so this data should be discarded
+
+    # Recreate the same rewrite (simulates a slice retry).
+    writer = self.WRITER_CLS.from_json(orig_json)
+    writer.begin_slice(None)
+    writer.write("goodData")
+    writer.end_slice(None)
     writer = self._serialize_and_deserialize(writer)
     writer.finalize(ctx, shard_state)
 
     # Verify the badData is not in the final file
-    self.assertEqual(good_data, cloudstorage.open(new_filename).read())
+    self.assertEqual("initDatagoodData", cloudstorage.open(new_filename).read())
 
   def testWriterMetadata(self):
     test_acl = "test-acl"
