@@ -1166,6 +1166,17 @@ class GoogleCloudStorageMergedOutputWriter(
   Extends the GoogleCloudStorageConsistentOutputWriter to merge all the
     outputs from the shards into a single file
   """
+  def __init__(self, status):
+    super(GoogleCloudStorageMergedOutputWriter, cls).__init__(status)
+    self.output_file_name = "Bob"
+    
+  @classmethod
+  def get_filenames(cls, mapreduce_state):
+    file_names = super(GoogleCloudStorageMergedOutputWriter, cls).get_filenames(mapreduce_state)
+    logging.warn(mapreduce_state.output_file_name)
+    mapreduce_state.output_file_name = "Jane"
+    logging.warn(mapreduce_state.output_file_name)
+  """
   @classmethod
   def get_filenames(cls, mapreduce_state):
     file_names = super(GoogleCloudStorageMergedOutputWriter, cls).get_filenames(mapreduce_state)
@@ -1186,6 +1197,7 @@ class GoogleCloudStorageMergedOutputWriter(
       for file_name in file_names:
         cloudstorage.delete(file_name)
     return output_file_name
+  """
   #pylint: disable=too-many-arguments
   @classmethod
   def _generate_filename(cls, writer_spec, name, job_id, num,
