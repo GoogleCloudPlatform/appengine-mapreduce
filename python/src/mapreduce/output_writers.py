@@ -42,6 +42,7 @@ import pickle
 import random
 import string
 import time
+import heapq
 
 from mapreduce import context
 from mapreduce import errors
@@ -1166,38 +1167,27 @@ class GoogleCloudStorageMergedOutputWriter(
   Extends the GoogleCloudStorageConsistentOutputWriter to merge all the
     outputs from the shards into a single file
   """
-  def __init__(self, status):
-    super(GoogleCloudStorageMergedOutputWriter, cls).__init__(status)
-    self.output_file_name = "Bob"
     
   @classmethod
   def get_filenames(cls, mapreduce_state):
     file_names = super(GoogleCloudStorageMergedOutputWriter, cls).get_filenames(mapreduce_state)
-    logging.warn(mapreduce_state.output_file_name)
-    mapreduce_state.output_file_name = "Jane"
-    logging.warn(mapreduce_state.output_file_name)
-  """
-  @classmethod
-  def get_filenames(cls, mapreduce_state):
-    file_names = super(GoogleCloudStorageMergedOutputWriter, cls).get_filenames(mapreduce_state)
-    output_file_name = ""
+    output_file_name = '/' + mapreduce_state.mapreduce_spec.mapper.params['output_writer']['bucket_name'] + \
+                      '/' + mapreduce_state.mapreduce_spec.mapper.params['output_writer']['naming_format']
     if len(file_names) > 0:
-      output_file_name = file_names[0]
-      output_file_name = output_file_name[:output_file_name.rfind("__")]
-      merged_data = []
+      files = map(cloudstorage.open, file_names)
+
+      with cloudstorage.open(output_file_name, "w") as gcs:
+        for line in heapq.merge(*files):
+          gcs.write(line)
+          
       for file_name in file_names:
-        with cloudstorage.open(file_name, "r") as gcs_file:
-          line = gcs_file.readline()
-          while line:
-            merged_data.append(line)
-            line = gcs_file.readline()
-      merged_data.sort()
-      with cloudstorage.open(output_file_name, "w") as gcs_file:
-        gcs_file.write("".join(merged_data))
-      for file_name in file_names:
-        cloudstorage.delete(file_name)
+        try:
+          cloudstorage.delete(file_name)
+        except Exception as e:
+          logging.error("There was an error deleting file %s, Error: %s", file_name, str(e))
+      
     return output_file_name
-  """
+  
   #pylint: disable=too-many-arguments
   @classmethod
   def _generate_filename(cls, writer_spec, name, job_id, num,
@@ -1207,5 +1197,6 @@ class GoogleCloudStorageMergedOutputWriter(
              attempt, seg_index)
     file_name += "__" + str(num)
     return file_name
+
 
 GoogleCloudStorageKeyValueOutputWriter = _GoogleCloudStorageKeyValueOutputWriter
