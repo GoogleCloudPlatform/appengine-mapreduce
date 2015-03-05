@@ -44,7 +44,7 @@ import javax.servlet.http.HttpServletResponse;
  *
  * Generally you'll want this handler to be protected by an admin security constraint
  * (see <a
- * href="http://code.google.com/appengine/docs/java/config/webxml.html#Security_and_Authentication">
+ * href="http://cloud.google.com/appengine/docs/java/config/webxml.html#Security_and_Authentication">
  * Security and Authentication</a>)
  * for more details.
  * </pre>

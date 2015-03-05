@@ -5,7 +5,6 @@ import static com.google.appengine.tools.mapreduce.impl.MapReduceConstants.GCS_R
 import static com.google.appengine.tools.mapreduce.impl.MapReduceConstants.MAP_OUTPUT_MIME_TYPE;
 import static com.google.common.base.Preconditions.checkNotNull;
 
-import com.google.appengine.repackaged.com.google.common.collect.ImmutableList;
 import com.google.appengine.tools.cloudstorage.GcsFileOptions;
 import com.google.appengine.tools.cloudstorage.GcsFilename;
 import com.google.appengine.tools.cloudstorage.GcsOutputChannel;
@@ -19,14 +18,18 @@ import com.google.appengine.tools.mapreduce.Sharder;
 import com.google.appengine.tools.mapreduce.outputs.LevelDbOutputWriter;
 import com.google.appengine.tools.mapreduce.outputs.MarshallingOutputWriter;
 import com.google.appengine.tools.mapreduce.outputs.ShardingOutputWriter;
+import com.google.common.collect.AbstractIterator;
 import com.google.common.collect.ImmutableMap;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.List;
+import java.util.Collection;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.LinkedHashSet;
 import java.util.Map;
+import java.util.Random;
+import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -43,7 +46,7 @@ import java.util.logging.Logger;
 public class GoogleCloudStorageMapOutputWriter<K, V>
     extends ShardingOutputWriter<K, V, GoogleCloudStorageMapOutputWriter.MapOutputWriter<K, V>> {
 
-  private static final long serialVersionUID = -1989859043333177195L;
+  private static final long serialVersionUID = 739934506831898405L;
   private static final Logger logger =
       Logger.getLogger(GoogleCloudStorageMapOutputWriter.class.getName());
 
@@ -82,7 +85,7 @@ public class GoogleCloudStorageMapOutputWriter<K, V>
 
   static class MapOutputWriter<K, V> extends MarshallingOutputWriter<KeyValue<K, V>> {
 
-    private static final long serialVersionUID = 1211941590518570124L;
+    private static final long serialVersionUID = 6056683766896574858L;
     private final GcsFileOutputWriter gcsWriter;
 
     public MapOutputWriter(GcsFileOutputWriter gcsWriter, KeyValueMarshaller<K, V> marshaller) {
@@ -90,20 +93,18 @@ public class GoogleCloudStorageMapOutputWriter<K, V>
       this.gcsWriter = gcsWriter;
     }
 
-    List<String> getFiles() {
+    Iterable<String> getFiles() {
       return gcsWriter.getFiles();
     }
   }
 
   private static class GcsFileOutputWriter extends OutputWriter<ByteBuffer> {
 
-    private static final long serialVersionUID = -4681879483578959369L;
-    private static final int MAX_FILES_PER_COMPOSE = Integer.parseInt(
-        System.getProperty("com.google.appengine.tools.mapreduce.impl"
-            + ".GoogleCloudStorageMapOutputWriter.MAX_FILES_PER_COMPOSE",
-            "1024"));
-    private static final String FILENAME_FORMAT = "%s@%d";
-    private static final String TEMP_FILENAME_FORMAT = "%s@%d~%d";
+    private static final long serialVersionUID = 1864188391798776210L;
+    private static final String MAX_COMPONENTS_PER_COMPOSE = "com.google.appengine.tools.mapreduce"
+        + ".impl.GoogleCloudStorageMapOutputWriter.MAX_COMPONENTS_PER_COMPOSE";
+    private static final String MAX_FILES_PER_COMPOSE = "com.google.appengine.tools.mapreduce.impl"
+        + ".GoogleCloudStorageMapOutputWriter.MAX_FILES_PER_COMPOSE";
     private static final GcsService GCS_SERVICE = GcsServiceFactory.createGcsService(
         new GcsServiceOptions.Builder()
         .setRetryParams(GCS_RETRY_PARAMETERS)
@@ -114,17 +115,24 @@ public class GoogleCloudStorageMapOutputWriter<K, V>
         new GcsFileOptions.Builder().mimeType(MAP_OUTPUT_MIME_TYPE).build();
     private static final long MEMORY_REQUIRED = MapReduceConstants.DEFAULT_IO_BUFFER_SIZE * 2;
 
+    private final int maxComponentsPerCompose;
+    private final int maxFilesPerCompose;
     private final String bucket;
     private final String namePrefix;
-    private final List<String> toDelete = new ArrayList<>();
-    private String previousSliceFileName;
-    private int compositionCount;
+    private final Set<String> toDelete = new HashSet<>();
+    private final Set<String> sliceParts = new LinkedHashSet();
+    private final Set<String> compositeParts = new LinkedHashSet<>();
+    private String filePrefix;
     private int fileCount;
+
     private transient GcsOutputChannel channel;
 
     public GcsFileOutputWriter(String bucket, String namePrefix) {
       this.bucket = bucket;
       this.namePrefix = namePrefix;
+      int temp = Integer.parseInt(System.getProperty(MAX_COMPONENTS_PER_COMPOSE, "1024"));
+      maxFilesPerCompose = Integer.parseInt(System.getProperty(MAX_FILES_PER_COMPOSE, "32"));
+      maxComponentsPerCompose = (temp / maxFilesPerCompose) * maxFilesPerCompose;
     }
 
     @Override
@@ -141,28 +149,33 @@ public class GoogleCloudStorageMapOutputWriter<K, V>
 
     @Override
     public void beginShard() {
+      toDelete.addAll(sliceParts);
+      toDelete.addAll(compositeParts);
       cleanup();
-      previousSliceFileName = null;
-      compositionCount = 0;
+      sliceParts.clear();
+      compositeParts.clear();
       fileCount = 0;
       channel = null;
+      filePrefix = namePrefix + "-" + new Random().nextLong();
     }
 
     @Override
     public void beginSlice() throws IOException {
       cleanup();
-      if (compositionCount >= MAX_FILES_PER_COMPOSE) {
-        // Rename temp file (remove the _timestamp suffix).
-        compose(ImmutableList.of(previousSliceFileName), getFileName(fileCount++));
-        previousSliceFileName = null;
-        compositionCount = 0;
+      if (sliceParts.size() >= maxFilesPerCompose) {
+        String tempFile = generateTempFileName();
+        compose(sliceParts, tempFile);
+        compositeParts.add(tempFile);
+      }
+      if (compositeParts.size() * maxFilesPerCompose >= maxComponentsPerCompose) {
+        compose(compositeParts, getFileName(fileCount++));
       }
     }
 
     @Override
     public void write(ByteBuffer bytes) throws IOException {
       if (channel == null) {
-        GcsFilename sliceFile = new GcsFilename(bucket, getTempFileName());
+        GcsFilename sliceFile = new GcsFilename(bucket, generateTempFileName());
         channel = GCS_SERVICE.createOrReplace(sliceFile, FILE_OPTIONS);
       }
       while (bytes.hasRemaining()) {
@@ -174,56 +187,73 @@ public class GoogleCloudStorageMapOutputWriter<K, V>
     public void endSlice() throws IOException {
       if (channel != null) {
         channel.close();
-        String fileName = channel.getFilename().getObjectName();
-        if (previousSliceFileName != null) {
-          compose(ImmutableList.of(previousSliceFileName, fileName), fileName);
-          ++compositionCount;
-        } else {
-          compositionCount = 1;
-        }
-        previousSliceFileName = fileName;
+        sliceParts.add(channel.getFilename().getObjectName());
         channel = null;
       }
     }
 
-    private String getTempFileName() {
-      return String.format(TEMP_FILENAME_FORMAT, namePrefix, fileCount, new Date().getTime());
+    @Override
+    public void endShard() throws IOException {
+      String tempFile = generateTempFileName();
+      compose(sliceParts, tempFile);
+      compositeParts.add(tempFile);
+      compose(compositeParts, getFileName(fileCount++));
     }
 
-    private String getFileName(int idx) {
-      return String.format(FILENAME_FORMAT, namePrefix, idx);
-    }
-
-    private void compose(List<String> source, String dest) throws IOException {
-      if (source.size() == 1) {
-        GCS_SERVICE.copy(new GcsFilename(bucket, source.get(0)), new GcsFilename(bucket, dest));
-      } else {
-        GCS_SERVICE.compose(source, new GcsFilename(bucket, dest));
-      }
-      for (String name : source) {
-        if (!name.equals(dest)) {
-          toDelete.add(name);
+    private String generateTempFileName() {
+      while (true) {
+        String tempFileName = filePrefix + "-" + new Random().nextLong();
+        if (!sliceParts.contains(tempFileName) && !compositeParts.contains(tempFileName)) {
+          return tempFileName;
         }
       }
     }
 
-    private List<String> getFiles() {
-      List<String> files = new ArrayList<>(fileCount);
-      for (int i = 0; i < fileCount; i++) {
-        files.add(getFileName(i));
+    private String getFileName(int part) {
+      return filePrefix + "@" + part;
+    }
+
+    private void compose(Collection<String> source, String target) throws IOException {
+      GcsFilename targetFile = new GcsFilename(bucket, target);
+      if (source.size() == 1) {
+        GCS_SERVICE.copy(new GcsFilename(bucket, source.iterator().next()), targetFile);
+      } else {
+        GCS_SERVICE.compose(source, targetFile);
       }
-      if (previousSliceFileName != null) {
-        files.add(previousSliceFileName);
+      for (String name : source) {
+        if (!name.equals(target)) {
+          toDelete.add(name);
+        }
       }
-      return files;
+      source.clear();
+    }
+
+    private Iterable<String> getFiles() {
+      return new Iterable<String>() {
+        @Override public Iterator<String> iterator() {
+          return new AbstractIterator<String>() {
+            private int index = 0;
+
+            @Override
+            protected String computeNext() {
+              if (index < fileCount) {
+                return getFileName(index++);
+              }
+              return endOfData();
+            }
+          };
+        }
+      };
     }
 
     @Override
     public String toString() {
       return getClass().getSimpleName()
-          + " [bucket=" + bucket + ", namePrefix=" + namePrefix + ", toDelete=" + toDelete
-          + ", previousSliceFileName=" + previousSliceFileName
-          + ", compositionCount=" + compositionCount + ", fileCount= " + fileCount + "]";
+          + " [bucket=" + bucket + ", maxComponentsPerCompose=" + maxComponentsPerCompose
+          + ", maxFilesPerCompose=" + maxFilesPerCompose + ", namePrefix=" + namePrefix
+          + ", filePrefix=" + filePrefix + ", fileCount=" + fileCount
+          + ", toDelete=" + toDelete + ", sliceParts=" + sliceParts
+          + ", compositeParts=" + compositeParts + "]";
     }
   }
 }

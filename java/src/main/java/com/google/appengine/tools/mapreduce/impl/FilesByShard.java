@@ -3,6 +3,7 @@ package com.google.appengine.tools.mapreduce.impl;
 import com.google.appengine.tools.mapreduce.GoogleCloudStorageFileSet;
 import com.google.appengine.tools.mapreduce.impl.util.SplitUtil;
 import com.google.common.base.Preconditions;
+import com.google.common.collect.Iterables;
 
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -55,10 +56,10 @@ public final class FilesByShard implements Serializable {
         && Objects.equals(shardCount, other.shardCount);
   }
 
-  public void addFilesToShard(int shardNumber, List<String> newFiles) {
+  public void addFilesToShard(int shardNumber, Iterable<String> newFiles) {
     Preconditions.checkArgument(shardNumber < shardCount);
     List<String> fileNames = allFiles.get(shardNumber);
-    fileNames.addAll(newFiles);
+    Iterables.addAll(fileNames, newFiles);
   }
 
   public void addFileToShard(int shardNumber, String newFile) {
