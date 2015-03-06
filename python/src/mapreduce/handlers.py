@@ -520,6 +520,7 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
     """Handler should always call this as the last statement."""
     task_directive = self._set_state(shard_state, tstate, task_directive)
     self._save_state_and_schedule_next(shard_state, tstate, task_directive)
+    context.Context._set(None)
 
   def _process_inputs(self,
                       input_reader,
