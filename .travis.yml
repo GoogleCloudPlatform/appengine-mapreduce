@@ -17,3 +17,4 @@ after_success:
 - cd target/gh-pages
 - git add .
 - git commit -am "update javadoc"
+- git push
