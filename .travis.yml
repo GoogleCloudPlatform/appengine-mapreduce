@@ -4,7 +4,7 @@ jdk:
 before_install:
 - cd java
 - ant clean
-- git clone -q -c user.email="travis@travis-ci.org" -c user.name="travis-ci" -b gh-pages https://${GH_TOKEN}@github.com/GoogleCloudPlatform/appengine-mapreduce `target/gh-pages
+- git clone -q -c user.email="travis@travis-ci.org" -c user.name="travis-ci" -b gh-pages https://${GH_TOKEN}@github.com/GoogleCloudPlatform/appengine-mapreduce target/gh-pages
 install: ant compile
 script: ant test
 branches:
