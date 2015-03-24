@@ -1,0 +1,4 @@
+com.google.appengine.tools.mapreduce
+com.google.appengine.tools.mapreduce.inputs
+com.google.appengine.tools.mapreduce.outputs
+com.google.appengine.tools.mapreduce.reducers
