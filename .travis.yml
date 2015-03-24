@@ -1,0 +1,24 @@
+language: java
+jdk:
+- oraclejdk7
+
+before_install:
+- cd java
+- ant clean
+- git clone -b gh-pages `git config --get remote.origin.url` target/gh-pages
+
+install: ant dist
+
+script: ant test
+
+branches:
+  only:
+  - master
+
+after_success:
+- ant javadoc
+- rm target/gh-pages/javadoc/*
+- mv javadoc target/gh-pages
+- cd target/gh-pages
+- git add .
+- git commit -am "update javadoc"
