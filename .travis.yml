@@ -1,20 +1,15 @@
 language: java
 jdk:
 - oraclejdk7
-
 before_install:
 - cd java
 - ant clean
-- git clone -b gh-pages `git config --get remote.origin.url` target/gh-pages
-
-install: ant dist
-
+- git clone -q -c user.email="travis@travis-ci.org" -c user.name="travis-ci" -b gh-pages `git config --get remote.origin.url` target/gh-pages
+install: ant compile
 script: ant test
-
 branches:
   only:
   - master
-
 after_success:
 - ant javadoc
 - rm target/gh-pages/javadoc/*
