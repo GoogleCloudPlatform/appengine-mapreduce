@@ -12,6 +12,20 @@
   </organization>
   <version>0.9-SNAPSHOT</version>
   <packaging>jar</packaging>
+  <scm>
+    <connection>scm:git:git@github.com:GoogleCloudPlatform/appengine-mapreduce.git</connection>
+    <developerConnection>scm:git:git@github.com:GoogleCloudPlatform/appengine-mapreduce.git</developerConnection>
+    <url>https://github.com/GoogleCloudPlatform/appengine-mapreduce</url>
+    <tag>HEAD</tag>
+  </scm>
+  <ciManagement>
+    <system>Travis CI</system>
+    <url>https://travis-ci.org/GoogleCloudPlatform/appengine-mapreduce</url>
+  </ciManagement>
+  <issueManagement>
+    <url>https://github.com/GoogleCloudPlatform/appengine-mapreduce/issues</url>
+    <system>GitHub Issues</system>
+  </issueManagement>
   <licenses>
     <license>
       <name>The Apache Software License, Version 2.0</name>
@@ -20,6 +34,9 @@
   </licenses>
   <properties>
     <appengine.target.version>[1.9.15,2.0)</appengine.target.version>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+    <github.global.server>github</github.global.server>
   </properties>
   <build>
     <plugins>
@@ -75,7 +92,7 @@
       <plugin>
         <groupId>com.github.github</groupId>
         <artifactId>site-maven-plugin</artifactId>
-        <version>0.10</version>
+        <version>0.11</version>
         <configuration>
           <message>Creating site for ${project.artifactId} ${project.version}</message>
         </configuration>
