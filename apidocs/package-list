@@ -1,0 +1,15 @@
+com.google.appengine.tools.mapreduce
+com.google.appengine.tools.mapreduce.bigqueryjobs
+com.google.appengine.tools.mapreduce.impl
+com.google.appengine.tools.mapreduce.impl.handlers
+com.google.appengine.tools.mapreduce.impl.pipeline
+com.google.appengine.tools.mapreduce.impl.proto
+com.google.appengine.tools.mapreduce.impl.shardedjob
+com.google.appengine.tools.mapreduce.impl.shardedjob.pipeline
+com.google.appengine.tools.mapreduce.impl.sort
+com.google.appengine.tools.mapreduce.impl.util
+com.google.appengine.tools.mapreduce.inputs
+com.google.appengine.tools.mapreduce.mappers
+com.google.appengine.tools.mapreduce.outputs
+com.google.appengine.tools.mapreduce.reducers
+com.google.appengine.tools.mapreduce.servlets
