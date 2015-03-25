@@ -3,18 +3,17 @@ jdk:
 - oraclejdk7
 before_install:
 - cd java
-- ant clean
-- git clone -q -c user.email="travis@travis-ci.org" -c user.name="travis-ci" -b gh-pages https://${GH_TOKEN}@github.com/GoogleCloudPlatform/appengine-mapreduce target/gh-pages
-install: ant compile
-script: ant test
+- mvn clean
+- git clone -b travis `git config --get remote.origin.url` target/travis
+- cp target/travis/settings.xml ~/.m2/settings.xml
+install: mvn install
+script: mvn verify
 branches:
   only:
   - master
 after_success:
-- ant javadoc
-- rm target/gh-pages/javadoc/*
-- mv javadoc target/gh-pages
-- cd target/gh-pages
-- git add .
-- git commit -am "update javadoc"
-- git push
+- mvn site --settings target/travis/settings.xml
+env:
+  global:
+  - secure: DCU0tg/VgvF4Vln9wRslycxxaNZ+oPh2L3s0bMvheVZ8HLb3VoczY6CX9e75uHlLQqkXwYk1QtDTr2RkszYKJwnJgz7Zu7uAjHlM3KLXoGlDS9rIkX+S3EwMLcQcxBmU1jTmx8l9TzaHHGOSI245TBrwJ736l6UK2FKWmNb5f9A=
+  - secure: d1XtFIq0YtqzbNMT/HKL0k2HUYAbU5GmT+KGNEC0axmXApNTQBxgkz2t5KNJ348JI+uq1O1OLb17i6eE7VmyXJNiWET8/h6RpBgMdbKxgqZaK8YcZdKRJjxHDRtVkPlOv1U1jq/r0MLm91L6srIom+RpJ3XXk92bKiPXa5EugLE=
