@@ -444,25 +444,6 @@ class _HashingGCSOutputWriter(output_writers.OutputWriter):
           cls.BUCKET_NAME_PARAM)
 
   @classmethod
-  def finalize_job(cls, mapreduce_state):
-    """Finalize job-level writer state.
-
-    Args:
-      mapreduce_state: an instance of model.MapreduceState describing current
-        job. State can be modified during finalization.
-    """
-    shards = mapreduce_state.mapreduce_spec.mapper.shard_count
-    filenames = []
-    for _ in range(shards):
-      filenames.append([None] * shards)
-    shard_states = model.ShardState.find_all_by_mapreduce_state(mapreduce_state)
-    for x, shard_state in enumerate(shard_states):
-      shard_filenames = shard_state.writer_state["shard_filenames"]
-      for y in range(shards):
-        filenames[y][x] = shard_filenames[y]
-    mapreduce_state.writer_state = {"filenames": filenames}
-
-  @classmethod
   def from_json(cls, json):
     """Creates an instance of the OutputWriter for the given json state.
 
@@ -507,9 +488,16 @@ class _HashingGCSOutputWriter(output_writers.OutputWriter):
   @classmethod
   def get_filenames(cls, mapreduce_state):
     """See parent class."""
-    if mapreduce_state.writer_state:
-      return mapreduce_state.writer_state["filenames"]
-    return []
+    shards = mapreduce_state.mapreduce_spec.mapper.shard_count
+    filenames = []
+    for _ in range(shards):
+      filenames.append([None] * shards)
+    shard_states = model.ShardState.find_all_by_mapreduce_state(mapreduce_state)
+    for x, shard_state in enumerate(shard_states):
+      shard_filenames = shard_state.writer_state["shard_filenames"]
+      for y in range(shards):
+        filenames[y][x] = shard_filenames[y]
+    return filenames
 
   def finalize(self, ctx, shard_state):
     """See parent class."""
