@@ -655,17 +655,29 @@ class DatastoreInputReader(AbstractDatastoreInputReader):
 
     properties = model_class._properties
 
-    for f in filters:
-      prop, _, val = f
+
+    for idx, f in enumerate(filters):
+      prop, ineq, val = f
       if prop not in properties:
         raise errors.BadReaderParamsError(
             "Property %s is not defined for entity type %s",
-            prop, model_class._get_kind())
+            prop, model_class.kind())
+
+      # Attempt to cast the value to a KeyProperty if appropriate.
+      # This enables filtering against keys.
+      try:
+        if (isinstance(val, basestring) and
+            isinstance(properties[prop],
+              (ndb.KeyProperty, ndb.ComputedProperty))):
+          val = ndb.Key(urlsafe=val)
+          filters[idx] = [prop, ineq, val]
+      except:
+        pass
 
       # Validate the value of each filter. We need to know filters have
       # valid value to carry out splits.
       try:
-        properties[prop]._do_validate(val)
+        properties[prop].validate(val)
       except db.BadValueError, e:
         raise errors.BadReaderParamsError(e)
 
