@@ -121,6 +121,8 @@ class ReducePipeline(pipeline_base._OutputSlotsMixin,
     filenames from output writer.
   """
 
+  output_names = mapper_pipeline.MapperPipeline.output_names
+
   def run(self,
           job_name,
           reducer_spec,
@@ -187,6 +189,8 @@ class MapreducePipeline(pipeline_base._OutputSlotsMixin,
       was outputting files. An empty list otherwise.
   """
 
+  output_names = mapper_pipeline.MapperPipeline.output_names
+
   def run(self,
           job_name,
           mapper_spec,
@@ -234,6 +238,8 @@ class MapreducePipeline(pipeline_base._OutputSlotsMixin,
 
     yield _ReturnPipeline(map_pipeline.result_status,
                           reducer_pipeline.result_status,
+                          reducer_pipeline.counters,
+                          reducer_pipeline.job_id,
                           reducer_pipeline)
 
 
@@ -244,11 +250,13 @@ class _ReturnPipeline(pipeline_base._OutputSlotsMixin,
   Fills outputs for MapreducePipeline. See MapreducePipeline.
   """
 
-  output_names = ["result_status"]
+  output_names = mapper_pipeline.MapperPipeline.output_names
 
   def run(self,
           map_result_status,
           reduce_result_status,
+          reduce_counters,
+          job_id,
           reduce_outputs):
 
     if (map_result_status == model.MapreduceState.RESULT_ABORTED or
@@ -261,6 +269,8 @@ class _ReturnPipeline(pipeline_base._OutputSlotsMixin,
       result_status = model.MapreduceState.RESULT_SUCCESS
 
     self.fill(self.outputs.result_status, result_status)
+    self.fill(self.outputs.counters, reduce_counters)
+    self.fill(self.outputs.job_id, job_id)
     if result_status == model.MapreduceState.RESULT_SUCCESS:
       yield pipeline_common.Return(reduce_outputs)
     else:
