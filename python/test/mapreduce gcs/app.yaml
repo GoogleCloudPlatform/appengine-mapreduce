@@ -1,5 +1,5 @@
-application: your-app-id
-version: 1
+application: cloud-support-telus-test
+version: ryanfilesapi
 runtime: python27
 api_version: 1
 threadsafe: false

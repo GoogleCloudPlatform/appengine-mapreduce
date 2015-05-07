@@ -37,9 +37,9 @@ __all__ = [
     "InputReader",
     "LogInputReader",
     "NamespaceInputReader",
-	"GoogleCloudStorageLineInputReader",
-	"GoogleCloudStorageZipInputReader",
-	"GoogleCloudStorageZipLineInputReader"
+	  "GoogleCloudStorageLineInputReader",
+	  "GoogleCloudStorageZipInputReader",
+	  "GoogleCloudStorageZipLineInputReader"
     ]
 
 # pylint: disable=g-bad-name
@@ -353,7 +353,7 @@ class AbstractDatastoreInputReader(InputReader):
           query_spec.app, [query_spec.ns], shard_count, query_spec)
     else:
       ns_keys = namespace_range.get_namespace_keys(
-          query_spec.app, cls.MAX_NAMESPACES_FOR_KEY_SHARD+1)
+          query_spec.app, cls.MAX_NAMESPACES_FOR_KEY_SHARD + 1)
       # No namespace means the app may have some data but those data are not
       # visible yet. Just return.
       if not ns_keys:
@@ -483,7 +483,7 @@ class AbstractDatastoreInputReader(InputReader):
     for i in range(0, len(random_keys) - 1):
       k_ranges.append(key_range.KeyRange(
           key_start=random_keys[i],
-          key_end=random_keys[i+1],
+          key_end=random_keys[i + 1],
           direction=key_range.KeyRange.ASC,
           include_start=True,
           include_end=False,
@@ -708,7 +708,7 @@ class DatastoreInputReader(AbstractDatastoreInputReader):
       ns_ranges = [copy.copy(ns_range) for _ in p_ranges]
     else:
       ns_keys = namespace_range.get_namespace_keys(
-          query_spec.app, cls.MAX_NAMESPACES_FOR_KEY_SHARD+1)
+          query_spec.app, cls.MAX_NAMESPACES_FOR_KEY_SHARD + 1)
       if not ns_keys:
         return
       # User doesn't specify ns but the number of ns is small.
@@ -984,7 +984,7 @@ class _OldAbstractDatastoreInputReader(InputReader):
     for i in range(0, len(random_keys) - 1):
       key_ranges.append(key_range.KeyRange(
           key_start=random_keys[i],
-          key_end=random_keys[i+1],
+          key_end=random_keys[i + 1],
           direction=key_range.KeyRange.ASC,
           include_start=True,
           include_end=False,
@@ -1123,7 +1123,7 @@ class _OldAbstractDatastoreInputReader(InputReader):
                                         keys_only=True,
                                         _app=app)
       namespace_keys = namespace_query.Get(
-          limit=cls.MAX_NAMESPACES_FOR_KEY_SHARD+1)
+          limit=cls.MAX_NAMESPACES_FOR_KEY_SHARD + 1)
 
       if len(namespace_keys) > cls.MAX_NAMESPACES_FOR_KEY_SHARD:
         ns_ranges = namespace_range.NamespaceRange.split(n=shard_count,
@@ -1829,7 +1829,7 @@ class RandomStringInputReader(InputReader):
     mr_input_readers = [
         cls(count_per_shard, string_length) for _ in range(shard_count)]
 
-    left = count - count_per_shard*shard_count
+    left = count - count_per_shard * shard_count
     if left > 0:
       mr_input_readers.append(cls(left, string_length))
 
@@ -2469,7 +2469,7 @@ class _GoogleCloudStorageInputReader(InputReader):
     num_files = len(self._filenames)
     if num_files > self._STRING_MAX_FILES_LISTED:
       names = "%s...%s + %d not shown" % (
-          ",".join(self._filenames[0:self._STRING_MAX_FILES_LISTED-1]),
+          ",".join(self._filenames[0:self._STRING_MAX_FILES_LISTED - 1]),
           self._filenames[-1],
           num_files - self._STRING_MAX_FILES_LISTED)
     else:
@@ -2663,7 +2663,7 @@ class _ReducerReader(_GoogleCloudStorageRecordInputReader):
     result.current_values = _ReducerReader.decode_data(json["current_values"])
     return result
 
-
+# pylint: disable=too-many-instance-attributes
 class GoogleCloudStorageLineInputReader(InputReader):
   """Input reader for a newline delimited file in Google Cloud Storage.
   Required configuration in the mapper_spec.input_reader dictionary.
@@ -2707,7 +2707,7 @@ class GoogleCloudStorageLineInputReader(InputReader):
   # Serialization parameters.
   INITIAL_POSITION_PARAM = "initial_position"
   END_POSITION_PARAM = "end_position"
-  
+
   @classmethod
   def validate(cls, mapper_spec):
     """Validates mapper spec and all mapper parameters.
@@ -2750,6 +2750,7 @@ class GoogleCloudStorageLineInputReader(InputReader):
         "%s is not a string but a %s" %
         (cls.DELIMITER_PARAM, type(delimiter)))
 
+  # pylint: disable=too-many-locals
   @classmethod
   def split_input(cls, mapper_spec):
     """Returns a list of shard_count input_spec_shards for input_spec.
@@ -2759,7 +2760,6 @@ class GoogleCloudStorageLineInputReader(InputReader):
     Returns:
       A list of GCSInputReaders corresponding to the specified shards.
     """
-
     reader_spec = _get_params(mapper_spec, allow_old=False)
     bucket = reader_spec[cls.BUCKET_NAME_PARAM]
     filenames = reader_spec[cls.OBJECT_NAMES_PARAM]
@@ -2776,7 +2776,8 @@ class GoogleCloudStorageLineInputReader(InputReader):
                _account_id=account_id)])
       else:
         try:
-          all_filenames.append(cloudstorage.stat(("/%s/%s") % (bucket, filename)))
+          all_filenames.append(cloudstorage
+                               .stat(("/%s/%s") % (bucket, filename)))
         except cloudstorage.NotFoundError:
           logging.warning("File /%s/%s may have been removed. Skipping file.",
             bucket, filename)
@@ -2808,7 +2809,6 @@ class GoogleCloudStorageLineInputReader(InputReader):
          cls.BUFFER_SIZE_PARAM : buffer_size,
          cls.DELIMITER_PARAM: delimiter,
          cls._ACCOUNT_ID_PARAM : account_id}))
-
     return chunks
 
   def to_json(self):
@@ -2832,19 +2832,21 @@ class GoogleCloudStorageLineInputReader(InputReader):
            json[cls.INITIAL_POSITION_PARAM],
            json[cls.END_POSITION_PARAM])
 
+  # pylint: disable=too-many-arguments
   def __init__(self, file_name, start_position, end_position,
                buffer_size=None, delimiter=None, account_id=None):
     """Initializes this instance with the given file name and character range.
-    This GoogleCloudStorageLineInputReader will read from the first record starting
-    strictly after start_position until the first record ending at or after
-    end_position (exclusive). As an exception, if start_position is 0, then
-    this InputReader starts reading at the first record.
+    This GoogleCloudStorageLineInputReader will read from the first record
+    starting strictly after start_position until the first record ending at or
+    after end_position (exclusive). As an exception, if start_position is 0,
+    then this InputReader starts reading at the first record.
     Args:
       file_name: the file name that this input reader is processing.
       start_position: the position to start reading at.
       end_position: a position in the last record to read.
       buffer_size: Used by the GCS reader to read data.
-      delimiter: The delimiter is used as a path separator to designate directory hierarchy.
+      delimiter: The delimiter is used as a path separator to designate
+      directory hierarchy.
       account_id: internal use
     """
     self._file_name = file_name
@@ -2858,6 +2860,7 @@ class GoogleCloudStorageLineInputReader(InputReader):
     if self._account_id:
       options["_account_id"] = self._account_id
     try:
+      # pylint: disable=star-args
       self._file_reader = cloudstorage.open(file_name, **options)
       self._file_reader.seek(start_position)
     except cloudstorage.NotFoundError:
@@ -2893,7 +2896,8 @@ class GoogleCloudStorageZipInputReader(InputReader):
   bucket_name : name of the bucket to use (with no extra delimiters or
     suffixed such as directories.
   objects : a list of object names or prefixes. All objects must be
-    in the bucket_name. They all must be zip files. If the name ends with a * it will be
+    in the bucket_name. They all must be zip files. If the name ends with
+      a * it will be
     treated as prefix and all objects with matching names will be read.
     Entries should not start with a slash unless that is part of the object's
     name. An example list could be:
@@ -3000,10 +3004,11 @@ class GoogleCloudStorageZipInputReader(InputReader):
         self.END_INDEX_PARAM: self._end_index}
 
   def __str__(self):
-    """Returns the string representation of this GoogleCloudStorageZipInputReader."""
+    """Returns the string representation of this GCSZipInputReader."""
     return "File Name(%r):[%d, %d]" % (
       self._file_name, self._start_index, self._end_index)
 
+  # pylint: disable=too-many-locals
   @classmethod
   def split_input(cls, mapper_spec):
     """Returns a list of shard_count input_spec_shards for input_spec.
@@ -3031,7 +3036,8 @@ class GoogleCloudStorageZipInputReader(InputReader):
                _account_id=account_id)])
       else:
         try:
-          all_filenames.append(cloudstorage.stat(("/%s/%s") % (bucket, filename)))
+          all_filenames.append(cloudstorage
+                               .stat(("/%s/%s") % (bucket, filename)))
         except cloudstorage.NotFoundError:
           logging.warning("File /%s/%s may have been removed. Skipping file.",
             bucket, filename)
@@ -3065,20 +3071,23 @@ class GoogleCloudStorageZipInputReader(InputReader):
         next_file_index += 1
         current_shard_size += fileinfo.file_size
         if current_shard_size >= size_per_shard:
-          readers.append(cls(file_name.filename, start_file_index, next_file_index,
-                             buffer_size=buffer_size, delimiter=delimiter, account_id=account_id))
+          readers.append(cls(file_name.filename, start_file_index,
+                             next_file_index, buffer_size=buffer_size,
+                             delimiter=delimiter, account_id=account_id))
           current_shard_size = 0
           start_file_index = next_file_index
       if current_shard_size != 0:
-        readers.append(cls(file_name.filename, start_file_index, next_file_index,
-                           buffer_size=buffer_size, delimiter=delimiter, account_id=account_id))
+        readers.append(cls(file_name.filename, start_file_index,
+                           next_file_index, buffer_size=buffer_size,
+                           delimiter=delimiter, account_id=account_id))
     return readers
 
+  # pylint: disable=too-many-arguments
   def __init__(self, file_name, start_index, end_index,
                buffer_size=None, delimiter=None, account_id=None):
     """Initializes this instance with the given file and file range.
 
-    This GoogleCloudStorageZipInputReader will read from the file with index start_index
+    This GCSZipInputReader will read from the file with index start_index
     up to but not including the file with index end_index.
 
     Args:
@@ -3086,7 +3095,8 @@ class GoogleCloudStorageZipInputReader(InputReader):
       start_index: the index of the first file to read.
       end_index: the index of the first file that will not be read.
       buffer_size: Used by the GCS reader to read data.
-      delimiter: The delimiter is used as a path separator to designate directory hierarchy.
+      delimiter: The delimiter is used as a path separator to designate
+        directory hierarchy.
       account_id: internal use
     """
     self._file_name = file_name
@@ -3101,6 +3111,7 @@ class GoogleCloudStorageZipInputReader(InputReader):
     if self._account_id:
       options["_account_id"] = self._account_id
     try:
+      # pylint: disable=star-args
       self._reader = cloudstorage.open(file_name, **options)
     except cloudstorage.NotFoundError:
       logging.warning("File /%s may have been removed. Skipping file.",
@@ -3114,7 +3125,8 @@ class GoogleCloudStorageZipInputReader(InputReader):
 
     Returns:
       The next input from this input reader, in the form of a 2-tuple.
-      The first element of the tuple is another tuple (Zip file name, text file name).
+      The first element of the tuple is another tuple (Zip file name,
+        text file name).
       The second element of the tuple complete body of the file.
     """
     if not self._zip:
@@ -3126,8 +3138,8 @@ class GoogleCloudStorageZipInputReader(InputReader):
       raise StopIteration()
     entry = self._entries.pop()
     self._start_index += 1
-    return ((self._file_name, self._zip.infolist()[self._start_index - 1].filename),
-             self._read(entry))
+    return (((self._file_name, self._zip.infolist()[self._start_index - 1]
+              .filename)), self._read(entry))
 
   def _read(self, entry):
     """Read entry content.
@@ -3152,8 +3164,8 @@ class GoogleCloudStorageZipInputReader(InputReader):
 class GoogleCloudStorageZipLineInputReader(InputReader):
   """Input reader for newline delimited files in zip archives from GCS.
 
-  This has the same external interface as the GoogleCloudStorageZipInputReader, in that
-  it takes a list of files as its input and yields lines to the reader.
+  This has the same external interface as the GoogleCloudStorageZipInputReader,
+  in that it takes a list of files as its input and yields lines to the reader.
   However the files themselves are expected to be zip archives of line delimited
   files instead of the files themselves.
 
@@ -3163,10 +3175,10 @@ class GoogleCloudStorageZipLineInputReader(InputReader):
   bucket_name : name of the bucket to use (with no extra delimiters or
     suffixed such as directories.
   objects : a list of object names or prefixes. All objects must be
-    in the bucket_name. They all must be zip files. If the name ends with a * it will be
-    treated as prefix and all objects with matching names will be read.
-    Entries should not start with a slash unless that is part of the object's
-    name. An example list could be:
+    in the bucket_name. They all must be zip files. If the name ends with
+    a * it will be treated as prefix and all objects with matching names will
+    be read. Entries should not start with a slash unless that is part of the
+    object's name. An example list could be:
     ["my-1st-input-file", "directory/my-2nd-file", "some/other/dir/input-*"]
     To retrieve all files "*" will match every object in the bucket. If a file
     is listed twice or is covered by multiple prefixes it will be read twice,
@@ -3289,6 +3301,7 @@ class GoogleCloudStorageZipLineInputReader(InputReader):
       self._file_name, self._start_file_index, self._end_file_index,
       self._next_offset())
 
+  #pylint: disable=too-many-locals
   @classmethod
   def split_input(cls, mapper_spec):
     """Returns a list of shard_count input_spec_shards for input_spec.
@@ -3317,7 +3330,8 @@ class GoogleCloudStorageZipLineInputReader(InputReader):
                _account_id=account_id)])
       else:
         try:
-          all_filenames.append(cloudstorage.stat(("/%s/%s") % (bucket, filename)))
+          all_filenames.append(cloudstorage.stat(("/%s/%s") % 
+                                                 (bucket, filename)))
         except cloudstorage.NotFoundError:
           logging.warning("File /%s/%s may have been removed. Skipping file.",
             bucket, filename)
@@ -3417,6 +3431,7 @@ class GoogleCloudStorageZipLineInputReader(InputReader):
 
     return offset
 
+  #pylint: disable=too-many-arguments
   def __init__(self, file_name, start_file_index, end_file_index, offset=0,
                buffer_size=None, delimiter=None, account_id=None):
     """Initializes this instance with the given file name and file range.
@@ -3445,6 +3460,7 @@ class GoogleCloudStorageZipLineInputReader(InputReader):
     if self._account_id:
       options["_account_id"] = self._account_id
     try:
+      #pylint: disable=star-args
       self._reader = cloudstorage.open(file_name, **options)
     except cloudstorage.NotFoundError:
       logging.warning("File /%s may have been removed. Skipping file.",

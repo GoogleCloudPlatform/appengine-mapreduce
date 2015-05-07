@@ -36,6 +36,7 @@ from google.appengine.ext.webapp import blobstore_handlers
 
 BUCKET_NAME = app_identity.get_default_gcs_bucket_name()
 WORK_FOLDER = "/MR-GCS-Tests"
+OUTPUT_FOLDER = "MR-GCS-Tests/Results/"
 FILE_PATH = "/" + BUCKET_NAME + WORK_FOLDER + "/Test.txt"
 ZIP_PATH = "/" + BUCKET_NAME + WORK_FOLDER + "/Test.zip"
 STRESS_TEST_PATH = "/" + BUCKET_NAME + WORK_FOLDER + "/Stress.txt"
@@ -83,7 +84,7 @@ class MainPage(webapp2.RequestHandler):
       number_of_chars = len(base_list)
     number_of_files_per_zip = int(self.request.get("files_per_zip", 5))
     number_of_zip_files = int(self.request.get("number_zips", 5))
-
+    sort_output = self.request.get("sort", "True") == "True"
     number_of_stress_files = int(self.request.get("stress_size", 1))
     job = self.request.get("job")
     email = self.request.get("email", None)
@@ -95,12 +96,13 @@ class MainPage(webapp2.RequestHandler):
 
     if "FileTest" == job:
       logging.info("Creating test file")
-      with cloudstorage.open(FILE_PATH, "w") as gcs:
+      with cloudstorage.open(FILE_PATH, "w", content_type="text/plain") as gcs:
         gcs.write(fill_file(list_of_chars))
-
-      pipeline = Mapreduce("FileTest", FILE_PATH, "File.txt",
+      
+      destination = "File.txt"
+      pipeline = Mapreduce("FileTest", FILE_PATH, destination,
                   "mapreduce.input_readers.GoogleCloudStorageLineInputReader",
-                  number_of_shards, email=email, base_url=self.request.url)
+                  number_of_shards, email=email, base_url=self.request.url, sort_output=sort_output)
       pipeline.start()
       blob_output += "<p><A HREF='/blobstore/" + \
                         blobstore.create_gs_key("/gs" + FILE_PATH) + \
@@ -110,7 +112,7 @@ class MainPage(webapp2.RequestHandler):
     if "ZipTestWhole" == job or "ZipTestLine" == job:
       logging.info("Creating test zip")
       for _ in range(number_of_zip_files):
-        with cloudstorage.open(ZIP_PATH, "w") as gcs_file:
+        with cloudstorage.open(ZIP_PATH, "w", content_type="text/plain") as gcs_file:
           with zipfile.ZipFile(gcs_file, 'w') as zipit:
             for i in range(number_of_files_per_zip):
               file_name = "test_file_%i.txt" % i
@@ -119,9 +121,11 @@ class MainPage(webapp2.RequestHandler):
       blob_output += "<p><A HREF='/blobstore/" + \
                       blobstore.create_gs_key("/gs" + ZIP_PATH) + "/Zip.zip'>Zip Check</A></p>"
       if "ZipTestWhole" == job:
-        pipeline = Mapreduce("Zip Input", ZIP_PATH, "ZipFile.txt",
+        destination = "ZipFile.txt"
+        pipeline = Mapreduce("Zip Input", ZIP_PATH, destination,
                              "mapreduce.input_readers.GoogleCloudStorageZipInputReader",
-                             number_of_shards, email=email, base_url=self.request.url)
+                             number_of_shards, email=email, base_url=self.request.url,
+                             sort_output=sort_output)
         pipeline.start()
 
         pipe_output += "<p><A HREF='" + pipeline.base_path \
@@ -129,9 +133,11 @@ class MainPage(webapp2.RequestHandler):
                       + "' target='_blank'>MR Watch Zip Input</A></p>"
 
       if "ZipTestLine" == job:
-        pipeline = Mapreduce("Zip Line", ZIP_PATH, "ZipLine.txt",
+        destination = "ZipLine.txt"
+        pipeline = Mapreduce("Zip Line", ZIP_PATH, destination,
                              "mapreduce.input_readers.GoogleCloudStorageZipLineInputReader",
-                             number_of_shards, email=email, base_url=self.request.url)
+                             number_of_shards, email=email, base_url=self.request.url,
+                             sort_output=sort_output)
         pipeline.start()
         pipe_output += "<p><A HREF='" + pipeline.base_path\
                        + "/status?root=" + pipeline.pipeline_id\
@@ -139,14 +145,15 @@ class MainPage(webapp2.RequestHandler):
 
     if "StressTest" == job:
       logging.info("Creating stress test file")
-      with cloudstorage.open(STRESS_TEST_PATH, "w") as gcs:
+      with cloudstorage.open(STRESS_TEST_PATH, "w", content_type="text/plain") as gcs:
         for _ in range(1024):
           gcs.write("\r\n"*1024)
       blob_output += "<p><A HREF='/blobstore/" + \
                     blobstore.create_gs_key("/gs" + STRESS_TEST_PATH)\
                      + "/Stress_File.txt'>Stress File Check</A></p>"
       pipeline = MapperOutputWriterStressTest(number_of_stress_files,
-                                              email=email, base_url=self.request.url)
+                                              email=email, base_url=self.request.url,
+                                              sort_output=sort_output)
       pipeline.start()
       pipe_output += "</p><A HREF='" + pipeline.base_path + "/status?root=" \
                     + pipeline.pipeline_id + "' target='_blank'>MR Stress Test</A>"
@@ -185,7 +192,7 @@ class Mapreduce(base_handler.PipelineBase):
   """
   # pylint: disable=arguments-differ, unused-argument, too-many-arguments
   def run(self, title, source_file, dest_file, op_type,
-          number_of_shards, email=None, base_url=None):
+          number_of_shards, email=None, base_url=None, sort_output=True):
     """
     Run for the general Mapreduce
     Args:
@@ -211,7 +218,9 @@ class Mapreduce(base_handler.PipelineBase):
                            },
                        },
       reducer_params={"output_writer" : {"bucket_name" : BUCKET_NAME,
-                                           "naming_format" : "MR-GCS-Tests/Results/" + dest_file}
+                                           "naming_format" : OUTPUT_FOLDER + dest_file,
+                                           "sort_output" : sort_output,
+                                           "content_type" : "text/plain"}
                         },
       shards=number_of_shards)
     yield DisplayOutputRaw(output)
@@ -223,7 +232,7 @@ class Mapreduce(base_handler.PipelineBase):
 class MapperOutputWriterStressTest(base_handler.PipelineBase):
   """ Stress test for output writer """
   # pylint: disable=arguments-differ, unused-argument
-  def run(self, number_of_stress_files=1, email=None, base_url=None):
+  def run(self, number_of_stress_files=1, email=None, base_url=None, sort_output=True):
     """
     Based of selection will generate a number of gigs of output to make
       sure the output writer can handle large outputs
@@ -243,7 +252,9 @@ class MapperOutputWriterStressTest(base_handler.PipelineBase):
                                          * number_of_stress_files
                            },
                 "output_writer" : {"bucket_name" : BUCKET_NAME,
-                                    "naming_format" : "MR-GCS-Tests/Results/Stress.txt"}
+                                    "naming_format" : OUTPUT_FOLDER + "Stress.txt",
+                                    "sort_output" : sort_output,
+                                    "content_type" : "text/plain"}
                        },
       shards=200)
 

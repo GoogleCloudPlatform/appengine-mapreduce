@@ -2,3 +2,4 @@ MANIFEST
 *.pyc
 .project
 .pydevproject
+.settings

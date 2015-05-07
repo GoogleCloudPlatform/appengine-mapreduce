@@ -15,9 +15,11 @@
     	<input type="radio" checked=True name="job" value="FileTest">File GCSLineInputReader<br>
     	<input type="radio" name="job" value="ZipTestWhole">File GCSZipInputReader<br>
     	<input type="radio" name="job" value="ZipTestLine">File GCSZipLineInputReader<br>
-    	Number of letters: <input type="text" name="num_letters" id="num_letters" class="pos_int" value=26><br/>
+    	Number of letters: <input type="text" name="num_letters" id="num_letters" class="pos_int" value=25><br/>
     	Repeat factor for letters: <input type="text" name="repeat_factor" id="repeat_factor" class="pos_int" value=50><br/>
-    	
+    	Sort Results:
+    	<input type="radio" checked=True name="sort" value="True">Yes
+		<input type="radio" name="sort" value="False">No<br>
     	Number of files per zip: <input type="text" name="files_per_zip" id="files_per_zip" class="pos_int" value=10><br/>
     	Number of zip files: <input type="text" name="number_zips" id="number_zips" class="pos_int" value=5><br/>
     	
@@ -30,6 +32,7 @@
   	</FORM>
   	{{pipe_output|safe}}
   	{{blob_output|safe}}
+  	
   	{% if messsage != "" %}
   		{% for msg in messsage %}
   	<DIV>{{ msg|safe }}</DIV>
