@@ -9,19 +9,16 @@ handlers:
   static_files: static/images/favicon.ico
   upload: static/images/favicon.ico
 
-- url: /mapreduce/pipeline/images
-  static_dir: mapreduce/lib/pipeline/ui/images
-
 - url: /static/js/custom.js
   static_files: static/js/custom.js
   upload: static/js/custom.js
 
-- url: /mapreduce(/.*)?
-  script: mapreduce.main.APP
-
 - url: .*
   script: main.app
   login: required
+
+includes:
+- mapreduce/include.yaml
 
 libraries:
 - name: webapp2
