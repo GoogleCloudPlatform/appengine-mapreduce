@@ -615,24 +615,24 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
       handler = transient_shard_state.handler
 
       if isinstance(handler, map_job.Mapper):
-        handler(self.slice_context, data)
+        result = handler(self.slice_context, data)
       else:
         if input_reader.expand_parameters:
           result = handler(*data)
         else:
           result = handler(data)
 
-        if util.is_generator(result):
-          for output in result:
-            if isinstance(output, operation.Operation):
-              output(ctx)
+      if util.is_generator(result):
+        for output in result:
+          if isinstance(output, operation.Operation):
+            output(ctx)
+          else:
+            output_writer = transient_shard_state.output_writer
+            if not output_writer:
+              logging.warning(
+                  "Handler yielded %s, but no output writer is set.", output)
             else:
-              output_writer = transient_shard_state.output_writer
-              if not output_writer:
-                logging.warning(
-                    "Handler yielded %s, but no output writer is set.", output)
-              else:
-                output_writer.write(output)
+              output_writer.write(output)
 
     if self._time() - self._start_time >= parameters.config._SLICE_DURATION_SEC:
       return False
