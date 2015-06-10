@@ -83,7 +83,7 @@ class MapreduceYamlTest(unittest.TestCase):
     self.set_up_directory_tree(test_dict)
     os.chdir(os.path.dirname(test_mapreduce_yaml))
     yaml_loc = status.find_mapreduce_yaml(status_file=test_status)
-    self.assertEqual(test_mapreduce_yaml, yaml_loc)
+    self.assertTrue(os.path.samefile(test_mapreduce_yaml, yaml_loc))
 
   def testFindYamlFileSameTree(self):
     """Test if mapreduce.yaml can be found with the same app/library tree."""
