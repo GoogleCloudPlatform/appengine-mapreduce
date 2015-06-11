@@ -661,7 +661,7 @@ class DatastoreInputReader(AbstractDatastoreInputReader):
       if prop not in properties:
         raise errors.BadReaderParamsError(
             "Property %s is not defined for entity type %s",
-            prop, model_class.kind())
+            prop, model_class._get_kind())
 
       # Attempt to cast the value to a KeyProperty if appropriate.
       # This enables filtering against keys.
