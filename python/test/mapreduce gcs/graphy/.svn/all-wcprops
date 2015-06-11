@@ -1,0 +1,89 @@
+K 25
+svn:wc:ra_dav:version-url
+V 39
+/svn/!svn/ver/75/tags/graphy_1.0/graphy
+END
+line_chart.py
+K 25
+svn:wc:ra_dav:version-url
+V 53
+/svn/!svn/ver/75/tags/graphy_1.0/graphy/line_chart.py
+END
+common.py
+K 25
+svn:wc:ra_dav:version-url
+V 49
+/svn/!svn/ver/75/tags/graphy_1.0/graphy/common.py
+END
+graphy_test.py
+K 25
+svn:wc:ra_dav:version-url
+V 54
+/svn/!svn/ver/75/tags/graphy_1.0/graphy/graphy_test.py
+END
+all_tests.py
+K 25
+svn:wc:ra_dav:version-url
+V 52
+/svn/!svn/ver/75/tags/graphy_1.0/graphy/all_tests.py
+END
+pie_chart_test.py
+K 25
+svn:wc:ra_dav:version-url
+V 57
+/svn/!svn/ver/75/tags/graphy_1.0/graphy/pie_chart_test.py
+END
+util.py
+K 25
+svn:wc:ra_dav:version-url
+V 47
+/svn/!svn/ver/75/tags/graphy_1.0/graphy/util.py
+END
+pie_chart.py
+K 25
+svn:wc:ra_dav:version-url
+V 52
+/svn/!svn/ver/75/tags/graphy_1.0/graphy/pie_chart.py
+END
+__init__.py
+K 25
+svn:wc:ra_dav:version-url
+V 51
+/svn/!svn/ver/75/tags/graphy_1.0/graphy/__init__.py
+END
+bar_chart_test.py
+K 25
+svn:wc:ra_dav:version-url
+V 57
+/svn/!svn/ver/75/tags/graphy_1.0/graphy/bar_chart_test.py
+END
+bar_chart.py
+K 25
+svn:wc:ra_dav:version-url
+V 52
+/svn/!svn/ver/75/tags/graphy_1.0/graphy/bar_chart.py
+END
+formatters_test.py
+K 25
+svn:wc:ra_dav:version-url
+V 58
+/svn/!svn/ver/75/tags/graphy_1.0/graphy/formatters_test.py
+END
+formatters.py
+K 25
+svn:wc:ra_dav:version-url
+V 53
+/svn/!svn/ver/75/tags/graphy_1.0/graphy/formatters.py
+END
+common_test.py
+K 25
+svn:wc:ra_dav:version-url
+V 54
+/svn/!svn/ver/75/tags/graphy_1.0/graphy/common_test.py
+END
+line_chart_test.py
+K 25
+svn:wc:ra_dav:version-url
+V 58
+/svn/!svn/ver/75/tags/graphy_1.0/graphy/line_chart_test.py
+END

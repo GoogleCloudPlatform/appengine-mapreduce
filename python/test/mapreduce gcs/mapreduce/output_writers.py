@@ -28,10 +28,11 @@ __all__ = [
     "COUNTER_IO_WRITE_BYTES",
     "COUNTER_IO_WRITE_MSEC",
     "OutputWriter",
-    "GCSRecordsPool",
+    "GCSRecordsPool"
 	  "GoogleCloudStorageMergedOutputWriter"
     ]
 
+# pylint: disable=g-bad-name
 # pylint: disable=protected-access
 
 import cStringIO
@@ -52,17 +53,16 @@ from mapreduce import operation
 from mapreduce import records
 from mapreduce import shard_life_cycle
 
+# pylint: disable=g-import-not-at-top
 # TODO(user): Cleanup imports if/when cloudstorage becomes part of runtime.
 try:
   # Check if the full cloudstorage package exists. The stub part is in runtime.
-  # pylint: disable=invalid-name
   cloudstorage = None
   import cloudstorage
   if hasattr(cloudstorage, "_STUB"):
     cloudstorage = None
   # "if" is needed because apphosting/ext/datastore_admin:main_test fails.
   if cloudstorage:
-    # pylint: disable=import-error
     from cloudstorage import cloudstorage_api
     from cloudstorage import errors as cloud_errors
 except ImportError:
@@ -75,13 +75,13 @@ if cloudstorage is None:
     from cloudstorage import cloudstorage_api
   except ImportError:
     pass  # CloudStorage library really not available
-
-# Checks if the cloud storage library has the compose function,
-  # otherwise it imports the stub
-# pylint: disable=import-error
+  
+# Checks if the cloud storage library has the compose function, 
+  #otherwise it imports the stub
 if hasattr(cloudstorage, "compose"):
   from cloudstorage import compose
 else:
+  # pylint: disable=redefinition
   from mapreduce.cloudstorage_compose_stub import compose
 
 
@@ -289,10 +289,10 @@ class OutputWriter(json_util.JsonMixin):
 
 
 # Flush size for files api write requests. Approximately one block of data.
-_FILE_POOL_FLUSH_SIZE = 128 * 1024
+_FILE_POOL_FLUSH_SIZE = 128*1024
 
 # Maximum size of files api request. Slightly less than 1M.
-_FILE_POOL_MAX_SIZE = 1000 * 1024
+_FILE_POOL_MAX_SIZE = 1000*1024
 
 
 def _get_params(mapper_spec, allowed_keys=None, allow_old=True):
@@ -372,7 +372,7 @@ class _RecordsPoolBase(context.Pool):
 
     if not self._exclusive and data_length > _FILE_POOL_MAX_SIZE:
       raise errors.Error(
-          "Too big input %s (%s)." % (data_length, _FILE_POOL_MAX_SIZE))
+          "Too big input %s (%s)."  % (data_length, _FILE_POOL_MAX_SIZE))
     else:
       self._buffer.append(data)
       self._size += data_length
@@ -1168,7 +1168,6 @@ class _GoogleCloudStorageKeyValueOutputWriter(
     proto.set_value(value)
     GoogleCloudStorageRecordOutputWriter.write(self, proto.Encode())
 
-
 class GoogleCloudStorageMergedOutputWriter(
         GoogleCloudStorageConsistentOutputWriter):
   """Output writer to Google Cloud Storage using the cloudstorage library.
@@ -1176,7 +1175,7 @@ class GoogleCloudStorageMergedOutputWriter(
   Extends the GoogleCloudStorageConsistentOutputWriter to merge all the
     outputs from the shards into a single file.
   """
-  SORT_OUTPUT_PARAM = 'sort_output'
+  SORT_OUTPUT_PARAM = "sort_output"
 
   @classmethod
   def validate(cls, mapper_spec):
@@ -1224,13 +1223,13 @@ class GoogleCloudStorageMergedOutputWriter(
       try:
         # Checks if the first file has been deleted.
           # If it has it will skip the merge
-        with cloudstorage.open(file_names[0], 'r'):
+        with cloudstorage.open(file_names[0], "r"):
           pass
         if (mapreduce_state.mapreduce_spec.mapper.params['output_writer']
             .get(cls.SORT_OUTPUT_PARAM, True)):
           # pylint: disable=bad-builtin
           files = map(cloudstorage.open, file_names)
-          with cloudstorage.open(output_file_name, 'w',
+          with cloudstorage.open(output_file_name, "w",
                                  content_type=content_type) as gcs:
             # pylint: disable=star-args
             for line in heapq.merge(*files):
@@ -1288,7 +1287,7 @@ class GoogleCloudStorageMergedOutputWriter(
     file_name = super(GoogleCloudStorageMergedOutputWriter,
                        cls)._generate_filename(writer_spec, name, job_id, num,
              attempt, seg_index)
-    file_name = '%s/%s__%i' % (str(job_id), file_name, num)
+    file_name = "%s/%s__%i" % (str(job_id), file_name, num)
     return file_name
 
 GoogleCloudStorageKeyValueOutputWriter = _GoogleCloudStorageKeyValueOutputWriter

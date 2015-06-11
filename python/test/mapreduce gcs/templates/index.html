@@ -1,0 +1,44 @@
+<HTML>
+  <HEAD>
+  	<script src="http://ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script>
+	<script src="/scripts/validator.js"></script>
+    <TITLE>SQL Time Trials</TITLE>
+  </HEAD>
+  <BODY>
+    <IMG SRC="/images/Ducky.jpg" alt="Ducks on parade">
+    <H1></H1>
+    <FORM method="post" action="/">
+    {% if error_msg != "" %}
+    	<div style="font-size: large; font-family: sans-serif; color: #ff0000;font-weight: bold">{{error_msg}}</DIV>
+    {% endif %}
+    	Number of shards(for non stress test): <input type="text" name="num_shards" id="num_shards" class="pos_int" value=24><br/>
+    	<input type="radio" checked=True name="job" value="FileTest">File GCSLineInputReader<br>
+    	<input type="radio" name="job" value="ZipTestWhole">File GCSZipInputReader<br>
+    	<input type="radio" name="job" value="ZipTestLine">File GCSZipLineInputReader<br>
+    	Number of letters: <input type="text" name="num_letters" id="num_letters" class="pos_int" value=25><br/>
+    	Repeat factor for letters: <input type="text" name="repeat_factor" id="repeat_factor" class="pos_int" value=50><br/>
+    	Sort Results:
+    	<input type="radio" checked=True name="sort" value="True">Yes
+		<input type="radio" name="sort" value="False">No<br>
+    	Number of files per zip: <input type="text" name="files_per_zip" id="files_per_zip" class="pos_int" value=10><br/>
+    	Number of zip files: <input type="text" name="number_zips" id="number_zips" class="pos_int" value=5><br/>
+    	
+    	<input type="radio" name="job" value="StressTest">Run Stress Test*<br>
+    	
+    	Number of Gigs to test: <input type="text" name="stress_size" id="stress_size" class="pos_int" value=1><br/>
+    	
+    	<button type="submit">Start Tests</button>
+    	Email Address**<input type="text" name="email" id="email" value="">
+  	</FORM>
+  	{{pipe_output|safe}}
+  	{{blob_output|safe}}
+  	
+  	{% if messsage != "" %}
+  		{% for msg in messsage %}
+  	<DIV>{{ msg|safe }}</DIV>
+  		{% endfor %}
+  	{% endif %}
+  	*Running stress test WILL use up a lot of quota. Use at your own risk and sparingly.</p>
+  	** If specified will email the results of each test to you. Otherwise the results are simply logged
+  </BODY>
+</HTML>
