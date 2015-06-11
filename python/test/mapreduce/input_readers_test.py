@@ -27,6 +27,7 @@ import cStringIO
 import datetime
 import math
 import os
+import random
 import string
 import time
 import unittest
@@ -196,9 +197,10 @@ class AbstractDatastoreInputReaderTest(unittest.TestCase):
         input_readers.AbstractDatastoreInputReader._choose_split_points,
         sorted([0, 1, 7, 8, 9, 3, 2, 4, 6, 5]), 11)
 
-  def _assertEquals_splitNSByScatter(self, shards, expected, ns=""):
+  def _assertEquals_splitNSByScatter(self, shards, expected, ns="",
+          filters=None):
     results = input_readers.RawDatastoreInputReader._split_ns_by_scatter(
-        shards, ns, "TestEntity", self.appid)
+        shards, ns, "TestEntity", filters, self.appid)
     self.assertEquals(expected, results)
 
   def testSplitNSByScatter_NotEnoughData(self):
@@ -896,6 +898,32 @@ class DatastoreInputReaderTest(DatastoreInputReaderTestCommon):
     self._assertEquals_splitInput(results[0], ["3", "5", "7"])
     self._assertEquals_splitInput(results[1], ["15", "17", "19"])
     self._assertEquals_splitInput(results[2], ["27", "29", "31"])
+
+  def testSplitInput_shardByFilters_imbalancedKeys(self):
+    # Create 24 entities with keys 0..23
+    scatters = {str(i): i for i in list(range(12)) + [12, 18]}
+    entities = self._create_entities(range(24), scatters, "f")
+    # 12 of the entities have a in range(6). These all have __scatter__ set.
+    # The other 12 have a = 100. Only 2 of these have __scatter__ set.
+    self._set_vals(entities, list(range(6)) + [100] * 6, list(range(2)))
+    params = {
+        "entity_kind": self.entity_kind,
+        "namespace": "f",
+        "filters": [("a", "=", 100)]
+        }
+    mapper_spec = model.MapperSpec(
+        "FooHandler",
+        "InputReader",
+        params, 2)
+
+    # Make the random.shuffle() in _to_key_ranges_by_shard() deterministic
+    random.seed(2)
+    results = self.reader_cls.split_input(mapper_spec)
+
+    # Verify that the input was evenly split
+    self.assertEquals(2, len(results))
+    self._assertEquals_splitInput(results[0], [str(i) for i in range(12, 18)])
+    self._assertEquals_splitInput(results[1], [str(i) for i in range(18, 24)])
 
 
 class DatastoreInputReaderNdbTest(DatastoreInputReaderTest):
