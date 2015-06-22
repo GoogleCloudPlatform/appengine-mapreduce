@@ -778,7 +778,7 @@ class _GoogleCloudStorageOutputWriter(_GoogleCloudStorageOutputWriterBase):
     self._streaming_buffer.close()
 
     if self._no_dup:
-      cloudstorage_api._copy2(
+      cloudstorage_api.copy2(
           self._streaming_buffer.name,
           self._streaming_buffer.name,
           metadata={self._VALID_LENGTH: self._streaming_buffer.tell()})
@@ -822,7 +822,7 @@ class _GoogleCloudStorageOutputWriter(_GoogleCloudStorageOutputWriterBase):
           self._streaming_buffer.close()
       except cloudstorage.FileClosedError:
         pass
-      cloudstorage_api._copy2(
+      cloudstorage_api.copy2(
           self._streaming_buffer.name,
           self._streaming_buffer.name,
           metadata={self._VALID_LENGTH:
