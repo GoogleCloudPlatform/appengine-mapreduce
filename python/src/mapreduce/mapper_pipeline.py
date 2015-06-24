@@ -107,6 +107,9 @@ class MapperPipeline(pipeline_base._OutputSlotsMixin,
 
   def callback(self):
     """Callback after this async pipeline finishes."""
+    if self.was_aborted:
+      return
+
     mapreduce_id = self.outputs.job_id.value
     mapreduce_state = model.MapreduceState.get_by_job_id(mapreduce_id)
     if mapreduce_state.result_status != model.MapreduceState.RESULT_SUCCESS:
