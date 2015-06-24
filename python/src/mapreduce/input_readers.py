@@ -391,6 +391,7 @@ class AbstractDatastoreInputReader(InputReader):
           shard_count,
           namespace,
           query_spec.entity_kind,
+          query_spec.filters,
           app)
       # The nth split of each ns will be assigned to the nth shard.
       # Shuffle so that None are not all by the end.
@@ -418,6 +419,7 @@ class AbstractDatastoreInputReader(InputReader):
                            shard_count,
                            namespace,
                            raw_entity_kind,
+                           filters,
                            app):
     """Split a namespace by scatter index into key_range.KeyRange.
 
@@ -444,7 +446,22 @@ class AbstractDatastoreInputReader(InputReader):
                                keys_only=True)
     ds_query.Order("__scatter__")
     oversampling_factor = 32
-    random_keys = ds_query.Get(shard_count * oversampling_factor)
+    random_keys = None
+    if filters:
+      ds_query_with_filters = copy.copy(ds_query)
+      for (key, op, value) in filters:
+        ds_query_with_filters.update({'%s %s' % (key, op): value})
+        try:
+          random_keys = ds_query_with_filters.Get(shard_count *
+                                                  oversampling_factor)
+        except db.NeedIndexError, why:
+          logging.warning('Need to add an index for optimal mapreduce-input'
+                          ' splitting:\n%s' % why)
+          # We'll try again without the filter.  We hope the filter
+          # will filter keys uniformly across the key-name space!
+
+    if not random_keys:
+      random_keys = ds_query.Get(shard_count * oversampling_factor)
 
     if not random_keys:
       # There are no entities with scatter property. We have no idea
