@@ -695,7 +695,7 @@ class DatastoreInputReader(AbstractDatastoreInputReader):
     p_ranges = p_range.split(shard_count)
 
     # User specified a namespace.
-    if query_spec.ns:
+    if query_spec.ns is not None:
       ns_range = namespace_range.NamespaceRange(
           namespace_start=query_spec.ns,
           namespace_end=query_spec.ns,
