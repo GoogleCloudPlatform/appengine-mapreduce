@@ -1182,12 +1182,14 @@ class QuerySpec(object):
   """Encapsulates everything about a query needed by DatastoreInputReader."""
 
   DEFAULT_BATCH_SIZE = 50
+  DEFAULT_OVERSPLIT_FACTOR = 1
 
   def __init__(self,
                entity_kind,
                keys_only=None,
                filters=None,
                batch_size=None,
+               oversplit_factor=None,
                model_class_path=None,
                app=None,
                ns=None):
@@ -1195,6 +1197,8 @@ class QuerySpec(object):
     self.keys_only = keys_only or False
     self.filters = filters or None
     self.batch_size = batch_size or self.DEFAULT_BATCH_SIZE
+    self.oversplit_factor = (oversplit_factor or
+                             self.DEFAULT_OVERSPLIT_FACTOR)
     self.model_class_path = model_class_path
     self.app = app
     self.ns = ns
@@ -1204,6 +1208,7 @@ class QuerySpec(object):
             "keys_only": self.keys_only,
             "filters": self.filters,
             "batch_size": self.batch_size,
+            "oversplit_factor": self.oversplit_factor,
             "model_class_path": self.model_class_path,
             "app": self.app,
             "ns": self.ns}
@@ -1214,6 +1219,7 @@ class QuerySpec(object):
                json["keys_only"],
                json["filters"],
                json["batch_size"],
+               json["oversplit_factor"],
                json["model_class_path"],
                json["app"],
                json["ns"])
