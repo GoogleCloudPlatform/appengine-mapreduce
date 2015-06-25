@@ -516,7 +516,7 @@ class MapreduceHandlerTestBase(testutil.HandlerTestBase):
     """
     self.assertTrue(mapreduce_state)
     self.assertTrue(
-        mapreduce_state.chart_url.startswith("http://chart.apis.google.com/"),
+        mapreduce_state.chart_url.startswith("https://www.google.com/"),
         "Wrong chart url: " + mapreduce_state.chart_url)
 
     self.assertEquals(kwargs.get("active", True), mapreduce_state.active)
@@ -2403,10 +2403,10 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
     mapreduce_spec = self.create_mapreduce_spec(self.mapreduce_id, 3)
     mapreduce_spec.params[PARAM_DONE_CALLBACK] = "/fin"
     mapreduce_spec.params[PARAM_DONE_CALLBACK_QUEUE] = "crazy-queue"
-    mapreduce_spec.params['base_path'] = parameters.config.BASE_PATH
+    mapreduce_spec.params["base_path"] = parameters.config.BASE_PATH
 
     self.mapreduce_state.mapreduce_spec = mapreduce_spec
-    self.mapreduce_state.chart_url = "http://chart.apis.google.com/chart?"
+    self.mapreduce_state.chart_url = "https://www.google.com/chart?"
     self.mapreduce_state.active = True
     self.mapreduce_state.active_shards = 3
     self.mapreduce_state.put()

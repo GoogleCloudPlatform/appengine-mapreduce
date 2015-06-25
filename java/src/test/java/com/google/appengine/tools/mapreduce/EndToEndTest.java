@@ -20,14 +20,12 @@ import com.google.appengine.api.datastore.DatastoreServiceFactory;
 import com.google.appengine.api.datastore.Entity;
 import com.google.appengine.api.datastore.KeyFactory;
 import com.google.appengine.api.datastore.Query;
-import com.google.appengine.api.files.AppEngineFile;
-import com.google.appengine.api.files.FileReadChannel;
-import com.google.appengine.api.files.FileServiceFactory;
 import com.google.appengine.tools.cloudstorage.GcsFileMetadata;
 import com.google.appengine.tools.cloudstorage.GcsFilename;
 import com.google.appengine.tools.cloudstorage.GcsInputChannel;
 import com.google.appengine.tools.cloudstorage.GcsService;
 import com.google.appengine.tools.cloudstorage.GcsServiceFactory;
+import com.google.appengine.tools.cloudstorage.RetryParams;
 import com.google.appengine.tools.mapreduce.impl.HashingSharder;
 import com.google.appengine.tools.mapreduce.impl.InProcessMap;
 import com.google.appengine.tools.mapreduce.impl.InProcessMapReduce;
@@ -37,10 +35,9 @@ import com.google.appengine.tools.mapreduce.inputs.DatastoreInput;
 import com.google.appengine.tools.mapreduce.inputs.ForwardingInputReader;
 import com.google.appengine.tools.mapreduce.inputs.NoInput;
 import com.google.appengine.tools.mapreduce.inputs.RandomLongInput;
-import com.google.appengine.tools.mapreduce.outputs.BlobFileOutput;
-import com.google.appengine.tools.mapreduce.outputs.BlobFileOutputWriter;
 import com.google.appengine.tools.mapreduce.outputs.ForwardingOutputWriter;
 import com.google.appengine.tools.mapreduce.outputs.GoogleCloudStorageFileOutput;
+import com.google.appengine.tools.mapreduce.outputs.GoogleCloudStorageFileOutputWriter;
 import com.google.appengine.tools.mapreduce.outputs.InMemoryOutput;
 import com.google.appengine.tools.mapreduce.outputs.MarshallingOutput;
 import com.google.appengine.tools.mapreduce.outputs.NoOutput;
@@ -78,6 +75,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Logger;
@@ -702,17 +700,18 @@ public class EndToEndTest extends EndToEndTestCase {
     final RandomLongInput input = new RandomLongInput(10, 1);
     input.setSeed(0L);
     runTest(new MapReduceSpecification.Builder<>(input, new Mod37Mapper(), ValueProjectionReducer
-        .<String, Long>create(), new StringOutput<Long, List<AppEngineFile>>(",",
-        new BlobFileOutput("Foo-%02d", "testType")))
+        .<String, Long>create(), new StringOutput<Long, GoogleCloudStorageFileSet>(",",
+        new GoogleCloudStorageFileOutput("bucket", "Foo-%02d", "testType")))
         .setKeyMarshaller(Marshallers.getStringMarshaller())
         .setValueMarshaller(Marshallers.getLongMarshaller()).setJobName("TestPassThroughToString")
-        .build(), new Verifier<List<AppEngineFile>>() {
+        .build(), new Verifier<GoogleCloudStorageFileSet>() {
       @Override
-      public void verify(MapReduceResult<List<AppEngineFile>> result) throws Exception {
-        assertEquals(1, result.getOutputResult().size());
+      public void verify(MapReduceResult<GoogleCloudStorageFileSet> result) throws Exception {
+        assertEquals(1, result.getOutputResult().getNumFiles());
         assertEquals(10, result.getCounters().getCounter(CounterNames.MAPPER_CALLS).getValue());
-        AppEngineFile file = result.getOutputResult().get(0);
-        FileReadChannel ch = FileServiceFactory.getFileService().openReadChannel(file, false);
+        GcsFilename file = result.getOutputResult().getFile(0);
+        GcsService service = GcsServiceFactory.createGcsService(RetryParams.getDefaultInstance());
+        GcsInputChannel ch = service.openReadChannel(file, 0);
         BufferedReader reader =
             new BufferedReader(Channels.newReader(ch, US_ASCII.newDecoder(), -1));
         String line = reader.readLine();
@@ -1185,12 +1184,13 @@ public class EndToEndTest extends EndToEndTestCase {
   }
 
   @SuppressWarnings("serial")
-  static class SideOutputMapper extends Mapper<Long, String, Void> {
-    transient BlobFileOutputWriter sideOutput;
+  static class SideOutputMapper extends Mapper<Long, GcsFilename, Void> {
+    transient GoogleCloudStorageFileOutputWriter sideOutput;
 
     @Override
     public void beginSlice() {
-      sideOutput = new BlobFileOutputWriter("test file", "application/octet-stream");
+      GcsFilename filename = new GcsFilename("bucket", UUID.randomUUID().toString());
+      sideOutput = new GoogleCloudStorageFileOutputWriter(filename, "application/octet-stream");
       try {
         sideOutput.beginShard();
         sideOutput.beginSlice();
@@ -1218,7 +1218,7 @@ public class EndToEndTest extends EndToEndTestCase {
       } catch (IOException e) {
         throw new RuntimeException(e);
       }
-      emit(sideOutput.getFile().getFullPath(), null);
+      emit(sideOutput.getFile(), null);
     }
   }
 
@@ -1226,24 +1226,27 @@ public class EndToEndTest extends EndToEndTestCase {
   public void testSideOutput() throws Exception {
 
     runTest(new MapReduceSpecification.Builder<>(new ConsecutiveLongInput(0, 6, 6),
-        new SideOutputMapper(), KeyProjectionReducer.<String, Void>create(),
-        new InMemoryOutput<String>()).setKeyMarshaller(Marshallers.getStringMarshaller())
-        .setValueMarshaller(Marshallers.getVoidMarshaller()).setJobName("Test MR").build(),
-        new Verifier<List<List<String>>>() {
+        new SideOutputMapper(), KeyProjectionReducer.<GcsFilename, Void>create(),
+        new InMemoryOutput<GcsFilename>())
+        .setKeyMarshaller(Marshallers.<GcsFilename>getSerializationMarshaller())
+        .setValueMarshaller(Marshallers.getVoidMarshaller())
+        .setJobName("Test MR")
+        .build(),
+        new Verifier<List<List<GcsFilename>>>() {
           @Override
-          public void verify(MapReduceResult<List<List<String>>> result) throws Exception {
-            List<List<String>> outputResult = result.getOutputResult();
+          public void verify(MapReduceResult<List<List<GcsFilename>>> result) throws Exception {
+            List<List<GcsFilename>> outputResult = result.getOutputResult();
             Set<Long> expected = new HashSet<>();
             for (long i = 0; i < 6; i++) {
               expected.add(i);
             }
             assertEquals(1, outputResult.size());
-            for (List<String> files : outputResult) {
+            GcsService gcs = GcsServiceFactory.createGcsService(RetryParams.getDefaultInstance());
+            for (List<GcsFilename> files : outputResult) {
               assertEquals(6, files.size());
-              for (String file : files) {
+              for (GcsFilename file : files) {
                 ByteBuffer buf = ByteBuffer.allocate(8);
-                try (FileReadChannel ch = FileServiceFactory.getFileService().openReadChannel(
-                    new AppEngineFile(file), false)) {
+                try (GcsInputChannel ch = gcs.openReadChannel(file, 0)) {
                   assertEquals(8, ch.read(buf));
                   assertEquals(-1, ch.read(ByteBuffer.allocate(1)));
                 }

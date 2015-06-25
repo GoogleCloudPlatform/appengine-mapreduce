@@ -20,7 +20,7 @@ public class GoogleCloudStorageLevelDbOutput extends Output<ByteBuffer, GoogleCl
   private final GoogleCloudStorageFileOutput output;
 
   /**
-   * Creates LevelDb output files who's names follow the provided pattern in the specified bucket.
+   * Creates LevelDb output files whose names follow the provided pattern in the specified bucket.
    *
    * @param fileNamePattern a Java format string {@link java.util.Formatter} containing one int
    *        argument for the shard number.
@@ -28,6 +28,20 @@ public class GoogleCloudStorageLevelDbOutput extends Output<ByteBuffer, GoogleCl
    */
   public GoogleCloudStorageLevelDbOutput(String bucket, String fileNamePattern, String mimeType) {
     output = new GoogleCloudStorageFileOutput(bucket, fileNamePattern, mimeType);
+  }
+
+  /**
+   * Creates LevelDb output files whose names follow the provided pattern in the specified bucket.
+   *
+   * @param fileNamePattern a Java format string {@link java.util.Formatter} containing one int
+   *        argument for the shard number.
+   * @param mimeType The string to be passed as the mimeType to GCS.
+   * @param supportSliceRetries indicates if slice retries should be supported by this writer.
+   */
+  public GoogleCloudStorageLevelDbOutput(String bucket, String fileNamePattern, String mimeType,
+      boolean supportSliceRetries) {
+    output =
+        new GoogleCloudStorageFileOutput(bucket, fileNamePattern, mimeType, supportSliceRetries);
   }
 
   @Override

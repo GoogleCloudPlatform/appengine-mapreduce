@@ -39,6 +39,7 @@ import com.google.apphosting.api.ApiProxy.ApiProxyException;
 import com.google.apphosting.api.ApiProxy.ArgumentException;
 import com.google.apphosting.api.ApiProxy.RequestTooLargeException;
 import com.google.apphosting.api.ApiProxy.ResponseTooLargeException;
+import com.google.apphosting.api.DeadlineExceededException;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
@@ -114,7 +115,8 @@ public class ShardedJobRunner<T extends IncrementalTask> implements ShardedJobHa
 
   private static final ExceptionHandler AGGRESIVE_EXCEPTION_HANDLER = new ExceptionHandler.Builder()
       .retryOn(Exception.class).abortOn(RequestTooLargeException.class,
-          ResponseTooLargeException.class, ArgumentException.class).build();
+          ResponseTooLargeException.class, ArgumentException.class,
+          DeadlineExceededException.class).build();
 
   private ShardedJobStateImpl<T> lookupJobState(Transaction tx, String jobId) {
     try {

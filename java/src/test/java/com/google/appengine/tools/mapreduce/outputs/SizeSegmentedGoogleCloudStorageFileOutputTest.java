@@ -3,7 +3,6 @@ package com.google.appengine.tools.mapreduce.outputs;
 import com.google.appengine.tools.cloudstorage.GcsFileMetadata;
 import com.google.appengine.tools.cloudstorage.GcsService;
 import com.google.appengine.tools.cloudstorage.GcsServiceFactory;
-import com.google.appengine.tools.development.testing.LocalFileServiceTestConfig;
 import com.google.appengine.tools.development.testing.LocalServiceTestHelper;
 import com.google.appengine.tools.mapreduce.GoogleCloudStorageFileSet;
 import com.google.appengine.tools.mapreduce.OutputWriter;
@@ -20,8 +19,7 @@ import java.util.Random;
 
 public class SizeSegmentedGoogleCloudStorageFileOutputTest extends TestCase {
 
-  private final LocalServiceTestHelper helper =
-      new LocalServiceTestHelper(new LocalFileServiceTestConfig());
+  private final LocalServiceTestHelper helper = new LocalServiceTestHelper();
   private final GcsService gcsService = GcsServiceFactory.createGcsService();
 
   private static final String BUCKET = "test-bigquery-loader";

@@ -4,7 +4,6 @@ import com.google.appengine.tools.cloudstorage.GcsFilename;
 import com.google.appengine.tools.cloudstorage.GcsServiceFactory;
 import com.google.appengine.tools.development.testing.LocalBlobstoreServiceTestConfig;
 import com.google.appengine.tools.development.testing.LocalDatastoreServiceTestConfig;
-import com.google.appengine.tools.development.testing.LocalFileServiceTestConfig;
 import com.google.appengine.tools.development.testing.LocalServiceTestHelper;
 import com.google.appengine.tools.development.testing.LocalTaskQueueTestConfig;
 import com.google.appengine.tools.mapreduce.impl.util.LevelDbConstants;
@@ -34,8 +33,9 @@ public class GoogleCloudStorageLevelDbInputReaderTest extends TestCase {
   GcsFilename filename = new GcsFilename("Bucket", "GoogleCloudStorageLevelDbInputReaderTest");
 
   private final LocalServiceTestHelper helper = new LocalServiceTestHelper(
-      new LocalTaskQueueTestConfig(), new LocalFileServiceTestConfig(),
-      new LocalBlobstoreServiceTestConfig(), new LocalDatastoreServiceTestConfig());
+      new LocalTaskQueueTestConfig(),
+      new LocalBlobstoreServiceTestConfig(),
+      new LocalDatastoreServiceTestConfig());
 
 
   @Override

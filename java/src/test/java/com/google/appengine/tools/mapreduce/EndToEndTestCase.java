@@ -13,7 +13,6 @@ import com.google.appengine.api.taskqueue.dev.QueueStateInfo.HeaderWrapper;
 import com.google.appengine.api.taskqueue.dev.QueueStateInfo.TaskStateInfo;
 import com.google.appengine.tools.development.ApiProxyLocal;
 import com.google.appengine.tools.development.testing.LocalDatastoreServiceTestConfig;
-import com.google.appengine.tools.development.testing.LocalFileServiceTestConfig;
 import com.google.appengine.tools.development.testing.LocalMemcacheServiceTestConfig;
 import com.google.appengine.tools.development.testing.LocalModulesServiceTestConfig;
 import com.google.appengine.tools.development.testing.LocalServiceTestHelper;
@@ -53,7 +52,6 @@ public abstract class EndToEndTestCase {
           new LocalDatastoreServiceTestConfig(),
           new LocalTaskQueueTestConfig().setDisableAutoTaskExecution(true),
           new LocalMemcacheServiceTestConfig(),
-          new LocalFileServiceTestConfig(),
           new LocalModulesServiceTestConfig());
   private LocalTaskQueue taskQueue;
 

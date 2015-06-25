@@ -18,6 +18,7 @@ import com.google.appengine.tools.mapreduce.Sharder;
 import com.google.appengine.tools.mapreduce.outputs.LevelDbOutputWriter;
 import com.google.appengine.tools.mapreduce.outputs.MarshallingOutputWriter;
 import com.google.appengine.tools.mapreduce.outputs.ShardingOutputWriter;
+import com.google.common.base.Preconditions;
 import com.google.common.collect.AbstractIterator;
 import com.google.common.collect.ImmutableMap;
 
@@ -115,6 +116,7 @@ public class GoogleCloudStorageMapOutputWriter<K, V>
         new GcsFileOptions.Builder().mimeType(MAP_OUTPUT_MIME_TYPE).build();
     private static final long MEMORY_REQUIRED = MapReduceConstants.DEFAULT_IO_BUFFER_SIZE * 2;
 
+
     private final int maxComponentsPerCompose;
     private final int maxFilesPerCompose;
     private final String bucket;
@@ -133,6 +135,8 @@ public class GoogleCloudStorageMapOutputWriter<K, V>
       int temp = Integer.parseInt(System.getProperty(MAX_COMPONENTS_PER_COMPOSE, "1024"));
       maxFilesPerCompose = Integer.parseInt(System.getProperty(MAX_FILES_PER_COMPOSE, "32"));
       maxComponentsPerCompose = (temp / maxFilesPerCompose) * maxFilesPerCompose;
+      Preconditions.checkArgument(maxFilesPerCompose > 0);
+      Preconditions.checkArgument(maxComponentsPerCompose > 0);
     }
 
     @Override
@@ -194,10 +198,14 @@ public class GoogleCloudStorageMapOutputWriter<K, V>
 
     @Override
     public void endShard() throws IOException {
-      String tempFile = generateTempFileName();
-      compose(sliceParts, tempFile);
-      compositeParts.add(tempFile);
-      compose(compositeParts, getFileName(fileCount++));
+      if (!sliceParts.isEmpty()) {
+        String tempFile = generateTempFileName();
+        compose(sliceParts, tempFile);
+        compositeParts.add(tempFile);
+      }
+      if (!compositeParts.isEmpty()) {
+        compose(compositeParts, getFileName(fileCount++));
+      }
     }
 
     private String generateTempFileName() {

@@ -257,7 +257,7 @@ class MapreduceStateTest(unittest.TestCase):
     mapreduce_state = model.MapreduceState.create_new()
     mapreduce_state.set_processed_counts([1, 2])
     self.assertTrue(mapreduce_state.chart_url.startswith(
-        "http://chart.apis.google.com/chart?"))
+        "https://www.google.com/chart?"))
     self.assertEquals(
         {u"cht": [u"bvg"],
          u"chs": [u"300x200"],

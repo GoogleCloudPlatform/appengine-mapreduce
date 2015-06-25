@@ -2,7 +2,6 @@ package com.google.appengine.tools.mapreduce.outputs;
 
 import com.google.api.services.bigquery.model.TableFieldSchema;
 import com.google.api.services.bigquery.model.TableSchema;
-import com.google.appengine.tools.development.testing.LocalFileServiceTestConfig;
 import com.google.appengine.tools.development.testing.LocalServiceTestHelper;
 import com.google.appengine.tools.mapreduce.BigQueryFieldMode;
 import com.google.appengine.tools.mapreduce.GoogleCloudStorageFileSet;
@@ -25,8 +24,7 @@ import java.util.Map;
 public class BigQueryGoogleCloudStorageStoreOutputTest extends TestCase {
   private static final String BUCKET = "test-bigquery-loader";
 
-  private final LocalServiceTestHelper helper =
-      new LocalServiceTestHelper(new LocalFileServiceTestConfig());
+  private final LocalServiceTestHelper helper = new LocalServiceTestHelper();
 
   @Override
   protected void setUp() throws Exception {
