@@ -259,14 +259,14 @@ class MapreduceStateTest(unittest.TestCase):
     self.assertTrue(mapreduce_state.chart_url.startswith(
         "https://www.google.com/chart?"))
     self.assertEquals(
-        {u"cht": [u"bvg"],
+        {u"cht": [u"bvs"],
          u"chs": [u"300x200"],
          u"chxr": [u"0,0,2.1"],
          u"chxt": [u"y,x"],
-         u"chd": [u"s:d6"],
+         u"chd": [u"s:AA,AA,d6,AA,AA"],
          u"chbh": [u"a"],
          u"chxl": [u"0:|0|2|1:|0|1"],
-         u"chco": [u"0000ff"]},
+         u"chco": [u'404040,00ac42,3636a9,e29e24,f6350f']},
         urlparse.parse_qs(urlparse.urlparse(mapreduce_state.chart_url).query))
 
 

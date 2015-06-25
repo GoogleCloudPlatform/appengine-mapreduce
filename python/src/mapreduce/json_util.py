@@ -14,7 +14,6 @@ from google.appengine.api import datastore_types
 from google.appengine.ext import db
 from google.appengine.ext import ndb
 
-
 # pylint: disable=invalid-name
 
 

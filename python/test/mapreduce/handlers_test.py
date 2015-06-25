@@ -1137,8 +1137,6 @@ class KickOffJobHandlerTest(testutil.HandlerTestBase):
     # Serialized new readers should be the same as serialized old ones.
     self.assertEqual(serialized_readers_entity.payload,
                      new_serialized_readers_entity.payload)
-    self.assertEqual(json.dumps([i.to_json_str() for i in new_readers]),
-                     serialized_readers_entity.payload)
 
   def testSaveState(self):
     self.createDummyHandler()
@@ -2266,6 +2264,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
 
     # Record calls
     context.Context._set(mox.IsA(context.Context))
+    context.Context._set(None)
 
     m.ReplayAll()
     try: # test, verify
@@ -2299,6 +2298,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
 
     # Record calls
     context.Context._set(mox.IsA(context.Context))
+    context.Context._set(None)
 
     m.ReplayAll()
     try: # test, verify
@@ -2331,6 +2331,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
     m.StubOutWithMock(context.Context, "_set", use_mock_anything=True)
 
     context.Context._set(MatchesContext(task_retry_count=5))
+    context.Context._set(None)
 
     m.ReplayAll()
     try: # test, verify
@@ -2350,7 +2351,8 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
 
     # Record calls
     context.Context._set(mox.IsA(context.Context))
-    context.get().flush()
+    context.Context.flush()
+    context.Context._set(None)
 
     m.ReplayAll()
     try: # test, verify

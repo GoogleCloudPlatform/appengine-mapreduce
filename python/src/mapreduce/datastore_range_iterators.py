@@ -4,9 +4,7 @@
 
 
 # pylint: disable=g-bad-name
-
 import itertools
-
 from google.appengine.datastore import datastore_query
 from google.appengine.datastore import datastore_rpc
 from google.appengine.ext import db
@@ -17,7 +15,6 @@ from mapreduce import model
 from mapreduce import namespace_range
 from mapreduce import property_range
 from mapreduce import util
-
 
 __all__ = [
     "RangeIteratorFactory",

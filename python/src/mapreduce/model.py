@@ -40,7 +40,6 @@ import cgi
 import datetime
 import urllib
 import zlib
-
 from graphy import bar_chart
 from graphy.backends import google_chart_api
 
