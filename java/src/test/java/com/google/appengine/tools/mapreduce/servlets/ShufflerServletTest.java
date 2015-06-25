@@ -23,7 +23,6 @@ import com.google.appengine.api.taskqueue.QueueFactory;
 import com.google.appengine.tools.cloudstorage.GcsFilename;
 import com.google.appengine.tools.development.ApiProxyLocal;
 import com.google.appengine.tools.development.testing.LocalDatastoreServiceTestConfig;
-import com.google.appengine.tools.development.testing.LocalFileServiceTestConfig;
 import com.google.appengine.tools.development.testing.LocalMemcacheServiceTestConfig;
 import com.google.appengine.tools.development.testing.LocalModulesServiceTestConfig;
 import com.google.appengine.tools.development.testing.LocalServiceTestHelper;
@@ -96,8 +95,7 @@ public class ShufflerServletTest {
   private final LocalServiceTestHelper helper = new LocalServiceTestHelper(
       new LocalDatastoreServiceTestConfig(), new LocalTaskQueueTestConfig()
           .setDisableAutoTaskExecution(false).setCallbackClass(TaskRunner.class),
-      new LocalMemcacheServiceTestConfig(), new LocalFileServiceTestConfig(),
-      new LocalModulesServiceTestConfig());
+      new LocalMemcacheServiceTestConfig(), new LocalModulesServiceTestConfig());
 
 
   public static class TaskRunner extends ServletInvokingTaskCallback {

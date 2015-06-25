@@ -1,7 +1,6 @@
 // Copyright 2011 Google Inc. All Rights Reserved.
 package com.google.appengine.tools.mapreduce.impl;
 
-import com.google.appengine.tools.development.testing.LocalFileServiceTestConfig;
 import com.google.appengine.tools.development.testing.LocalServiceTestHelper;
 import com.google.appengine.tools.mapreduce.InputReader;
 import com.google.appengine.tools.mapreduce.KeyValue;
@@ -38,8 +37,7 @@ public class GoogleCloudStorageMapOutputTest extends TestCase {
       + ".mapreduce.impl.GoogleCloudStorageMapOutputWriter.MAX_COMPONENTS_PER_COMPOSE";
   private static final Random RND = new SecureRandom();
 
-  private final LocalServiceTestHelper helper =
-      new LocalServiceTestHelper(new LocalFileServiceTestConfig());
+  private final LocalServiceTestHelper helper = new LocalServiceTestHelper();
 
   @Override
   public void setUp() {
@@ -54,29 +52,33 @@ public class GoogleCloudStorageMapOutputTest extends TestCase {
   }
 
   public void testNoContent() throws IOException {
-    writeAndVerifyContent(0, 0, 0);
+    writeAndVerifyContent(SliceData.of(0, 0, 0));
   }
 
   public void testSingleFilePartNoIntermediateCompositeParts() throws IOException {
-    writeAndVerifyContent(1, 100, 100);
-    writeAndVerifyContent(FILES_PER_COMPOSE - 1, 100, 100);
+    writeAndVerifyContent(SliceData.of(1, 100, 100));
+    writeAndVerifyContent(SliceData.of(FILES_PER_COMPOSE - 1, 100, 100));
   }
 
   public void testSingleFilePartWithIntermediateCompositeParts() throws IOException {
-    writeAndVerifyContent(FILES_PER_COMPOSE, 100, 100);
-    writeAndVerifyContent(COMPONENTS_PER_COMPOSE -  1, 100, 100);
+    writeAndVerifyContent(SliceData.of(FILES_PER_COMPOSE, 100, 100));
+    writeAndVerifyContent(SliceData.of(FILES_PER_COMPOSE + 1, 100, 100));
+    writeAndVerifyContent(SliceData.of(FILES_PER_COMPOSE, 100, 100),
+        SliceData.of(FILES_PER_COMPOSE, 0, 0));
+    writeAndVerifyContent(SliceData.of(COMPONENTS_PER_COMPOSE -  1, 100, 100));
   }
 
   public void testWithMultipleFileParts() throws IOException  {
-    //writeAndVerifyContent(COMPONENTS_PER_COMPOSE, 100, 100);
-    writeAndVerifyContent(COMPONENTS_PER_COMPOSE * 3, 100, 100);
+    writeAndVerifyContent(SliceData.of(COMPONENTS_PER_COMPOSE, 100, 100));
+    writeAndVerifyContent(SliceData.of(COMPONENTS_PER_COMPOSE + 1, 100, 100));
+    writeAndVerifyContent(SliceData.of(COMPONENTS_PER_COMPOSE * 3, 100, 100));
   }
 
   private List<KeyValue<Long, String>> createRandomValues(int maxValues, int maxValueSize) {
     if (maxValues == 0) {
       return Collections.emptyList();
     }
-    int count = 1 + RND.nextInt(maxValues);
+    int count = RND.nextInt(maxValues);
     List<KeyValue<Long, String>> values = new ArrayList<>(count);
     for (int i = 0; i < count; i++) {
       int length = RND.nextInt(maxValueSize);
@@ -89,8 +91,24 @@ public class GoogleCloudStorageMapOutputTest extends TestCase {
     return values;
   }
 
-  private void writeAndVerifyContent(int slices, int maxValuesPerSlice, int maxValueSize)
-      throws IOException  {
+  private static class SliceData {
+
+    private final int slices;
+    private final int maxValuesPerSlice;
+    private final int maxValueSize;
+
+    private SliceData(int slices, int maxValuesPerSlice, int maxValueSize) {
+      this.slices = slices;
+      this.maxValuesPerSlice = maxValuesPerSlice;
+      this.maxValueSize = maxValueSize;
+    }
+
+    public static SliceData of(int slices, int maxValuesPerSlice, int maxValueSize) {
+      return new SliceData(slices, maxValuesPerSlice, maxValueSize);
+    }
+  }
+
+  private void writeAndVerifyContent(SliceData... sliceData) throws IOException  {
     GoogleCloudStorageMapOutput<Long, String> output = new GoogleCloudStorageMapOutput<>(BUCKET,
         JOB, KEY_MARSHALLER, VALUE_MARSHALLER, new Sharder() {
           private static final long serialVersionUID = 1L;
@@ -107,25 +125,32 @@ public class GoogleCloudStorageMapOutputTest extends TestCase {
         });
     List<? extends OutputWriter<KeyValue<Long, String>>> writers = output.createWriters(1);
     assertEquals(1, writers.size());
-    List<KeyValue<Long, String>> values = new ArrayList<>(slices);
+    List<KeyValue<Long, String>> values = new ArrayList<>();
     OutputWriter<KeyValue<Long, String>> writer = writers.get(0);
+    int sliceCount = 0;
     writer.beginShard();
-    for (int i = 0; i < slices; i++) {
-      writer.beginSlice();
-      for (KeyValue<Long, String> value : createRandomValues(maxValuesPerSlice, maxValueSize)) {
-        writer.write(value);
-        values.add(value);
+    for (SliceData data : sliceData) {
+      for (int i = 0; i < data.slices; i++) {
+        writer.beginSlice();
+        List<KeyValue<Long, String>> randomValues =
+            createRandomValues(data.maxValuesPerSlice, data.maxValueSize);
+        for (KeyValue<Long, String> value : randomValues) {
+          writer.write(value);
+          values.add(value);
+        }
+        if (!randomValues.isEmpty()) {
+          sliceCount++;
+        }
+        writer.endSlice();
       }
-      writer.endSlice();
     }
     writer.endShard();
-
     FilesByShard filesByShard = output.finish(writers);
     assertEquals(1, filesByShard.getShardCount());
     List<? extends InputReader<KeyValue<ByteBuffer, ByteBuffer>>> input =
         new GoogleCloudStorageSortInput(filesByShard).createReaders();
     assertEquals(1, input.size());
-    int expectedFiles = (int) Math.ceil((double) slices / COMPONENTS_PER_COMPOSE);
+    int expectedFiles = (int) Math.ceil((double) sliceCount / COMPONENTS_PER_COMPOSE);
     assertEquals(expectedFiles, filesByShard.getFilesForShard(0).getNumFiles());
     Iterator<KeyValue<Long, String>> shardValues = values.iterator();
     InputReader<KeyValue<ByteBuffer, ByteBuffer>> reader = input.get(0);

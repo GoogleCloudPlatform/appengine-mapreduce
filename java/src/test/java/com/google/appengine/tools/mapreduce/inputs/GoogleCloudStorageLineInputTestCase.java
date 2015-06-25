@@ -7,7 +7,6 @@ import com.google.appengine.tools.cloudstorage.GcsService;
 import com.google.appengine.tools.cloudstorage.GcsServiceFactory;
 import com.google.appengine.tools.development.testing.LocalBlobstoreServiceTestConfig;
 import com.google.appengine.tools.development.testing.LocalDatastoreServiceTestConfig;
-import com.google.appengine.tools.development.testing.LocalFileServiceTestConfig;
 import com.google.appengine.tools.development.testing.LocalServiceTestHelper;
 
 import junit.framework.TestCase;
@@ -21,7 +20,6 @@ abstract class GoogleCloudStorageLineInputTestCase extends TestCase {
 
   private final LocalServiceTestHelper helper = new LocalServiceTestHelper(
       new LocalBlobstoreServiceTestConfig(),
-      new LocalFileServiceTestConfig(),
       new LocalDatastoreServiceTestConfig());
 
   @Override

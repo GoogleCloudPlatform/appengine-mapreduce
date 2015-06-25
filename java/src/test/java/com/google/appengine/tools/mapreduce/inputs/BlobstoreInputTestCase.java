@@ -2,17 +2,20 @@
 
 package com.google.appengine.tools.mapreduce.inputs;
 
-import com.google.appengine.api.blobstore.BlobInfoFactory;
 import com.google.appengine.api.blobstore.BlobKey;
-import com.google.appengine.api.files.AppEngineFile;
-import com.google.appengine.api.files.FileService;
-import com.google.appengine.api.files.FileServiceFactory;
-import com.google.appengine.api.files.FileWriteChannel;
+import com.google.appengine.api.blobstore.BlobstoreService;
+import com.google.appengine.api.blobstore.BlobstoreServiceFactory;
+import com.google.appengine.api.datastore.DatastoreServiceFactory;
+import com.google.appengine.api.datastore.Entity;
 import com.google.appengine.api.files.FinalizationException;
 import com.google.appengine.api.files.LockException;
+import com.google.appengine.tools.cloudstorage.GcsFileOptions;
+import com.google.appengine.tools.cloudstorage.GcsFilename;
+import com.google.appengine.tools.cloudstorage.GcsOutputChannel;
+import com.google.appengine.tools.cloudstorage.GcsService;
+import com.google.appengine.tools.cloudstorage.GcsServiceFactory;
 import com.google.appengine.tools.development.testing.LocalBlobstoreServiceTestConfig;
 import com.google.appengine.tools.development.testing.LocalDatastoreServiceTestConfig;
-import com.google.appengine.tools.development.testing.LocalFileServiceTestConfig;
 import com.google.appengine.tools.development.testing.LocalServiceTestHelper;
 
 import junit.framework.TestCase;
@@ -20,6 +23,8 @@ import junit.framework.TestCase;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.Date;
+import java.util.UUID;
 
 /**
  */
@@ -30,7 +35,6 @@ abstract class BlobstoreInputTestCase extends TestCase {
   long blobSize;
   private final LocalServiceTestHelper helper = new LocalServiceTestHelper(
       new LocalBlobstoreServiceTestConfig(),
-      new LocalFileServiceTestConfig(),
       new LocalDatastoreServiceTestConfig());
 
   @Override
@@ -47,14 +51,25 @@ abstract class BlobstoreInputTestCase extends TestCase {
 
   protected void createFile(String record, int recordsCount)
       throws IOException, FileNotFoundException, FinalizationException, LockException {
-    FileService fileService = FileServiceFactory.getFileService();
-    AppEngineFile blobFile = fileService.createNewBlobFile("application/bin");
-    FileWriteChannel writeChannel = fileService.openWriteChannel(blobFile, true);
-    for (int i = 0; i < recordsCount; i++) {
-      writeChannel.write(ByteBuffer.wrap(record.getBytes()));
+
+    String filename = UUID.randomUUID().toString();
+    GcsFilename gcsFilename = new GcsFilename("bucket", filename);
+    GcsService gcsService = GcsServiceFactory.createGcsService();
+    try (GcsOutputChannel writeChannel = gcsService.createOrReplace(
+        gcsFilename, new GcsFileOptions.Builder().mimeType("application/bin").build())) {
+      for (int i = 0; i < recordsCount; i++) {
+        writeChannel.write(ByteBuffer.wrap(record.getBytes()));
+      }
     }
-    writeChannel.closeFinally();
-    blobKey = fileService.getBlobKey(blobFile);
-    blobSize = new BlobInfoFactory().loadBlobInfo(blobKey).getSize();
+    BlobstoreService blobstore = BlobstoreServiceFactory.getBlobstoreService();
+    blobKey = blobstore.createGsBlobKey("/gs/bucket/" + filename);
+    blobSize = gcsService.getMetadata(gcsFilename).getLength();
+    Entity entity = new Entity("__BlobInfo__", blobKey.getKeyString());
+    entity.setProperty("size", blobSize);
+    entity.setProperty("content_type", "application/bin");
+    entity.setProperty("md5_hash", filename);
+    entity.setProperty("creation", new Date());
+    entity.setProperty("filename", filename);
+    DatastoreServiceFactory.getDatastoreService().put(entity);
   }
 }
