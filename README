@@ -1,6 +1,8 @@
 AppEngine Mapreduce library
 ===========================
 
+[![Build Status](https://travis-ci.org/GoogleCloudPlatform/appengine-mapreduce.svg?branch=master)](https://travis-ci.org/GoogleCloudPlatform/appengine-mapreduce)
+
 Official site: https://github.com/GoogleCloudPlatform/appengine-mapreduce
 
 Check the site for up to date status, latest version, getting started & user
