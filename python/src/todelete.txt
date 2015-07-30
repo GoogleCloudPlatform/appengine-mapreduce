@@ -8,3 +8,4 @@ simplejson
 mock
 mox
 pg8000
+six
