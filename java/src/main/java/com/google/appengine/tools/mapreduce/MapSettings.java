@@ -229,16 +229,28 @@ public class MapSettings implements Serializable {
     return settings;
   }
 
+  private static String getCurrentBackend() {
+    if (Boolean.parseBoolean(System.getenv("GAE_VM"))) {
+      // MVM can't be a backend.
+      return null;
+    }
+    BackendService backendService = BackendServiceFactory.getBackendService();
+    String currentBackend = backendService.getCurrentBackend();
+    // If currentBackend contains ':' it is actually a B type module (see b/12893879)
+    if (currentBackend != null && currentBackend.indexOf(':') != -1) {
+      currentBackend = null;
+    }
+    return currentBackend;
+  }
+
   ShardedJobSettings toShardedJobSettings(String shardedJobId, Key pipelineKey) {
     String backend = getBackend();
     String module = getModule();
     String version = null;
     if (backend == null) {
       if (module == null) {
-        BackendService backendService = BackendServiceFactory.getBackendService();
-        String currentBackend = backendService.getCurrentBackend();
-        // If currentBackend contains ':' it is actually a B type module (see b/12893879)
-        if (currentBackend != null && currentBackend.indexOf(':') == -1) {
+        String currentBackend = getCurrentBackend();
+        if (currentBackend != null) {
           backend = currentBackend;
         } else {
           ModulesService modulesService = ModulesServiceFactory.getModulesService();
