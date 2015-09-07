@@ -139,8 +139,8 @@ final class BigQuerySchemaMarshallerByType<T> implements Serializable {
       validateTypeForSchemaMarshalling(type);
       Set<Field> fieldsToMap = getFieldsToSerialize(type);
       for (Field field : fieldsToMap) {
-        if ((marshallers != null && !marshallers.containsKey(field))
-            || BigqueryFieldMarshallers.getMarshaller(field.getType()) == null) {
+        if ((marshallers == null || !marshallers.containsKey(field))
+            && BigqueryFieldMarshallers.getMarshaller(field.getType()) == null) {
           validateType(field.getType(), marshallers);
         }
       }

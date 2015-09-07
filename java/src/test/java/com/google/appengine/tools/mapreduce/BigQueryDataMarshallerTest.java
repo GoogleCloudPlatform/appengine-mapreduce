@@ -373,26 +373,43 @@ public class BigQueryDataMarshallerTest extends TestCase {
             }
           }
         });
+    marshallers.put(ClassWithUnsupportedType.class.getDeclaredField("blob"),
+        new BigqueryFieldMarshaller() {
+
+          @Override
+          public Class<?> getSchemaType() {
+            return String.class;
+          }
+
+          @Override
+          public Object getFieldValue(Field field, Object object) {
+            return "override";
+          }
+        });    
     BigQueryDataMarshallerTester<ClassWithUnsupportedType> tester =
         new BigQueryDataMarshallerTester<>(
             new BigQueryMarshallerByType<>(ClassWithUnsupportedType.class, marshallers));
-    tester.testGeneratedJson("{\"ip\":\"00000001-0002-0003-0004-000000000005\",\"id\":5}",
-        new ClassWithUnsupportedType(UUID.fromString("1-2-3-4-5"), 5));
+    tester.testGeneratedJson("{\"ip\":\"00000001-0002-0003-0004-000000000005\",\"id\":5,\"blob\":\"override\"}",
+        new ClassWithUnsupportedType(UUID.fromString("1-2-3-4-5"), 5, "blob"));
 
     tester.testSchema(new TableSchema().setFields(Lists.newArrayList(
         new TableFieldSchema().setName("ip").setType("string"), new TableFieldSchema().setName("id")
-            .setType("integer").setMode(BigQueryFieldMode.REQUIRED.getValue()))));
+        .setType("integer").setMode(BigQueryFieldMode.REQUIRED.getValue()),
+        new TableFieldSchema().setName("blob").setType("string"))));
   }
 
   private static class ClassWithUnsupportedType {
+    @SuppressWarnings("unused")
+    Object blob;
     @SuppressWarnings("unused")
     UUID ip;
     @SuppressWarnings("unused")
     int id;
 
-    public ClassWithUnsupportedType(UUID ip, int id) {
+    public ClassWithUnsupportedType(UUID ip, int id, Object blob) {
       this.ip = ip;
       this.id = id;
+      this.blob = blob;
     }
   }
 
