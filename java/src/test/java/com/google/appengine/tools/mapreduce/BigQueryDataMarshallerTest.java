@@ -344,18 +344,27 @@ public class BigQueryDataMarshallerTest extends TestCase {
       new BigQueryDataMarshallerTester<ClassWithRecord>(
         new BigQueryMarshallerByType<ClassWithRecord>(ClassWithRecord.class));
 
-    tester.testGeneratedJson("{\"record\":null}",
-      new ClassWithRecord(null));
+    tester.testGeneratedJson("{}",
+     new ClassWithRecord(null,null));
 
     tester.testGeneratedJson("{\"record\":{\"name\":\"myname\",\"value\":\"myvalue\"}}",
-      new ClassWithRecord(new ClassWithRecord.Record("myname","myvalue")));
+     new ClassWithRecord(new ClassWithRecord.Record("myname","myvalue"), null));
+
+    tester.testGeneratedJson(
+     "{\"record\":{\"name\":\"name\",\"value\":\"value\"},\"records\":[{\"name\":\"name\",\"value\":\"value\"}]}",
+     new ClassWithRecord(new ClassWithRecord.Record("name","value"),
+      Lists.newArrayList(new ClassWithRecord.Record("name","value"))));
+
 
     tester.testSchema(new TableSchema().setFields(Lists.newArrayList(new TableFieldSchema()
-      .setName("record").setType("record").setFields(Lists.newArrayList(new TableFieldSchema()
-        .setName("name").setType("string"), new TableFieldSchema()
-        .setName("value").setType("string"))))));
+        .setName("records").setType("record").setMode("REPEATED").setFields(Lists.newArrayList(new TableFieldSchema()
+          .setName("name").setType("string"), new TableFieldSchema()
+          .setName("value").setType("string"))),
+      new TableFieldSchema()
+        .setName("record").setType("record").setFields(Lists.newArrayList(new TableFieldSchema()
+          .setName("name").setType("string"), new TableFieldSchema()
+          .setName("value").setType("string"))))));
   }
-
 
   private static class ClassWithRecord {
     private static class Record{
@@ -369,10 +378,12 @@ public class BigQueryDataMarshallerTest extends TestCase {
       
     @SuppressWarnings("unused")
     Record record;
+    List<Record> records;
 
     @SuppressWarnings("unused")
-    public ClassWithRecord(Record record) {
+    public ClassWithRecord(Record record, List<Record> records) {
       this.record = record;
+      this.records = records;
     }
   }
 
