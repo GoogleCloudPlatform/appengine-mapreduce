@@ -51,6 +51,9 @@ final class BigQueryDataMarshallerByType implements Serializable {
    * @return a nested map of field name to field value.
    */
   Map<String, Object> mapFieldNameToValue(Object toMap) {
+    if (toMap == null) {
+      return null;
+    }
     Class<?> typeOfObjectToMap = toMap.getClass();
     Map<String, Object> toRet = new HashMap<>();
     Set<Field> fieldsToMap = getFieldsToSerialize(typeOfObjectToMap);

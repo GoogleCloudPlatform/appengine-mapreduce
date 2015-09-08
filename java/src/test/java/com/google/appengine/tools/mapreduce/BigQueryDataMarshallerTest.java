@@ -73,7 +73,7 @@ public class BigQueryDataMarshallerTest extends TestCase {
       try {
         assertTrue(mapper.readTree(expected).equals(mapper.readTree(actualJson)));
       } catch (IOException e) {
-        fail("Exception while serializing. Expected " + expected);
+        fail("Exception while serializing. Expected " + expected + " got " + actualJson);
       }
     }
 
@@ -335,6 +335,44 @@ public class BigQueryDataMarshallerTest extends TestCase {
     public ClassWithMap(Map map, int id) {
       this.map = map;
       this.id = id;
+    }
+  }
+
+  @SuppressWarnings("unused")
+  public void testGeneratedJsonForClassWithRecord() {
+    BigQueryDataMarshallerTester<ClassWithRecord> tester =
+      new BigQueryDataMarshallerTester<ClassWithRecord>(
+        new BigQueryMarshallerByType<ClassWithRecord>(ClassWithRecord.class));
+
+    tester.testGeneratedJson("{\"record\":null}",
+      new ClassWithRecord(null));
+
+    tester.testGeneratedJson("{\"record\":{\"name\":\"myname\",\"value\":\"myvalue\"}}",
+      new ClassWithRecord(new ClassWithRecord.Record("myname","myvalue")));
+
+    tester.testSchema(new TableSchema().setFields(Lists.newArrayList(new TableFieldSchema()
+      .setName("record").setType("record").setFields(Lists.newArrayList(new TableFieldSchema()
+        .setName("name").setType("string"), new TableFieldSchema()
+        .setName("value").setType("string"))))));
+  }
+
+
+  private static class ClassWithRecord {
+    private static class Record{
+      public String name;
+      public String value;
+      public Record(String name, String value){
+          this.name=name;
+          this.value=value;
+      }
+    }
+      
+    @SuppressWarnings("unused")
+    Record record;
+
+    @SuppressWarnings("unused")
+    public ClassWithRecord(Record record) {
+      this.record = record;
     }
   }
 
