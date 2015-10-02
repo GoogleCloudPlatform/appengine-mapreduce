@@ -63,6 +63,9 @@ final class BigQueryDataMarshallerByType implements Serializable {
         fieldValue = getFieldValue(field, toMap);
       }
       assertFieldValue(field, fieldValue);
+      if (fieldValue == null){
+          continue;
+      }
 
       if (marshaller != null) {
         toRet.put(getFieldName(field), fieldValue);

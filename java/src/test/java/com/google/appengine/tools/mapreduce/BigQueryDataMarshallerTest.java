@@ -73,7 +73,7 @@ public class BigQueryDataMarshallerTest extends TestCase {
       try {
         assertTrue(mapper.readTree(expected).equals(mapper.readTree(actualJson)));
       } catch (IOException e) {
-        fail("Exception while serializing. Expected " + expected);
+        fail("Exception while serializing. Expected " + expected + " got " + actualJson);
       }
     }
 
@@ -338,6 +338,55 @@ public class BigQueryDataMarshallerTest extends TestCase {
     }
   }
 
+  @SuppressWarnings("unused")
+  public void testGeneratedJsonForClassWithRecord() {
+    BigQueryDataMarshallerTester<ClassWithRecord> tester =
+      new BigQueryDataMarshallerTester<ClassWithRecord>(
+        new BigQueryMarshallerByType<ClassWithRecord>(ClassWithRecord.class));
+
+    tester.testGeneratedJson("{}",
+     new ClassWithRecord(null,null));
+
+    tester.testGeneratedJson("{\"record\":{\"name\":\"myname\",\"value\":\"myvalue\"}}",
+     new ClassWithRecord(new ClassWithRecord.Record("myname","myvalue"), null));
+
+    tester.testGeneratedJson(
+     "{\"record\":{\"name\":\"name\",\"value\":\"value\"},\"records\":[{\"name\":\"name\",\"value\":\"value\"}]}",
+     new ClassWithRecord(new ClassWithRecord.Record("name","value"),
+      Lists.newArrayList(new ClassWithRecord.Record("name","value"))));
+
+
+    tester.testSchema(new TableSchema().setFields(Lists.newArrayList(new TableFieldSchema()
+        .setName("records").setType("record").setMode("REPEATED").setFields(Lists.newArrayList(new TableFieldSchema()
+          .setName("name").setType("string"), new TableFieldSchema()
+          .setName("value").setType("string"))),
+      new TableFieldSchema()
+        .setName("record").setType("record").setFields(Lists.newArrayList(new TableFieldSchema()
+          .setName("name").setType("string"), new TableFieldSchema()
+          .setName("value").setType("string"))))));
+  }
+
+  private static class ClassWithRecord {
+    private static class Record{
+      public String name;
+      public String value;
+      public Record(String name, String value){
+          this.name=name;
+          this.value=value;
+      }
+    }
+      
+    @SuppressWarnings("unused")
+    Record record;
+    List<Record> records;
+
+    @SuppressWarnings("unused")
+    public ClassWithRecord(Record record, List<Record> records) {
+      this.record = record;
+      this.records = records;
+    }
+  }
+
   public void testGeneratedJsonForClassExtendingAbstractClass() {
     BigQueryDataMarshallerTester<ClassExtendingAbstract> tester =
         new BigQueryDataMarshallerTester<>(
@@ -373,26 +422,43 @@ public class BigQueryDataMarshallerTest extends TestCase {
             }
           }
         });
+    marshallers.put(ClassWithUnsupportedType.class.getDeclaredField("blob"),
+        new BigqueryFieldMarshaller() {
+
+          @Override
+          public Class<?> getSchemaType() {
+            return String.class;
+          }
+
+          @Override
+          public Object getFieldValue(Field field, Object object) {
+            return "override";
+          }
+        });    
     BigQueryDataMarshallerTester<ClassWithUnsupportedType> tester =
         new BigQueryDataMarshallerTester<>(
             new BigQueryMarshallerByType<>(ClassWithUnsupportedType.class, marshallers));
-    tester.testGeneratedJson("{\"ip\":\"00000001-0002-0003-0004-000000000005\",\"id\":5}",
-        new ClassWithUnsupportedType(UUID.fromString("1-2-3-4-5"), 5));
+    tester.testGeneratedJson("{\"ip\":\"00000001-0002-0003-0004-000000000005\",\"id\":5,\"blob\":\"override\"}",
+        new ClassWithUnsupportedType(UUID.fromString("1-2-3-4-5"), 5, "blob"));
 
     tester.testSchema(new TableSchema().setFields(Lists.newArrayList(
         new TableFieldSchema().setName("ip").setType("string"), new TableFieldSchema().setName("id")
-            .setType("integer").setMode(BigQueryFieldMode.REQUIRED.getValue()))));
+        .setType("integer").setMode(BigQueryFieldMode.REQUIRED.getValue()),
+        new TableFieldSchema().setName("blob").setType("string"))));
   }
 
   private static class ClassWithUnsupportedType {
+    @SuppressWarnings("unused")
+    Object blob;
     @SuppressWarnings("unused")
     UUID ip;
     @SuppressWarnings("unused")
     int id;
 
-    public ClassWithUnsupportedType(UUID ip, int id) {
+    public ClassWithUnsupportedType(UUID ip, int id, Object blob) {
       this.ip = ip;
       this.id = id;
+      this.blob = blob;
     }
   }
 
