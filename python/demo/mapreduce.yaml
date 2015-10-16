@@ -9,8 +9,6 @@ mapreduce:
     params:
     - name: entity_kind
       default: main.Post
-    - name: processing_rate
-      default: 100
     - name: shard_count
       default: 4
 - name: Make messages upper case
@@ -23,7 +21,5 @@ mapreduce:
     params:
     - name: entity_kind
       default: main.Post
-    - name: processing_rate
-      default: 100
     - name: shard_count
       default: 4
