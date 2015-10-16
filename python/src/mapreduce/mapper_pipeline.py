@@ -42,6 +42,7 @@ class MapperPipeline(pipeline_base._OutputSlotsMixin,
     output_writer_spec: output writer specification as string.
     params: mapper parameters for input reader and output writer as dict.
     shards: number of shards in the job as int.
+    base_path: (optional) the path prefix under which requests to the servlet should go.
 
   Returns:
     default: the list of filenames produced by the mapper if there was any
