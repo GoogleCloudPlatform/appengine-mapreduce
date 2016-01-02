@@ -232,6 +232,8 @@ class PropertyRange(object):
   def from_json(cls, json):
     return cls(json["filters"], json["model_class_path"])
 
+  def __repr__(self):
+    return "PropertyRange(%r)" % self.to_json()
 
 def _split_datetime_property(start, end, n, include_start, include_end):
   # datastore stored datetime precision is microsecond.
