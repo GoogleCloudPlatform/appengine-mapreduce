@@ -22,9 +22,9 @@
 # pylint: disable=g-import-not-at-top
 
 import httplib
+import importlib
 import logging
 import pkgutil
-import importlib
 
 try:
   import json
