@@ -22,17 +22,20 @@
 # pylint: disable=g-import-not-at-top
 
 import httplib
+import importlib
 import logging
+import pkgutil
 
 try:
   import json
 except ImportError:
   import simplejson as json
 
-try:
-  from mapreduce import pipeline_base
-except ImportError:
-  pipeline_base = None
+pipeline_base = None
+
+if pkgutil.find_loader('mapreduce.pipeline_base') is not None:
+  pipeline_base = importlib.import_module('mapreduce.pipeline_base')
+
 try:
   # Check if the full cloudstorage package exists. The stub part is in runtime.
   import cloudstorage
