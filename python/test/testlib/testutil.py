@@ -92,6 +92,8 @@ class TestEntity(db.Model):
 
   a = db.IntegerProperty()
   b = db.IntegerProperty()
+  mvp_str = db.StringListProperty()
+  mvp_int = db.ListProperty(int, required=True, indexed=True)
 
 
 class NdbTestEntity(ndb.Model):
@@ -99,6 +101,9 @@ class NdbTestEntity(ndb.Model):
 
   a = ndb.IntegerProperty()
   b = ndb.IntegerProperty()
+
+  mvp_str = ndb.StringProperty(repeated=True)
+  mvp_int = ndb.IntegerProperty(repeated=True)
 
 
 class TestEntityWithDot(db.Model):

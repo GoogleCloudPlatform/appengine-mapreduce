@@ -670,6 +670,11 @@ class DatastoreInputReader(AbstractDatastoreInputReader):
             "Property %s is not defined for entity type %s",
             prop, model_class.kind())
 
+      if isinstance(properties[prop], db.ListProperty):
+        # for db.ListProperty validate expect a list, but filter expect
+        # a single value
+        val = [val]
+
       # Validate the value of each filter. We need to know filters have
       # valid value to carry out splits.
       try:
