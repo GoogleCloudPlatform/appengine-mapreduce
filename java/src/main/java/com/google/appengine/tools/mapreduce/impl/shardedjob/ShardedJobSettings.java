@@ -45,11 +45,11 @@ public final class ShardedJobSettings implements Serializable {
     private String version;
     private String pipelineStatusUrl;
     private String mrStatusUrl;
-    private String controllerPath = "/mapreduce/controllerCallback";
-    private String workerPath = "/mapreduce/workerCallback";
+    private String controllerPath = DEFAULT_BASE_URL + CONTROLLER_PATH;
+    private String workerPath = DEFAULT_BASE_URL + WORKER_PATH;
     private String queueName = "default";
-    private int maxShardRetries = 4;
-    private int maxSliceRetries = 20;
+    private int maxShardRetries = DEFAULT_SHARD_RETRIES;
+    private int maxSliceRetries = DEFAULT_SLICE_RETRIES;
     private int sliceTimeoutMillis = DEFAULT_SLICE_TIMEOUT_MILLIS;
 
     public Builder setPipelineStatusUrl(String pipelineStatusUrl) {
