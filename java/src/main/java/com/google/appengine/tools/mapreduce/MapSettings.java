@@ -133,8 +133,8 @@ public class MapSettings implements Serializable {
     }
 
     /**
-     * Sets ratio for much longer than millisPerSlice before slice will be considered
-     * to have timed out.
+     * Sets a ratio for how much time beyond millisPerSlice must elapse before slice will be
+     * considered to have failed due to a timeout.
      */
     public B setSliceTimeoutRatio(double sliceTimeoutRatio) {
       Preconditions.checkArgument(sliceTimeoutRatio >= 1.0);
