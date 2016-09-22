@@ -7,6 +7,12 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import com.google.appengine.api.backends.BackendServiceFactory;
 import com.google.appengine.api.modules.ModulesServiceFactory;
 
+import static com.google.appengine.tools.mapreduce.MapSettings.DEFAULT_BASE_URL;
+import static com.google.appengine.tools.mapreduce.MapSettings.WORKER_PATH;
+import static com.google.appengine.tools.mapreduce.MapSettings.CONTROLLER_PATH;
+import static com.google.appengine.tools.mapreduce.MapSettings.DEFAULT_SHARD_RETRIES;
+import static com.google.appengine.tools.mapreduce.MapSettings.DEFAULT_SLICE_RETRIES;
+
 import java.io.IOException;
 import java.io.Serializable;
 
@@ -45,11 +51,11 @@ public final class ShardedJobSettings implements Serializable {
     private String version;
     private String pipelineStatusUrl;
     private String mrStatusUrl;
-    private String controllerPath = "/mapreduce/controllerCallback";
-    private String workerPath = "/mapreduce/workerCallback";
+    private String controllerPath = DEFAULT_BASE_URL + CONTROLLER_PATH;
+    private String workerPath = DEFAULT_BASE_URL + WORKER_PATH;
     private String queueName = "default";
-    private int maxShardRetries = 4;
-    private int maxSliceRetries = 20;
+    private int maxShardRetries = DEFAULT_SHARD_RETRIES;
+    private int maxSliceRetries = DEFAULT_SLICE_RETRIES;
     private int sliceTimeoutMillis = DEFAULT_SLICE_TIMEOUT_MILLIS;
 
     public Builder setPipelineStatusUrl(String pipelineStatusUrl) {

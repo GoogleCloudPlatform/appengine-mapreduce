@@ -5,6 +5,7 @@ package com.google.appengine.tools.mapreduce;
 import static com.google.appengine.tools.mapreduce.MapSettings.CONTROLLER_PATH;
 import static com.google.appengine.tools.mapreduce.MapSettings.DEFAULT_BASE_URL;
 import static com.google.appengine.tools.mapreduce.MapSettings.DEFAULT_MILLIS_PER_SLICE;
+import static com.google.appengine.tools.mapreduce.MapSettings.DEFAULT_SLICE_TIMEOUT_RATIO;
 import static com.google.appengine.tools.mapreduce.MapSettings.DEFAULT_SHARD_RETRIES;
 import static com.google.appengine.tools.mapreduce.MapSettings.DEFAULT_SLICE_RETRIES;
 import static com.google.appengine.tools.mapreduce.MapSettings.WORKER_PATH;
@@ -72,6 +73,7 @@ public class MapSettingsTest extends TestCase {
     assertEquals(DEFAULT_MILLIS_PER_SLICE, mrSettings.getMillisPerSlice());
     assertEquals(DEFAULT_SHARD_RETRIES, mrSettings.getMaxShardRetries());
     assertEquals(DEFAULT_SLICE_RETRIES, mrSettings.getMaxSliceRetries());
+    assertEquals(DEFAULT_SLICE_TIMEOUT_RATIO, mrSettings.getSliceTimeoutRatio());
   }
 
   public void testNonDefaultSettings() {
@@ -91,6 +93,12 @@ public class MapSettingsTest extends TestCase {
       builder.setMillisPerSlice(-1);
     } catch (IllegalArgumentException ex) {
       // expected
+    }
+    builder.setSliceTimeoutRatio(1.5);
+    try {
+      builder.setSliceTimeoutRatio(0.8);
+    } catch (IllegalArgumentException ex) {
+      //expected
     }
     builder.setMaxShardRetries(1);
     try {

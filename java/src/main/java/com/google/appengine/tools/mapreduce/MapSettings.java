@@ -48,6 +48,7 @@ public class MapSettings implements Serializable {
   public static final String CONTROLLER_PATH = "controllerCallback";
   public static final String WORKER_PATH = "workerCallback";
   public static final int DEFAULT_MILLIS_PER_SLICE = 180_000;
+  public static final double DEFAULT_SLICE_TIMEOUT_RATIO = 1.1;
   public static final int DEFAULT_SHARD_RETRIES = 4;
   public static final int DEFAULT_SLICE_RETRIES = 20;
 
@@ -56,6 +57,7 @@ public class MapSettings implements Serializable {
   private final String module;
   private final String workerQueueName;
   private final int millisPerSlice;
+  private final double sliceTimeoutRatio;
   private final int maxShardRetries;
   private final int maxSliceRetries;
 
@@ -66,6 +68,7 @@ public class MapSettings implements Serializable {
     protected String backend;
     protected String workerQueueName;
     protected int millisPerSlice = DEFAULT_MILLIS_PER_SLICE;
+    protected double sliceTimeoutRatio = DEFAULT_SLICE_TIMEOUT_RATIO;
     protected int maxShardRetries = DEFAULT_SHARD_RETRIES;
     protected int maxSliceRetries = DEFAULT_SLICE_RETRIES;
 
@@ -130,6 +133,16 @@ public class MapSettings implements Serializable {
     }
 
     /**
+     * Sets a ratio for how much time beyond millisPerSlice must elapse before slice will be
+     * considered to have failed due to a timeout.
+     */
+    public B setSliceTimeoutRatio(double sliceTimeoutRatio) {
+      Preconditions.checkArgument(sliceTimeoutRatio >= 1.0);
+      this.sliceTimeoutRatio = sliceTimeoutRatio;
+      return self();
+    }
+
+    /**
      * The number of times a Shard can fail before it gives up and fails the whole job.
      */
     public B setMaxShardRetries(int maxShardRetries) {
@@ -176,6 +189,7 @@ public class MapSettings implements Serializable {
     backend = builder.backend;
     workerQueueName = checkQueueSettings(builder.workerQueueName);
     millisPerSlice = builder.millisPerSlice;
+    sliceTimeoutRatio = builder.sliceTimeoutRatio;
     maxShardRetries = builder.maxShardRetries;
     maxSliceRetries = builder.maxSliceRetries;
   }
@@ -200,6 +214,10 @@ public class MapSettings implements Serializable {
     return millisPerSlice;
   }
 
+  double getSliceTimeoutRatio() {
+    return sliceTimeoutRatio;
+  }
+
   int getMaxShardRetries() {
     return maxShardRetries;
   }
@@ -216,6 +234,7 @@ public class MapSettings implements Serializable {
         + module + ", "
         + workerQueueName + ", "
         + millisPerSlice + ", "
+        + sliceTimeoutRatio + ", "
         + maxSliceRetries + ", "
         + maxShardRetries + ")";
   }
@@ -284,7 +303,7 @@ public class MapSettings implements Serializable {
         .setMaxShardRetries(maxShardRetries)
         .setMaxSliceRetries(maxSliceRetries)
         .setSliceTimeoutMillis(
-            Math.max(DEFAULT_SLICE_TIMEOUT_MILLIS, (int) (millisPerSlice * 1.1)));
+            Math.max(DEFAULT_SLICE_TIMEOUT_MILLIS, (int) (millisPerSlice * sliceTimeoutRatio)));
     return runWithRetries(new Callable<ShardedJobSettings>() {
       @Override public ShardedJobSettings call() {
         return builder.build();
