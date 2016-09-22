@@ -12,7 +12,6 @@ import static com.google.appengine.tools.mapreduce.MapSettings.WORKER_PATH;
 import static com.google.appengine.tools.mapreduce.MapSettings.CONTROLLER_PATH;
 import static com.google.appengine.tools.mapreduce.MapSettings.DEFAULT_SHARD_RETRIES;
 import static com.google.appengine.tools.mapreduce.MapSettings.DEFAULT_SLICE_RETRIES;
-import static com.google.appengine.tools.mapreduce.impl.shardedjob.ShardedJobSettings.DEFAULT_SLICE_TIMEOUT_MILLIS;
 
 import java.io.IOException;
 import java.io.Serializable;
