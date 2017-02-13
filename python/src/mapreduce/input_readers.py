@@ -689,6 +689,14 @@ class DatastoreInputReader(AbstractDatastoreInputReader):
 
     for idx, f in enumerate(filters):
       prop, ineq, val = f
+
+      # Split structured properties.
+      field_name = None
+      if '.' in prop:
+        split_prop = prop.split('.', 1)
+        prop = split_prop[0]
+        field_name = split_prop[1]
+
       if prop not in properties:
         raise errors.BadReaderParamsError(
             "Property %s is not defined for entity type %s",
@@ -697,7 +705,7 @@ class DatastoreInputReader(AbstractDatastoreInputReader):
       # Attempt to cast the value to a KeyProperty if appropriate.
       # This enables filtering against keys.
       try:
-        if (isinstance(val, basestring) and
+        if (not field_name and isinstance(val, basestring) and
             isinstance(properties[prop],
               (ndb.KeyProperty, ndb.ComputedProperty))):
           val = ndb.Key(urlsafe=val)
@@ -708,7 +716,11 @@ class DatastoreInputReader(AbstractDatastoreInputReader):
       # Validate the value of each filter. We need to know filters have
       # valid value to carry out splits.
       try:
-        properties[prop]._do_validate(val)
+        property = properties[prop]
+        if field_name:
+          for subfield_name in field_name.split('.'):
+            property = property.__getattr__(subfield_name)
+        property._do_validate(val)
       except db.BadValueError, e:
         raise errors.BadReaderParamsError(e)
 
