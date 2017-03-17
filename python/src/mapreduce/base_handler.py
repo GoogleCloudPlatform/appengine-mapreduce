@@ -128,7 +128,7 @@ class TaskQueueHandler(webapp.RequestHandler):
     # pylint: disable=bare-except
     except:
       self._preprocess_success = False
-      logging.error(
+      logging.exception(
           "Preprocess task %s failed. Dropping it permanently.",
           self.request.headers["X-AppEngine-TaskName"])
       self._drop_gracefully()
