@@ -5,7 +5,6 @@ import static java.util.concurrent.Executors.callable;
 import com.google.appengine.api.datastore.DatastoreServiceFactory;
 import com.google.appengine.api.datastore.Entity;
 import com.google.appengine.api.datastore.Key;
-import com.google.appengine.repackaged.com.google.common.base.Throwables;
 import com.google.appengine.tools.cloudstorage.RetryHelper;
 import com.google.appengine.tools.mapreduce.impl.shardedjob.IncrementalTask;
 import com.google.appengine.tools.mapreduce.impl.shardedjob.IncrementalTaskState;
@@ -15,6 +14,7 @@ import com.google.appengine.tools.mapreduce.impl.shardedjob.Status;
 import com.google.appengine.tools.mapreduce.impl.util.SerializationUtil;
 import com.google.appengine.tools.pipeline.Job0;
 import com.google.appengine.tools.pipeline.Value;
+import com.google.common.base.Throwables;
 
 import java.util.ArrayList;
 import java.util.Iterator;
