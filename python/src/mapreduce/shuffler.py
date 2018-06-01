@@ -32,6 +32,7 @@ import heapq
 import logging
 import pickle
 import time
+import zlib
 
 import pipeline
 from pipeline import common as pipeline_common
@@ -525,7 +526,7 @@ class _HashingGCSOutputWriter(output_writers.OutputWriter):
       logging.error("Expecting a tuple, but got %s: %s",
                     data.__class__.__name__, data)
 
-    file_index = key.__hash__() % len(self._filehandles)
+    file_index = zlib.adler32(key) % len(self._filehandles)
 
     # Work-around: Since we don't have access to the context in the to_json()
     # function, but we need to flush each pool before we serialize the
