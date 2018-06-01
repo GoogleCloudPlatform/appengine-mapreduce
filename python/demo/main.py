@@ -73,9 +73,9 @@ class FileMetadata(db.Model):
   uploadedOn = db.DateTimeProperty()
   source = db.StringProperty()
   blobkey = db.StringProperty()
-  wordcount_link = db.StringProperty()
-  index_link = db.StringProperty()
-  phrases_link = db.StringProperty()
+  wordcount_links = db.StringListProperty()
+  index_links = db.StringListProperty()
+  phrases_links = db.StringListProperty()
 
   @staticmethod
   def getFirstKeyForUser(username):
@@ -352,7 +352,7 @@ class StoreOutput(base_handler.PipelineBase):
   Args:
     mr_type: the type of mapreduce job run (e.g., WordCount, Index)
     encoded_key: the DB key corresponding to the metadata of this job
-    output: the gcs file path where the output of the job is stored
+    output: the gcs file paths where the output of the job is stored
   """
 
   def run(self, mr_type, encoded_key, output):
@@ -360,16 +360,15 @@ class StoreOutput(base_handler.PipelineBase):
     key = db.Key(encoded=encoded_key)
     m = FileMetadata.get(key)
 
-    blobstore_filename = "/gs" + output[0]
-    blobstore_gs_key = blobstore.create_gs_key(blobstore_filename)
-    url_path = "/blobstore/" + blobstore_gs_key
+    url_paths = ["/blobstore/" + blobstore.create_gs_key("/gs" + filename)
+                 for filename in output]
 
     if mr_type == "WordCount":
-      m.wordcount_link = url_path
+      m.wordcount_links = url_paths
     elif mr_type == "Index":
-      m.index_link = url_path
+      m.index_links = url_paths
     elif mr_type == "Phrases":
-      m.phrases_link = url_path
+      m.phrases_links = url_paths
 
     m.put()
 

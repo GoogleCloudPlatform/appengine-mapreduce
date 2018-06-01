@@ -17,9 +17,9 @@
           <td>name</td>
           <td>uploaded on</td>
           <td>source</td>
-          <td>wordcount link</td>
-          <td>index link</td>
-          <td>phrases link</td>
+          <td>wordcount links</td>
+          <td>index links</td>
+          <td>phrases links</td>
         </tr>
         {% for item in items %}
         <tr>
@@ -29,19 +29,19 @@
           <td>{{ item.uploadedOn }}</td>
           <td>{{ item.source }}</td>
           <td>
-            {% if item.wordcount_link %}
-            <a href="{{ item.wordcount_link }}">wordcount</a>
-            {% endif %}
+            {% for link in item.wordcount_links %}
+            <a href="{{ link }}" style="display:block">wordcount-{{ loop.index }}</a>
+            {% endfor %}
           </td>
           <td>
-            {% if item.index_link %}
-            <a href="{{ item.index_link }}">index</a>
-            {% endif %}
+            {% for link in item.index_links %}
+            <a href="{{ link }}" style="display:block">index-{{ loop.index }}</a>
+            {% endfor %}
           </td>
           <td>
-            {% if item.phrases_link %}
-            <a href="{{ item.phrases_link }}">phrases</a>
-            {% endif %}
+            {% for link in item.phrases_links %}
+            <a href="{{ link }}" style="display:block">phrases-{{ loop.index }}</a>
+            {% endfor %}
           </td>
         </tr>
         {% endfor %}
