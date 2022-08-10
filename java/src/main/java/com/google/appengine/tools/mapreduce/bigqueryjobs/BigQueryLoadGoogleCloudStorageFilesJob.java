@@ -7,7 +7,7 @@ import com.google.api.client.googleapis.services.json.CommonGoogleJsonClientRequ
 import com.google.api.client.http.HttpTransport;
 import com.google.api.client.http.javanet.NetHttpTransport;
 import com.google.api.client.json.JsonFactory;
-import com.google.api.client.json.jackson2.JacksonFactory;
+import com.google.api.client.json.gson.GsonFactory;
 import com.google.api.services.bigquery.Bigquery;
 import com.google.api.services.bigquery.BigqueryRequest;
 import com.google.api.services.bigquery.model.Job;
@@ -26,7 +26,6 @@ import com.google.appengine.tools.pipeline.Job1;
 import com.google.appengine.tools.pipeline.Value;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
-
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -45,7 +44,7 @@ public final class BigQueryLoadGoogleCloudStorageFilesJob extends
   private final String projectId;
 
   private static final HttpTransport HTTP_TRANSPORT = new NetHttpTransport();
-  private static final JsonFactory JSON_FACTORY = new JacksonFactory();
+  private static final JsonFactory JSON_FACTORY = GsonFactory.getDefaultInstance();
 
   private static final Logger log =
       Logger.getLogger(BigQueryLoadGoogleCloudStorageFilesJob.class.getName());
