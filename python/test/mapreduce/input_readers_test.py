@@ -810,6 +810,12 @@ class DatastoreInputReaderTest(DatastoreInputReaderTestCommon):
                       self.reader_cls.validate,
                       mapper_spec)
 
+    params["filters"] = [('mvp_str', '=', '1')]
+    self.reader_cls.validate(mapper_spec)
+
+    params["filters"] = [('mvp_int', '=', 1)]
+    self.reader_cls.validate(mapper_spec)
+
   def _set_vals(self, entities, a_vals, b_vals):
     """Set a, b values for entities."""
     vals = []
