@@ -8,6 +8,7 @@ import com.google.appengine.tools.mapreduce.BigQueryMarshaller;
 import com.google.appengine.tools.mapreduce.GoogleCloudStorageFileSet;
 import com.google.appengine.tools.mapreduce.Output;
 import com.google.appengine.tools.mapreduce.OutputWriter;
+import com.google.appengine.tools.mapreduce.impl.BigQueryConstants;
 
 import java.io.IOException;
 import java.util.Collection;
@@ -25,20 +26,21 @@ public final class BigQueryGoogleCloudStorageStoreOutput<O> extends
   private final MarshallingOutput<O, GoogleCloudStorageFileSet> dataMarshallingOutput;
   private final BigQueryMarshaller<O> bigQueryMarshaller;
   private final String bucketName;
-  private final String fileNamePattern;
+  private final String jobName;
 
   /**
    * @param bigQueryMarshaller use for generating the bigquery schema and marshal the data into
    *        newline delimited json.
+   * @param jobName Used in naming GCS objects, see {@link BigQueryConstants#GCS_FILE_NAME_FORMAT}.
    */
   public BigQueryGoogleCloudStorageStoreOutput(BigQueryMarshaller<O> bigQueryMarshaller,
-      String bucketName, String fileNamePattern) {
+      String bucketName, String jobName) {
     this.bigQueryMarshaller = bigQueryMarshaller;
     this.bucketName = bucketName;
-    this.fileNamePattern = fileNamePattern;
+    this.jobName = jobName;
     SizeSegmentedGoogleCloudStorageFileOutput sizeSegmentedOutput =
         new SizeSegmentedGoogleCloudStorageFileOutput(this.bucketName, MAX_BIG_QUERY_GCS_FILE_SIZE,
-            String.format(GCS_FILE_NAME_FORMAT, this.fileNamePattern), MIME_TYPE);
+            String.format(GCS_FILE_NAME_FORMAT, this.jobName), MIME_TYPE);
     this.dataMarshallingOutput = new MarshallingOutput<>(sizeSegmentedOutput, bigQueryMarshaller);
   }
 
